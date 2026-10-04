@@ -33,6 +33,12 @@ const UserXpSchema = new mongoose.Schema({
   voiceXpOff: { type: Boolean, default: false },
   voiceXpOffAt: { type: Date, default: null },
   voiceXpOffBy: { type: String, default: "" },
+  // 📌 XP 획득 중단 — 사이트 관리자가 세우고(POST /api/admin/users/xp-stop) 봇은 읽기만 한다. xpStopFrom ≤ 지금 < xpStopUntil 이면 중단 중.
+  //    판정은 xpStop.js(60초마다 끝나지 않은 중단을 읽는다 — xpStopUntil 색인). (models/UserXp.js 와 이름·기본값이 반드시 같아야 한다)
+  xpStopFrom: { type: Date, default: null },
+  xpStopUntil: { type: Date, default: null, index: true },
+  xpStopBy: { type: String, default: "" },
+  xpStopReason: { type: String, default: "" },
   // 📌 아이템 효과 "하루 1번" 기록 — 키 "<itemId>:<effectId>" → 마지막으로 받은 날(KST "YYYY-MM-DD").
   //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
@@ -271,6 +277,7 @@ const PurchaseSchema = new mongoose.Schema({
   paidPoint: { type: Number, default: 0 },
   billed: { type: Boolean, default: false }, // 지갑에서 실제로 빠졌는지 (models/Purchase.js 와 같은 뜻)
   // 기간제 역할 — days가 0이면 영구. 지나면 이 봇이 회수하고 status를 expired로 바꾼다
+  //    📌 역할이 있는 새 구매는 역할을 준 시각 + 기간으로 지급 때 다시 적는다(features/grantQueue.js grantedEnd — 2026-10-04 #127)
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
   revokedAt: { type: Date, default: null },

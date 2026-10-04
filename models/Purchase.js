@@ -47,6 +47,8 @@ const PurchaseSchema = new mongoose.Schema({
   couponBackAt: { type: Date, default: null },
   // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
   //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
+  //    2026-10-04 #127 "역할 준 시간" — 결제 때 적는 만료(결제 + 기간)는 임시이고, 디스코드 역할이 있는 새 구매는 봇이 역할을 준 순간
+  //    그 시각 + 기간으로 다시 적는다(bot/src/features/grantQueue.js grantedEnd · 연장분도 같이 민다). 역할 없는 아이템은 결제 시각 그대로
   days: { type: Number, default: 0 },
   expiresAt: { type: Date, default: null, index: true },
   revokedAt: { type: Date, default: null },

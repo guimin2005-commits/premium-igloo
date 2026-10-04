@@ -10,6 +10,7 @@ import { getCumulativeXpByLevel, getLevelByXp, currentSeason } from "./leveling.
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
 import { claimAttendance, streakBonusText } from "./attend.js";
+import { xpStopText } from "./xpStop.js";
 import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, progressBar, tierOf, SITE_URL } from "./botMessages.js";
 import { questView, questCardData } from "./views/quests.js";
 import { inventoryView, inventoryCardData } from "./views/inventory.js";
@@ -105,6 +106,8 @@ async function handleAttend(interaction, r) {
   const res = await claimAttendance(member, { source: "command" });
 
   if (res?.closed) return sendClosed(interaction, r);
+  // 📌 XP 획득 중단(관리자 — xpStop.js) — 출석을 받지 않는다. 나만 보기로 끝 시각만 알린다(사이트 받기 거절 문구와 같은 글)
+  if (res?.stopped) return r.send({ content: xpStopText(res.until), allowedMentions: { parse: [] } }, { ephemeral: true });
   if (res?.already) {
     return r.send(
       msg("cmdAttendAlready", { ...base, streak: res.streak }, `오늘은 이미 출석했습니다. 연속 ${res.streak}일`),

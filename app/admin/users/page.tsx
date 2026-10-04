@@ -5,7 +5,7 @@
 //    쓰기 — 구매 탭 1회 소모권 "1개 사용"(app/api/admin/users/consume) · 역할 탭 역할 회수(app/api/admin/users/roles) ·
 //    인벤토리 탭 아이템 회수(app/api/admin/users/inventory — 지급 · 패스는 그냥 회수, 구매는 낸 값 환불) · 아이템 지급(app/api/admin/items/grant) ·
 //    상세 칸 아래 줄 — XP · 빙옥 지급/제거(app/api/xp/grant) · 쿠폰 지급(app/api/shop/coupons/issue) · 알림 발송(app/api/notifications) ·
-//    음성 XP 정지/해제(app/api/admin/users/voice-stop).
+//    음성 XP 정지/해제(app/api/admin/users/voice-stop) · XP 획득 중단 설정/해제(app/api/admin/users/xp-stop).
 //    전부 기존 API 를 target / recipient = 이 유저 ID 로 부른다(다른 화면에서 ID 를 다시 넣지 않게).
 //    주소에 ?q= · ?userId= 를 실어 새로고침해도 같은 화면이 다시 열린다.
 
@@ -30,8 +30,11 @@ type UserSum = {
   attendCount: number; attendStreak: number; attendBestStreak: number; lastAttendDate: string;
   voiceSeconds: number; needsRoleSync: boolean; updatedAt: string | null;
   voiceXpOff?: boolean; voiceXpOffAt?: string | null; // 음성 XP 정지(app/api/admin/users/voice-stop)
+  xpStop?: XpStop | null; // XP 획득 중단(app/api/admin/users/xp-stop) — 끝나지 않은 것만
   pass: Pass;
 };
+// active: 지금 막는 중(false = 시작 전 예약)
+type XpStop = { from: string; until: string; by: string; reason: string; active: boolean };
 // ×N 묶음(1회 소모권 · 소모품) — thing: 묶음 키, pending: 그중 지급 대기
 type Stack = { thing: string; name: string; count: number; pending: number };
 type Detail = {
@@ -293,9 +296,20 @@ const couponBenefit = (c: CouponOpt) =>
 type MsgForm = { type: string; title: string; content: string };
 const EMPTY_MSG: MsgForm = { type: "안내", title: "", content: "" };
 const NOTI_TYPES = Object.keys(NOTI_TONE).map((t) => ({ v: t, l: t }));
-type ActKind = "money" | "coupon" | "notice";
-// 상세 칸 아래 줄 단추 — 모바일은 폭을 나눠 갖고(여백 8px) · PC 는 글자 폭
-const FOOT_BTN = "flex-1 sm:flex-none max-sm:!px-2";
+// 📌 XP 획득 중단 — POST /api/admin/users/xp-stop { userId, on: true, from: "now" | ISO, days, reason } · { userId, on: false }(해제).
+//    2026-10-04 운영자 "회수 + 타임아웃 3일 + 그 뒤 5일 전체 XP 획득 중단" — 시작은 지금 · 지정 시각(KST), 기간은 일 단위. 끝나면 저절로 풀린다
+type StopForm = { start: "now" | "at"; at: string; days: string; reason: string };
+const STOP_START = [{ v: "now", l: "지금" }, { v: "at", l: "지정 시각" }];
+const STOP_MAX_DAYS = 3650; // 서버(xp-stop)와 같은 끝 — 아이템 지급 기간 칸과 같다
+// datetime-local 칸 값 "YYYY-MM-DDTHH:mm" ↔ 시각 — 관리자 브라우저 시간대와 상관없이 KST 로 읽고 쓴다(표의 fmt 와 같은 기준)
+const kstInput = (ms: number) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 16);
+const fromKstInput = (v: string) => (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? Date.parse(`${v}:00+09:00`) : NaN);
+type ActKind = "money" | "coupon" | "notice" | "xpstop";
+// 상세 칸 아래 줄 단추 — 모바일은 폭을 나눠 갖고(여백 8px · 360 미만은 4px) · PC 는 글자 폭
+//    📌 두 여백은 겹치지 않는 구간으로 건다 — 겹치면 빌드된 CSS 에서 max-sm 이 max-[360px] 뒤에 와 4px 가 먹지 않는다
+const FOOT_BTN = "flex-1 sm:flex-none max-[360px]:!px-1 min-[360px]:max-sm:!px-2";
+// 단추 묶음 — 모바일은 틈 6px 로 한 줄(다섯 단추), PC 는 예전처럼 8px
+const FOOT_ROW = "w-full sm:w-auto flex flex-wrap items-center gap-1.5 sm:gap-2";
 
 // 주소 맞추기 — 새로고침해도 같은 검색 · 같은 유저가 열리게 (쿼리만 바꾸고 이동은 하지 않는다)
 const syncUrl = (q: string, userId: string | null) => {
@@ -804,6 +818,50 @@ export default function AdminUsersPage() {
     }
   };
 
+  // 📌 XP 획득 중단 — 창 하나에서 지금 걸린 중단(있으면)과 해제 · 새로 설정(있던 것은 덮어쓴다). 해제는 확인 없이 바로(같은 창 안의 단추)
+  //    stopBusy: 도는 쪽(set · clear) — 두 단추 글자가 각자 "처리 중…"으로 바뀐다(폭 고정)
+  //    stopClock: 창을 연 시각 — "지금" 시작의 종료 미리보기 · 지난 기간 판정에 쓴다(실제 시작은 서버가 받은 때)
+  const xpStopNow = detail?.user?.xpStop || null;
+  const [stop, setStop] = useState<StopForm>({ start: "now", at: "", days: "", reason: "" });
+  const [stopClock, setStopClock] = useState(0);
+  const [stopBusy, setStopBusy] = useState<"" | "set" | "clear">("");
+  const stopDays = Math.trunc(Number(stop.days));
+  const stopFrom = stop.start === "now" ? stopClock : fromKstInput(stop.at);
+  const stopEnd = stop.days.trim() !== "" && stopDays >= 1 && stopDays <= STOP_MAX_DAYS && Number.isFinite(stopFrom) ? stopFrom + stopDays * 86400000 : NaN;
+  const stopReady = !!selectedId && hasXp && Number.isFinite(stopEnd) && stopEnd > stopClock && !actBusy;
+  const openStop = () => {
+    const now = Date.now();
+    setStopClock(now);
+    setStop({ start: "now", at: kstInput(now), days: "", reason: "" });
+    setAct("xpstop");
+  };
+  const runStop = async (on: boolean) => {
+    const id = selectedId;
+    if (!id || actBusy || (on && !stopReady)) return;
+    setActBusy(true);
+    setStopBusy(on ? "set" : "clear");
+    try {
+      const body = on
+        ? { userId: id, on: true, from: stop.start === "now" ? "now" : new Date(fromKstInput(stop.at)).toISOString(), days: stopDays, reason: stop.reason.trim() }
+        : { userId: id, on: false };
+      const r = await fetch("/api/admin/users/xp-stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.success) {
+        notify(d.message || "처리했습니다.");
+        setAct(null);
+        // 칩은 그 자리에서 바꾸고, 상세는 조용히 다시 읽는다
+        const next: XpStop | null = d.data && typeof d.data === "object" ? d.data : null;
+        setDetail((prev) => (prev?.user && selectedRef.current === id ? { ...prev, user: { ...prev.user, xpStop: next } } : prev));
+        refreshDetail(id);
+      } else notify(d?.message || "처리에 실패했습니다.", true); // 400 시각 · 기간 · 404 XP 기록 없음
+    } catch {
+      notify("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setActBusy(false);
+      setStopBusy("");
+    }
+  };
+
   const closeUser = useCallback(() => {
     reqRef.current++;
     selectedRef.current = null;
@@ -921,7 +979,8 @@ export default function AdminUsersPage() {
                   fmt(p.createdAt),
                   ITEM_TYPE[p.itemType] || p.itemType,
                   p.days > 0 && `${p.days}일`,
-                  p.expiresAt && `~ ${fmt(p.expiresAt)}`,
+                  // 📌 역할 기간제 새 구매는 봇이 역할을 준 시각부터 센다(2026-10-04 #127) — 지급 대기 동안의 만료는 임시라 적지 않는다
+                  p.expiresAt && !(p.status === "pending" && p.roleId && !p.renewOf) && `~ ${fmt(p.expiresAt)}`,
                   p.siteOnly && "사이트 보유",
                 ])}
                 right={paid}
@@ -1065,7 +1124,8 @@ export default function AdminUsersPage() {
                         {joinMeta([
                           itemTypeLabel(it.type || it.kind),
                           (it.count || 0) > 1 && `×${num(it.count)}`,
-                          it.expiresAt ? `~ ${fmt(it.expiresAt)}` : "무기한",
+                          // 📌 지급 대기인 기간제는 만료가 아직 임시(역할을 준 시각부터 센다 — 2026-10-04 #127) — 날짜 대신 기간만
+                          it.expiresAt ? (it.status === "pending" ? ((it.days || 0) > 0 ? `${num(it.days)}일` : "지급 대기") : `~ ${fmt(it.expiresAt)}`) : "무기한",
                           it.siteOnly && "사이트 보유",
                         ])}
                       </p>
@@ -1159,33 +1219,35 @@ export default function AdminUsersPage() {
       )}
 
       {/* 📌 상세 칸 아래 동작 줄(footer) — 칸이 열릴 때부터 늘 있다(상세를 읽는 동안은 잠금만). 다 읽은 뒤 줄이 생기며 본문 높이가 바뀌지 않게.
-             모바일은 네 단추가 폭을 나눠 갖고, PC 는 글자 폭. 탭 줄과는 따로라 탭 칸 폭에 영향이 없다
-             📌 모바일 단추 여백 8px — 글자 폭(13px 굵게) 53 · 26 · 26 · 55 + 여백 16 × 4 + 틈 8 × 3 = 248 ≤ 320 − 40 이라 한 줄(375 · 360 · 320).
-                [음성 정지] ↔ [정지 해제]는 SwapLabel 로 두 글자 중 긴 쪽 폭을 늘 잡는다 */}
+             모바일은 다섯 단추가 폭을 나눠 갖고, PC 는 글자 폭. 탭 줄과는 따로라 탭 칸 폭에 영향이 없다
+             📌 모바일 한 줄 — 글자 폭(13px 굵게) XP · 빙옥 · 쿠폰 · 알림 · 음성 정지 · XP 중단 + 단추 여백(FOOT_BTN — 8px, 360 미만 4px) + 틈(FOOT_ROW — 6px).
+                폭은 실측해 아래 FOOT_ROW 주석에 적는다. [음성 정지] ↔ [정지 해제]는 SwapLabel 로 두 글자 중 긴 쪽 폭을 늘 잡는다 */}
       <DetailPane
         open={!!selectedId}
         onClose={closeUser}
         width={560}
         badge={
-          detail && (!u || u.needsRoleSync || u.voiceXpOff) ? (
-            <span className="inline-flex gap-1.5">
+          detail && (!u || u.needsRoleSync || u.voiceXpOff || u.xpStop) ? (
+            <span className="inline-flex flex-wrap gap-1.5">
               {!u && <StatusChip>XP 기록 없음</StatusChip>}
               {u?.needsRoleSync && <StatusChip tone="warn">역할 맞춤 대기</StatusChip>}
               {u?.voiceXpOff && <StatusChip tone="bad">음성 XP 정지</StatusChip>}
+              {u?.xpStop && <StatusChip tone={u.xpStop.active ? "bad" : "warn"}>{u.xpStop.active ? "XP 획득 중단" : "XP 중단 예약"}</StatusChip>}
             </span>
           ) : undefined
         }
         title={paneTitle}
         sub={<span className="tabular-nums">{paneUsername && `@${paneUsername} · `}{selectedId}</span>}
         footer={selectedId ? (
-          <>
+          <div className={FOOT_ROW}>
             <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={openMoney}>XP · 빙옥</Btn>
             <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={openCoupon}>쿠폰</Btn>
             <Btn variant="secondary" className={FOOT_BTN} disabled={!detail} onClick={openMsg}>알림</Btn>
             <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={() => setVoiceTarget(!voiceOff)}>
               <SwapLabel swap={voiceOff} to="정지 해제">음성 정지</SwapLabel>
             </Btn>
-          </>
+            <Btn variant="secondary" className={FOOT_BTN} disabled={!hasXp} title={detail && !hasXp ? "XP 기록 없음" : undefined} onClick={openStop}>XP 중단</Btn>
+          </div>
         ) : undefined}
       >
         {detailErr ? (
@@ -1430,6 +1492,68 @@ export default function AdminUsersPage() {
           </>
         ) : null}
       />
+
+      {/* 📌 XP 획득 중단 창 — 걸린 중단이 있으면 그 내용(상태 · 시작 · 종료 · 설정 · 사유)과 [해제], 없으면 새로 설정(시작 · 기간 · 사유 · 종료 미리보기).
+             바꾸려면 해제한 뒤 다시 설정한다. 지정 시각 칸은 늘 두고 잠그기만 해서 칸이 밀리지 않는다. 시각은 KST */}
+      {act === "xpstop" && (
+        <Sheet label="XP 획득 중단" sub={paneTitle} busy={actBusy} onClose={closeAct}
+          actions={xpStopNow ? (
+            <>
+              <Btn variant="secondary" onClick={closeAct} disabled={actBusy}>닫기</Btn>
+              <Btn className="w-[88px] shrink-0" onClick={() => runStop(false)} disabled={actBusy}>
+                <SwapLabel swap={stopBusy === "clear"} to="처리 중…">해제</SwapLabel>
+              </Btn>
+            </>
+          ) : (
+            <>
+              <Btn variant="secondary" onClick={closeAct} disabled={actBusy}>취소</Btn>
+              <Btn variant="danger" className="w-[88px] shrink-0" onClick={() => runStop(true)} disabled={!stopReady}>
+                <SwapLabel swap={stopBusy === "set"} to="처리 중…">설정</SwapLabel>
+              </Btn>
+            </>
+          )}>
+          {xpStopNow ? (
+            <dl className="mb-3">
+              <DefRow k="상태"><StatusChip tone={xpStopNow.active ? "bad" : "warn"}>{xpStopNow.active ? "중단 중" : "예약"}</StatusChip></DefRow>
+              <DefRow k="시작"><span className="tabular-nums">{fmt(xpStopNow.from)}</span></DefRow>
+              <DefRow k="종료"><span className="tabular-nums">{fmt(xpStopNow.until)}</span></DefRow>
+              {xpStopNow.by && <DefRow k="설정">{xpStopNow.by}</DefRow>}
+              {xpStopNow.reason && <DefRow k="사유">{xpStopNow.reason}</DefRow>}
+            </dl>
+          ) : (
+            <>
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>시작</p>
+                <Segmented options={STOP_START} value={stop.start} onChange={(v) => setStop((f) => ({ ...f, start: v === "at" ? "at" : "now" }))} disabled={actBusy} />
+                <input type="datetime-local" aria-label="시작 시각" disabled={stop.start !== "at" || actBusy}
+                  value={stop.at}
+                  onChange={(e) => setStop((f) => ({ ...f, at: e.target.value }))}
+                  className={`${inputClass} mt-2 tabular-nums sm:!w-60`} />
+              </div>
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>기간</p>
+                <Inline>
+                  <input type="number" min={1} max={STOP_MAX_DAYS} aria-label="일수" placeholder="일수" value={stop.days} disabled={actBusy}
+                    onChange={(e) => setStop((f) => ({ ...f, days: e.target.value === "" ? "" : String(Math.min(STOP_MAX_DAYS, Math.max(1, Math.trunc(Number(e.target.value)) || 1))) }))}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runStop(true); } }}
+                    className={numClass} />
+                  일
+                </Inline>
+              </div>
+              <div className="mb-4 min-w-0">
+                <p className={labelClass}>사유</p>
+                <input type="text" maxLength={100} value={stop.reason} disabled={actBusy} aria-label="사유"
+                  onChange={(e) => setStop((f) => ({ ...f, reason: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runStop(true); } }}
+                  className={inputClass} />
+              </div>
+              <dl className="mb-3">
+                <DefRow k="종료"><span className="tabular-nums">{Number.isFinite(stopEnd) ? fmt(stopEnd) : "—"}</span></DefRow>
+              </dl>
+            </>
+          )}
+        </Sheet>
+      )}
 
       {/* 📌 쿠폰 창 — 드롭다운 하나라 목록(최대 180)이 창 안에 다 들어가게 본문 높이를 잡는다.
              이름 줄 오른쪽 칩(보유 중 · 중지 · 만료 · 소진)은 칩 높이를 늘 잡아 골라도 아래 칸이 밀리지 않는다 */}

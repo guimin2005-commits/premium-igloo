@@ -9,7 +9,7 @@
 //       음소거 막기 · 잠수 채널 · 제외 채널처럼 세지 않는 동안은 바퀴가 멈춰 있다(같은 채널에 있는 한 이어 간다).
 //       나갔다가 20초 안에 같은 채널로 돌아오면 같은 바퀴로 이어진다(기록 주기 안이라 나감을 따로 보지 않는다 — 받는 양은 같다).
 //       한 번 기록할 때 같은 사람에게 닫힌 바퀴가 여럿이면(채널을 자주 옮김) 하나로 합쳐 한 줄로 준다 — 지급 줄이 20초에 한 줄을 넘지 않게.
-//    📌 세는 조건은 예전 음성 XP 주기와 같다 — 봇 · 잠수 채널 · 제외 채널(채널 정책) · 음소거 막기(완화 효과 반영) · 음성 XP 정지(voiceXpOff) ·
+//    📌 세는 조건은 예전 음성 XP 주기와 같다 — 봇 · 잠수 채널 · 제외 채널(채널 정책) · 음소거 막기(완화 효과 반영) · 음성 XP 정지(voiceXpOff) · XP 획득 중단(xpStop.js) ·
 //       시즌 2 개시 전(VOICE_TIME_START)은 빼고, 레벨 비공개여도 쌓는다(XP · 오늘 누적 분 · 자동 출석은 payVoiceCycle 이 막는다 — 2026-10-04 "다 막아"). 지급 XP 가 0 이어도 시간은 센다 — 시간은 시간.
 //       설정 · 채널 정책 · 잠수 채널 · 아이템 효과는 이벤트 없이 바뀌므로 기록할 때마다 열린 구간을 끊어 다시 판정한다.
 //    📌 진행 중인 바퀴는 기록할 때마다 UserXp.voiceCycle 에 적는다 — 봇이 재시작(배포)돼도 처음 기록할 때 읽어,
@@ -23,6 +23,7 @@ import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getMuteMultiplier } from "../botSettings.js";
 import { relieveMute, voiceRate, payVoiceCycle } from "./voiceXp.js";
 import { idleMinutes } from "./activity.js";
+import { noteXpStop, stopUntilOf, notStopped } from "../xpStop.js";
 import { config } from "../config.js";
 
 const FLUSH_MS = 20_000;
@@ -223,15 +224,18 @@ async function doFlush(final) {
 
   // 📌 음성 XP 정지 · 레벨 · 강화는 쓰는 때 본다(관리자가 사이트에서 켜고 끄므로 이벤트가 없다). 문서가 없는 새 사람만 만들어 쓴다 —
   //    정지 조건과 upsert 를 한 쓰기에 같이 걸면 userId 유일 색인 때문에 E11000 이 난다
+  //    📌 XP 획득 중단(관리자 — xpStop.js, 2026-10-04 "5일 전체 XP 획득 중단")도 음성 XP 정지와 똑같이 본다 — 음성 XP · 음성 시간 · 오늘 누적 분 ·
+  //       자동 출석 · 하루 음성 효과를 통째로 건너뛰고 바퀴는 주지 않고 버린다. 끝나면 그때부터 새로 센다. 읽은 칸으로 메모리 판정도 맞춘다
   let docs = [];
   try {
-    if (ids.size) docs = await UserXp.find({ userId: { $in: [...ids] } }, { userId: 1, voiceXpOff: 1, level: 1, voiceEnhance: 1 }).lean();
+    if (ids.size) docs = await UserXp.find({ userId: { $in: [...ids] } }, { userId: 1, voiceXpOff: 1, level: 1, voiceEnhance: 1, xpStopFrom: 1, xpStopUntil: 1 }).lean();
   } catch (e) {
     giveBack(); // 읽기 실패 — 아무것도 안 썼으니 다음 번에 다시
     throw e;
   }
   const docOf = new Map(docs.map((d) => [d.userId, d]));
-  const isOff = (userId) => docOf.get(userId)?.voiceXpOff === true;
+  for (const d of docs) noteXpStop(d.userId, d);
+  const isOff = (userId) => docOf.get(userId)?.voiceXpOff === true || stopUntilOf(docOf.get(userId), now) > 0;
 
   // ── 음성 XP 바퀴 진행 ──
   const touchIdle = (userId, c) => {
@@ -297,12 +301,13 @@ async function doFlush(final) {
 
   // ── 쓰기 1: 음성 시간 ──
   const ops = [];
+  const nowAt = new Date(now);
   for (const r of rows) {
     const d = docOf.get(r.userId);
-    if (d?.voiceXpOff === true || gone.has(r.userId)) continue;
+    if (isOff(r.userId) || gone.has(r.userId)) continue;
     const names = r.member ? { username: r.member.user?.username || "", displayName: r.member.displayName || "" } : {};
     if (d) {
-      ops.push({ updateOne: { filter: { userId: r.userId, voiceXpOff: { $ne: true } }, update: { $inc: { voiceSeconds: r.sec }, ...(r.member ? { $set: names } : {}) } } });
+      ops.push({ updateOne: { filter: { userId: r.userId, voiceXpOff: { $ne: true }, ...notStopped(nowAt) }, update: { $inc: { voiceSeconds: r.sec }, ...(r.member ? { $set: names } : {}) } } });
     } else if (guild?.members.cache.has(r.userId)) {
       // 📌 서버에 있는 사람만 새로 만든다 — 퇴장 초기화(features/leaveReset.js)로 지운 문서를 남은 초로 되살리지 않게
       ops.push({ updateOne: { filter: { userId: r.userId }, update: { $inc: { voiceSeconds: r.sec }, $set: { ...names, updatedAt: new Date() } }, upsert: true } });

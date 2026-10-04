@@ -16,6 +16,7 @@ import BotSetting from "@/models/BotSetting";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
+import { activeXpStopUntil } from "@/lib/xpStop";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
 import { stripAdminTag, isAdminName } from "@/lib/admins";
@@ -97,15 +98,19 @@ export async function POST(request) {
     // 📌 캐시백 % (아이템 효과 shopCashback — 상한 적용) — 이번 결제 전에 가진 것으로 정한다(방금 사는 캐시백 아이템이 제 결제에 붙지 않게).
     //    재고를 잡기 전에 읽는다. 읽지 못하면 캐시백 없이 결제한다(결제를 막지 않는다) — 장바구니 결제와 같은 규칙
     //    📌 상한 · 빙옥 몫 포함 여부는 관리자 설정(상점 관리 › 설정 — lib/itemEffects cashbackRuleOf). 설정을 못 읽으면 기본값(30% · XP 몫만)
-    const [perkPct, cashRule] = await Promise.all([
+    //    📌 XP 획득 중단(관리자 — lib/xpStop.js) 중이면 캐시백 없음 — 장바구니 결제와 같다. 확인하지 못하면 캐시백 없이
+    const [perkPct, cashRule, xpStopped] = await Promise.all([
       getPerks(userId)
         .then((p) => p.shopCashback || 0)
         .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; }),
       BotSetting.findOne({ key: "main" }, { shopCashbackCap: 1, cashbackOnPoint: 1 }).lean()
         .then(cashbackRuleOf)
         .catch((e) => { console.error("캐시백 설정 조회 실패:", e); return cashbackRuleOf(null); }),
+      activeXpStopUntil(userId)
+        .then((until) => !!until)
+        .catch((e) => { console.error("XP 획득 중단 조회 실패:", e); return true; }),
     ]);
-    const cashPct = Math.min(perkPct, cashRule.cap);
+    const cashPct = xpStopped ? 0 : Math.min(perkPct, cashRule.cap);
 
     // 1) 재고 선점 — 무제한(-1)이 아니면 남은 수량이 있을 때만 차감
     if (item.stock >= 0) {
@@ -198,7 +203,8 @@ export async function POST(request) {
         billed: true,
         cashbackXp,
         days,
-        // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
+        // 만료 시각은 결제 시점부터(임시) — 📌 2026-10-04 #127 디스코드 역할이 있는 기간제 새 구매는 봇이 역할을 준 시각부터 다시 센다
+        //    (bot/src/features/grantQueue.js grantedEnd — 줄이지는 않는다). 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
         expiresAt: timing.expiresAt,
         renewOf: timing.renewOf,
         startsAt: timing.startsAt,

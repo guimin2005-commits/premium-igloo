@@ -13,6 +13,7 @@ import { effectXp, jackpotXp, welcomeReplyXp, perksOf } from "../itemEffects.js"
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, isLevelOpen } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
+import { isXpStopped, notStopped } from "../xpStop.js";
 import { config } from "../config.js";
 
 const WELCOME_DAYS = 14; // 새 멤버 — 서버 입장 뒤 이 기간 안 (📌 2026-10-04 7일 → "14일")
@@ -49,6 +50,9 @@ export function registerChatXp(client) {
       if (message.author.bot || !message.member || message.guild?.id !== config.guildId) return;
       // 📌 레벨 비공개면 채팅 XP 없음 — 쿨타임 · 문서도 건드리지 않는다 (grantXp 입구도 한 번 더 막는다)
       if (!isLevelOpen()) return;
+      // 📌 XP 획득 중단(관리자 — xpStop.js) 중이면 채팅 XP · 새 멤버 첫 답장 · 잭팟 · 하루 첫 채팅 전부 없음 — 쿨타임도 쓰지 않는다
+      //    (메모리 판정. 60초 안에 세운 중단은 아래 쿨타임 쓰기 조건이 막는다)
+      if (isXpStopped(message.author.id)) return;
 
       // 채널/카테고리 정책 (지급 제외 채널이면 쿨타임도 소모하지 않음)
       const channelPolicy = getChannelPolicy(message.channel);
@@ -68,6 +72,7 @@ export function registerChatXp(client) {
       // 경쟁 상태(연속 메시지 중복 지급)가 원천적으로 불가능.
       // 갱신된 문서를 돌려받아 강화 단계까지 한 번의 왕복으로 읽는다.
       // 📌 쿨타임 단축(아이템 효과 cooldownCut) — 이 유저의 쿨타임에서 뺀다. 상한(쿨타임의 절반)은 perksOf 가 건다
+      //    📌 XP 획득 중단 중이 아닐 때만(notStopped) — 중단 중이면 쿨타임 중과 같이 upsert 충돌로 끝난다
       const now = new Date();
       const cooldownSec = Math.max(0, (Number(s.chatCooldownSec) || 0) - perksOf(message.member).cooldownCut);
       const cutoff = new Date(now.getTime() - cooldownSec * 1000);
@@ -77,13 +82,14 @@ export function registerChatXp(client) {
           {
             userId: message.author.id,
             $or: [{ lastChatXpAt: null }, { lastChatXpAt: { $lt: cutoff } }],
+            ...notStopped(now),
           },
           { $set: { lastChatXpAt: now } },
           { upsert: true, new: true, projection: { chatEnhance: 1 } }
         );
         if (!doc) return; // 쿨타임 중
       } catch (e) {
-        if (isDuplicateKeyError(e)) return; // 문서는 있으나 쿨타임 중 → upsert 충돌
+        if (isDuplicateKeyError(e)) return; // 문서는 있으나 쿨타임 중(또는 XP 획득 중단 중) → upsert 충돌
         throw e;
       }
 

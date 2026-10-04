@@ -40,7 +40,11 @@ export function planPurchase(doc, days, holdings) {
   return { renew: base };
 }
 
-// 구매 기록에 넣을 기간 — 새 구매는 결제 시점부터(봇 지급이 늦어도 산 만큼 보장), 연장은 이어 붙인 건의 만료부터
+// 구매 기록에 넣을 기간 — 새 구매는 결제 시점부터, 연장은 이어 붙인 건의 만료부터
+//    📌 2026-10-04 #127 "역할 준 시간" — 디스코드 역할이 있는 기간제 새 구매의 이 만료는 지급 대기 동안의 임시 값이다.
+//       봇이 역할을 실제로 준 순간 그 시각 + 기간으로 다시 적는다(bot/src/features/grantQueue.js grantedEnd — 줄이지는 않는다).
+//       그 사이 이어 붙인 연장분도 같은 폭만큼 함께 민다(shiftRenewals). 역할 없는 아이템은 결제 때 바로 가진 것이라 결제 시각 그대로.
+//       지급 대기 동안에도 이 임시 만료로 보유 판정(liveHoldings) · 연장 이어 붙이기가 그대로 돈다
 export function timingOf(plan, days, now = Date.now()) {
   if (plan?.renew) {
     const startsAt = new Date(plan.renew.expiresAt);

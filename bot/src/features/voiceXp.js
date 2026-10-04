@@ -11,6 +11,7 @@
 //    📌 레벨 비공개면 바퀴를 받아도 아무것도 하지 않는다 — XP · 오늘 누적 분 · 자동 출석 · 하루 음성 효과 전부(payVoiceCycle 맨 위).
 //       음성 시간(voiceSeconds — 랭킹)은 voiceTime.js 가 따로 쌓는다.
 //    📌 음성 XP 정지(UserXp.voiceXpOff — 관리자)인 사람은 통째로 건너뛴다: 지급 · 오늘 누적 분 · 자동 출석 · 하루 음성 효과 · 음성 시간(voiceTime.js).
+//       XP 획득 중단(UserXp.xpStopFrom ~ xpStopUntil — 관리자, xpStop.js) 중인 사람도 똑같이 건너뛴다.
 //    📌 지급 줄(XpLog "voice")의 sec 는 그 지급의 실제 초(5분을 채웠으면 300), ctx 는 그 시간 동안 가장 오래였던 음성 상황(인원 · 마이크 · 헤드셋 · 화면 공유/캠)과 마지막 활동 뒤 분(모르면 idle 칸 없음).
 //    📌 자동 출석이 되면 봇 메시지 autoAttend 를 출석 알림 채널(비우면 레벨업 채널)에 보낸다.
 import { PermissionFlagsBits } from "discord.js";
@@ -22,6 +23,7 @@ import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, isLevelOpen } from "../botSettings.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
 import { claimAttendance, streakBonusText } from "../attend.js";
+import { isXpStopped } from "../xpStop.js";
 import { buildMessageWithCard, cardAvatar, commonVars } from "../botMessages.js";
 import { config } from "../config.js";
 
@@ -88,6 +90,8 @@ export async function payVoiceCycle(member, c) {
   //    ⚠ 경계: 공개 여부는 바퀴를 줄 때 본다(구간마다가 아니라). 공개하는 순간 돌던 바퀴는 공개 뒤에 닫히므로 그 바퀴의 비공개 몫
   //       (사람마다 최대 한 주기 — voiceIntervalSec, 기본 5분)은 XP · 오늘 누적 분에 들어간다. 출석이 몰리지 않는 크기라 그대로 둔다
   if (!isLevelOpen()) return;
+  // 📌 XP 획득 중단(xpStop.js) — voiceTime.js 가 기록할 때 거르지만, 그 사이 시작된 중단도 여기서 한 번 더(오늘 누적 분 · 자동 출석까지 통째로)
+  if (isXpStopped(member.id)) return;
   const s = getSettings();
   const today = kstToday();
   const attendMin = Math.max(1, s.attendVoiceMin || 60);

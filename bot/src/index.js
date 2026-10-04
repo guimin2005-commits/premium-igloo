@@ -4,6 +4,7 @@
 //  · 역할·채널·기간제 부스트, 음소거 정책, 퇴장 시 초기화
 //  · /레벨 /랭크 /출석체크 /퀘스트 /인벤토리 /시즌패스 · 레벨업 알림 · 보상 역할 자동 지급 · XP 로그
 //  · 출석은 /출석체크 또는 음성 누적 자동 출석 (attend.js) · 레벨 비공개(levelPublic) 동안은 XP 를 주지 않는다
+//  · XP 획득 중단(관리자가 사이트에서 세움 — xpStop.js)인 사람은 그 기간 동안 XP · 출석 · 활동 횟수가 멈춘다
 //  · 상점 지급 큐 · 만료 임박 DM · 시즌 패스 미수령 DM · 시즌 결산(RANKER) · 사이트 공지 → 공지 채널 · 생존 신호(대시보드 봇 상태)
 //  사이트와 동일한 MongoDB 사용 → 웹 레벨 대시보드·랭킹과 실시간 연동
 // ═══════════════════════════════════════════════════════
@@ -14,6 +15,7 @@ import { refreshRoleConfigs, startRoleConfigLoop } from "./roleConfigs.js";
 import { refreshItemEffects, startItemEffectLoop } from "./itemEffects.js";
 import { refreshChannelConfigs, startChannelConfigLoop } from "./channelConfigs.js";
 import { refreshBotSettings, startBotSettingLoop } from "./botSettings.js";
+import { refreshXpStops, startXpStopLoop } from "./xpStop.js";
 import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceTime, flushVoiceTime } from "./features/voiceTime.js";
 import { startActivityStats, flushActivity } from "./features/activityStats.js";
@@ -69,13 +71,15 @@ client.once(Events.ClientReady, async (c) => {
   }
 
   // 📌 봇 메시지 디자인도 여기서 먼저 읽는다 — 지급 큐 · 레벨업이 첫 메시지부터 저장된 디자인으로 나가게
-  await Promise.all([refreshRoleConfigs(), refreshItemEffects(), refreshChannelConfigs(), refreshBotSettings(), refreshBotMessages()]);
+  //    📌 XP 획득 중단(관리자 — xpStop.js)도 같이 읽는다 — 첫 지급부터 막히게
+  await Promise.all([refreshRoleConfigs(), refreshItemEffects(), refreshChannelConfigs(), refreshBotSettings(), refreshBotMessages(), refreshXpStops()]);
   startRoleConfigLoop();
   startItemEffectLoop(); // 보유 아이템 효과 — 아이템 등록 · 구매 변경을 1분 주기로 반영
   startChannelConfigLoop();
   startBotSettingLoop();
+  startXpStopLoop(); // XP 획득 중단 — 끝나지 않은 중단을 1분 주기로 다시 읽는다
   startBotMessageLoop(c); // 봇 메시지 디자인 1분 주기 갱신 + 관리자 테스트 발송
-  console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책·봇 메시지 (1분 주기 갱신)");
+  console.log("✅ 설정 로드 완료 — 역할·아이템 효과·채널·기본 정책·봇 메시지·XP 획득 중단 (1분 주기 갱신)");
 
   startActivity(c); // 마지막 활동 시각 — 적어 둔 값을 읽어 재시작 뒤에도 무활동을 이어 세고, 음성에 있는 사람 것만 20초마다 기록
   startVoiceTime(c); // 음성 시간 · 음성 XP — 사람마다 실제 접속 초(들어옴 · 나감 · 옮김 · 마이크 변경), 5분 채우면 1회분 · 못 채우고 나가면 머문 만큼, 20초마다 기록

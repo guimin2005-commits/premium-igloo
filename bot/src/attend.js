@@ -5,6 +5,7 @@
 //    아이템 효과 출석 빙옥(attendPoint)도 같은 쓰기로 넣고 원장(kind "attend-point")에 따로 남긴다.
 //    (BotSetting.attendPoint 설정값은 지금 어디서도 지급하지 않는다 — 동작을 바꾸지 않으려고 여기서도 주지 않는다)
 //    📌 연속 출석 보호막(아이템 효과 streakShield) — 어제 하루만 빠졌으면(마지막 출석이 그제) 보호막 구매 하나를 소모하고 연속을 잇는다.
+//    📌 XP 획득 중단(관리자 — xpStop.js) 중이면 출석을 받지 않는다 — { stopped, until }. 자물쇠도 세우지 않는다
 import { UserXp } from "./db.js";
 import { kstToday } from "./leveling.js";
 import { getAttendBuffXp } from "./roleConfigs.js";
@@ -12,6 +13,7 @@ import { getAttendEffectXp, attendLuckyXp, attendPointOf, consumeStreakShield } 
 import { getSettings, isLevelOpen } from "./botSettings.js";
 import { grantXp } from "./xp.js";
 import { logWallet } from "./wallet.js";
+import { xpStoppedUntil, notStopped, noteXpStop, stopUntilOf } from "./xpStop.js";
 
 const MAX_BONUS = 10_000_000; // 사이트 저장 한도(app/api/bot-settings)와 같다
 const MAX_DAYS = 365;
@@ -53,22 +55,29 @@ export function streakBonusText(b) {
 /**
  * 출석 — member 는 GuildMember. source: "command" | "voice" (로그용)
  * @returns {{ closed: true }
+ *   | { stopped: true, until: number }
  *   | { already: true, streak: number }
  *   | { ok: true, amount: number, attendCount: number, streak: number, bestStreak: number,
  *       streakBonus: { xp: number, point: number, days: number } | null, lucky: number, point: number, shieldUsed: boolean }}
  *   amount = 출석 XP(버프 · 효과 · 럭키 포함, 연속 보너스 제외) — 보너스는 streakBonus 에 따로. 실제 지급 XP 는 amount + streakBonus.xp
  *   lucky = 럭키 출석으로 더해진 XP(amount 안에 들어 있다, 없으면 0) · point = 아이템 효과 출석 빙옥(연속 보너스 빙옥 제외, 없으면 0)
  *   shieldUsed = 오늘 보호막을 써서 연속을 이었는지
+ *   stopped = XP 획득 중단 중(xpStop.js) — until 은 끝 시각(ms). 출석 기록(자물쇠 · 누적 · 연속)도 남기지 않는다
  */
 export async function claimAttendance(member, { source = "command" } = {}) {
   // 📌 레벨 비공개면 자물쇠도 세우지 않는다 — 공개된 날 그날 출석을 받을 수 있게
   if (!isLevelOpen()) return { closed: true };
   // 📌 날것(API) 멤버면 id · 역할 캐시가 없다 — userId 없이 upsert 하면 userId 가 빈 문서가 생기므로 쓰기 전에 멈춘다
   if (!member?.id || !member.roles?.cache) throw new Error("멤버 정보를 읽지 못했습니다.");
+  // 📌 XP 획득 중단(관리자 — xpStop.js) — 2026-10-04 "5일 전체 XP 획득 중단". 출석 자체를 받지 않는다(출석일 · 연속 · 빙옥 모두 없음).
+  //    중단이 끝난 그날은 다시 출석할 수 있다. 메모리로 먼저 거르고, 아래 자물쇠 조건(notStopped)이 60초 안에 세운 중단까지 막는다
+  const stoppedUntil = xpStoppedUntil(member.id);
+  if (stoppedUntil) return { stopped: true, until: stoppedUntil };
 
   const s = getSettings();
   const userId = member.id;
   const today = kstToday();
+  const now = new Date();
 
   // 문서가 없는 유저(아직 XP 를 한 번도 못 받음)도 출석할 수 있게 먼저 만들어 둔다
   await UserXp.updateOne({ userId }, { $setOnInsert: { userId } }, { upsert: true }).catch((e) => {
@@ -78,13 +87,17 @@ export async function claimAttendance(member, { source = "command" } = {}) {
   // 자물쇠부터 — 오늘 미출석일 때만 통과하는 조건부 갱신 (연타 · 음성 자동 출석과 겹쳐도 한 번만)
   //    바꾸기 전 문서를 돌려받아 어제 출석했는지(연속)와 누적 출석 수를 본다
   const prev = await UserXp.findOneAndUpdate(
-    { userId, lastAttendDate: { $ne: today } },
+    { userId, lastAttendDate: { $ne: today }, ...notStopped(now) },
     { $set: { lastAttendDate: today }, $inc: { attendCount: 1 } },
     { new: false, projection: { attendCount: 1, lastAttendDate: 1, attendStreak: 1, attendBestStreak: 1 } }
   ).lean();
 
   if (!prev) {
-    const cur = await UserXp.findOne({ userId }, { attendStreak: 1 }).lean();
+    const cur = await UserXp.findOne({ userId }, { attendStreak: 1, xpStopFrom: 1, xpStopUntil: 1 }).lean();
+    // 자물쇠가 안 잡힌 까닭이 XP 획득 중단이면 그것을 알린다(이미 출석한 것이 아니다)
+    noteXpStop(userId, cur);
+    const until = stopUntilOf(cur, now.getTime());
+    if (until) return { stopped: true, until };
     // 오늘 이미 출석했으니 최소 1일 (연속 기록이 생기기 전에 출석한 문서는 0 이다)
     return { already: true, streak: Math.max(1, Math.floor(Number(cur?.attendStreak) || 0)) };
   }
