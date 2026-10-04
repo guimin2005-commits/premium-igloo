@@ -100,9 +100,13 @@ const hexLift = (hex: string, t: number) => {
   const f = (h: string) => Math.round(parseInt(h, 16) + (255 - parseInt(h, 16)) * t).toString(16).padStart(2, "0");
   return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
 };
+// 📌 누적 음성 시간 — 레벨 페이지 대시보드 · 서버 랭킹(app/level/page.js fmtVoiceTimeMin)과 같은 표기("3시간 27분", 1시간 전에는 "27분", 1분 전에는 "42초")
+//    2026-10-04 "두 곳 모두 '3시간 27분'으로 통일" — 같은 프로필 카드를 그리는 미리보기도 같이
 const fmtVoiceTime = (sec: number) => {
   const min = Math.floor((sec || 0) / 60);
-  return min < 60 ? `${min}분` : `${Math.floor(min / 60).toLocaleString()}시간`;
+  if (min < 1) return `${Math.max(0, Math.floor(sec || 0))}초`;
+  if (min < 60) return `${min}분`;
+  return `${Math.floor(min / 60).toLocaleString()}시간 ${min % 60}분`;
 };
 // 레벨 페이지 카드의 옅은 격자(lux-grid-bg-dark) — 그 화면의 style 태그에 있어 여기선 인라인으로
 const GRID_DARK: React.CSSProperties = {

@@ -239,7 +239,7 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
             {both ? (skinOn ? "스킨 해제" : "스킨 착용") : skinOn ? "착용 해제" : "착용"}
           </button>
         )}
-        {/* 📌 프로필 배지 — 이름 옆(내 정보 · 랭킹)에 최대 3개. 안 고른 유저는 관리자 순서상 앞의 3개가 자동으로 달려 있다 */}
+        {/* 📌 프로필 배지 — 이름 옆(내 정보 · 랭킹)에 최대 3개. 직접 단 것만 보인다(2026-10-04 자동으로 달지 않음) */}
         {it.badgeId && !compact && (
           <button type="button" disabled={badgeBusy} onClick={() => onBadge?.(it.badgeId, !badgeOn)} className={wearBtn(badgeOn)}>
             {both ? (badgeOn ? "배지 해제" : "배지 착용") : badgeOn ? "착용 해제" : "착용"}

@@ -323,7 +323,7 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
 
   const owned = new Map(); // 아이템 id → { exp(ms, 0 = 영구), pending, units: 묶음 건 수, perm: 무기한 묶음 건 있음, first: 가장 빠른 만료 }
   const seenRoles = new Set();
-  // 📌 bought — 상점에서 산 건이 하나라도 있으면(사이트 lib/ownedItems _bought 와 같다). 배지 자동 표시는 산 것만(views/inventory.js)
+  // 📌 bought — 상점에서 산 건이 하나라도 있으면(사이트 lib/ownedItems _bought 와 같다). 표시용 표식 — 2026-10-04 부터 사이트는 배지를 자동으로 달지 않는다(pickBadges)
   const add = (id, exp, pending, unit = false, bought = false) => {
     let cur = owned.get(id);
     if (!cur) {

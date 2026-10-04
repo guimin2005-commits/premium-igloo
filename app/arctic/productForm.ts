@@ -4,6 +4,7 @@
 
 import { isItemType } from "@/lib/items";
 import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
+import { pointSaleFloor } from "@/lib/shopPricing";
 import { unitSaleAllowed, clampPerOrder, DEFAULT_PER_ORDER } from "@/lib/unitSale";
 import { isBackdropKey } from "@/lib/itemBackdrops";
 
@@ -202,12 +203,13 @@ export const durationsCalc = (f: ProductForm | null | undefined) => {
     : `빙옥으로 내면 ${list.map((x) => `${x.l} ${xpToPoint(x.n).toLocaleString()}`).join(" · ")} 빙옥`;
 };
 // 할인 뒤 판매가 — 입력칸 단위 그대로. 상점 · 결제와 같은 계산(lib/shopPricing applyDiscount):
-//    빙옥 전용은 XP 로 할인한 뒤 빙옥 단위로 내린다(2026-10-04 — 할인이 빙옥 값에 반영되게). 할인이 없으면 정가 그대로
+//    빙옥 전용은 XP 로 할인한 뒤 빙옥 단위로 내린다(2026-10-04 — 할인이 빙옥 값에 반영되게) — 정가가 1 빙옥 이상이면 최소 1 빙옥(pointSaleFloor).
+//    할인이 없으면 정가 그대로
 export const formSalePrice = (f: ProductForm | null | undefined, raw: string | number, pct: number) => {
   const xp = toXpValue(String(raw ?? ""), !!f?.pointOnly);
   if (!(pct > 0)) return f?.pointOnly ? xpToPoint(xp) : xp;
   const sale = Math.max(0, Math.floor((xp * (100 - pct)) / 100));
-  return f?.pointOnly ? Math.floor(sale / POINT_RATE) : sale;
+  return f?.pointOnly ? pointSaleFloor(xp, sale) / POINT_RATE : sale;
 };
 
 // 📌 기간제 — 값을 매긴 기간만 판매 목록에 올린다. 기간제 + 무제한이면 무제한(days 0)을 나란히 붙인다
