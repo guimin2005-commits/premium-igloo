@@ -10,6 +10,8 @@ const PurchaseSchema = new mongoose.Schema({
   // 📌 아이템 등록(models/Item) id 스냅샷 — 상품이 등록된 아이템을 참조했거나 시즌 패스 아이템 보상이면 채운다.
   //    인벤토리(my-items)가 이 값으로 Item 을 먼저 찾아 표기를 그린다. "" 이면 상품·구매 스냅샷으로 그린다.
   itemRef: { type: String, default: "" },
+  // 📌 시즌 패스 보상으로 받은 건의 칸 이름("시즌 패스 9티어 · 프리미엄") — 퀘스트가 칸 수로 센다(2026-10-04). 상점 구매는 빈 값
+  passCell: { type: String, default: "" },
   itemName: { type: String, default: "" },
   itemType: { type: String, default: "role" }, // "role" | "perk" | "item" | "cosmetic" | "physical"
   roleId: { type: String, default: "" },

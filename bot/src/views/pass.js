@@ -146,10 +146,10 @@ async function seasonStartBaseXp(userId, xp, season, docId) {
       // 📌 패스 가속(아이템 효과 passBoost)으로 더 오른 진행도도 이번 시즌에 번 것으로 친다
       { $group: { _id: null, s: { $sum: { $add: ["$amount", { $ifNull: ["$passBoost", 0] }] } } } },
     ]),
-    // 📌 패스 보상 · 역할 환불(role-refund)은 뺀다 — 지급할 때 기준선도 같이 올리는 지급(grantQueue PASS_NEUTRAL). 사이트 lib/seasonPass.js 와 같게
+    // 📌 패스 보상 · 역할 환불(role-refund)은 뺀다 — 지급할 때 기준선도 같이 올리는 지급(grantQueue PASS_NEUTRAL). 관리자 초기화(kind "reset")도 뺀다. 사이트 lib/season.js passEarnedPipelines 와 같게
     //    📌 퀘스트 보상의 패스 가속(Payout.passBoost — grantQueue PASS_BOOSTED)도 XpLog 처럼 더한다 — 빠지면 기준선을 되짚을 때 가속분이 사라진다
     Payout.aggregate([
-      { $match: { userId, status: "paid", currency: { $ne: "point" }, source: { $nin: ["pass", "role-refund"] }, paidAt: { $gte: since } } },
+      { $match: { userId, status: "paid", currency: { $ne: "point" }, source: { $nin: ["pass", "role-refund"] }, kind: { $ne: "reset" }, paidAt: { $gte: since } } },
       { $group: { _id: null, s: { $sum: { $add: ["$amount", { $ifNull: ["$passBoost", 0] }] } } } },
     ]),
   ]);

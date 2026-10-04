@@ -65,8 +65,8 @@ type RoleState = { key: string; loading: boolean; present: boolean; roles: HeldR
 
 // 📌 인벤토리 탭 — 유저 화면 인벤토리와 같은 판정(app/api/admin/users/inventory)에 회수 방법(revoke)이 붙는다.
 //    rows: 그 물건의 기록을 서버가 다시 모아 회수(key 를 그대로 돌려준다) · role: 구매 기록 없이 역할로 가진 것 → 역할 회수 API · locked: 손대지 않는다(lock 라벨)
-//    units: 회수 순서대로 한 건씩 — 지급 · 패스(낸 값 없음) 먼저, 그다음 구매(xp · point = 돌려줄 값)
-type RevokeUnit = { src: "grant" | "pass" | "shop"; xp: number; point: number };
+//    units: 회수 순서대로 한 건씩 — 지급 · 패스(낸 값 없음) 먼저, 그다음 구매(xp · point = 돌려줄 값, clawXp = 돌려줄 XP 로 다 못 뺀 캐시백 — 지갑에서 빠짐)
+type RevokeUnit = { src: "grant" | "pass" | "shop"; xp: number; point: number; clawXp: number };
 type Revoke = { mode: "rows" | "role" | "locked"; key: string; roleId: string; lock: string; stack: boolean; max: number; tool: number; units: RevokeUnit[] };
 type InvSource = "shop" | "grant" | "pass" | "item" | "level";
 type InvCard = {
@@ -98,6 +98,7 @@ const normRevoke = (v: unknown): Revoke => {
       src: u?.src === "shop" || u?.src === "pass" ? u.src : "grant",
       xp: toInt(u?.xp),
       point: toInt(u?.point),
+      clawXp: toInt(u?.clawXp),
     })),
   };
 };
@@ -1281,6 +1282,7 @@ export default function AdminUsersPage() {
           const parts = UNIT_SRC.map((g) => ({ l: g.l, n: picked.filter((x) => x.src === g.src).length })).filter((g) => g.n > 0);
           const xp = picked.reduce((s, x) => s + x.xp, 0);
           const point = picked.reduce((s, x) => s + x.point, 0);
+          const claw = picked.reduce((s, x) => s + x.clawXp, 0);
           return (
             <>
               <p className="font-bold text-[#131313] break-keep">{invRevoke.name}</p>
@@ -1296,6 +1298,7 @@ export default function AdminUsersPage() {
               {(xp > 0 || point > 0) && (
                 <p className="mt-1 font-bold text-[#131313] tabular-nums">환불 {joinMeta([xp > 0 && `${num(xp)} XP`, point > 0 && `${num(point)} 빙옥`])}</p>
               )}
+              {claw > 0 && <p className="mt-1 font-bold text-[#131313] tabular-nums">캐시백 회수 {num(claw)} XP</p>}
               {rv.tool > 0 && <p className="mt-1 text-[#8a8a8a] tabular-nums">역할 이전 {num(rv.tool)}건 제외</p>}
             </>
           );

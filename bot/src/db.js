@@ -261,6 +261,7 @@ const PurchaseSchema = new mongoose.Schema({
   userName: { type: String, default: "" },
   itemId: { type: String, required: true },
   itemRef: { type: String, default: "" }, // 아이템 등록(사이트 models/Item) id 스냅샷 — 봇은 아이템 효과 보유 판정(itemEffects.js)에 읽기만 한다
+  passCell: { type: String, default: "" }, // 시즌 패스 보상 칸 이름 — 퀘스트가 칸 수로 센다(models/Purchase.js 와 같은 칸)
   itemName: { type: String, default: "" },
   itemType: { type: String, default: "role" },
   roleId: { type: String, default: "" },

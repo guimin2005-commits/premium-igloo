@@ -468,7 +468,7 @@ export function jackpotXp(member, { channel = null, kst = kstNow() } = {}) {
   }
 }
 
-// 음성 파티 — 그 음성 채널 인원(봇 제외, 본인 포함)이 minMembers 이상일 때 1회당 (percent 는 기본 음성 XP 기준)
+// 음성 파티 — 그 음성 채널 인원(봇 제외, 본인 포함)이 minMembers 이상일 때 1회당 (percent 는 강화 포함 기본 음성 XP 기준 — voiceXp.js voiceRate)
 export function voicePartyXp(member, { base = 0, channel = null, count = 0, kst = kstNow() } = {}) {
   return effectXp(member, "voiceParty", { base, channel, kst, test: (e) => count >= e.minMembers });
 }

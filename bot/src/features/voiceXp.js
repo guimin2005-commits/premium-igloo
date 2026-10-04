@@ -73,7 +73,9 @@ export function voiceRate(member, channel, doc, s, count) {
   const base = Math.max(0, Number(s.voiceXp) || 0);
   const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
   const channelXp = channel ? getChannelPolicy(channel).boostXp || 0 : 0;
-  const itemXp = effectXp(member, "voice", { base, channel }) + voicePartyXp(member, { base, channel, count });
+  // 📌 2026-10-04 "강화 포함이지. 강화는 '기본 XP'를 강화하는 개념" — % 효과("음성 1회당" · "음성 파티")는 강화로 늘어난 기본 XP 에 붙인다(채팅과 같은 기준)
+  const pctBase = base + enhanceXp;
+  const itemXp = effectXp(member, "voice", { base: pctBase, channel }) + voicePartyXp(member, { base: pctBase, channel, count });
   return base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp + getBuffXp(member) + channelXp + getActiveBoostXp(member, channel) + itemXp;
 }
 

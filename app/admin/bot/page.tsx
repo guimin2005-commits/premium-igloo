@@ -212,7 +212,7 @@ const questTargetHint =(reason: string, metric: string) => {
   if (reason === "shop" && metric === "point") return "ARCTIC 구매에 쓴 빙옥 합계";
   if (reason === "shop") return "ARCTIC 구매 건수 — 운영진 지급 · 시즌 패스 보상 · 환불 · 취소 제외";
   if (reason === "enhance") return "강화 횟수 — 1단계 = 1회";
-  if (reason === "pass") return "시즌 패스 보상을 받은 개수";
+  if (reason === "pass") return "시즌 패스 보상을 받은 칸 수";
   if (reason === "quest") return "이 주기에 보상을 받은 다른 퀘스트 수 (이 퀘스트는 제외)";
   if (metric === "xp") return "달성에 필요한 XP 합계";
   if (metric === "minute") return "달성에 필요한 접속 시간 (분) — 예: 2시간이면 120";
