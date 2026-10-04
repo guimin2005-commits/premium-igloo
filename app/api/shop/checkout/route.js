@@ -11,12 +11,13 @@ import UserXp from "@/models/UserXp";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import ShopLock from "@/models/ShopLock";
+import BotSetting from "@/models/BotSetting";
 import { salePrice, couponError, couponClaimFilter, couponReleaseUpdate, isTimed, durationPrice } from "@/lib/shopPricing";
 import { getLevelByXp } from "@/lib/leveling";
 import { planPayment, splitByPrice } from "@/lib/shopPay";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { getPerks } from "@/lib/itemPerks";
-import { cashbackOf } from "@/lib/itemEffects";
+import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf } from "../_lib/renewal";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
@@ -152,9 +153,16 @@ export async function POST(request) {
 
     // 📌 캐시백 % (아이템 효과 shopCashback — 상한 적용) — 이번 결제 전에 가진 것으로 정한다(방금 사는 캐시백 아이템이 제 결제에 붙지 않게).
     //    재고 · 쿠폰을 잡기 전에 읽는다. 읽지 못하면 캐시백 없이 결제한다(결제를 막지 않는다)
-    const cashPct = await getPerks(userId)
-      .then((p) => p.shopCashback || 0)
-      .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; });
+    //    📌 상한 · 빙옥 몫 포함 여부는 관리자 설정(상점 관리 › 설정 — lib/itemEffects cashbackRuleOf). 설정을 못 읽으면 기본값(30% · XP 몫만)
+    const [perkPct, cashRule] = await Promise.all([
+      getPerks(userId)
+        .then((p) => p.shopCashback || 0)
+        .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; }),
+      BotSetting.findOne({ key: "main" }, { shopCashbackCap: 1, cashbackOnPoint: 1 }).lean()
+        .then(cashbackRuleOf)
+        .catch((e) => { console.error("캐시백 설정 조회 실패:", e); return cashbackRuleOf(null); }),
+    ]);
+    const cashPct = Math.min(perkPct, cashRule.cap);
 
     // 📌 단가는 여기서 한 번만 — 할인 종료 시각이 요청 도중에 지나도 청구액과 기록(Purchase.price)이 같은 값이 되게
     const unitPrice = new Map(docs.map((d) => [String(d._id), salePrice(d, daysOf.get(String(d._id)))]));
@@ -287,10 +295,12 @@ export async function POST(request) {
     //    _id 를 미리 정해 두어, 넣다 만 경우 그 건들만 골라 지울 수 있게 한다.
     //    📌 한 결제의 건은 orderId · createdAt 이 모두 같다 — 주문 내역 · 원장이 orderId + 상품으로 한 줄에 묶고,
     //       원장의 쪽 넘김(같은 시각은 한 쪽에)에서 한 주문이 두 쪽으로 갈라지지 않게
-    //    📌 캐시백은 결제 전체 XP 로 한 번 계산(버림)해 건마다 낸 XP 비율로 나눈다 — 여러 개를 살 때 건마다 버려 덜 돌려주지 않게.
-    //       건별 몫의 합이 전체와 같고, 환불은 그 건 몫만 회수한다(app/api/shop/orders)
+    //    📌 캐시백은 결제 전체 바탕으로 한 번 계산(버림)해 건마다 바탕 비율로 나눈다 — 여러 개를 살 때 건마다 버려 덜 돌려주지 않게.
+    //       바탕 = 낸 XP(설정에서 켜면 + 낸 빙옥 × 10,000 — cashbackBaseOf). 건별 몫의 합이 전체와 같고, 환불은 그 건 몫만 회수한다(lib/orderRefund)
+    //    📌 couponId — 이 주문에 쓴 쿠폰. 주문 전체를 취소 · 환불하면 그 쿠폰을 돌려준다(lib/orderRefund returnOrderCoupon). 건마다 같은 값
     const createdAt = new Date();
-    const cashShares = splitByPrice(cashbackOf(pay.lines.reduce((s, l) => s + (l.paidXp || 0), 0), cashPct), pay.lines.map((l) => l.paidXp || 0));
+    const cashBases = pay.lines.map((l) => cashbackBaseOf(l.paidXp, l.paidPoint, cashRule.onPoint));
+    const cashShares = splitByPrice(cashbackOf(cashBases.reduce((s, v) => s + v, 0), cashPct), cashBases);
     const rows = units.map(({ d }, i) => {
       const days = daysOf.get(String(d._id)) || 0;
       const timing = timingOf(plans.get(String(d._id)), days);
@@ -314,6 +324,7 @@ export async function POST(request) {
         billed: true,
         // 이 건에 돌려줄 캐시백 — 결제 전체 캐시백의 이 건 몫(위 cashShares). 지급에 실패하면 아래에서 0 으로 되돌린다
         cashbackXp: cashShares[i] || 0,
+        couponId: coupon ? String(coupon._id) : "",
         days,
         // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
         expiresAt: timing.expiresAt,
@@ -370,9 +381,9 @@ export async function POST(request) {
     }
 
     // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다).
-    //    빙옥만 냈으면 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다.
+    //    빙옥만 냈으면 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다 — 빙옥 몫 캐시백(XP)을 받았으면 XP 가 늘었으니 다시 계산한다
     const balDoc = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
-    if (chargedXp > 0) {
+    if (chargedXp > 0 || cashbackGiven > 0) {
       // 레벨이 내려갔을 수 있으니 봇이 보상 역할을 다시 맞추도록 표시한다
       await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(balDoc?.xp ?? 0), needsRoleSync: true } });
     }

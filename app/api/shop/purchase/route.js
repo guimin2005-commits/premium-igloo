@@ -12,9 +12,10 @@ import ShopItem from "@/models/ShopItem";
 import Purchase from "@/models/Purchase";
 import UserXp from "@/models/UserXp";
 import ShopLock from "@/models/ShopLock";
+import BotSetting from "@/models/BotSetting";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { getPerks } from "@/lib/itemPerks";
-import { cashbackOf } from "@/lib/itemEffects";
+import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
 import { stripAdminTag } from "@/lib/admins";
@@ -90,9 +91,16 @@ export async function POST(request) {
 
     // 📌 캐시백 % (아이템 효과 shopCashback — 상한 적용) — 이번 결제 전에 가진 것으로 정한다(방금 사는 캐시백 아이템이 제 결제에 붙지 않게).
     //    재고를 잡기 전에 읽는다. 읽지 못하면 캐시백 없이 결제한다(결제를 막지 않는다) — 장바구니 결제와 같은 규칙
-    const cashPct = await getPerks(userId)
-      .then((p) => p.shopCashback || 0)
-      .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; });
+    //    📌 상한 · 빙옥 몫 포함 여부는 관리자 설정(상점 관리 › 설정 — lib/itemEffects cashbackRuleOf). 설정을 못 읽으면 기본값(30% · XP 몫만)
+    const [perkPct, cashRule] = await Promise.all([
+      getPerks(userId)
+        .then((p) => p.shopCashback || 0)
+        .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; }),
+      BotSetting.findOne({ key: "main" }, { shopCashbackCap: 1, cashbackOnPoint: 1 }).lean()
+        .then(cashbackRuleOf)
+        .catch((e) => { console.error("캐시백 설정 조회 실패:", e); return cashbackRuleOf(null); }),
+    ]);
+    const cashPct = Math.min(perkPct, cashRule.cap);
 
     // 1) 재고 선점 — 무제한(-1)이 아니면 남은 수량이 있을 때만 차감
     if (item.stock >= 0) {
@@ -162,8 +170,8 @@ export async function POST(request) {
     //       지우기부터 실패하면 되돌리지 않는다(기록이 남았을 수 있어 공짜가 된다) — 바깥 catch 로 넘긴다
     const purchaseId = new mongoose.Types.ObjectId();
     const timing = timingOf(plan, days);
-    // 이 건에 돌려줄 캐시백 — 실제로 낸 XP 의 % (버림). 지급에 실패하면 아래에서 0 으로 되돌린다
-    const cashbackXp = cashbackOf(chargedXp, cashPct);
+    // 이 건에 돌려줄 캐시백 — 실제로 낸 XP(설정에서 켜면 + 낸 빙옥 × 10,000)의 % (버림). 지급에 실패하면 아래에서 0 으로 되돌린다
+    const cashbackXp = cashbackOf(cashbackBaseOf(chargedXp, pointUse, cashRule.onPoint), cashPct);
     let purchase;
     try {
       purchase = await Purchase.create({
@@ -225,9 +233,9 @@ export async function POST(request) {
     }
 
     // 차감된 XP에 맞춰 레벨을 다시 계산 (레벨이 내려갈 수 있다)
-    //    빙옥만 냈으면 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다.
+    //    빙옥만 냈으면 레벨에 영향이 없으므로 재계산도 역할 동기화도 하지 않는다 — 빙옥 몫 캐시백(XP)을 받았으면 XP 가 늘었으니 다시 계산한다
     const doc = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
-    if (chargedXp > 0) {
+    if (chargedXp > 0 || cashbackGiven > 0) {
       // 레벨이 내려갔을 수 있으니 봇이 보상 역할을 다시 맞추도록 표시한다
       await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(doc?.xp ?? 0), needsRoleSync: true } });
     }

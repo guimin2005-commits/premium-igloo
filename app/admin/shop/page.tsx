@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { discountPctOf, discountUntilLabel, priceText, COUPON_SCOPES, couponScopeTail } from "@/lib/shopPricing";
+import { discountPctOf, discountUntilLabel, priceText, applyDiscount, COUPON_SCOPES, couponScopeTail } from "@/lib/shopPricing";
+import { POINT_RATE } from "@/lib/pointRate";
 import Dropdown, { type DropdownOption } from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
@@ -13,7 +14,7 @@ import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
   TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
-  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines,
+  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines, cashbackRuleOf,
 } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
@@ -35,6 +36,9 @@ import {
   DefRow,
   StatusChip,
   Panel,
+  PanelGrid,
+  FieldRow,
+  SaveBar,
   Inline,
   inputClass,
   numClass,
@@ -70,6 +74,8 @@ const TAB_META: Record<string, { desc: string }> = {
   // 예전 목록 아래 한 줄 안내를 머리로 올렸다
   orders: { desc: "역할 상품은 봇이 30초 주기로 자동 지급합니다. 취소하면 XP가 환불되고 재고가 복구됩니다." },
   season: { desc: "되돌리려면 역할을 손으로 다시 붙여야 합니다." },
+  // 📌 2026-10-04 "관리자가 정하게 해" — 결제 캐시백 상한 · 빙옥 결제분 캐시백(BotSetting — app/api/bot-settings PATCH)
+  settings: { desc: "" },
 };
 
 const TAB_ORDER = [
@@ -79,6 +85,7 @@ const TAB_ORDER = [
   { id: "coupons", short: "쿠폰" },
   { id: "orders", short: "구매 내역" },
   { id: "season", short: "시즌 전환" },
+  { id: "settings", short: "설정" },
 ];
 
 // expired — 기간제가 끝나 봇이 회수한 건 (bot/src/features/grantQueue.js)
@@ -175,6 +182,17 @@ const sameDays = (a: number[], b: number[]) => a.length === b.length && [...a].s
 const fmtDateTime = (v: string | Date) => {
   const d = new Date(v);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+// 같은 건(_id)은 한 번만 — 앞의 것을 남긴다(구매 내역 더 보기의 겹친 건)
+const uniqById = <T extends { _id?: unknown }>(rows: T[]) => {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const k = String(r?._id);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 };
 
 // 필수 · 선택 표시 (라벨 옆 기호)
@@ -317,16 +335,20 @@ function EffectsEditor({
   const chName = (id: string) => channels.find((c) => c.id === id)?.name as string | undefined;
   // 📌 2026-10-04 "상시 효과 숨은 상한은 관리자만 표기" — 상한은 관리자 편집 칸에만 적는다(유저 화면에는 없다).
   //    쿨타임 단축 · 음소거 완화는 상한이 설정값에 따라 바뀐다(채팅 쿨타임의 절반 · 지금 음소거 감소율) — 지금 설정으로 계산해 적는다
-  const [botCaps, setBotCaps] = useState<{ cooldown: number; mute: number } | null>(null);
+  //    캐시백 상한은 관리자 설정(상점 관리 › 설정 — BotSetting.shopCashbackCap, 기본 30%)
+  const [botCaps, setBotCaps] = useState<{ cooldown: number; mute: number; cashback: number } | null>(null);
   useEffect(() => {
     fetch("/api/bot-settings", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.data) setBotCaps({ cooldown: Number(d.data.chatCooldownSec) || 0, mute: Math.min(100, Math.max(0, Number(d.data.muteReducePct) || 0)) }); })
+      .then((d) => {
+        if (d?.data) setBotCaps({ cooldown: Number(d.data.chatCooldownSec) || 0, mute: Math.min(100, Math.max(0, Number(d.data.muteReducePct) || 0)), cashback: cashbackRuleOf(d.data).cap });
+      })
       .catch(() => {});
   }, []);
   const capText = (t: { v: string; cap?: number; unit?: string }) => {
     if (t.v === "cooldownCut") return botCaps ? `합 최대 ${Math.min(3600, Math.floor(botCaps.cooldown / 2)).toLocaleString()}초 (채팅 쿨타임의 절반)` : "합 최대 채팅 쿨타임의 절반";
     if (t.v === "muteRelief") return botCaps ? `합 최대 ${botCaps.mute}%p (지금 음소거 감소율)` : "합 최대 지금 음소거 감소율";
+    if (t.v === "shopCashback") return botCaps ? `합 최대 ${botCaps.cashback}% (상점 관리 › 설정)` : "합 최대 상점 관리 › 설정 값";
     return `합 최대 ${t.cap}${t.unit}`;
   };
   // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다).
@@ -679,6 +701,11 @@ export default function AdminShopPage() {
 
   const [items, setItems] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  // 📌 구매 내역 더 보기 — 한 번에 500건(app/api/shop/orders 쪽 넘김). ordersNext: 다음 쪽 커서("" 이면 끝).
+  //    ordersDepth: 펼친 건 수 — 처리 뒤 다시 읽을 때 그만큼 읽어, 더 보기로 찾은 옛 주문이 목록에서 사라지지 않게
+  const [ordersNext, setOrdersNext] = useState("");
+  const [ordersBusy, setOrdersBusy] = useState(false);
+  const ordersDepth = useRef(0);
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "item" | "banner" | "coupon" | "reg"; id: string } | null>(null);
@@ -817,21 +844,41 @@ export default function AdminShopPage() {
   };
 
   const fetchAll = useCallback(() => {
+    // 더 보기로 펼친 만큼(최대 5,000건 — 서버 한도) 다시 읽는다. 처음엔 한 쪽(500건)
+    const depth = ordersDepth.current;
     Promise.all([
       fetch("/api/shop/items?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/discord-roles", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/shop/orders", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/shop/orders${depth > 500 ? `?limit=${Math.min(5000, depth)}` : ""}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       // 배너는 노출 위치(홈 · 시즌 탭) 구분 없이 전부 — 위치를 안 붙이면 홈 배너만 온다
       fetch("/api/shop/banners?all=1&placement=any", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/shop/coupons", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([it, roles, ord, ban, cou]) => {
       setItems(Array.isArray(it?.data) ? it.data : []);
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
-      setOrders(Array.isArray(ord?.data) ? ord.data : []);
+      const ordRows = Array.isArray(ord?.data) ? uniqById(ord.data) : [];
+      setOrders(ordRows);
+      ordersDepth.current = ordRows.length;
+      setOrdersNext(ord?.hasMore && ord?.next ? String(ord.next) : "");
       setBanners(Array.isArray(ban?.data) ? ban.data : []);
       setCoupons(Array.isArray(cou?.data) ? cou.data : []);
     }).finally(() => setIsLoading(false));
   }, []);
+
+  // 구매 내역 다음 쪽 — 쪽 끝에 걸친 주문은 서버가 나머지 건까지 붙여 주므로 다음 쪽과 겹칠 수 있다(_id 로 뺀다)
+  const loadMoreOrders = async () => {
+    if (ordersBusy || !ordersNext) return;
+    setOrdersBusy(true);
+    const d = await fetch(`/api/shop/orders?before=${encodeURIComponent(ordersNext)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    setOrdersBusy(false);
+    if (!d?.success || !Array.isArray(d.data)) return notify("구매 내역을 더 불러오지 못했습니다.", true);
+    setOrders((prev) => {
+      const next = uniqById([...prev, ...d.data]);
+      ordersDepth.current = next.length;
+      return next;
+    });
+    setOrdersNext(d.hasMore && d.next ? String(d.next) : "");
+  };
 
   // ── 이미지 배너 ──────────────────────────────
   // 📌 placement — 노출 위치. home: ARCTIC 홈 맨 위 · season: 스토어 시즌 탭 맨 위 (값이 없는 옛 배너는 홈)
@@ -881,14 +928,21 @@ export default function AdminShopPage() {
     setIsIssuing(false);
   };
 
-  // 예전 '코드'를 보상형 쿠폰으로 옮긴다 (여러 번 눌러도 중복되지 않는다)
+  // 예전 '코드'를 보상형 쿠폰으로 옮긴다 (여러 번 눌러도 중복되지 않는다) — 예전에 쓴 사람의 사용 기록도 넘긴다(app/api/shop/coupons/migrate)
+  //    📌 2026-10-04 "이미 다 옮겼다면 버튼을 없앤다" — 남은 일(옮길 코드 · 넘길 사용 기록)이 있을 때만 버튼을 보인다
   const [isMigrating, setIsMigrating] = useState(false);
+  const [legacyLeft, setLegacyLeft] = useState(0);
+  const fetchLegacy = useCallback(() => {
+    fetch("/api/shop/coupons/migrate", { cache: "no-store" }).then((r) => r.json())
+      .then((d) => setLegacyLeft(d?.success ? (Number(d.data?.pending) || 0) + (Number(d.data?.linked) || 0) : 0))
+      .catch(() => setLegacyLeft(0));
+  }, []);
   const migrateCodes = async () => {
     if (isMigrating) return;
     setIsMigrating(true);
     const res = await fetch("/api/shop/coupons/migrate", { method: "POST" }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { notify(d.message || "이전했습니다."); fetchAll(); }
+    if (res?.ok && d?.success) { notify(d.message || "이전했습니다."); fetchAll(); fetchLegacy(); }
     else notify(d?.message || "이전에 실패했습니다.", true);
     setIsMigrating(false);
   };
@@ -938,6 +992,54 @@ export default function AdminShopPage() {
   };
 
   useEffect(() => { if (isAdmin) { fetchAll(); fetchRegItems(); } }, [isAdmin, fetchAll, fetchRegItems]);
+  // 예전 코드 남은 일 — 쿠폰 탭을 열 때만 센다(예전 기록을 훑는다)
+  useEffect(() => { if (isAdmin && tab === "coupons") fetchLegacy(); }, [isAdmin, tab, fetchLegacy]);
+
+  // ── 설정 (결제 캐시백) ────────────────────────
+  //    📌 2026-10-04 "관리자가 정하게 해" — 캐시백 합 상한(%) · 빙옥 결제분 캐시백. 저장은 그 두 칸만(app/api/bot-settings PATCH — 레벨 설정의 다른 값은 건드리지 않는다)
+  type ShopSet = { cap: string; onPoint: boolean };
+  const [shopSet, setShopSet] = useState<ShopSet | null>(null);
+  const [shopSetSnap, setShopSetSnap] = useState<ShopSet | null>(null);
+  const [savingShopSet, setSavingShopSet] = useState(false);
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d?.success) return;
+        const r = cashbackRuleOf(d.data);
+        const v = { cap: String(r.cap), onPoint: r.onPoint };
+        setShopSet(v);
+        setShopSetSnap(v);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isAdmin]);
+  const shopSetChanges: string[] = shopSet && shopSetSnap
+    ? [
+        shopSet.cap !== shopSetSnap.cap ? `캐시백 상한 ${shopSetSnap.cap}% → ${shopSet.cap || "-"}%` : "",
+        shopSet.onPoint !== shopSetSnap.onPoint ? `빙옥 결제분 ${shopSetSnap.onPoint ? "포함" : "제외"} → ${shopSet.onPoint ? "포함" : "제외"}` : "",
+      ].filter(Boolean)
+    : [];
+  const saveShopSet = async () => {
+    if (!shopSet || savingShopSet) return;
+    const cap = Number(shopSet.cap);
+    if (shopSet.cap.trim() === "" || !Number.isInteger(cap) || cap < 0 || cap > 100) return notify("캐시백 상한은 0~100 사이의 정수로 입력해 주세요.", true);
+    setSavingShopSet(true);
+    const res = await fetch("/api/bot-settings", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shopCashbackCap: cap, cashbackOnPoint: shopSet.onPoint }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setSavingShopSet(false);
+    if (res?.ok && d?.success) {
+      const r = cashbackRuleOf(d.data);
+      const v = { cap: String(r.cap), onPoint: r.onPoint };
+      setShopSet(v);
+      setShopSetSnap(v);
+      notify("저장되었습니다.");
+    } else notify(d?.message || "저장에 실패했습니다.", true);
+  };
 
   // 📌 역할 버프(관리자 › 레벨 설정 역할 탭) — 연결 역할에 걸려 있으면 효과 칸 · 미리보기에 읽기 전용으로 보여 준다.
   //    아이템 효과와 별개로 그 역할을 가진 사람에게 더해지므로, 모르고 아이템에 같은 값을 또 넣어 두 번 붙지 않게
@@ -1208,7 +1310,8 @@ export default function AdminShopPage() {
       key: "price", label: "가격", align: "right",
       render: (it) => (
         <span className="font-bold tabular-nums whitespace-nowrap">
-          {priceText(it, Math.max(0, Math.floor((it.price * (100 - discountPctOf(it))) / 100)))}
+          {/* 할인가 — 상점 · 결제와 같은 계산(빙옥 전용은 빙옥 단위로 내림 — lib/shopPricing applyDiscount) */}
+          {priceText(it, applyDiscount(it, it.price))}
           {discountPctOf(it) > 0 && <span className="ml-1 text-[#e91e3f]">-{it.discountPct}%</span>}
           {/* 할인 종료 — 남아 있으면 언제까지, 지났으면 끝났다고 */}
           {it.discountPct > 0 && it.discountUntil && (
@@ -1345,6 +1448,16 @@ export default function AdminShopPage() {
             hrefOf={(id) => `/admin/shop?tab=${id}`}
           />
         }
+        // 설정 탭만 — 바뀐 게 있을 때만 뜬다
+        footer={tab === "settings" ? (
+          <SaveBar
+            dirty={shopSetChanges.length > 0}
+            changes={shopSetChanges}
+            onSave={saveShopSet}
+            onReset={() => { if (shopSetSnap) setShopSet(shopSetSnap); }}
+            saving={savingShopSet}
+          />
+        ) : undefined}
       >
         {/* 탭별 설명은 탭 줄 아래 본문 첫 줄에
             📌 설명이 없는 탭(쿠폰)도 한 줄 자리를 지킨다 — 그 탭으로 옮길 때만 아래 검색 · 토글 줄이 한 줄 위로 뛰던 것 */}
@@ -1950,9 +2063,11 @@ export default function AdminShopPage() {
             <Toolbar
               right={
                 <>
-                  <Btn variant="secondary" onClick={migrateCodes} disabled={isMigrating}>
-                    <SwapLabel swap={isMigrating} to="이전 중...">예전 코드 가져오기</SwapLabel>
-                  </Btn>
+                  {legacyLeft > 0 && (
+                    <Btn variant="secondary" onClick={migrateCodes} disabled={isMigrating}>
+                      <SwapLabel swap={isMigrating} to="이전 중...">예전 코드 가져오기</SwapLabel>
+                    </Btn>
+                  )}
                   {newBtn(openNewCoupon)}
                 </>
               }
@@ -2144,6 +2259,12 @@ export default function AdminShopPage() {
                 empty={orders.length === 0 || !qq ? "구매 내역이 없습니다." : noResult}
               />
             )}
+            {/* 📌 더 보기 — 2026-10-04 추천대로: 오래된 주문도 이 목록에서 찾아 환불할 수 있게(한 번에 500건) */}
+            {!isLoading && ordersNext && (
+              <div className="mt-4 flex justify-center">
+                <Btn variant="secondary" className="w-[116px]" onClick={loadMoreOrders} disabled={ordersBusy}>더 보기</Btn>
+              </div>
+            )}
 
             {/* 📌 줄을 누르면 수령 정보 · 메모 · 처리 단추가 상세 칸에 모인다 (예전엔 줄마다 펼쳐 놓아 목록이 길어졌다) */}
             <DetailPane
@@ -2229,6 +2350,30 @@ export default function AdminShopPage() {
               </div>
             )}
           </Panel>
+        )}
+
+        {/* ═══ 설정 — 결제 캐시백 ═══ */}
+        {tab === "settings" && (
+          <PanelGrid>
+            <Panel title="결제 캐시백" flush>
+              {!shopSet || !shopSetSnap ? (
+                <EmptyRow>불러오는 중...</EmptyRow>
+              ) : (
+                <>
+                  <FieldRow label="캐시백 합 상한" changed={shopSet.cap !== shopSetSnap.cap} hint="캐시백 아이템 효과를 합한 최대치 · 기본 30%">
+                    <Inline>
+                      <input type="number" min={0} max={100} step={1} inputMode="numeric" aria-label="캐시백 합 상한" value={shopSet.cap}
+                        onChange={(e) => setShopSet({ ...shopSet, cap: e.target.value })} className={numClass} />
+                      <span>%</span>
+                    </Inline>
+                  </FieldRow>
+                  <FieldRow label="빙옥 결제분" changed={shopSet.onPoint !== shopSetSnap.onPoint} hint={`포함하면 빙옥으로 낸 금액도 1 빙옥 = ${POINT_RATE.toLocaleString()} XP로 환산해 캐시백 · 기본 제외`}>
+                    <Toggle on={shopSet.onPoint} onClick={() => setShopSet({ ...shopSet, onPoint: !shopSet.onPoint })} onLabel="캐시백 포함" offLabel="캐시백 제외" />
+                  </FieldRow>
+                </>
+              )}
+            </Panel>
+          </PanelGrid>
         )}
       </AdminPage>
 
@@ -2341,7 +2486,7 @@ export default function AdminShopPage() {
               <input type="text" value={issueInput} onChange={(e) => setIssueInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && issueInput.trim()) issueCoupon(issueInput.trim()); }}
                 placeholder="디스코드 닉네임 또는 유저 ID" className={inputClass} />
-              <p className={fieldNote}>XP 기록이 있는 유저만 검색되고, 이미 보유 중이면 건너뜁니다.</p>
+              <p className={fieldNote}>이미 보유 중이면 건너뜁니다.</p>
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
@@ -2371,7 +2516,7 @@ export default function AdminShopPage() {
           <>
             <span className="block font-black text-[#131313]">{issueTarget.code}</span>
             {issueTarget.name && <span className="block mb-3">{issueTarget.name}</span>}
-            XP 기록이 있는 전 유저의 지갑에 들어가며, 지급 후에는 되돌릴 수 없습니다.
+            서버 멤버 전원과 XP 기록이 있는 유저의 지갑에 들어가며, 지급 후에는 되돌릴 수 없습니다.
           </>
         ) : null}
         onConfirm={() => issueCoupon("all")}

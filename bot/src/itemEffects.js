@@ -23,7 +23,7 @@
 //      상시형  — 들고 있는 동안. 조건 없음, 같은 효과는 합산 후 상한 — perksOf
 //               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · questBonus
 //      소모형  — streakShield(attend.js) — 구매 하나를 consumeStreakShield 로 소모(Purchase.consumedAt)
-//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkin) / 사이트만: profileBadge
+//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) / 사이트만: profileBadge
 //
 //    📌 보유 판정 (사이트 lib/ownedItems.js · app/api/shop/my-items (A)/(B) 와 같은 규칙)
 //      (A) 구매 건 — status pending(결제 끝, 지급 대기) · completed 이고 기간이 안 지났고 소모되지 않은 것(consumedAt 없음)
@@ -60,7 +60,7 @@ const EFFECT_TRIGGERS = {
   attendPoint: { kind: "trigger", modes: ["add"] },                                                // 출석 때 빙옥 +amount
   // ── 상시형 (합산 후 상한 — perksOf / 사이트 lib/itemPerks.js) ──
   enhanceDiscount: { kind: "perk", modes: ["percent"], cap: 50 },  // 사이트 — 강화 비용 −%
-  shopCashback: { kind: "perk", modes: ["percent"], cap: 30 },     // 사이트 — ARCTIC 결제 캐시백 %
+  shopCashback: { kind: "perk", modes: ["percent"], cap: 100 },    // 사이트 — ARCTIC 결제 캐시백 % (실제 상한은 사이트 관리자 설정 BotSetting.shopCashbackCap)
   questBonus: { kind: "perk", modes: ["percent"], cap: 100 },      // 사이트 — 퀘스트 보상 +%
   passBoost: { kind: "perk", modes: ["percent"], cap: 50 },        // 시즌 패스 진행 +% (xp.js grantXp)
   cooldownCut: { kind: "perk", modes: ["add"], needs: "seconds", cap: 3600 }, // 채팅 쿨타임 −초 (실제 상한은 쿨타임의 절반 — perksOf)
@@ -73,11 +73,12 @@ const EFFECT_TRIGGERS = {
 // 📌 카드 스킨 키 — 사이트 lib/itemEffects.js SKINS · botCards.js CARD_SKINS 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
 const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship"]);
 // 📌 유저가 고른 스킨 적용 — 사이트 lib/itemEffects.js pickCardSkin 과 같은 규칙
-//    pick: "" 안 고름(첫 스킨) · "none" 끔 · 스킨 키(더 이상 없으면 첫 스킨)
+//    pick: "" 안 고름 · "none" 끔 · 스킨 키(더 이상 없으면 기본 카드)
+//    📌 2026-10-04 "굳이임 이것도" — 자동 착용 없음: 직접 고른 스킨만 입힌다. 안 골랐거나 끔이면 기본 카드("")
 export function pickCardSkin(skins, pick) {
   const list = Array.isArray(skins) ? skins : [];
-  if (pick === "none") return "";
-  return pick && list.includes(pick) ? pick : list[0] || "";
+  if (!pick || pick === "none") return "";
+  return list.includes(pick) ? pick : "";
 }
 const MAX_EFFECTS = 20;
 const LIMIT = { add: 1_000_000, percent: 500, minutes: 1440, everyN: 365 };
@@ -507,8 +508,8 @@ export function attendPointOf(member, kst = kstNow()) {
 /**
  * 📌 들고 있는 동안 붙는 효과의 합 — 사이트 lib/itemPerks.js getPerks 의 봇 쪽 사본(봇이 쓰는 칸만). 캐시만 본다.
  *    같은 효과는 합산 후 상한: cooldownCut ≤ 채팅 쿨타임의 절반(초), muteRelief ≤ 음소거 감소율(%p), passBoost ≤ 50(%)
- *    cardSkin: 스킨 키 — 여러 개면 관리자 순서(아이템 sortOrder · createdAt)상 첫 번째. 없으면 ""
- *    cardSkins: 가진 스킨 전부(관리자 순서) — 유저가 고른 스킨은 pickCardSkin 으로 (botMessages withSkin)
+ *    cardSkin: "" — 자동으로 입히는 스킨 없음(2026-10-04, 사이트 perksOfItems 와 같다)
+ *    cardSkins: 가진 스킨 전부(관리자 순서 — 아이템 sortOrder · createdAt) — 유저가 고른 스킨은 pickCardSkin 으로 (botMessages withSkin)
  *    오류가 나도 0 · "" 을 돌려준다.
  * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[] }}
  */
@@ -535,7 +536,7 @@ export function perksOf(member) {
     out.cooldownCut = Math.min(cut, EFFECT_TRIGGERS.cooldownCut.cap, Math.floor(Math.max(0, Number(s.chatCooldownSec) || 0) / 2));
     out.muteRelief = Math.min(relief, EFFECT_TRIGGERS.muteRelief.cap, Math.max(0, Number(s.muteReducePct) || 0));
     out.passBoost = Math.min(boost, EFFECT_TRIGGERS.passBoost.cap);
-    out.cardSkin = skins[0] || "";
+    out.cardSkin = pickCardSkin(skins, "");
     out.cardSkins = skins;
   } catch (e) {
     console.error("아이템 효과 계산 오류 (perks):", e.message);

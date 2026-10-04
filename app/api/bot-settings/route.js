@@ -137,3 +137,37 @@ export async function POST(request) {
     return NextResponse.json({ success: false }, { status: 500 });
   }
 }
+
+// 📌 상점 설정만 바꾸기 — 상점 관리 › 설정(app/admin/shop)이 부른다. 본문에 온 칸만 $set 한다(나머지 봇 설정은 건드리지 않는다).
+//    POST 는 화면이 보낸 전체 값으로 칸마다 다시 쓰므로, 다른 화면이 일부만 보내면 나머지가 기본값으로 덮인다 — 그래서 따로 둔다.
+//    POST 는 이 칸들을 받지 않는다(레벨 설정 저장이 상점 설정을 되돌리지 않게)
+//      shopCashbackCap: 캐시백 합 상한 %(0~100 정수) · cashbackOnPoint: 빙옥으로 낸 몫에도 캐시백(true/false)
+export async function PATCH(request) {
+  try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
+    await connectToDatabase();
+    const b = await request.json().catch(() => ({}));
+    const set = {};
+    if (b?.shopCashbackCap != null && String(b.shopCashbackCap).trim() !== "") {
+      const n = Number(b.shopCashbackCap);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return NextResponse.json({ success: false, message: "캐시백 상한은 0~100% 사이로 입력해 주세요." }, { status: 400 });
+      }
+      set.shopCashbackCap = Math.floor(n);
+    }
+    if (typeof b?.cashbackOnPoint === "boolean") set.cashbackOnPoint = b.cashbackOnPoint;
+    if (!Object.keys(set).length) {
+      return NextResponse.json({ success: false, message: "바꿀 값이 없습니다." }, { status: 400 });
+    }
+    const doc = await BotSetting.findOneAndUpdate(
+      { key: "main" },
+      { $set: { ...set, updatedAt: new Date() } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    return NextResponse.json({ success: true, data: doc });
+  } catch (e) {
+    console.error("상점 설정 저장 오류:", e);
+    return NextResponse.json({ success: false, message: "저장에 실패했습니다." }, { status: 500 });
+  }
+}

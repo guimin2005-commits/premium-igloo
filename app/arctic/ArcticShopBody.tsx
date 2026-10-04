@@ -1241,10 +1241,13 @@ export default function ArcticShopBody({
                   )}
 
                   {/* 화면에 안 보이는 것만 남긴다 — 지급까지 걸리는 시간과 되돌릴 수 없다는 경고
-                      (기간 만료 회수는 위 '이용 기간' 칸이 이미 말한다) */}
+                      (기간 만료 회수는 위 '이용 기간' 칸이 이미 말한다)
+                      📌 소모품(1회 소모권 · 보호막 — 상품 목록 API consumable)은 쓴 뒤 취소 · 환불되지 않는다는 것까지(2026-10-04 "주의 문구 써둬") */}
                   <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-5 break-keep">
                     {buyTarget.type === "physical"
                       ? "운영진 확인 후 발송되며, 구매 후 취소할 수 없습니다."
+                      : buyTarget.consumable
+                      ? "인벤토리에 보관되며, 구매 후 취소할 수 없고 사용한 뒤에는 환불되지 않습니다."
                       : (buyTarget.type === "item" || buyTarget.type === "cosmetic") && !buyTarget.roleId
                       ? "인벤토리에 보관되며, 구매 후 취소할 수 없습니다."
                       : "역할은 30초 이내에 지급되며, 구매 후 취소할 수 없습니다."}

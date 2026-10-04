@@ -6,7 +6,8 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { getShopAccess } from "@/lib/shopAccess";
 import { isItemType, itemSnapshot, normalizeIcon, normalizeColor, normalizeDescription } from "@/lib/items";
 import { POINT_RATE } from "@/lib/pointRate";
-import { unitSaleAllowed, clampPerOrder } from "@/lib/unitSale";
+import { unitSaleAllowed, clampPerOrder, isUnitSale } from "@/lib/unitSale";
+import { hasConsumable } from "@/lib/itemEffects";
 import { isBackdropKey } from "@/lib/itemBackdrops";
 import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
@@ -25,7 +26,17 @@ export async function GET(request) {
     const filter = isAdmin && all ? {} : { active: true };
     const items = await ShopItem.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
 
-    return NextResponse.json({ success: true, data: items });
+    // 📌 consumable — 쓰면 없어지는 상품(1개 단위 1회 소모권 · 소모형 효과 아이템 — 보호막)이면 true. 쓴 건은 취소 · 환불하지 않는다(lib/orderRefund) —
+    //    바로 구매 창 안내가 그 점을 함께 적는다. 상품 상세 API(app/api/shop/items/[id])와 같은 판정
+    const linkedIds = [...new Set(items.map((s) => s.itemId).filter((v) => v && mongoose.isValidObjectId(v)).map(String))];
+    const consumableIds = new Set(
+      linkedIds.length
+        ? (await Item.find({ _id: { $in: linkedIds } }, { type: 1, effects: 1 }).lean()).filter((i) => i.type !== "physical" && hasConsumable(i)).map((i) => String(i._id))
+        : []
+    );
+    const data = items.map((s) => (isUnitSale(s) || consumableIds.has(String(s.itemId || "")) ? { ...s, consumable: true } : s));
+
+    return NextResponse.json({ success: true, data });
   } catch (e) {
     return NextResponse.json({ success: false, data: [] }, { status: 500 });
   }

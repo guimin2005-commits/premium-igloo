@@ -54,6 +54,11 @@ const BotSettingSchema = new mongoose.Schema({
 
   // ARCTIC 공개 여부 — false면 관리자만 접근 가능 (준비 중 상태)
   shopPublic: { type: Boolean, default: false },
+  // 📌 ARCTIC 결제 캐시백 규칙 — 상점 관리 › 설정(app/api/bot-settings PATCH). 2026-10-04 "관리자가 정하게 해".
+  //    shopCashbackCap: 캐시백 효과(아이템 shopCashback) 합의 상한 %(0~100) · cashbackOnPoint: 빙옥으로 낸 몫에도 캐시백(빙옥을 XP 로 쳐서)
+  //    결제 API 가 lean 으로 읽어 lib/itemEffects cashbackRuleOf 로 푼다(값이 없는 옛 문서는 30% · 꺼짐). 봇은 읽지 않는다
+  shopCashbackCap: { type: Number, default: 30 },
+  cashbackOnPoint: { type: Boolean, default: false },
   // SYSTEM : LEVEL 공개 여부 — 리뉴얼 후 10월 공개 예정. false 면 관리자만 /level 을 보고
   // 일반 유저에게는 예고 화면·메뉴 숨김. ARCTIC 은 /level 안에 있으므로 이것이 꺼지면 함께 닫힌다.
   levelPublic: { type: Boolean, default: false },
