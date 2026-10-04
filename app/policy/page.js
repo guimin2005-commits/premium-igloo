@@ -57,7 +57,7 @@ const Addendum = ({ date }) => (
 const DOCS = [
   { id: "terms", label: "서버 이용약관", short: "이용약관", note: "운영정책", date: "2023. 01. 22." },
   { id: "privacy", label: "개인정보처리방침", short: "개인정보", note: "", date: "2023. 01. 22." },
-  { id: "level", label: "SYSTEM : LEVEL 운영 규정", short: "레벨", note: "XP·레벨", date: "2026. 08. 17." },
+  { id: "level", label: "SYSTEM : LEVEL 운영 규정", short: "레벨", note: "XP·레벨", date: "2026. 05. 01." },
   { id: "arctic", label: "ARCTIC 이용약관", short: "ARCTIC", note: "XP 상점", date: "2026. 08. 17." },
   { id: "tournament", label: "e스포츠 대회 공식 규정", short: "대회", note: "", date: "2026. 08. 21." },
   { id: "scrim", label: "내전 규정", short: "내전", note: "", date: "2026. 04. 16." },
@@ -393,7 +393,7 @@ function PolicyContent() {
             ]} />
           </Article>
 
-          <Addendum date="2026년 8월 17일" />
+          <Addendum date="2026년 5월 1일" />
         </div>
       ) : tab === "arctic" ? (
         <div className="space-y-7 text-sm">
