@@ -796,7 +796,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
   }
 
   return (
-    <main className="w-full flex-1 flex flex-col relative bg-[#f4f3f2] text-[#131313]">
+    <main className="w-full flex-1 flex flex-col relative bg-white text-[#131313]">
       {/* 본문 렌더러는 다크 페이지 기준 색을 내보낸다 — 라이트 면에서 표·이미지 선이 보이도록 덮는다 */}
       <style
         dangerouslySetInnerHTML={{

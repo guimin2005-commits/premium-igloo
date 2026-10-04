@@ -317,7 +317,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         : null;
   // 📌 흰 바탕 페이지 — 화이트 & 블랙으로 옮긴 곳. 종이색 라이트와 구분한다.
   //    경매·대회·명예의 전당은 일부러 개성 있게 만든 화면이라 여기 넣지 않는다.
-  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile", "/verify", "/policy"];
+  // 📌 2026-10-04 "서포터즈 아직 누런 느낌 — 동일한 화이트 톤으로" — 서포터즈도 흰 바탕(#f4f3f2 종이색 걷음)
+  const WHITE_ROOTS = ["/notice", "/event", "/recruit", "/faq", "/support", "/booster", "/level", "/profile", "/verify", "/policy", "/supporters"];
   // 관리자 화면(대회 룸 빼고) · 글쓰기도 흰 바탕 — 관리자 개편(2026-09)에서 종이색을 걷었다
   const isAdminWhite = (pathname === "/admin" || (!!pathname?.startsWith("/admin/") && !pathname.startsWith("/admin/room"))) || pathname === "/write";
   const isWhitePage = isShopPage || pathname === "/" || isAdminWhite || WHITE_ROOTS.some((r) => pathname === r || !!pathname?.startsWith(r + "/"));

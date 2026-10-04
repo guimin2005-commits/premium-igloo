@@ -1168,7 +1168,7 @@ export default function SupportersPage() {
   }
 
   return (
-    <main className="w-full flex-1 flex flex-col relative bg-[#f4f3f2] text-[#131313]">
+    <main className="w-full flex-1 flex flex-col relative bg-white text-[#131313]">
       {/* 잉크 패널의 격자 — /level 과 같은 값을 이 페이지 안에서만 정의한다 */}
       <style
         dangerouslySetInnerHTML={{
