@@ -10,6 +10,7 @@ import UserCoupon from "@/models/UserCoupon";
 import CodeGrant from "@/models/CodeGrant";
 import Payout from "@/models/Payout";
 import { denyIfMaintenance } from "@/lib/apiAuth";
+import { denyIfXpStopped } from "@/lib/xpStop";
 
 // 디스코드에서 역할 보유 여부 확인 (보상형 쿠폰의 사용 조건)
 async function hasRole(userId, roleId) {
@@ -119,6 +120,12 @@ export async function POST(request) {
           const label = coupon.requiredRoleName ? `[${coupon.requiredRoleName}] ` : "";
           return NextResponse.json({ success: false, message: `${label}역할 보유자만 사용할 수 있습니다.` }, { status: 403 });
         }
+      }
+
+      // 📌 XP 를 주는 보상 쿠폰은 XP 획득 중단 중이면 사용권을 잡기 전에 막는다 — 사용권만 쓰이고 XP 는 봇에서 막히는 일이 없게
+      if (coupon.rewardXp > 0) {
+        const stopped = await denyIfXpStopped(userId);
+        if (stopped) return stopped;
       }
 
       // 📌 사용권부터 잡는다 — 위 한도 검사는 읽은 값이라, 동시에 여러 번 보내면 모두 통과해 보상이 여러 번 지급된다.

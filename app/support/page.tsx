@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
 import { priceText } from "@/lib/shopPricing";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { ICON_PATHS } from "../components/Icons";
+import { openLogin } from "../components/LoginPrompt";
 
 // 📌 1:1 문의 — 화이트 & 블랙.
 //    유저: 예전 서식의 흐름 — 왼쪽 문의 입력(라벨 좌측 줄 · 알약) + 오른쪽 답변 알림 · 문의하기.
@@ -235,7 +236,7 @@ export default function SupportPage() {
           <h1 className="text-[30px] md:text-[34px] font-black tracking-tight leading-none mb-3">1:1 문의</h1>
           <p className="text-[13px] text-[#8a8a8a] mb-8">로그인이 필요합니다.</p>
           <button
-            onClick={() => signIn("discord")}
+            onClick={() => openLogin()}
             className="w-full h-12 rounded-full bg-[#131313] hover:bg-black text-white text-[13px] font-extrabold transition-colors outline-none"
           >
             Discord 로그인

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import BackLink from "../../components/BackLink";
@@ -9,6 +9,7 @@ import ArcticDock from "../../arctic/ArcticDock";
 import { ICON_PATHS } from "../../components/Icons";
 import { isAdminName } from "@/lib/admins";
 import { couponScopeTail } from "@/lib/shopPricing";
+import { openLogin } from "../../components/LoginPrompt";
 
 // 📌 쿠폰함 — 전역 바의 쿠폰 아이콘 · 내 정보 · 모바일 메뉴가 모두 여기로 온다 (예전엔 레이아웃 위의 모달).
 //    코드 하나로 두 가지를 받는다: 할인 쿠폰은 아래 목록에 남고, 보상 코드(XP · 역할)는 입력 즉시 지급 대기로 넘어간다.
@@ -76,7 +77,7 @@ export default function CouponBoxPage() {
       <main className="w-full flex-1 flex flex-col items-center justify-center px-6 py-40 text-center text-[#131313] break-keep">
         <h2 className="text-2xl font-black mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-[#5a5a5a] mb-8 text-sm">쿠폰함을 보려면 로그인해 주세요.</p>
-        <button onClick={() => signIn("discord", { callbackUrl: window.location.pathname + window.location.search })}
+        <button onClick={() => openLogin()}
           className="px-8 py-3.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-bold rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40 focus-visible:ring-offset-2">
           디스코드 로그인
         </button>

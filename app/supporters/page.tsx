@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
 import { EmptySlot } from "../components/Hud";
 import { isAdminName } from "@/lib/admins";
 import { VOICE_TIME_START } from "@/lib/season";
 import { tone, useToasts, ToastStack, fmtDate, BLUE, fieldClass, CheckMark, CommentIcon, ArrowRight, type Post, type AckStats } from "./NoticeDetail";
+import { openLogin } from "../components/LoginPrompt";
 
 // 📌 서포터즈 전용 — 활동 · 평가·지급 · 공지·가이드 · 신고·피드백 네 탭.
 //    입장은 세션 플래그(isSupporter)로 먼저 가르고, 서버(/api/supporters/*)가 다시 막는다.
@@ -493,7 +494,7 @@ export default function SupportersPage() {
       <div className="py-24 md:py-32 max-w-sm mx-auto text-center">
         <p className="text-sm font-bold text-[#131313] mb-6">로그인이 필요합니다</p>
         <button
-          onClick={() => signIn("discord", { callbackUrl: "/supporters" })}
+          onClick={() => openLogin()}
           className="w-full py-3.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-sm font-bold rounded-xl transition-colors shadow-[0_10px_30px_rgba(233,30,63,0.35)] outline-none focus:outline-none"
         >
           Discord로 로그인

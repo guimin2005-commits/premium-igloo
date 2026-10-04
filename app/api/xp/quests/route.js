@@ -12,6 +12,7 @@ import { addPoints } from "@/lib/points";
 import { getPerks } from "@/lib/itemPerks";
 import { withBonus } from "@/lib/itemEffects";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
+import { denyIfXpStopped } from "@/lib/xpStop";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 
 // ── [조회] 오늘의 일일 퀘스트 + 내 진행도 ─────────────────────
@@ -143,6 +144,9 @@ export async function POST(request) {
     const closed = await denyIfLevelClosed(session);
     if (closed) return closed;
     const userId = session.user.id;
+    // 📌 XP 획득 중단 중이면 보상 받기 자체를 막는다 — 받기 자물쇠 · 빙옥이 먼저 들어가지 않게(봇 지급 대기열도 따로 막는다)
+    const stopped = await denyIfXpStopped(userId);
+    if (stopped) return stopped;
     const userName = session.user.name || "";
 
     const [state, perks] = await Promise.all([getQuestState(userId), getPerks(userId)]);

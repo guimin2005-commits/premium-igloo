@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { isAdminName } from "@/lib/admins";
 import {
-  HudPanel, HudSection, HudStyles, LiveDot, RingGauge, SegBar,
+  HudSection, HudStyles, LiveDot, RingGauge,
   StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
 } from "../components/Hud";
 import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
@@ -3020,7 +3020,7 @@ export default function LevelPage() {
                         </div>
                       )}
 
-                      <div className={`relative z-10 p-5 md:p-7 ${guest ? "opacity-45 pointer-events-none select-none" : ""}`} aria-hidden={guest || undefined}>
+                      <div className={`relative z-10 p-5 md:p-7 ${guest ? "opacity-45 pointer-events-none select-none" : ""}`} aria-hidden={guest || undefined} inert={guest || undefined}>
                         {/* 정체성 — 아바타 옆에 이름 */}
                         <div className="flex items-center gap-4 lg:gap-5">
                           <span className="shrink-0 lg:hidden">

@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import BackLink from "../../../components/BackLink";
 import { useParams, useRouter } from "next/navigation";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { EsportsStyles } from "../../../components/Esports";
 import { parseBracketSections } from "../../../components/BracketView";
 import { bracketVisible } from "@/lib/tournamentPhase";
 import DmPreview from "../../../components/DmPreview";
+import { openLogin } from "../../../components/LoginPrompt";
 
 /* 📌 팀 룸 — 대회에 소속된 팀이 머무는 공간
    디자인은 새로 만들지 않고 /tournament 의 e스포츠 언어를 그대로 상속한다.
@@ -393,7 +394,7 @@ export default function TeamRoom() {
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
         <h2 className="text-xl font-black text-white mb-2">로그인이 필요합니다</h2>
         <p className="text-gray-400 text-sm mb-4">팀 룸은 팀원만 볼 수 있습니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
+        <button onClick={() => openLogin()} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
   }

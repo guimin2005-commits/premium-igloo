@@ -113,9 +113,9 @@ export const invAccentOf = (it) => {
   const lum = (parseInt(m[1], 16) * 0.299 + parseInt(m[2], 16) * 0.587 + parseInt(m[3], 16) * 0.114) / 255;
   return lum < 0.18 ? "#d4d4d4" : c;
 };
-// 기간제 — 만료는 결제 순간부터 정해져 있다(봇 지급이 늦어도 산 만큼 보장). 그래서 지급 대기여도 남은 기간을 센다
+// 기간제 — 역할 기간제는 봇이 역할을 준 때부터 센다(2026-10-04). 아직 지급 대기(provisional)면 만료가 정해지지 않아 남은 기간을 세지 않는다
 const ddayOf = (it) =>
-  it.expiresAt ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
+  it.expiresAt && !it.provisional ? Math.max(0, Math.ceil((new Date(it.expiresAt).getTime() - Date.now()) / 86400000)) : null;
 const untilOf = (it) =>
   it.expiresAt
     ? new Date(it.expiresAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
@@ -210,7 +210,7 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
               : it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : "영구"}
           </span>
         </div>
-        {it.expiresAt && (
+        {it.expiresAt && !it.provisional && (
           <>
             <div className="flex items-center justify-between gap-3">
               <span className="text-[11px] font-bold text-white/45">만료</span>

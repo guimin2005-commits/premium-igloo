@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { openLogin } from "../components/LoginPrompt";
 import BackLink from "../components/BackLink";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
 import { isAdminName } from "@/lib/admins";
@@ -504,7 +505,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
       <Notice msg="로그인이 필요합니다">
         <button
           type="button"
-          onClick={() => signIn("discord", { callbackUrl: `/supporters/notice/${postId}` })}
+          onClick={() => openLogin()}
           className="inline-flex items-center h-9 px-4 rounded-full bg-[#e91e3f] hover:bg-[#d01634] text-white text-[12px] font-bold transition-colors outline-none focus:outline-none"
         >
           Discord로 로그인

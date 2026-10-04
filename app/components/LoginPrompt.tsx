@@ -22,6 +22,8 @@ export type OpenLoginOptions = {
   context?: LoginContext | null;
   /** 창을 닫으면(X · 바깥 · Esc) 부르는 것 — 경매방 직접 주소처럼 닫으면 다른 곳으로 보내야 할 때. 로그인하러 가거나 다른 화면으로 옮기면 부르지 않는다 */
   onClose?: () => void;
+  /** 로그인하고 돌아올 곳 — 비우면 지금 화면. 경매 목록에서 방에 들어가려다 연 창이면 그 방으로 */
+  returnTo?: string;
 };
 
 const OPEN_EVENT = "igloo:open-login";
@@ -91,10 +93,12 @@ function SheetFrame({ label, onClose, children }: { label: string; onClose: () =
 
 // 📌 로그인 창 본문 — 맥락 칩 · 제목 · 한 줄 · Discord 단추 · 작은 링크 둘. 디스코드 로고 · 펭귄 같은 그림은 두지 않는다
 export function LoginSheet({
-  context, onClose, onDiscord, onGuest, onDev,
+  context, onClose, onLeave, onDiscord, onGuest, onDev,
 }: {
   context?: LoginContext | null;
   onClose: () => void;
+  /** 창 안의 링크로 다른 화면에 갈 때 — 연 쪽이 맡긴 닫기 할 일(경매 목록으로 보내기 등)은 하지 않고 조용히 닫는다 */
+  onLeave?: () => void;
   onDiscord: () => void;
   onGuest: () => void;
   /** 로컬 개발 서버에서만 — 예전 레벨 화면에 있던 확인용 로그인 */
@@ -117,7 +121,7 @@ export function LoginSheet({
       <div className="mt-4 flex items-center justify-center gap-2 text-[12px] text-[#5a5a5a]">
         <button type="button" onClick={onGuest} className="underline underline-offset-4 hover:text-[#131313] transition-colors outline-none focus-visible:text-[#131313]">비회원 문의</button>
         <span aria-hidden className="text-[#a3a3a3]">·</span>
-        <Link href="/policy" onClick={onClose} className="underline underline-offset-4 hover:text-[#131313] transition-colors outline-none focus-visible:text-[#131313]">이용약관</Link>
+        <Link href="/policy" onClick={onLeave || onClose} className="underline underline-offset-4 hover:text-[#131313] transition-colors outline-none focus-visible:text-[#131313]">이용약관</Link>
       </div>
       {onDev && (
         <button type="button" onClick={onDev} className="mt-3 block mx-auto text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] underline underline-offset-4 transition-colors outline-none">로컬 확인용 로그인 (dev)</button>

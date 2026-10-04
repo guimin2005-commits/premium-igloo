@@ -99,7 +99,7 @@ export default function AuctionListPage() {
   //    📌 2026-10-04 로그인 전에는 목록만 — 들어가려 하면 그 자리에서 로그인 창(경매 · 입장). 티켓은 찢지 않는다
   const enter = (id: string, skipTear = false) => {
     if (tearing) return;
-    if (status === "unauthenticated") { openLogin({ context: LOGIN_CTX.auction }); return; }
+    if (status === "unauthenticated") { openLogin({ context: LOGIN_CTX.auction, returnTo: `/auction/${id}` }); return; }
     if (skipTear) { router.push(`/auction/${id}`); return; }
     setTearing(id);
     playTear();

@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+
 import { EsportsStyles } from "../../components/Esports";
 import { useAdminGuard } from "../ui";
 import DmPreview from "../../components/DmPreview";
 import { DEFAULTS, LIMITS } from "@/lib/nudgeMessage";
+import { openLogin } from "../../components/LoginPrompt";
 
 /* 📌 대회 룸 운영 (관리자 전용)
    실제 화면은 각 팀의 룸(/tournament/team/[id])이고, 여기서는 팀을 만들고 어디로 들어갈지 고른다.
@@ -112,7 +113,7 @@ export default function AdminScrimPage() {
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
         <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
         <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
+        <button onClick={() => openLogin()} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LuxStyles } from "../components/Lux";
@@ -13,6 +13,8 @@ import { ICON_PATHS } from "../components/Icons";
 import { VOICE_TIERS, getTierIndex } from "@/lib/voiceTiers";
 import ItemIcon from "../components/ItemIcon";
 import { itemTypeColor } from "@/lib/items";
+import { openLogin } from "../components/LoginPrompt";
+import { readShopList, CART_KEY, WISH_KEY } from "../arctic/shopStore";
 
 // 📌 내 정보 — A(잉크 헤더) + D(묶음 줄 목록).
 //    줄은 전부 '해당하는 곳'으로 간다. 알림·문의·구인 내역은 /profile/notice · /profile/inquiry · /profile/recruit 로 분리했고,
@@ -72,13 +74,13 @@ export default function MyInfoPage() {
       .then((r) => r.json())
       .then((d) => { setShopPublic(!!d?.data?.shopPublic); setLevelPublic(!!d?.data?.levelPublic); })
       .catch(() => {});
-    try {
-      const w = localStorage.getItem("iglooShopWish");
-      if (w) setShopWish(JSON.parse(w));
-      const c = localStorage.getItem("iglooShopCart");
-      if (c) setShopCart(JSON.parse(c));
-    } catch {}
   }, []);
+  // 📌 2026-10-04 장바구니 · 찜은 계정별 저장(app/arctic/shopStore) — 이 계정 목록만 센다. 로그인 전에는 빈 목록
+  const shopUid = status === "authenticated" ? String((session?.user as { id?: string } | undefined)?.id || "") : "";
+  useEffect(() => {
+    setShopWish(readShopList(WISH_KEY, shopUid));
+    setShopCart(readShopList(CART_KEY, shopUid));
+  }, [shopUid]);
 
   // 내 XP·레벨은 ARCTIC과 무관한 기본 정보라 항상 읽는다
   useEffect(() => {
@@ -150,7 +152,7 @@ export default function MyInfoPage() {
       <main className="w-full text-[#131313] flex-1 flex flex-col justify-center items-center px-6 py-40 text-center break-keep">
         <h2 className="text-2xl font-black text-[#131313] mb-4 tracking-tight">로그인 필요</h2>
         <p className="text-[#5a5a5a] mb-8 text-sm">내 정보를 확인하시려면 로그인이 필요합니다.</p>
-        <button onClick={() => signIn("discord", { callbackUrl: window.location.pathname + window.location.search })} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
+        <button onClick={() => openLogin()} className="w-full py-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#5865F2]/20 outline-none focus:outline-none">
           Discord 로그인
         </button>
       </main>

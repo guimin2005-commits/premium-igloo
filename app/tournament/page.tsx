@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal, LuxStyles } from "../components/Lux";
 import { BracketView } from "../components/BracketView";
@@ -9,6 +9,7 @@ import { EsportsStyles, STATUS_META } from "../components/Esports";
 import { PHASES, phaseOf, phaseMeta, phaseShows, statusOf } from "@/lib/tournamentPhase";
 
 import { ADMIN_USERS } from "@/lib/admins";
+import { openLogin } from "../components/LoginPrompt";
 
 const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
   if (!text) return null;
@@ -622,7 +623,7 @@ export default function TournamentPage() {
             <p className="text-sm text-gray-400 mb-8 whitespace-pre-line">대회 참가 신청을 위해서는<br/>디스코드 로그인이 필요합니다.</p>
             <div className="flex gap-3">
               <button onClick={() => setIsLoginReqModalOpen(false)} className="flex-1 py-3 esp-cut-sm font-black text-sm bg-white/5 hover:bg-white/10 text-white transition-colors">취소</button>
-              <button onClick={() => signIn("discord")} className="flex-1 py-3 esp-cut-sm font-black text-sm bg-[#5865F2] hover:bg-[#4752C4] text-white transition-colors">Discord 로그인</button>
+              <button onClick={() => openLogin()} className="flex-1 py-3 esp-cut-sm font-black text-sm bg-[#5865F2] hover:bg-[#4752C4] text-white transition-colors">Discord 로그인</button>
             </div>
           </div>
         </div>

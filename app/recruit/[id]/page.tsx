@@ -3,10 +3,11 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import BackLink from "../../components/BackLink";
 import { useParams, useRouter } from "next/navigation";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Reveal } from "../../components/Lux";
 import { RenderFormattedText } from "../../components/FormattedText";
 import { ADMIN_USERS } from "@/lib/admins";
+import { openLogin } from "../../components/LoginPrompt";
 
 /* 📌 구인 한 건 = 한 페이지 (이동 규칙 1). 화이트 & 블랙.
    지원도 모달이 아니라 이 페이지 안 '지원서' 시트에서 받는다. */
@@ -168,7 +169,7 @@ export default function RecruitDetailPage() {
               ) : !isLoggedIn ? (
                 <div>
                   <h2 className="text-[20px] font-black tracking-tight mb-5">지원서</h2>
-                  <button onClick={() => signIn("discord")}
+                  <button onClick={() => openLogin()}
                     className="h-11 px-6 rounded-full border-[1.5px] border-[#131313] text-[13px] font-extrabold text-[#131313] hover:bg-[#131313] hover:text-white transition-colors">Discord 로그인</button>
                 </div>
               ) : (

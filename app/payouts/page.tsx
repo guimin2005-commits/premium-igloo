@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { isAdminName } from "@/lib/admins";
+import { openLogin } from "../components/LoginPrompt";
 
 // 📌 XP 지급은 봇 큐가 30초마다 자동으로 한다 — 이 화면은 기록 조회와 아직 지급되지 않은 건의 취소만.
 //    예전의 명령어 복사 · '지급 완료/되돌리기' 토글은 봇 큐와 부딪혀(이미 준 건 재지급 · 안 준 건 닫힘) 걷어냈다.
@@ -74,7 +75,7 @@ export default function PayoutAdminPage() {
       <main className="w-full max-w-sm mx-auto px-6 py-40 text-center flex-1 flex flex-col justify-center">
         <h2 className="text-xl font-black text-white mb-2">권한 없음</h2>
         <p className="text-gray-400 text-sm mb-4">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
+        <button onClick={() => openLogin()} className="w-full py-3.5 bg-[#5865F2] text-white font-bold rounded-xl mt-4">디스코드 로그인</button>
       </main>
     );
   }

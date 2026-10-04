@@ -281,14 +281,23 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [loginCtx, setLoginCtx] = useState<LoginContext | null>(null);
   const loginOnCloseRef = useRef<(() => void) | null>(null);
   const loginAtRef = useRef<string | null>(null);
-  const openLoginModal = useCallback((ctx: LoginContext | null = null, onClose: (() => void) | null = null, at: string | null = null) => {
+  const loginReturnRef = useRef<string | null>(null); // 로그인하고 돌아올 곳(비우면 지금 화면)
+  const openLoginModal = useCallback((ctx: LoginContext | null = null, onClose: (() => void) | null = null, at: string | null = null, returnTo: string | null = null) => {
     setLoginCtx(ctx);
     loginOnCloseRef.current = onClose;
     loginAtRef.current = at;
+    loginReturnRef.current = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : null;
     setIsGuestInquiryOpen(false);
     setIsLoginModalOpen(true);
   }, []);
-  useEffect(() => onLoginRequest((o) => openLoginModal(o.context || null, o.onClose || null, window.location.pathname)), [openLoginModal]);
+  useEffect(() => onLoginRequest((o) => openLoginModal(o.context || null, o.onClose || null, window.location.pathname, o.returnTo || null)), [openLoginModal]);
+  // 창 안 링크(이용약관)로 나갈 때 — 맡긴 닫기 할 일 없이 조용히 닫는다
+  const leaveLoginModal = useCallback(() => {
+    loginOnCloseRef.current = null;
+    loginAtRef.current = null;
+    setIsLoginModalOpen(false);
+    setIsGuestInquiryOpen(false);
+  }, []);
   // 로그인 오류로 "/" 에 떨어졌을 때(RouteBody 가 보던 곳으로 돌려보낸다) — 오류면 안내, 로그인 화면 자리면 로그인 창
   //    (돌려보내며 주소가 바뀌므로 연 화면은 적지 않는다 — 바뀐 화면에서도 창이 남게)
   const onAuthLanding = useCallback((code: string | null) => {
@@ -923,7 +932,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <LoginSheet
           context={loginCtx}
           onClose={closeLoginModal}
-          onDiscord={() => signIn("discord", { callbackUrl: loginReturnPath() })}
+          onLeave={leaveLoginModal}
+          onDiscord={() => signIn("discord", { callbackUrl: loginReturnRef.current || loginReturnPath() })}
           onGuest={() => setIsGuestInquiryOpen(true)}
           onDev={process.env.NODE_ENV === "development" ? () => signIn("devlogin", { callbackUrl: loginReturnPath() }) : null}
         />
@@ -1054,7 +1064,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               {status === "authenticated" && session ? (
                 <button onClick={() => { closeMobileMenu(); signOut(); }} className={`w-full h-11 px-3 rounded-xl text-left text-[15px] font-bold transition-colors outline-none ${L ? "text-[#d01634] active:bg-[#e91e3f]/[0.06]" : "text-[#ff5c77] active:bg-[#e91e3f]/10"}`}>로그아웃</button>
               ) : (
-                <button onClick={() => { closeMobileMenu(); signIn("discord", { callbackUrl: loginReturnPath() }); }} className="w-full h-11 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">Discord 로그인</button>
+                <button onClick={() => { closeMobileMenu(); openLoginModal(); }} className="w-full h-11 rounded-full bg-[#5865F2] active:bg-[#4752C4] text-white text-sm font-bold transition-colors outline-none">로그인</button>
               )}
               <div className={`flex flex-wrap items-center gap-x-3.5 gap-y-1 px-3 pt-2.5 pb-1 text-[11px] font-bold ${L ? "text-[#8a8a8a]" : "text-gray-500"}`}>
                 <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={L ? "active:text-[#131313]" : "active:text-white"}>Discord</a>

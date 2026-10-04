@@ -13,9 +13,10 @@
 //    톤은 "사무적인 공식문서" — 장식 대신 선과 여백으로 나눈다.
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ADMIN_USERS } from "@/lib/admins";
+import { openLogin } from "../components/LoginPrompt";
 
 // ── 입력 ───────────────────────────────────────────────────
 //    높이는 min-h 로 — 같은 클래스를 textarea 에 써도 줄 수만큼 자란다
@@ -850,7 +851,7 @@ export function useAdminGuard() {
       <main className="flex-1 w-full max-w-sm mx-auto px-6 py-40 text-center flex flex-col justify-center bg-white">
         <h2 className="text-[20px] font-black text-[#131313] mb-2">권한 없음</h2>
         <p className="text-[#5a5a5a] text-[14px] mb-6">관리자 권한이 필요합니다.</p>
-        <button onClick={() => signIn("discord")} className="w-full h-11 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">
+        <button onClick={() => openLogin()} className="w-full h-11 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">
           디스코드 로그인
         </button>
       </main>
