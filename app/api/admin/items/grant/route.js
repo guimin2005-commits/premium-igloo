@@ -23,20 +23,44 @@ const INSERT_CHUNK = 1000;
 // 📌 역할 이전 · 역할 환불 도구의 기록 머리(lib/roleMigrationTerms TOOL_RE) — 지급 사유로 쓰지 못하게 하고, 수정 · 회수에서도 손대지 않는다
 const TOOL_NOTE_RE = /^역할 (이전|환불)/;
 
+// 📌 쪽 넘김(더 보기) — 최신순(createdAt · _id 내림차순)으로 limit 건씩. before 는 앞 쪽 응답의 next("<시각 ms>_<_id>") — 그보다 오래된 것부터.
+//    limit 기본 300(예전 한 번에 읽던 양) · 최대 3,000(회수 뒤 화면이 '더 보기'로 펼친 깊이만큼 다시 읽을 때). 관리자 주문 목록(app/api/shop/orders)과 같은 방식
+//    📌 쪽 끝에 걸친 한 사람분 지급(같은 orderId)은 나머지 건까지 같은 쪽에 붙인다 — next 는 붙이기 전 쪽 끝 기준이라 화면이 _id 로 겹친 건을 뺀다
+const PAGE = 300;
+const PAGE_MAX = 3000;
+const GRANT_FIELDS = { userId: 1, userName: 1, itemRef: 1, itemName: 1, itemType: 1, days: 1, expiresAt: 1, status: 1, createdAt: 1, adminNote: 1, error: 1, orderId: 1 };
+const parseCursor = (v) => {
+  const m = /^(\d{1,15})_([a-f0-9]{24})$/i.exec(String(v || ""));
+  return m ? { at: new Date(Number(m[1])), id: new mongoose.Types.ObjectId(m[2]) } : null;
+};
+const olderThan = (c) => ({ $or: [{ createdAt: { $lt: c.at } }, { createdAt: c.at, _id: { $lt: c.id } }] });
+
 // ── [조회] 최근 수동 아이템 지급 — 여러 개 지급은 1개가 한 건이라 넉넉히 읽고, 화면이 orderId 로 한 줄에 묶는다 ──
-export async function GET() {
+//    ?before=<next>&limit=<n> — 응답: { data, hasMore, next }
+export async function GET(request) {
   try {
     const { deny } = await requireAdmin();
     if (deny) return deny;
     await connectToDatabase();
-    const rows = await Purchase.find(
-      { itemId: "grant" },
-      { userId: 1, userName: 1, itemRef: 1, itemName: 1, itemType: 1, days: 1, expiresAt: 1, status: 1, createdAt: 1, adminNote: 1, error: 1, orderId: 1 }
-    )
-      .sort({ createdAt: -1 })
-      .limit(300)
+    const sp = new URL(request.url).searchParams;
+    const limit = Math.min(PAGE_MAX, Math.max(1, Math.floor(Number(sp.get("limit")) || PAGE)));
+    const before = parseCursor(sp.get("before"));
+    const base = { itemId: "grant" };
+    const got = await Purchase.find(before ? { ...base, ...olderThan(before) } : base, GRANT_FIELDS)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
       .lean();
-    return NextResponse.json({ success: true, data: rows });
+    const hasMore = got.length > limit;
+    const rows = got.slice(0, limit);
+    const tail = rows[rows.length - 1];
+    if (hasMore && tail?.orderId) {
+      const rest = await Purchase.find({ ...base, userId: tail.userId, orderId: tail.orderId, ...olderThan({ at: new Date(tail.createdAt || 0), id: tail._id }) }, GRANT_FIELDS)
+        .sort({ createdAt: -1, _id: -1 })
+        .lean();
+      rows.push(...rest);
+    }
+    const next = hasMore && tail ? `${new Date(tail.createdAt || 0).getTime()}_${tail._id}` : "";
+    return NextResponse.json({ success: true, data: rows, hasMore, next });
   } catch (e) {
     console.error("아이템 지급 내역 조회 오류:", e);
     return NextResponse.json({ success: false, data: [], message: "조회 중 오류가 발생했습니다." }, { status: 500 });

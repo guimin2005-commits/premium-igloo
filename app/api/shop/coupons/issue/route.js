@@ -3,12 +3,21 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
+import { getGuildRoster } from "@/lib/guildRoster";
+import { fetchGuildMember } from "@/lib/discordMember";
 import Coupon from "@/models/Coupon";
 import UserCoupon from "@/models/UserCoupon";
 import UserXp from "@/models/UserXp";
 
+// 서버 멤버 표시 이름 — 별명 > 전역 이름 > 사용자명 (lib/guildRoster 의 name 과 같은 순서)
+const memberName = (m) => String(m?.nick || m?.user?.global_name || m?.user?.username || "");
+
 // ── [지급] 관리자가 유저 지갑에 쿠폰을 넣어준다 ──
-//    target: 디스코드 닉네임 또는 유저 ID · "all"이면 XP 기록이 있는 전원
+//    target: 디스코드 닉네임 또는 유저 ID · "all"이면 전원
+//    📌 2026-10-04 "XP 기록이 있어야 한다는 건 수정이 좀 필요" — XP 기록(UserXp)이 없는 서버 멤버(아직 채팅 · 음성을 안 한 신규 멤버)도 받는다.
+//       전체 = XP 기록이 있는 사람 + 지금 서버 멤버 전원(봇 제외 — lib/guildRoster, 역할 이전과 같은 멤버 명단).
+//       명단을 못 받으면 지급하지 않는다(일부에게만 들어가지 않게 — 다시 시도).
+//       한 명 = XP 기록에서 ID · 사용자명 · 표시 이름으로 찾고, 없으면 서버 멤버에서 ID(멤버 조회) · 서버 표시 이름(명단)으로 찾는다
 export async function POST(request) {
   try {
     const deny = await denyIfNotAdmin();
@@ -24,7 +33,19 @@ export async function POST(request) {
     // 대상 유저 결정
     let targets = [];
     if (target === "all") {
-      targets = await UserXp.find({}, { userId: 1, displayName: 1, username: 1 }).lean();
+      let roster;
+      try {
+        roster = await getGuildRoster({ fresh: true });
+      } catch (e) {
+        console.error("쿠폰 전체 지급 — 멤버 명단 조회 실패:", e?.message || e);
+        return NextResponse.json({ success: false, message: "디스코드 멤버 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요." }, { status: 502 });
+      }
+      const byId = new Map((await UserXp.find({}, { userId: 1, displayName: 1, username: 1 }).lean()).map((r) => [r.userId, r]));
+      for (const m of roster.members) {
+        if (m.bot || !m.id || byId.has(m.id)) continue;
+        byId.set(m.id, { userId: m.id, displayName: m.name, username: "" });
+      }
+      targets = [...byId.values()];
     } else {
       const key = (target || "").trim();
       if (!key) {
@@ -34,6 +55,15 @@ export async function POST(request) {
       targets = await UserXp.find({ userId: key }, { userId: 1, displayName: 1, username: 1 }).lean();
       if (targets.length === 0) {
         targets = await UserXp.find({ $or: [{ username: key }, { displayName: key }] }, { userId: 1, displayName: 1, username: 1 }).lean();
+      }
+      // XP 기록에 없으면 서버 멤버에서 — ID 는 멤버 한 명 조회, 이름은 멤버 명단(서버 표시 이름)으로
+      if (targets.length === 0 && /^\d{15,25}$/.test(key)) {
+        const r = await fetchGuildMember(key);
+        if (r.status === "ok" && !r.member?.user?.bot) targets = [{ userId: key, displayName: memberName(r.member), username: String(r.member?.user?.username || "") }];
+      }
+      if (targets.length === 0) {
+        const roster = await getGuildRoster().catch(() => null);
+        targets = (roster?.members || []).filter((m) => !m.bot && m.name === key).map((m) => ({ userId: m.id, displayName: m.name, username: "" }));
       }
       if (targets.length > 1) {
         return NextResponse.json({

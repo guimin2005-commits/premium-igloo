@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { getShopAccess } from "@/lib/shopAccess";
-import { itemEffectPartsOf, roleBuffParts } from "@/lib/itemEffects";
+import { itemEffectPartsOf, roleBuffParts, hasConsumable } from "@/lib/itemEffects";
+import { isUnitSale } from "@/lib/unitSale";
 import { cosmeticOf } from "@/lib/itemCosmetic";
 import { channelNamesFor } from "@/lib/channelNames";
 import ShopItem from "@/models/ShopItem";
@@ -15,6 +16,8 @@ import RoleConfig from "@/models/RoleConfig";
 //       연결된 등록 아이템의 효과(기본 · 조건) + 지급 역할의 역할 버프(관리자 › 레벨 설정). 없으면 [] (화면은 칸을 그리지 않는다)
 //    📌 cosmetic — 꾸미기 효과가 있을 때만 { skin: 카드 스킨 키 | "", badge: 프로필 배지 여부, botCard: 봇 카드도 그 스킨을 그리는지 }.
 //       상품 상세가 '적용 모습' 미리보기를 그린다(app/arctic/ItemGallery.tsx). 배지 그림은 상품에 복사된 아이템 스냅샷(icon · itemImageUrl · color · type)
+//    📌 consumable — 쓰면 없어지는 상품(1개 단위 1회 소모권 · 소모형 효과 아이템 — 보호막)이면 true. 쓴 건은 취소 · 환불하지 않는다(lib/orderRefund) —
+//       상세 정보 칸이 그 점을 한 줄로 적는다(2026-10-04 "주의 문구 써둬 취소 환불 대상이 아니라고")
 export async function GET(request, { params }) {
   try {
     await connectToDatabase();
@@ -31,6 +34,7 @@ export async function GET(request, { params }) {
 
     let effects = [];
     let cosmetic = null;
+    let consumable = isUnitSale(item);
     try {
       const [linked, cfg] = await Promise.all([
         item.itemId ? Item.findById(item.itemId).lean().catch(() => null) : null,
@@ -40,12 +44,13 @@ export async function GET(request, { params }) {
       effects = [...itemEffectPartsOf(linked, (cid) => names.get(cid)), ...roleBuffParts(cfg || {})];
       // 꾸미기 — 효과 문장과 같은 원천(연결된 등록 아이템). 시즌 패스 보상 칸과 같은 계산(lib/itemCosmetic)
       cosmetic = cosmeticOf(linked);
+      if (linked && linked.type !== "physical" && hasConsumable(linked)) consumable = true;
     } catch (e) {
       // 효과 문장이 없다고 상품을 못 보면 안 된다
       console.error("상품 효과 문장 오류:", e);
     }
 
-    return NextResponse.json({ success: true, data: { ...item, effects, ...(cosmetic ? { cosmetic } : {}) } });
+    return NextResponse.json({ success: true, data: { ...item, effects, ...(cosmetic ? { cosmetic } : {}), ...(consumable ? { consumable } : {}) } });
   } catch (e) {
     return NextResponse.json({ success: false, data: null }, { status: 500 });
   }

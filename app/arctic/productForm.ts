@@ -201,11 +201,13 @@ export const durationsCalc = (f: ProductForm | null | undefined) => {
     ? `${list.map((x) => `${x.l} ${pointToXp(x.n).toLocaleString()}`).join(" · ")} XP 상당`
     : `빙옥으로 내면 ${list.map((x) => `${x.l} ${xpToPoint(x.n).toLocaleString()}`).join(" · ")} 빙옥`;
 };
-// 할인 뒤 판매가 — 입력칸 단위 그대로. 빙옥 전용은 XP 로 할인한 뒤 올림(상점 · 결제와 같은 계산 — lib/shopPricing salePrice + xpToPoint)
+// 할인 뒤 판매가 — 입력칸 단위 그대로. 상점 · 결제와 같은 계산(lib/shopPricing applyDiscount):
+//    빙옥 전용은 XP 로 할인한 뒤 빙옥 단위로 내린다(2026-10-04 — 할인이 빙옥 값에 반영되게). 할인이 없으면 정가 그대로
 export const formSalePrice = (f: ProductForm | null | undefined, raw: string | number, pct: number) => {
   const xp = toXpValue(String(raw ?? ""), !!f?.pointOnly);
+  if (!(pct > 0)) return f?.pointOnly ? xpToPoint(xp) : xp;
   const sale = Math.max(0, Math.floor((xp * (100 - pct)) / 100));
-  return f?.pointOnly ? xpToPoint(sale) : sale;
+  return f?.pointOnly ? Math.floor(sale / POINT_RATE) : sale;
 };
 
 // 📌 기간제 — 값을 매긴 기간만 판매 목록에 올린다. 기간제 + 무제한이면 무제한(days 0)을 나란히 붙인다
