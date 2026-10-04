@@ -23,7 +23,7 @@ const UserXpSchema = new mongoose.Schema({
   voiceTodayMin: { type: Number, default: 0 },
   voiceTodayDate: { type: String, default: "" },
   // 📌 진행 중인 음성 XP 바퀴 — 봇이 20초마다 적고 다 주면 지운다(features/voiceTime.js). 재시작 뒤 이어 가거나 그 사이 나갔으면 머문 만큼 준다.
-  //    { ch, chName, pc, sec, xp, muS, dfS, lvS, nS, at } (models/UserXp.js 와 같은 칸)
+  //    { ch, chName, pc, sec, xp, muS, dfS, lvS, nS, idle(분 — null 모름), at, pend? } (models/UserXp.js 와 같은 칸)
   voiceCycle: { type: mongoose.Schema.Types.Mixed, default: undefined },
   // 📌 마지막 활동 시각 — 음성에 있는 동안의 마지막 채팅 · 음성 상태 바뀜 · 명령 · 버튼. features/activity.js 가 20초마다 적고 음성에서 나가면 비운다.
   //    재시작 뒤 읽어 음성 XP 로그의 무활동(ctx.idle)을 이어 센다 (models/UserXp.js 와 같은 칸)
@@ -37,7 +37,8 @@ const UserXpSchema = new mongoose.Schema({
   //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
   effectDaily: { type: Map, of: String, default: {} },
-  // 지금까지 도달한 최고 레벨 — 레벨 업 퀘스트가 처음 도달한 레벨만 세려고(xp.js · grantQueue.js). 사이트 models/UserXp.js 와 같이
+  // 지금까지 도달한 최고 레벨 — 기록으로만 둔다(xp.js · grantQueue.js 가 $max 로 적는다). 사이트 models/UserXp.js 와 같이
+  //    📌 2026-10-04 레벨 업 퀘스트는 이 값을 보지 않는다 — XP 를 써서 내려갔다가 다시 오른 레벨도 매번 센다(시작 레벨 0 → 1 은 제외)
   maxLevel: { type: Number, default: 0 },
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
@@ -62,7 +63,8 @@ const UserXpSchema = new mongoose.Schema({
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
   // 고른 카드 스킨 — "" 안 고름 · "none" 끔 · 스킨 키 (models/UserXp.js 와 같은 칸). 이미지 카드 그릴 때 읽는다(botMessages withSkin)
   cardSkinPick: { type: String, default: "" },
-  // 단 프로필 배지 — 아이템 id 배열, 칸 없음 = 안 고름(자동) · [] = 전부 뗌 (models/UserXp.js 와 같은 칸). 봇은 읽지 않는다
+  // 단 프로필 배지 — 아이템 id 배열, 칸 없음 = 안 고름(배지 없음 — 2026-10-04 자동 착용 없음) · [] = 전부 뗌 (models/UserXp.js 와 같은 칸).
+  //    봇은 /인벤토리 '착용' 표시에만 읽는다(views/inventory.js)
   //    📌 default: undefined — 배열 칸 기본값([])이 봇 upsert 로 들어가면 기존 유저가 "전부 뗌"이 된다
   badgePick: { type: [String], default: undefined },
   // 해금 때 낸 값 — 사이트의 관리자 테스트 초기화가 환불에 쓴다 (models/UserXp.js 와 같은 모양)
@@ -239,7 +241,7 @@ const XpLogSchema = new mongoose.Schema({
   passBoost: { type: Number, default: 0 },
   // 📌 음성 지급 줄에만 — 그 주기의 음성 상황(features/voiceXp.js voiceCtx). 다른 줄 · 예전 줄에는 없다. models/XpLog.js 와 같은 칸
   //    n: 그 채널의 봇 아닌 사람 수(본인 포함) · mute: 마이크 꺼짐(본인 · 서버) · deaf: 헤드셋 꺼짐(본인 · 서버)
-  //    live: 화면 공유 · 캠 · idle: 마지막 활동(features/activity.js) 뒤 지난 분
+  //    live: 화면 공유 · 캠 · idle: 마지막 활동(features/activity.js) 뒤 지난 분 — 재시작 뒤 아직 활동 기록이 없어 모르면 칸 없음(관리 › 이상 활동 "모름")
   ctx: {
     n: Number,
     mute: Boolean,
@@ -284,6 +286,10 @@ const PurchaseSchema = new mongoose.Schema({
   // 📌 주문 묶음 — 한 결제(장바구니 · 수동 지급 한 사람분)의 건들이 같은 값. 1개 단위 상품은 1개가 한 건이라
   //    지급 큐(features/grantQueue.js)가 이 값 + 상품으로 한 번에 완료하고 DM 을 한 통만 보낸다. "" 이면 옛 건. models/Purchase.js 와 같아야 한다
   orderId: { type: String, default: "" },
+  // 📌 주문 쿠폰 — 장바구니 결제에 쓴 쿠폰 id(건마다 같은 값, "" 이면 안 씀 · 옛 주문) · 주문 전체를 취소 · 환불해 그 쿠폰을 돌려준 시각(한 번만).
+  //    사이트가 쓴다(app/api/shop/checkout · lib/orderRefund). 봇은 읽지 않지만 스키마에 없으면 같은 모델로 저장할 때 버려지므로 models/Purchase.js 와 맞춰 둔다
+  couponId: { type: String, default: "" },
+  couponBackAt: { type: Date, default: null },
   // 📌 사이트 보유 — 소유는 그대로 두고 디스코드 역할 표기만 뗀 상태.
   //    시즌이 바뀌면 디스코드가 역할로 지저분해지므로 표기를 사이트로 옮긴다.
   //    만료(expired)와는 다르다 — 물건은 계속 갖고 있고 인벤토리에도 그대로 뜬다.
@@ -310,9 +316,15 @@ const PayoutSchema = new mongoose.Schema({
   status: { type: String, default: "pending" }, // pending | processing(봇이 선점해 지급 중) | paid | failed
   // "xp" | "point" — 빙옥(point) 건은 사이트가 즉시 반영하고 paid 로 남기므로 봇은 집지 않는다 (models/Payout.js 와 동일)
   currency: { type: String, default: "xp" },
-  // 📌 "reset" = 관리자 초기화 기록(사이트가 paid 로만 남긴다 — 봇은 집지 않는다) · 처리한 관리자 이름(감사용). 봇은 읽지 않지만 models/Payout.js 와 맞춰 둔다
+  // 📌 "reset" = 초기화 기록 — paid 로만 남고 봇 대기열은 집지 않는다(status paid). 관리자 초기화(사이트 app/api/xp/grant, source "manual" · 금액 −XP)와
+  //    퇴장 초기화(봇 features/leaveReset.js, source "etc" · 금액 0 · by "bot")가 남긴다 — 이번 달 랭킹이 그 시각까지를 0 으로 친다.
+  //    by: 처리한 관리자 이름(감사용, 퇴장 초기화는 "bot"). models/Payout.js 와 맞춰 둔다
   kind: { type: String, default: "" },
   by: { type: String, default: "" },
+  // 📌 시즌 패스 가속(아이템 효과 passBoost) — 이 지급과 함께 passBaseXp 를 낮춘 폭(진행도에만 더해진 XP). 없으면 0.
+  //    지급 대기열의 퀘스트 보상(source "quest")만 붙는다(features/grantQueue.js — 2026-10-04, 운영진 지급은 빼고). XpLog.passBoost 와 같은 뜻.
+  //    시즌 기준선을 로그로 되짚을 때(views/pass.js · 사이트 lib/season.js seasonStartBaseXp) amount 와 함께 더해야 가속분이 사라지지 않는다. models/Payout.js 와 같은 칸
+  passBoost: { type: Number, default: 0 },
   error: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
   paidAt: { type: Date },

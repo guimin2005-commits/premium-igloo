@@ -187,6 +187,16 @@ async function processPayouts(guild) {
         continue;
       }
 
+      // 📌 패스 가속(PASS_BOOSTED) — 보유는 지급 직전 멤버로 본다(채팅 · 음성과 같은 캐시 판정).
+      //    서버에서 멤버를 못 찾으면 구매 건만으로 본다(역할로만 가진 아이템은 빠진다).
+      //    선점보다 먼저 본다 — 멤버 조회(캐시에 없으면 디스코드 REST)가 선점과 XP 쓰기 사이에 끼면, 그 사이 종료(SIGTERM · SIGKILL)될 때
+      //    processing 에 멈춘 채 XP 가 안 들어간다(processing 은 자동으로 다시 주지 않는다). 가속분은 XP 와 같은 $inc 라 XP 쓰기 뒤로는 못 옮긴다
+      let passBoost = 0; // 패스 가속으로 기준선을 낮춘 폭 — 지급 기록에도 남긴다(아래 paid)
+      if (p.amount > 0 && PASS_BOOSTED.has(p.source)) {
+        const holder = (await fetchMember(guild, userId)) || { id: userId };
+        passBoost = Math.floor((p.amount * perksOf(holder).passBoost) / 100);
+      }
+
       // 📌 선점 — pending → processing 에 성공한 틱만 지급한다.
       //    XP 를 넣은 뒤 paid 를 쓰기 전에 꺼지거나 DB 오류가 나도 pending 으로 남지 않아 같은 건을 두 번 주지 않는다.
       //    (processing 에 멈춘 건은 자동으로 다시 주지 않는다 — 관리자가 확인한다)
@@ -195,7 +205,6 @@ async function processPayouts(guild) {
 
       let doc;
       let applied = p.amount;
-      let passBoost = 0; // 패스 가속으로 기준선을 낮춘 폭(PASS_BOOSTED) — 지급 기록에도 남긴다(아래 paid)
       try {
         if (p.amount < 0) {
           // 📌 회수는 0 아래로 내리지 않는다 — 사이트는 예약 시점 잔액으로만 자르므로, 그 사이 쓴 만큼은 여기서 다시 자른다
@@ -211,12 +220,6 @@ async function processPayouts(guild) {
           applied = afterXp - beforeXp;
           doc = before ? { xp: afterXp, displayName: before.displayName, username: before.username } : null;
         } else {
-          // 📌 패스 가속(PASS_BOOSTED) — 보유는 지급 직전 멤버로 본다(채팅 · 음성과 같은 캐시 판정).
-          //    서버에서 멤버를 못 찾으면 구매 건만으로 본다(역할로만 가진 아이템은 빠진다)
-          if (PASS_BOOSTED.has(p.source)) {
-            const holder = (await fetchMember(guild, userId)) || { id: userId };
-            passBoost = Math.floor((p.amount * perksOf(holder).passBoost) / 100);
-          }
           doc = await UserXp.findOneAndUpdate(
             { userId },
             // 📌 시즌 패스 보상 XP 는 진행도(xp - passBaseXp)를 채우면 안 된다 —
@@ -240,12 +243,11 @@ async function processPayouts(guild) {
       }
 
       // XP 가 들어간 즉시 paid — 아래 부가 작업(레벨 · 역할 · 이름)이 실패해도 다시 지급하지 않는다
-      //    📌 passBoost — 이 지급과 함께 기준선을 낮춘 폭(XpLog.passBoost 와 같은 뜻). 시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp)
-      //       amount 와 함께 더해야 가속분이 사라지지 않는다. strict:false — Payout 스키마에 칸이 없어도 조용히 버려지지 않게
+      //    📌 passBoost — 이 지급과 함께 기준선을 낮춘 폭(XpLog.passBoost 와 같은 뜻, Payout 스키마 칸 — db.js). 시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp)
+      //       amount 와 함께 더해야 가속분이 사라지지 않는다
       await Payout.updateOne(
         { _id: p._id },
-        { $set: { status: "paid", paidAt: new Date(), error: "", ...(applied !== p.amount ? { amount: applied } : {}), ...(passBoost > 0 ? { passBoost } : {}) } },
-        { strict: false }
+        { $set: { status: "paid", paidAt: new Date(), error: "", ...(applied !== p.amount ? { amount: applied } : {}), ...(passBoost > 0 ? { passBoost } : {}) } }
       );
       console.log(
         `💰 XP 지급 완료: ${p.userName} ${applied >= 0 ? "+" : ""}${applied.toLocaleString()} (${p.reason || p.source})${passBoost > 0 ? ` · 패스 가속 +${passBoost.toLocaleString()}` : ""}`
@@ -256,8 +258,9 @@ async function processPayouts(guild) {
         const newLevel = getLevelByXp(doc.xp);
         // 지급 직후 xp 그대로일 때만 레벨을 쓴다 — 그 사이 채팅 · 음성 지급이 xp 를 바꿨으면 그쪽이 맞춘다(레벨 역행 방지)
         const lv = await UserXp.updateOne({ userId, xp: doc.xp }, { $set: { level: newLevel } });
-        // 최고 도달 레벨 — 큐로 오른 레벨도 기록한다(기록으로만 둔다 — 레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다)
-        await UserXp.updateOne({ userId }, { $max: { maxLevel: newLevel } });
+        // 최고 도달 레벨 — 큐로 오른 레벨도 기록한다(기록으로만 둔다 — 레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다).
+        //    기록이 잠깐 실패해도 레벨 업 퀘스트 · 역할 · 알림 · 효과를 막지 않게 오류는 삼킨다
+        await UserXp.updateOne({ userId }, { $max: { maxLevel: newLevel } }).catch(() => {});
         // 📌 레벨이 오른 것으로 치는 기준 — 레벨 업 퀘스트 · 레벨업 알림 · 레벨업 효과가 같이 쓴다(채팅 · 음성 grantXp 와 같은 규칙).
         //    doc.level 은 이번 지급 전 레벨. 레벨 0 → 1(시작 레벨)은 빼고, 오른 레벨마다 매번(XP 를 써서 내려갔다가 다시 올라도).
         //    레벨을 못 썼으면(그 사이 xp 가 바뀜) 바꾼 쪽이 센다. 레벨 비공개 중 · 역할 환불(source "role-refund")은 치지 않는다

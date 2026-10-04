@@ -11,7 +11,7 @@
 //    📌 레벨 비공개면 바퀴를 받아도 아무것도 하지 않는다 — XP · 오늘 누적 분 · 자동 출석 · 하루 음성 효과 전부(payVoiceCycle 맨 위).
 //       음성 시간(voiceSeconds — 랭킹)은 voiceTime.js 가 따로 쌓는다.
 //    📌 음성 XP 정지(UserXp.voiceXpOff — 관리자)인 사람은 통째로 건너뛴다: 지급 · 오늘 누적 분 · 자동 출석 · 하루 음성 효과 · 음성 시간(voiceTime.js).
-//    📌 지급 줄(XpLog "voice")의 sec 는 그 지급의 실제 초(5분을 채웠으면 300), ctx 는 그 시간 동안 가장 오래였던 음성 상황(인원 · 마이크 · 헤드셋 · 화면 공유/캠)과 마지막 활동 뒤 분.
+//    📌 지급 줄(XpLog "voice")의 sec 는 그 지급의 실제 초(5분을 채웠으면 300), ctx 는 그 시간 동안 가장 오래였던 음성 상황(인원 · 마이크 · 헤드셋 · 화면 공유/캠)과 마지막 활동 뒤 분(모르면 idle 칸 없음).
 //    📌 자동 출석이 되면 봇 메시지 autoAttend 를 출석 알림 채널(비우면 레벨업 채널)에 보낸다.
 import { PermissionFlagsBits } from "discord.js";
 import { UserXp } from "../db.js";
@@ -83,6 +83,8 @@ export async function payVoiceCycle(member, c) {
   // 📌 2026-10-04 "다 막아" — 레벨 비공개 동안 머문 시간은 그날 출석에도 치지 않는다. 예전엔 XP · 출석만 막고 오늘 누적 분은 계속 쌓아,
   //    공개로 바꾼 다음 바퀴에 그날 이미 60분을 채운 사람이 한꺼번에 출석 처리되고 알림이 몰렸다(10/1 공개 때).
   //    이제 공개한 뒤 머문 시간만 센다 — 공개 전부터 와 있던 사람도 공개 뒤 기준 시간을 새로 채워야 출석된다
+  //    ⚠ 경계: 공개 여부는 바퀴를 줄 때 본다(구간마다가 아니라). 공개하는 순간 돌던 바퀴는 공개 뒤에 닫히므로 그 바퀴의 비공개 몫
+  //       (사람마다 최대 한 주기 — voiceIntervalSec, 기본 5분)은 XP · 오늘 누적 분에 들어간다. 출석이 몰리지 않는 크기라 그대로 둔다
   if (!isLevelOpen()) return;
   const s = getSettings();
   const today = kstToday();

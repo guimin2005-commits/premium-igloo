@@ -38,6 +38,11 @@ const PurchaseSchema = new mongoose.Schema({
   //    주문 내역 · 원장 · 관리자 주문 목록 · 봇 지급 DM 이 이 값 + 상품(itemId)으로 한 줄로 묶는다. "" 이면 옛 건(한 건이 한 줄).
   //    장바구니 결제는 화면이 보낸 값으로 같은 결제가 두 번 들어오지 않게 막는다(app/api/shop/checkout). bot/src/db.js 에도 같은 칸
   orderId: { type: String, default: "" },
+  // 📌 주문 쿠폰 — 장바구니 결제에 쓴 쿠폰 id(Coupon _id 글자, 건마다 같은 값 — app/api/shop/checkout). "" 이면 쿠폰을 안 썼거나 옛 주문(돌려줄 쿠폰을 모른다).
+  //    couponBackAt — 주문 전체를 취소 · 환불해 그 쿠폰을 돌려준 시각. 주문 첫 건에 { couponBackAt: null } 조건부로 세워 한 번만 돌려준다(lib/orderRefund).
+  //    칸이 없는 옛 문서도 couponBackAt: null 조건에 걸린다. 스키마에 없으면 strict 모드가 저장 · 갱신을 조용히 버린다. bot/src/db.js 에도 같은 칸
+  couponId: { type: String, default: "" },
+  couponBackAt: { type: Date, default: null },
   // 📌 기간제 역할 — days가 0이면 영구. 지급 시각 기준으로 expiresAt을 세우고,
   //    기간이 지나면 봇이 역할을 회수하며 status를 expired로 바꾼다.
   days: { type: Number, default: 0 },

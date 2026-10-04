@@ -133,7 +133,8 @@ export function normalizeTiers(tiers, startTid = 1) {
     .map((t, i) => ({ tid: t.tid, level: i + 1, need: t.need, free: t.free, paid: t.paid }));
 }
 
-// 📌 시즌 시작 시점 기준선 — lib/seasonPass.js 의 seasonStartBaseXp 와 같은 식(시즌 시작 뒤 봇 지급 로그 + 패스 보상 뺀 지급 대기열)
+// 📌 시즌 시작 시점 기준선 — lib/seasonPass.js 의 seasonStartBaseXp 와 같은 식(시즌 시작 뒤 봇 지급 로그 + 패스 보상 뺀 지급 대기열, 둘 다 가속분 포함).
+//    사이트 쪽 집계 식은 lib/season.js passEarnedPipelines 하나 — 바꾸면 같이
 //    세는 구간은 시즌 시작과 지금 문서가 생긴 시각(_id) 중 늦은 쪽부터 — 퇴장 초기화로 지운 문서 시절 로그는 넣지 않는다
 async function seasonStartBaseXp(userId, xp, season, docId) {
   const seasonStart = new Date(`${season.start}T00:00:00+09:00`).getTime();
@@ -146,9 +147,10 @@ async function seasonStartBaseXp(userId, xp, season, docId) {
       { $group: { _id: null, s: { $sum: { $add: ["$amount", { $ifNull: ["$passBoost", 0] }] } } } },
     ]),
     // 📌 패스 보상 · 역할 환불(role-refund)은 뺀다 — 지급할 때 기준선도 같이 올리는 지급(grantQueue PASS_NEUTRAL). 사이트 lib/seasonPass.js 와 같게
+    //    📌 퀘스트 보상의 패스 가속(Payout.passBoost — grantQueue PASS_BOOSTED)도 XpLog 처럼 더한다 — 빠지면 기준선을 되짚을 때 가속분이 사라진다
     Payout.aggregate([
       { $match: { userId, status: "paid", currency: { $ne: "point" }, source: { $nin: ["pass", "role-refund"] }, paidAt: { $gte: since } } },
-      { $group: { _id: null, s: { $sum: "$amount" } } },
+      { $group: { _id: null, s: { $sum: { $add: ["$amount", { $ifNull: ["$passBoost", 0] }] } } } },
     ]),
   ]);
   const earned = (Number(logs[0]?.s) || 0) + (Number(pays[0]?.s) || 0);
