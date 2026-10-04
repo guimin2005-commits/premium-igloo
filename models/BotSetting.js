@@ -35,7 +35,7 @@ const BotSettingSchema = new mongoose.Schema({
   attendPoint: { type: Number, default: 0 },      // 출석 1회 POINT
   attendPassPoint: { type: Number, default: 0 },  // 출석 1회 패스 포인트
   attendVoiceMin: { type: Number, default: 60 },
-  // 📌 2026-10-04 잠수 확인 — 음성 채널에 혼자인 사람에게 [확인] 버튼(그 음성 채널 채팅, 본인만 누름). 첫 확인은 혼자 afkCheckFirstMin 분,
+  // 📌 2026-10-04 AFK 방지 시스템 — 음성 채널에 혼자인 사람에게 [확인] 버튼(그 음성 채널 채팅, 본인만 누름). 첫 확인은 혼자 afkCheckFirstMin 분,
   //    그 뒤는 afkCheckMinMin~afkCheckMaxMin 분 사이 무작위. afkCheckReplyMin 분 안에 안 누르면 서버 잠수 채널로 옮긴다(bot/src/features/afkCheck.js)
   afkCheckOn: { type: Boolean, default: true },
   afkCheckFirstMin: { type: Number, default: 60 }, // 2026-10-04 "최소 시간 1시간"

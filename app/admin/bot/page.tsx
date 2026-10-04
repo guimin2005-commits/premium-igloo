@@ -287,12 +287,12 @@ const SETTING_LABEL: Record<string, string> = {
   muteMode: "음소거 처리",
   muteReducePct: "감소 비율",
   muteTarget: "적용 기준",
-  afkCheckOn: "잠수 확인",
-  afkCheckFirstMin: "잠수 확인 첫 확인",
-  afkCheckSanctionMin: "잠수 확인 첫 확인(제재 이력)",
-  afkCheckMinMin: "잠수 확인 다음 확인 최소",
-  afkCheckMaxMin: "잠수 확인 다음 확인 최대",
-  afkCheckReplyMin: "잠수 확인 응답 시간",
+  afkCheckOn: "AFK 방지 시스템",
+  afkCheckFirstMin: "AFK 방지 첫 확인",
+  afkCheckSanctionMin: "AFK 방지 첫 확인(제재 이력)",
+  afkCheckMinMin: "AFK 방지 다음 확인 최소",
+  afkCheckMaxMin: "AFK 방지 다음 확인 최대",
+  afkCheckReplyMin: "AFK 방지 응답 시간",
   levelupChannelId: "레벨업 알림 채널",
   levelupMessage: "레벨업 알림 문구",
   roleGrantEnabled: "역할 지급 알림",
@@ -1723,8 +1723,8 @@ export default function AdminBotPage() {
                 </FieldRow>
               </Panel>
 
-              {/* 📌 2026-10-04 잠수 확인 — 음성 채널에 혼자인 사람에게 그 채널 채팅으로 [확인] 버튼(본인만 누름). 관리자 · 서포터즈는 빠진다(bot/src/features/afkCheck.js) */}
-              <Panel title="잠수 확인" flush>
+              {/* 📌 2026-10-04 AFK 방지 시스템(운영자 명칭) — 음성 채널에 혼자인 사람에게 그 채널 채팅으로 [확인] 버튼(본인만 누름). 관리자 · 서포터즈는 빠진다(bot/src/features/afkCheck.js) */}
+              <Panel title="AFK 방지 시스템" flush>
                 <FieldRow label="사용" changed={chg("afkCheckOn")} hint="음성 채널에 혼자인 사람만 · 관리자 · 서포터즈 제외">
                   <Toggle
                     on={settings.afkCheckOn !== false}
