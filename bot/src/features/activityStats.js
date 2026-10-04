@@ -4,7 +4,9 @@
 //       msg 메시지(쿨타임 무관) · reply 답장하기 · replied 답장 받기 · mention 멘션하기 · react 반응 달기 · reacted 반응 받기 ·
 //       threadmsg 스레드 대화 · threadnew 스레드 · 포럼 글 만들기 · sticker 스티커 · cmd 봇 명령어 · vjoin 음성 채널 입장 · levelup 레벨 업
 //    📌 도배로 부풀리지 않게 — 메시지 계열은 사람마다 3초에 한 번만, 음성 입장은 1분에 한 번만, 반응은 (사람 · 메시지 · 이모지)당 하루 한 번만 센다.
-//       봇 · 시스템 메시지 · 자기 자신에게 한 답장/반응 · 지급 제외 채널(채널 정책)은 세지 않는다. 레벨 비공개여도 센다(퀘스트 수령은 사이트가 막는다)
+//       봇 · 시스템 메시지 · 자기 자신에게 한 답장/반응 · 지급 제외 채널(채널 정책)은 세지 않는다.
+//    📌 2026-10-04 "비공개 중에는 활동 횟수도 멈추면 XP 퀘스트와 기준이 같아집니다" — 레벨 비공개(isLevelOpen false)면 아무것도 세지 않는다(레벨 업 포함).
+//       예전엔 비공개 중에도 세어, 공개 뒤 같은 주 · 달 퀘스트에 비공개 동안의 횟수가 바로 들어갔다
 //    📌 반응은 raw 게이트웨이 패킷(MESSAGE_REACTION_ADD)으로 받는다 — 메시지 작성자(message_author_id)가 패킷에 있어 캐시 · 조회 없이 "받기"까지 센다.
 //       GuildMessageReactions 인텐트가 필요하다(index.js). 메시지 본문 · 첨부는 MessageContent 인텐트가 없어 세지 않는다
 //    📌 스레드 안 활동은 부모 채널로 적는다(관리 화면 채널 고르기에 스레드는 없다). pc = 카테고리
@@ -12,6 +14,7 @@
 import { Events, MessageType } from "discord.js";
 import { ActivityStat } from "../db.js";
 import { getChannelPolicy } from "../channelConfigs.js";
+import { isLevelOpen } from "../botSettings.js";
 import { config } from "../config.js";
 
 const FLUSH_MS = 20_000;
@@ -37,9 +40,9 @@ const isThread = (c) => typeof c?.isThread === "function" && c.isThread();
 const chanOf = (c) => (isThread(c) ? c.parentId || c.id : c?.id) || "";
 const catOf = (c) => (isThread(c) ? c.parent?.parentId : c?.parentId) || "";
 
-// 📌 한 번 세기 — 다른 기능(xp.js 레벨 업 등)도 이걸 부른다. channel 이 없으면 chId(글자)만 적는다
+// 📌 한 번 세기 — 다른 기능(xp.js 레벨 업 등)도 이걸 부른다. channel 이 없으면 chId(글자)만 적는다. 레벨 비공개면 세지 않는다(맨 위 📌)
 export function bumpActivity(userId, k, n = 1, channel = null, chId = "") {
-  if (!started || !userId || !(n > 0)) return;
+  if (!started || !userId || !(n > 0) || !isLevelOpen()) return;
   const { d, h } = kstParts();
   const ch = channel ? chanOf(channel) : String(chId || "");
   const pc = channel ? catOf(channel) : "";

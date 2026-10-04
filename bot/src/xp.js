@@ -167,20 +167,13 @@ async function sendLevelUp(member, prevLevel, newLevel, totalXp) {
 export async function grantXp(member, amount, meta = {}) {
   if (!amount) return null;
 
-  if (!isLevelOpen()) {
-    // 음성 주기는 비공개여도 문서가 없으면 만들어 둔다(오늘 누적 분 · 자동 출석 판정이 이 문서를 쓴다. 음성 시간은 voiceTime.js 가 따로 쌓는다)
-    if (meta.reason === "voice") {
-      await UserXp.updateOne(
-        { userId: member.id },
-        { $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() } },
-        { upsert: true }
-      ).catch((e) => console.error(`음성 문서 만들기 오류 (${member.displayName}):`, e.message));
-    }
-    return null;
-  }
+  // 📌 비공개면 문서도 만들지 않는다 — 2026-10-04 "다 막아"로 비공개 중엔 오늘 누적 분도 쌓지 않아(features/voiceXp.js) 음성용으로 만들어 둘 까닭이 없다.
+  //    (음성 시간 voiceSeconds 는 voiceTime.js 가 문서를 만들며 따로 쌓는다)
+  if (!isLevelOpen()) return null;
 
   // 📌 시즌 패스 가속(아이템 효과 passBoost, 상한 50%) — 이 지급 XP 의 합% 만큼 기준선(passBaseXp)을 같은 쓰기에서 낮춘다.
-  //    진행도(xp - passBaseXp)만 더 오르고 레벨 · XP 는 그대로다. 회수(음수)에는 붙이지 않는다
+  //    진행도(xp - passBaseXp)만 더 오르고 레벨 · XP 는 그대로다. 회수(음수)에는 붙이지 않는다.
+  //    지급 대기열의 퀘스트 보상(source "quest")은 features/grantQueue.js 가 같은 식으로 붙인다(2026-10-04 — 운영진 지급은 빼고)
   const passBoost = amount > 0 ? Math.floor((amount * perksOf(member).passBoost) / 100) : 0;
   const inc = { xp: amount };
   if (passBoost > 0) inc.passBaseXp = -passBoost;
@@ -215,7 +208,7 @@ export async function grantXp(member, amount, meta = {}) {
   const newLevel = getLevelByXp(doc.xp);
   if (newLevel !== doc.level) {
     doc.level = newLevel;
-    // 바꾸기 직전 레벨을 돌려받는다 — 두 지급이 동시에 같은 레벨업을 봐도 알림 · 역할 · 레벨업 효과는 실제로 오른 쪽 하나만 처리하게.
+    // 바꾸기 직전 레벨을 돌려받는다 — 두 지급이 동시에 같은 레벨업을 봐도 알림 · 역할 · 레벨 업 퀘스트 · 레벨업 효과는 실제로 오른 쪽 하나만 처리하게.
     // 📌 xp 가 방금 $inc 결과 그대로일 때만 쓴다 — 그 사이 다른 지급(채팅 · 음성 · 큐)이 xp 를 바꿨으면
     //    뒤에 온 쪽이 더 큰 xp 로 레벨을 맞추므로 여기서 작은 레벨로 덮어쓰지 않는다(레벨 역행 방지).
     const prev = await UserXp.findOneAndUpdate(
@@ -231,17 +224,12 @@ export async function grantXp(member, amount, meta = {}) {
       syncRewardRoles(member, newLevel).catch(() => {});
       // 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 알리지 않는다 (역할 지급은 그대로)
       if (newLevel > Math.max(1, before)) announceLevelUp(member, Math.max(1, before), newLevel, doc.xp);
-      // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함(레벨 업 퀘스트가 쓴다)
-      const pm = await UserXp.findOneAndUpdate(
-        { userId: member.id },
-        { $max: { maxLevel: newLevel } },
-        { new: false, projection: { maxLevel: 1 } }
-      ).lean();
-      // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 처음 도달한 레벨만(그 전 최고치를 넘은 만큼, 0 → 1 은 시작 레벨이라 제외)
-      {
-        const top = Math.max(1, before, Math.floor(Number(pm?.maxLevel) || 0));
-        if (newLevel > top) bumpActivity(member.id, "levelup", newLevel - top);
-      }
+      // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함.
+      //    기록으로만 둔다(레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다 — 아래)
+      await UserXp.updateOne({ userId: member.id }, { $max: { maxLevel: newLevel } });
+      // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 2026-10-04 "XP를 써서 내려갔다가 다시 오른 레벨도 레벨이다 / 시작 레벨은 동일 유지".
+      //    오른 레벨마다 매번 센다(레벨업 알림 · 레벨업 효과와 같은 기준 — 예전엔 처음 도달한 레벨만). 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 제외
+      if (newLevel > Math.max(1, before)) bumpActivity(member.id, "levelup", newLevel - Math.max(1, before));
       // 📌 아이템 효과 "레벨이 오를 때마다" — 2026-10-04 오른 레벨마다 매번 준다. 상점 · 강화에 XP 를 써서 내려갔다가 다시 올라도 또 받는다.
       //    효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지). 레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다
       if (meta.reason !== "effect-levelup") await grantLevelUpEffects(member, newLevel - Math.max(1, before));
