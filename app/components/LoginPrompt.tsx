@@ -107,13 +107,13 @@ export function LoginSheet({
   return (
     <SheetFrame label="로그인" onClose={onClose}>
       {context && (
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center md:justify-center gap-2 mb-3">
           <span className="inline-flex items-center h-5 px-2 rounded-full bg-[#131313] text-white text-[10px] font-black tracking-[0.08em] leading-none">{context.chip}</span>
           <span className="text-[12px] font-bold text-[#8a8a8a]">{context.label}</span>
         </div>
       )}
-      <h2 className="text-[22px] font-black text-[#131313] tracking-tight leading-tight">로그인</h2>
-      <p className="mt-1.5 text-[12px] text-[#5a5a5a]">고급 이글루 디스코드 계정</p>
+      <h2 className="text-[22px] font-black text-[#131313] tracking-tight leading-tight md:text-center">로그인</h2>
+      <p className="mt-1.5 text-[12px] text-[#5a5a5a] md:text-center">고급 이글루 디스코드 계정</p>
       <button type="button" onClick={onDiscord}
         className="mt-7 w-full h-12 rounded-full bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#5865F2]/40">
         Discord로 계속하기
