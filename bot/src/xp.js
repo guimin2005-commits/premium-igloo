@@ -1,6 +1,7 @@
 // ── XP 지급 · 레벨업 감지 · 보상 역할 지급 · 로그 기록 ──────
-import { UserXp, XpLog } from "./db.js";
+import { UserXp, XpLog, isDuplicateKeyError } from "./db.js";
 import { getLevelByXp, getCumulativeXpByLevel, kstToday } from "./leveling.js";
+import { isXpStopped, notStopped, noteXpStop, stopUntilOf } from "./xpStop.js";
 import { getRoleConfigs } from "./roleConfigs.js";
 import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow, perksOf } from "./itemEffects.js";
 import { getSettings, isLevelOpen } from "./botSettings.js";
@@ -164,12 +165,16 @@ async function sendLevelUp(member, prevLevel, newLevel, totalXp) {
 //   📌 누적 음성 시간(voiceSeconds)은 여기서 올리지 않는다 — features/voiceTime.js 가 실제 접속 초로 센다(2026-10-03)
 //   📌 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과 · 레벨업 효과)는 전부 이 함수로 들어온다 — 레벨 비공개면 여기서 막는다.
 //      (지급 대기열 Payout 은 grantQueue.js 가 따로 넣으므로 막히지 않는다)
+//   📌 XP 획득 중단(xpStop.js) 중인 사람에게도 주지 않는다(null). 지급 대기열의 자동 출처는 grantQueue.js 가 따로 막는다
 export async function grantXp(member, amount, meta = {}) {
   if (!amount) return null;
 
   // 📌 비공개면 문서도 만들지 않는다 — 2026-10-04 "다 막아"로 비공개 중엔 오늘 누적 분도 쌓지 않아(features/voiceXp.js) 음성용으로 만들어 둘 까닭이 없다.
   //    (음성 시간 voiceSeconds 는 voiceTime.js 가 문서를 만들며 따로 쌓는다)
   if (!isLevelOpen()) return null;
+  // 📌 XP 획득 중단(관리자 — xpStop.js) — 2026-10-04 "5일 전체 XP 획득 중단". 채팅 · 음성 · 출석 · 아이템 효과(레벨업 효과 포함)가 전부 여기로 들어온다.
+  //    메모리로 먼저 거르고, 아래 쓰기 조건(notStopped)이 60초 안에 세운 중단까지 막는다. 회수(음수)는 막지 않는다
+  if (amount > 0 && isXpStopped(member.id)) return null;
 
   // 📌 시즌 패스 가속(아이템 효과 passBoost, 상한 50%) — 이 지급 XP 의 합% 만큼 기준선(passBaseXp)을 같은 쓰기에서 낮춘다.
   //    진행도(xp - passBaseXp)만 더 오르고 레벨 · XP 는 그대로다. 회수(음수)에는 붙이지 않는다.
@@ -177,14 +182,25 @@ export async function grantXp(member, amount, meta = {}) {
   const passBoost = amount > 0 ? Math.floor((amount * perksOf(member).passBoost) / 100) : 0;
   const inc = { xp: amount };
   if (passBoost > 0) inc.passBaseXp = -passBoost;
-  const doc = await UserXp.findOneAndUpdate(
-    { userId: member.id },
-    {
-      $inc: inc,
-      $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() },
-    },
-    { upsert: true, new: true }
-  );
+  const update = {
+    $inc: inc,
+    $set: { username: member.user.username, displayName: member.displayName, updatedAt: new Date() },
+  };
+  let doc;
+  try {
+    const now = new Date();
+    doc = await UserXp.findOneAndUpdate({ userId: member.id, ...(amount > 0 ? notStopped(now) : {}) }, update, { upsert: true, new: true });
+  } catch (e) {
+    if (!isDuplicateKeyError(e)) throw e;
+    // 📌 문서는 있는데 "중단 중 아님" 조건에 안 맞았다(upsert 가 새 문서를 만들려다 E11000) — 중단 중이면 주지 않는다.
+    //    아니면 같은 새 사람에게 두 지급이 동시에 문서를 만든 경합이라 조건 없이 한 번 더 쓴다
+    const cur = await UserXp.findOne({ userId: member.id }, { xpStopFrom: 1, xpStopUntil: 1 }).lean();
+    noteXpStop(member.id, cur);
+    if (stopUntilOf(cur)) return null;
+    doc = await UserXp.findOneAndUpdate({ userId: member.id }, update, { upsert: true, new: true });
+  }
+  if (!doc) return null;
+  noteXpStop(member.id, doc); // 지급 결과로 메모리도 맞춘다(관리자가 방금 세운 예약 등)
 
   // 지급 로그 (실패해도 지급 자체는 유지)
   XpLog.create({
@@ -242,8 +258,9 @@ export async function grantXp(member, amount, meta = {}) {
 }
 
 // 레벨업 효과 — (효과 합 × 오른 레벨 수) 를 따로 지급. 오류는 로그만 남긴다(원래 지급은 이미 끝났다)
+//    📌 XP 획득 중단 중이면 주지 않는다 — 운영진 지급(지급 대기열)으로 레벨이 올라도 효과는 없다(grantXp 입구도 막는다)
 export async function grantLevelUpEffects(member, gained) {
-  if (!(gained > 0)) return;
+  if (!(gained > 0) || isXpStopped(member.id)) return;
   try {
     const per = effectXp(member, "levelUp");
     if (per > 0) await grantXp(member, per * gained, { reason: "effect-levelup" });
@@ -257,7 +274,8 @@ export async function grantLevelUpEffects(member, gained) {
 //    meta: XpLog 에 남길 채널 정보. 오류는 효과별로 삼킨다 — 기존 지급을 막지 않게.
 export async function grantOnceEffects(member, on, { test = () => true, meta = {} } = {}) {
   // 📌 레벨 비공개면 "하루 1번" 자물쇠도 세우지 않는다 — 세우고 grantXp 에서 막히면 공개된 그날 효과를 못 받는다
-  if (!isLevelOpen()) return;
+  //    XP 획득 중단(xpStop.js) 중인 사람도 같다 — 중단이 끝난 그날 효과를 받을 수 있게
+  if (!isLevelOpen() || isXpStopped(member.id)) return;
   let effects = [];
   try {
     effects = heldEffects(member, on);

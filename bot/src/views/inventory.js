@@ -58,9 +58,11 @@ export async function inventoryView(member) {
 
   // 📌 여러 개 가진 것(1개 단위 상품 · 소모품 — count)은 "**이름** ×N" — 쓰면 줄어드는 것이라 "영구"는 붙이지 않는다(사이트 인벤토리와 같은 표기).
   //    모두 기간제면 가장 빠른 만료(먼저 쓰이는 것)를 붙인다
+  //    📌 2026-10-04 #127 — 역할 기간제는 역할을 준 시각부터 센다(features/grantQueue.js grantedEnd). 지급 대기인 기간제 한 건은 만료가 아직 임시라 날짜 대신 "지급 대기"만
   const lines = owned.slice(0, MAX_LINES).map(({ item, expiresAt, pending, count }) => {
     const name = `**${esc(item.name) || "아이템"}**`;
     if (count > 1) return `${name} ×${count}${expiresAt ? ` · ${formatUntil(expiresAt).slice(0, 10)} 까지` : ""}${pending ? " · 지급 대기" : ""}`;
+    if (pending && expiresAt) return `${name} · 지급 대기`;
     const until = expiresAt ? `${formatUntil(expiresAt).slice(0, 10)} 까지` : "영구";
     return `${name} · ${until}${pending ? " · 지급 대기" : ""}`;
   });
@@ -106,7 +108,8 @@ export async function inventoryCardData(v, name, cards) {
   const items = await Promise.all(
     shown.map(async (b) => {
       const image = b.imageUrl && cards?.fetchImageDataUri ? await cards.fetchImageDataUri(b.imageUrl).catch(() => null) : null;
-      const exp = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
+      // 지급 대기인 기간제 한 건은 남은 일수를 달지 않는다(만료가 아직 임시 — 역할을 준 시각부터 센다, #127)
+      const exp = b.expiresAt && !(b.pending && !(b.count > 1)) ? new Date(b.expiresAt).getTime() : 0;
       return {
         name: b.name,
         type: b.type,

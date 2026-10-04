@@ -19,6 +19,7 @@ import { denyIfMaintenance } from "@/lib/apiAuth";
 import { isAdminName } from "@/lib/admins";
 import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
+import { activeXpStopUntil } from "@/lib/xpStop";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf } from "../_lib/renewal";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
@@ -160,15 +161,19 @@ export async function POST(request) {
     // 📌 캐시백 % (아이템 효과 shopCashback — 상한 적용) — 이번 결제 전에 가진 것으로 정한다(방금 사는 캐시백 아이템이 제 결제에 붙지 않게).
     //    재고 · 쿠폰을 잡기 전에 읽는다. 읽지 못하면 캐시백 없이 결제한다(결제를 막지 않는다)
     //    📌 상한 · 빙옥 몫 포함 여부는 관리자 설정(상점 관리 › 설정 — lib/itemEffects cashbackRuleOf). 설정을 못 읽으면 기본값(30% · XP 몫만)
-    const [perkPct, cashRule] = await Promise.all([
+    //    📌 XP 획득 중단(관리자 — lib/xpStop.js) 중이면 캐시백 없음 — 캐시백도 아이템 효과로 받는 XP 다. 결제 자체는 막지 않는다. 확인하지 못하면 캐시백 없이
+    const [perkPct, cashRule, xpStopped] = await Promise.all([
       getPerks(userId)
         .then((p) => p.shopCashback || 0)
         .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; }),
       BotSetting.findOne({ key: "main" }, { shopCashbackCap: 1, cashbackOnPoint: 1 }).lean()
         .then(cashbackRuleOf)
         .catch((e) => { console.error("캐시백 설정 조회 실패:", e); return cashbackRuleOf(null); }),
+      activeXpStopUntil(userId)
+        .then((until) => !!until)
+        .catch((e) => { console.error("XP 획득 중단 조회 실패:", e); return true; }),
     ]);
-    const cashPct = Math.min(perkPct, cashRule.cap);
+    const cashPct = xpStopped ? 0 : Math.min(perkPct, cashRule.cap);
 
     // 📌 단가는 여기서 한 번만 — 할인 종료 시각이 요청 도중에 지나도 청구액과 기록(Purchase.price)이 같은 값이 되게
     const unitPrice = new Map(docs.map((d) => [String(d._id), salePrice(d, daysOf.get(String(d._id)))]));
@@ -336,7 +341,8 @@ export async function POST(request) {
         cashbackXp: cashShares[i] || 0,
         couponId: coupon ? String(coupon._id) : "",
         days,
-        // 만료 시각은 결제 시점부터 — 봇 지급이 늦어도 산 만큼은 보장된다. 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
+        // 만료 시각은 결제 시점부터(임시) — 📌 2026-10-04 #127 디스코드 역할이 있는 기간제 새 구매는 봇이 역할을 준 시각부터 다시 센다
+        //    (bot/src/features/grantQueue.js grantedEnd — 줄이지는 않는다). 연장이면 이어 붙인 건의 만료부터(renewOf · startsAt)
         expiresAt: timing.expiresAt,
         renewOf: timing.renewOf,
         startsAt: timing.startsAt,

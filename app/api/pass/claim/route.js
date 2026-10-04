@@ -8,6 +8,7 @@ import { getPassState, grantReward } from "@/lib/seasonPass";
 import { SEASON } from "@/lib/season";
 import { denyIfLevelClosed } from "@/lib/levelAccess";
 import { denyIfMaintenance } from "@/lib/apiAuth";
+import { denyIfXpStopped } from "@/lib/xpStop";
 import { logWallet } from "@/lib/wallet";
 import UserXp from "@/models/UserXp";
 
@@ -175,6 +176,9 @@ export async function POST(request) {
     if (closed) return closed;
     const userId = session.user.id;
     const userName = session.user.name || "";
+    // 📌 XP 획득 중단(관리자 — lib/xpStop.js) 중이면 패스 보상을 받지 않는다(XP · 빙옥 · 아이템 전부). 403 + "…까지 XP 획득이 중단된 상태입니다."
+    const stopped = await denyIfXpStopped(userId);
+    if (stopped) return stopped;
     const state = await getPassState(userId);
 
     if (!state.enabled) {

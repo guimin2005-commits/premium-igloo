@@ -35,6 +35,15 @@ const UserXpSchema = new mongoose.Schema({
   voiceXpOff: { type: Boolean, default: false },
   voiceXpOffAt: { type: Date, default: null },
   voiceXpOffBy: { type: String, default: "" }, // 세운 관리자 이름
+  // 📌 XP 획득 중단 — 관리자가 세운다(POST /api/admin/users/xp-stop). 2026-10-04 운영자 "회수 + 타임아웃 3일 + 그 뒤 5일 전체 XP 획득 중단".
+  //    xpStopFrom ≤ 지금 < xpStopUntil 이면 중단 중(끝나면 저절로 풀린다 · 시작 전이면 예약). 판정 · 문구는 lib/xpStop.js, 봇은 bot/src/xpStop.js.
+  //    중단 중에는 봇이 채팅 · 음성(음성 시간 포함) · 출석 · 아이템 효과 · 지급 대기열의 자동 출처 XP 를 주지 않고 활동 횟수도 세지 않는다.
+  //    사이트는 보상 받기를 막고(lib/xpStop.js denyIfXpStopped) 캐시백을 주지 않는다. 운영진 지급은 그대로. bot/src/db.js 와 같은 칸
+  //    색인(xpStopUntil) — 봇이 60초마다 끝나지 않은 중단만 읽는다
+  xpStopFrom: { type: Date, default: null },
+  xpStopUntil: { type: Date, default: null, index: true },
+  xpStopBy: { type: String, default: "" },     // 세운 관리자 이름
+  xpStopReason: { type: String, default: "" }, // 사유(관리 화면에만)
   // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(기록으로만 — 봇이 $max 로 적는다.
   //    2026-10-04 레벨 업 퀘스트는 이 값을 보지 않고 다시 오른 레벨도 매번 센다)
   effectDaily: { type: Map, of: String, default: {} },

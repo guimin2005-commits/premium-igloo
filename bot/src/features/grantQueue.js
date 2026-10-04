@@ -1,6 +1,7 @@
 // ── 자동 지급 큐 (30초 주기) ──────────────────
 //  · ARCTIC 역할 상품 구매 → 역할 자동 지급
-//  · XP 지급 대기열(코드·초대 보상 등) → XP 자동 지급
+//  · XP 지급 대기열(코드·초대 보상 등) → XP 자동 지급 (XP 획득 중단 중이면 자동 출처는 막는다 — STOP_BLOCKED)
+//  · 역할 기간제 새 구매는 역할을 준 시각부터 기간을 센다 (grantedEnd — 2026-10-04 #127)
 //  · 코드 역할 지급 요청 → 역할 자동 지급
 //  · 사이트에서 XP가 바뀐 유저 → 레벨 보상 역할 재동기화(지급·회수)
 //  · 시즌 전환으로 사이트 보유(siteOnly)가 된 구매 → 디스코드 역할 표기만 떼기
@@ -12,10 +13,12 @@ import { refreshRoleConfigs } from "../roleConfigs.js";
 import { perksOf } from "../itemEffects.js";
 import { getLevelByXp } from "../leveling.js";
 import { bumpActivity } from "./activityStats.js";
+import { noteXpStop, stopUntilOf } from "../xpStop.js";
 import { config } from "../config.js";
 import { buildMessage, commonVars, formatUntil } from "../botMessages.js";
 
 const TICK_MS = 30 * 1000;
+const DAY_MS = 86400000;
 
 // 길드 멤버 조회 (캐시에 없으면 fetch)
 async function fetchMember(guild, userId) {
@@ -79,6 +82,36 @@ export async function findContinuation(p, after = new Date()) {
   }).lean();
 }
 
+// 📌 2026-10-04 #127 "역할 준 시간" — 디스코드 역할이 있는 기간제 새 구매(연장분 아님)는 봇이 역할을 실제로 준 그 순간부터 기간을 센다.
+//    결제 · 지급 때 적어 둔 만료(그 시각 + 기간)는 지급 대기 동안의 임시 값이다 — 보유 판정 · 연장 이어 붙이기가 그대로 쓴다.
+//    역할을 준 시각 + 기간이 그보다 늦을 때만 바꾼다(줄이지 않는다). 역할 없는 아이템(꾸미기 · 소모품 등)은 결제 때 바로 가진 것이라 그대로,
+//    연장분은 앞 건의 만료에 이어 붙는다(앞 건이 밀리면 shiftRenewals 가 같이 민다). 돌려주는 값: 새 만료 ms(바꿀 것 없으면 0)
+function grantedEnd(p, at) {
+  if (!p.roleId || !(Number(p.days) > 0) || p.renewOf) return 0;
+  const end = at.getTime() + Number(p.days) * DAY_MS;
+  const old = p.expiresAt ? new Date(p.expiresAt).getTime() : 0;
+  return end > old ? end : 0;
+}
+
+// 📌 앞 건의 만료가 밀린 만큼 그 뒤에 이어 붙인 연장분(renewOf — 시작이 앞 건의 옛 만료인 것)도 같이 민다. 연장분의 연장분까지 차례로.
+//    지급 대기 중에 연장을 산 경우 — 안 밀면 앞 건과 연장분이 겹쳐 그만큼 기간을 잃는다
+async function shiftRenewals(baseId, oldEnd, delta, depth = 0) {
+  if (!(delta > 0) || depth > 20) return;
+  const from = new Date(oldEnd);
+  const kids = await Purchase.find(
+    { renewOf: String(baseId), status: { $in: ["pending", "completed"] }, startsAt: from, expiresAt: { $ne: null } },
+    { expiresAt: 1 }
+  ).lean();
+  for (const k of kids) {
+    const kidEnd = new Date(k.expiresAt).getTime();
+    const r = await Purchase.updateOne(
+      { _id: k._id, startsAt: from, expiresAt: k.expiresAt },
+      { $set: { startsAt: new Date(oldEnd + delta), expiresAt: new Date(kidEnd + delta), reminderSentAt: null } }
+    );
+    if (r.modifiedCount) await shiftRenewals(k._id, kidEnd, delta, depth + 1);
+  }
+}
+
 // 📌 지급 실패 표시 — 주문 묶음(bundleFilter)이면 묶음의 대기 건 전부에 적는다. 머리 건에만 적으면 나머지 건이 error "" 로
 //    대기열 앞자리(error 오름차순)를 계속 차지해, 틱마다 한 건만 처리하고 25칸을 버려 다른 유저의 지급이 밀린다
 async function markError(p, bundleFilter, error) {
@@ -125,11 +158,24 @@ async function processPurchases(guild) {
       if (p.roleId) await member.roles.add(p.roleId, p.itemId === "grant" ? `운영진 지급: ${p.itemName}` : `ARCTIC 구매: ${p.itemName}`);
 
       // 📌 pending 일 때만 completed 로 — 역할을 붙이는 사이 관리자가 취소(환불)했으면 덮어쓰지 않는다
-      const set = { $set: { status: "completed", processedAt: new Date(), error: "" } };
-      const done = bundle
-        ? await Purchase.updateMany(bundleFilter, set)
-        : await Purchase.updateOne({ _id: p._id, status: "pending" }, set);
-      if (!done.modifiedCount) {
+      //    📌 역할 기간제 새 구매는 지금(역할을 준 시각)부터 기간을 센다(grantedEnd — #127). 한 건짜리는 바뀐 만료를 돌려받아 DM 에 쓴다
+      //       (연장분은 같은 틱에 앞 건이 밀렸을 수 있다 — 읽어 둔 값이 아니라 지금 값으로)
+      const grantedAt = new Date();
+      const oldEnd = p.expiresAt ? new Date(p.expiresAt).getTime() : 0;
+      const newEnd = grantedEnd(p, grantedAt);
+      const set = { $set: { status: "completed", processedAt: grantedAt, error: "", ...(newEnd ? { expiresAt: new Date(newEnd) } : {}) } };
+      let expiresAt = p.expiresAt;
+      let doneCount = 0;
+      if (bundle) {
+        doneCount = (await Purchase.updateMany(bundleFilter, set)).modifiedCount;
+      } else {
+        const after = await Purchase.findOneAndUpdate({ _id: p._id, status: "pending" }, set, { new: true, projection: { expiresAt: 1 } }).lean();
+        if (after) {
+          doneCount = 1;
+          expiresAt = after.expiresAt;
+        }
+      }
+      if (!doneCount) {
         // 그 사이 취소됨 — 방금 붙인 역할을 되돌린다 (원래 있던 역할이거나 같은 역할을 주는 다른 살아 있는 구매가 있으면 둔다)
         if (p.roleId && !hadRole) {
           const holder = await findRoleHolder(p);
@@ -138,15 +184,19 @@ async function processPurchases(guild) {
         console.log(`🛒 지급 중 취소된 구매: ${p.userName} ← ${p.itemName}`);
         continue;
       }
+      // 지급 대기 중에 이어 붙인 연장분이 있으면 밀린 만큼 같이 민다(실패해도 지급은 끝났다 — 로그만)
+      if (newEnd && oldEnd) {
+        await shiftRenewals(p._id, oldEnd, newEnd - oldEnd).catch((e) => console.error(`🛒 연장분 기간 맞춤 실패 (${p.userName} / ${p.itemName}):`, e.message));
+      }
       // 묶음이면 완료한 개수만큼 "이름 ×N" — 메시지 틀(botMessages)은 그대로, 이름만 바꾼다
-      const n = done.modifiedCount;
+      const n = doneCount;
       const itemName = n > 1 ? `${p.itemName} ×${n}` : p.itemName;
       console.log(`🛒 역할 지급 완료: ${p.userName} ← ${itemName}${p.days > 0 ? ` (${p.days}일)` : ""}${p.renewOf ? " · 연장" : ""}`);
 
       // 본인에게 알린다 — 연장 · 기간제(언제까지) · 영구
-      const until = formatUntil(p.expiresAt);
+      const until = formatUntil(expiresAt);
       if (p.renewOf) sendDm(member, "renewed", { item: itemName, days: p.days, until });
-      else if (p.days > 0 && p.expiresAt) sendDm(member, "purchaseGrantedTimed", { item: itemName, days: p.days, until });
+      else if (p.days > 0 && expiresAt) sendDm(member, "purchaseGrantedTimed", { item: itemName, days: p.days, until });
       else sendDm(member, "purchaseGranted", { item: itemName });
     } catch (e) {
       // 50013(봇 역할보다 위) · 10011(삭제된 역할)은 다시 해도 같다 — 표시만 남기고 pending 은 둔다.
@@ -168,6 +218,10 @@ const QUIET_ROLE_SYNC = new Set(["role-refund"]);
 //    채팅 · 음성 grantXp(xp.js)와 같은 식: 지급 XP 의 합% 만큼 기준선(passBaseXp)을 XP 와 같은 쓰기에서 낮춘다(진행도만 더 오르고 레벨 · XP 는 그대로).
 //    운영진 지급(manual) · 코드 · 초대 등 다른 대기열 지급에는 붙이지 않는다
 const PASS_BOOSTED = new Set(["quest"]);
+// 📌 XP 획득 중단(관리자 — xpStop.js) 중이면 넣지 않는 자동 출처 — 2026-10-04 "5일 전체 XP 획득 중단". 퀘스트 · 시즌 패스 · 쿠폰 · 코드 보상.
+//    지급하지 않고 failed 로 남긴다(중단이 끝난 뒤에도 들어가지 않는다 — 관리 › 유저 조회 지급 탭에 사유가 보인다).
+//    운영진 지급(manual · 서포터즈 등) · 회수(음수)는 그대로 들어간다
+const STOP_BLOCKED = new Set(["quest", "pass", "coupon", "code"]);
 async function processPayouts(guild) {
   // 빙옥(currency "point") 건은 사이트가 즉시 반영한 것 — 어떤 경우에도 XP 로 지급하지 않는다
   const rows = await Payout.find({ status: "pending", currency: { $ne: "point" } }).limit(50);
@@ -185,6 +239,18 @@ async function processPayouts(guild) {
         p.error = "지급 대상 ID를 찾을 수 없습니다.";
         await p.save();
         continue;
+      }
+
+      // 📌 XP 획득 중단 — 자동 출처(STOP_BLOCKED)의 지급만, 지급 직전에 DB 로 본다(메모리 판정보다 늦게 세운 중단까지). 선점 전이라 다른 틱과 겹쳐도 한 번만 바뀐다
+      if (p.amount > 0 && STOP_BLOCKED.has(p.source)) {
+        const sd = await UserXp.findOne({ userId }, { xpStopFrom: 1, xpStopUntil: 1 }).lean();
+        noteXpStop(userId, sd);
+        const until = stopUntilOf(sd);
+        if (until) {
+          await Payout.updateOne({ _id: p._id, status: "pending" }, { $set: { status: "failed", error: `XP 획득 중단 (~ ${formatUntil(until)})` } });
+          console.log(`💰 XP 획득 중단으로 지급 안 함: ${p.userName} ${p.amount.toLocaleString()} (${p.reason || p.source})`);
+          continue;
+        }
       }
 
       // 📌 패스 가속(PASS_BOOSTED) — 보유는 지급 직전 멤버로 본다(채팅 · 음성과 같은 캐시 판정).
@@ -361,7 +427,6 @@ async function processRoleSyncs(guild) {
 
 // 📌 만료 DM 의 이용 일수 — days 가 비어 있는(0) 기록은 시작(연장분은 startsAt) ~ 만료로 잰다(올림, 최소 1).
 //    "이용 기간(0일)" 이 나가지 않게 — 사이트 역할 이전의 기간 적용은 days 를 채우지만 옛 기록 · 다른 경로를 막아 둔다
-const DAY_MS = 86400000;
 function usedDays(p) {
   if (Number(p.days) > 0) return Number(p.days);
   const start = new Date(p.startsAt || p.createdAt || p.processedAt).getTime();
