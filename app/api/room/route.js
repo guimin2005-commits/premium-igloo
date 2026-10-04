@@ -54,16 +54,18 @@ const discordName = async (id, fallback) => {
   } catch { return fallback; }
 };
 
-/* 📌 예약 발송 시각 — 지나간 시각이나 30일 넘게 먼 시각은 받지 않는다(즉시 발송).
-   지나간 시각을 그대로 넣으면 봇이 곧바로 보내버려 '예약했다' 는 기대와 어긋난다. */
+/* 📌 예약 발송 시각 — 비어 있으면 지금 보낸다(null). 지나갔거나 1분 안이거나 30일 넘게 먼 시각은 받지 않는다(false).
+   2026-10-04 "'예약할 수 없는 시각입니다' 안내를 띄우고 보내지 않습니다" — 예전엔 예약을 버리고 그 자리에서 바로 보냈다.
+   받지 않는 시각이면 한 건도 쌓지 않고 badSendAt 으로 돌려준다(화면은 message 를 알림으로 띄운다). */
 const sendAtOf = (v) => {
   if (!v) return null;
   const d = new Date(v);
-  if (isNaN(d.getTime())) return null;
+  if (isNaN(d.getTime())) return false;
   const ms = d.getTime() - Date.now();
-  if (ms <= 60e3 || ms > 30 * 864e5) return null;
+  if (ms <= 60e3 || ms > 30 * 864e5) return false;
   return d;
 };
+const badSendAt = () => NextResponse.json({ success: false, message: "예약할 수 없는 시각입니다." }, { status: 400 });
 
 export async function GET() {
   try {
@@ -234,6 +236,8 @@ export async function POST(request) {
       case "fixture:notify": {
         const { deny, session } = await requireAdmin();
         if (deny) return deny;
+        const sendAt = sendAtOf(body.sendAt);
+        if (sendAt === false) return badSendAt();
 
         const f = await ScrimFixture.findById(body.fixtureId);
         if (!f) return NextResponse.json({ success: false, message: "경기를 찾을 수 없습니다." }, { status: 404 });
@@ -255,7 +259,6 @@ export async function POST(request) {
           cta: fixtureCta(season.fixtureMsg?.cta),
         };
 
-        const sendAt = sendAtOf(body.sendAt);
         let queued = 0, skipped = 0;
         for (const [own, opp] of [[A, B], [B, A]]) {
           const tid = String(own._id);
@@ -318,6 +321,8 @@ export async function POST(request) {
         const uid = session?.user?.id;
         if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
         const admin = isAdminName(session?.user?.name);
+        const sendAt = sendAtOf(body.sendAt);
+        if (sendAt === false) return badSendAt();
 
         const teams = body.teamId === "all"
           ? (admin ? await ScrimTeam.find({ seasonId: sid }) : [])
@@ -328,7 +333,6 @@ export async function POST(request) {
         }
 
         const origin = new URL(request.url).origin;
-        const sendAt = sendAtOf(body.sendAt);
         // 같은 사람을 연달아 찌르지 않는다 — 30분 안에 보낸 게 있으면 건너뛴다
         const recentAfter = new Date(Date.now() - 30 * 60e3);
         let queued = 0, skipped = 0;

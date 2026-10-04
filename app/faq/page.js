@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
 
 // 📌 자주 묻는 질문 — 화이트 & 블랙. 제목 한 줄 · 왼쪽 세로 분류(모바일은 가로 밑줄 탭) · 헤어라인 아코디언.
@@ -8,15 +8,33 @@ import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
 // 📌 문구 규칙 — 원래 문구(2026-09-26 이전 FAQ)가 우선. 사실이 바뀐 곳만 원래 문장 모양 · 말투를 살려 최소로 고친다.
 //    질문 끝만 "~나요? / ~인가요?" 의문형으로 통일, 답은 옛 안내형 말투(합니다체 + "~해 주세요 / ~주시기 바랍니다") 그대로, t 는 명사형 한 줄.
 //    사실의 기준은 약관(/policy)과 코드 — 운영 설정값(쿨타임 · 감소율 · 출석 XP 등)은 옛 FAQ 에 있던 것만 두고 새로 박지 않는다.
+//    있던 값(음소거 감소율)은 손으로 적지 않고 실제 설정값(/api/xp/policy)으로 그린다 — 아래 muteClause
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 // 빙옥 환율은 lib/pointRate.js 한 곳에서 — 서버 기본 로캘과 브라우저가 달라도 같은 글자가 나오게 ko-KR 로 찍는다
 const RATE = POINT_RATE.toLocaleString("ko-KR");
 const RATE_EX_XP = POINT_RATE * 2.5;
 
+// 📌 음소거 문장 — 옛 FAQ 에 있던 감소율을 실제 설정값(/api/xp/policy · 봇 getMuteMultiplier)으로. 2026-10-04 "약관·인증 화면·FAQ의 숫자와 조건을 지금 실제 동작에 맞게"
+//    적용 기준 both = 둘 다 꺼야, any = 하나라도. 막기면 획득 불가, 끔이면 그 구절이 빠진다. 받기 전 · 못 받으면 감소율은 "—"
+const muteClause = (p) => {
+  if (!p) return "마이크 및 헤드셋 모두 음소거 시 XP 획득량이 —% 감소되며, ";
+  if (p.muteMode === "off") return "";
+  const who = p.muteTarget === "any" ? "마이크 또는 헤드셋 음소거 시" : "마이크 및 헤드셋 모두 음소거 시";
+  return p.muteMode === "block" ? `${who} XP 획득이 불가하며, ` : `${who} XP 획득량이 ${Number(p.muteReducePct).toLocaleString("ko-KR")}% 감소되며, `;
+};
+
 export default function FaqPage() {
   const [openFaqIndex, setOpenFaqIndex] = useState(null);
   const [activeCategory, setActiveCategory] = useState("전체");
+  // 지금 XP 정책 — 음소거 문장이 읽는다(받기 전에는 null)
+  const [xpPolicy, setXpPolicy] = useState(null);
+  useEffect(() => {
+    fetch("/api/xp/policy", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.data) setXpPolicy(d.data); })
+      .catch(() => {});
+  }, []);
 
   const faqData = [
     {
@@ -24,7 +42,7 @@ export default function FaqPage() {
       items: [
         { q: "레벨업에 필요한 XP 양은 모든 구간이 같나요?", t: "단계별 요구 XP 산정 방식", a: "상위 레벨로 진입할수록 다음 단계 달성에 필요한 XP 요구량이 점진적으로 증가합니다. 단, 레벨 상승에 맞춰 XP 획득 효율 또한 유동적으로 조정되어 안정적인 성장이 가능하도록 설계되었습니다." },
         { q: "채팅을 빠르고 많이 치면 XP를 빨리 획득할 수 있나요?", t: "비정상 획득 방지 여부", a: "획득할 수 있는 쿨타임이 존재합니다. 정상적인 채팅 활동을 통해 안정적으로 XP를 쌓아주세요." },
-        { q: "음성 채널에 혼자 있어도 XP 획득이 가능한가요?", t: "활동에 따른 XP 획득 여부", a: "네, 가능합니다. 단, 마이크 및 헤드셋 음소거 시 XP 획득량이 90% 감소되며, 잠수 채널로 이동 시 XP 획득이 불가합니다." },
+        { q: "음성 채널에 혼자 있어도 XP 획득이 가능한가요?", t: "활동에 따른 XP 획득 여부", a: `네, 가능합니다. 단, ${muteClause(xpPolicy)}잠수 채널로 이동 시 XP 획득이 불가합니다.` },
         { q: "레벨이 오르면 어떤 구체적인 혜택이 있나요?", t: "단계별 전용 혜택 여부", a: "특정 레벨마다 전용 레벨 역할 및 색상 혜택이 적용됩니다. 또한 음성 채널 이용 시 레벨 구간별 등급에 따라 추가 XP가 가산됩니다.\nARCTIC에는 서버 이용 편의를 돕는 권한 상품이 포함되어 있으니, 구매를 통해 최적화된 서버 환경을 경험해 보시기 바랍니다." },
         { q: "서버 퇴장 시 XP 및 LEVEL이 유지 되나요?", t: "서버 데이터 유지 여부", a: "유지되지 않습니다. 2026-04-11(토) 이후 운영 정책이 변경됨에 따라 서버 퇴장 시 즉시 XP 및 LEVEL은 물론 빙옥 · 강화 단계 등 SYSTEM : LEVEL 기록이 모두 초기화 됩니다." },
         { q: "출석체크는 어떻게 하나요?", t: "출석 XP 획득 방법", a: "출석체크를 통해 출석 XP를 획득할 수 있습니다.\n\n[출석 방법]\n· 디스코드에서 '/출석체크' 명령어 입력\n· 음성 채널에 정해진 시간 이상 접속 시 자동 출석\n\n출석은 두 방법을 합쳐 하루 한 번만 가능하며, 매일 자정(한국 시간)에 초기화됩니다." },

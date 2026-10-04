@@ -64,12 +64,49 @@ const DOCS = [
 ];
 const VALID_TABS = DOCS.map((d) => d.id);
 
+// 📌 XP 획득 기준의 숫자 · 조건은 실제 설정값(/api/xp/policy — 봇이 읽는 BotSetting)으로 그린다.
+//    2026-10-04 "약관·인증 화면·FAQ의 숫자와 조건을 지금 실제 동작에 맞게" — 손으로 적은 숫자(출석 10,000 · 내전 3,500 · 음소거 '마이크 또는 헤드셋')가
+//    실제 지급과 어긋났다. 값을 받기 전 · 못 받으면 그 줄은 "—" (틀린 숫자를 먼저 보이지 않게). 인증 화면(app/verify) · FAQ 도 같은 규칙
+const num = (v) => Number(v).toLocaleString("ko-KR");
+const fmtSec = (sec) => {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m && r ? `${m}분 ${r}초` : m ? `${m}분` : `${r}초`;
+};
+const eul = (w) => (/초$/.test(w) ? "를" : "을");
+const chatRule = (p) => {
+  const range = p.chatXpMin === p.chatXpMax ? `${num(p.chatXpMin)} XP` : `${num(p.chatXpMin)}~${num(p.chatXpMax)} XP 중 무작위`;
+  return `메시지 전송 시 ${range}${p.chatCooldownSec > 0 ? ` · 쿨타임 ${fmtSec(p.chatCooldownSec)}` : ""}`;
+};
+const voiceRule = (p) => {
+  const per = fmtSec(p.voiceIntervalSec);
+  return `머문 시간 ${per}마다 ${num(p.voiceXp)} XP · ${per}${eul(per)} 채우지 못하고 나가면 머문 시간만큼`;
+};
+// 음소거 — 봇 getMuteMultiplier(bot/src/botSettings.js): 적용 기준 both = 마이크 · 헤드셋 둘 다, any = 하나라도. 끔(off)이면 이 항이 없다
+const muteRule = (p) => {
+  if (p.muteMode === "off") return null;
+  const who = p.muteTarget === "any" ? "마이크 또는 헤드셋을 음소거한" : "마이크와 헤드셋을 모두 음소거한";
+  return p.muteMode === "block"
+    ? `음성 채널에서 ${who} 상태에서는 XP가 지급되지 않습니다.`
+    : `음성 채널에서 ${who} 상태에서는 XP 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
+};
+
 function PolicyContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
   const [tab, setTab] = useState(VALID_TABS.includes(initialTab) ? initialTab : "terms");
   // 이미 /policy 에 있을 때 푸터·메뉴 링크로 ?tab 만 바뀌면 페이지가 다시 마운트되지 않는다 — 주소를 따라간다
   useEffect(() => { setTab(VALID_TABS.includes(initialTab) ? initialTab : "terms"); }, [initialTab]);
+  // 지금 XP 정책 — 받기 전에는 null
+  const [xp, setXp] = useState(null);
+  useEffect(() => {
+    fetch("/api/xp/policy", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.data) setXp(d.data); })
+      .catch(() => {});
+  }, []);
+  const mute = xp ? muteRule(xp) : "—";
 
   const activeDoc = DOCS.find((d) => d.id === tab) || DOCS[0];
 
@@ -136,7 +173,8 @@ function PolicyContent() {
             <NumberedList items={[
               "본 운영정책은 멤버가 서버에 입장하는 즉시 효력이 발생하며, 입장 시 본 정책에 동의한 것으로 간주합니다.",
               "운영진은 합리적인 사유가 발생할 경우 관련 법령을 위배하지 않는 범위 내에서 본 정책을 개정할 수 있습니다.",
-              "정책이 변경될 경우 변경 사항은 최소 7일 전 서버 및 사이트 공지사항을 통해 고지되며, 변경 이후의 서버 이용은 개정된 정책에 동의한 것으로 봅니다.",
+              // 📌 2026-10-04 "'최소 7일 전'을 '사전 공지'로 바꿉니다" — 출석 XP 처럼 다음 날 바뀌는 조정과 어긋나지 않게
+              "정책이 변경될 경우 변경 사항은 서버 및 사이트 공지사항을 통해 사전 공지되며, 변경 이후의 서버 이용은 개정된 정책에 동의한 것으로 봅니다.",
             ]} />
           </Article>
 
@@ -348,11 +386,11 @@ function PolicyContent() {
 
           <Article title="제2조 (XP 획득 기준)">
             <p>XP는 아래 기준에 따라 자동 지급되며, 운영상 필요에 따라 사전 공지 후 변경될 수 있습니다.</p>
+            {/* 📌 숫자는 실제 설정값(위 xp). 내전 음성 채널 줄은 2026-10-04 뺐다 — 내전 채널만 더 주는 지급이 없다(일반 음성과 같은 값) */}
             <DefList items={[
-              { term: "채팅 채널", desc: "메시지 전송 시 50~500 XP 중 무작위 · 쿨타임 1분" },
-              { term: "음성 채널", desc: "머문 시간 5분마다 3,000 XP · 5분을 채우지 못하고 나가면 머문 시간만큼" },
-              { term: "내전 음성 채널", desc: "음성 채널 기준에 보너스 500 XP를 더한 3,500 XP (5분 기준)" },
-              { term: "출석 체크", desc: "1일 1회 10,000 XP (관련 상품 보유 시 추가 지급)" },
+              { term: "채팅 채널", desc: xp ? chatRule(xp) : "—" },
+              { term: "음성 채널", desc: xp ? voiceRule(xp) : "—" },
+              { term: "출석 체크", desc: xp ? `1일 1회 ${num(xp.attendXp)} XP (관련 상품 보유 시 추가 지급)` : "—" },
               { term: "레벨 구간 보너스", desc: "음성 채널 이용 시 보유 레벨 구간(등급)에 따라 추가 XP가 가산되며, 880 레벨 이상(이글루)이 최고 등급입니다." },
             ]} />
             <p>레벨 상한은 1,000 레벨이며, 레벨별 필요 XP는 공식 사이트의 XP 테이블에 공개된 산식을 따릅니다.</p>
@@ -361,7 +399,8 @@ function PolicyContent() {
           <Article title="제3조 (XP 획득 제한)">
             <NumberedList items={[
               "잠수 전용 음성 채널 이용 시 XP가 지급되지 않습니다.",
-              "마이크 또는 헤드셋을 음소거한 상태에서는 XP 획득량이 90% 감소합니다.",
+              // 음소거 — 실제 설정(감소 · 막기 · 끔, 적용 기준)대로. 끔이면 이 항이 빠진다
+              ...(mute ? [mute] : []),
               "동일하거나 무의미한 메시지를 반복 전송하는 등 획득량을 늘리기 위한 도배 행위는 운영정책 제3조에 따른 금지 행위에 해당합니다.",
             ]} />
           </Article>

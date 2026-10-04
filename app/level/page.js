@@ -173,19 +173,15 @@ const fmtRel = (s) => {
 };
 const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-// XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 (그 외 유채색 금지)
-const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f", effect: "#c39220", "effect-levelup": "#c39220" };
-const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과" };
-// 획득 피드 한 줄의 글자 — 채널 이름이 있으면 그것, 없으면 사유. 대시보드 칸 · 전체 창이 같이 쓴다
-const feedLabel = (l) => l.channelName || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—");
+// XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 · 보상(payout) 먹 (그 외 유채색 금지)
+//    📌 payout = 퀘스트 · 시즌 패스 · 운영진 지급 등 보상 XP(app/api/xp/my-logs). 2026-10-04 "보상 XP도 같이 보여서 'XP가 어디서 늘었는지' 바로 알 수 있습니다"
+const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f", effect: "#c39220", "effect-levelup": "#c39220", payout: "#131313" };
+const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과", payout: "보상" };
+// 획득 피드 한 줄의 글자 — 채널 이름이 있으면 그것, 보상은 지급 사유(label), 없으면 사유. 대시보드 칸 · 전체 창이 같이 쓴다
+const feedLabel = (l) => l.channelName || l.label || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—");
 
-// 누적 음성 참여 시간 — 한 시간을 넘기면 시간 단위로, 그 전에는 분 단위로 읽는다
-const fmtVoiceTime = (sec) => {
-  const min = Math.floor((sec || 0) / 60);
-  if (min < 60) return `${min}분`;
-  return `${Math.floor(min / 60).toLocaleString()}시간`;
-};
-// 📌 서버 랭킹 음성 시간 — 분까지("3시간 27분", 1시간 전에는 "27분", 1분 전에는 "42초"). 대시보드 '누적 음성 시간' 칸은 위 fmtVoiceTime 그대로
+// 📌 누적 음성 시간 — 분까지("3시간 27분", 1시간 전에는 "27분", 1분 전에는 "42초"). 서버 랭킹과 대시보드 '누적 음성 시간' 칸이 같이 쓴다
+//    2026-10-04 "두 곳 모두 '3시간 27분'으로 통일" — 대시보드만 시간 단위로 끊던 것을 없앴다
 //    2026-10-03부터 실제 접속 초(봇 features/voiceTime.js) — 그 전 기록은 5분 단위로 쌓여 있다
 const fmtVoiceTimeMin = (sec) => {
   const min = Math.floor((sec || 0) / 60);
@@ -3200,7 +3196,7 @@ export default function LevelPage() {
                             { l: "오늘 획득", v: `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0 },
                             { l: "누적 출석", v: `${(me.attendCount || 0).toLocaleString()}일` },
                             voiceTracked
-                              ? { l: "누적 음성 시간", v: fmtVoiceTime(me.voiceSeconds) }
+                              ? { l: "누적 음성 시간", v: fmtVoiceTimeMin(me.voiceSeconds) }
                               : { l: "누적 음성 시간", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true },
                           ].map((st, i) => (
                             <div key={i} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
@@ -3542,7 +3538,8 @@ export default function LevelPage() {
                         <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
                       ) : (
                         // 📌 TOP 10 밖이면 목록 아래 내 줄 — 누적 · 이번 달은 랭킹 API 의 me. 현재는 순위 숫자만 내 정보(/api/xp/me)의 것으로 —
-                        //    같은 화면 프로필 카드 "랭크 #N" · 봇 /레벨 · /랭크 와 같은 공동 순위(동점은 같은 숫자). 배지 · 이름은 랭킹 API 의 me
+                        //    같은 화면 프로필 카드 "랭크 #N" · 봇 /레벨 · /랭크 와 같은 순위. 배지 · 이름은 랭킹 API 의 me
+                        //    2026-10-04 동점 규칙 하나 — XP 내림차순, 동점은 userId 오름차순(목록 · 내 정보 · 봇이 모두 같다)
                         <RankRows
                           rows={lb[lbTab].data}
                           myId={session.user.id}
@@ -3571,7 +3568,8 @@ export default function LevelPage() {
                             {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 5)).map((l, i) => (
                               <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-black/[0.05]">
                                 <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
-                                <span className="shrink-0 w-16 text-[13px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
+                                {/* 보상 XP(퀘스트 · 운영진 지급)는 +1,000,000 처럼 길 수 있다 — 기본 폭은 그대로, 넘칠 때만 그 줄이 넓어진다(옆 글자와 겹치지 않게) */}
+                                <span className="shrink-0 min-w-16 whitespace-nowrap text-[13px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
                                 <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#8a8a8a]">{feedLabel(l)}</span>
                                 <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">{fmtRel(l.createdAt)}</span>
                               </div>
