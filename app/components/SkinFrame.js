@@ -29,11 +29,16 @@ const r1 = (n) => Math.round(n * 10) / 10;
 // 아바타 · 이름 자리(왼쪽 위) — 진한 점 장식은 피한다
 const inAvatar = (x, y) => x < 120 && y < 118;
 
-export function deco(skin, w, h) {
+// ctx — 카드 안 표시한 자리(px, 카드 기준). 없으면 null
+//   lineY · lineX0 · lineX1: 스탯 위 가로선(data-skin-line) — 항해도 배 · 새로운 세계 섬이 이 선 위에(배 · 깃발 섬은 선의 시작)
+//   barY · barBottom: 레벨 막대(data-skin-bar) 가운데 · 아래 — 항해도 항로가 이 막대를 넘어간다
+//   goalY: 등급 줄(data-skin-goal) 위 — LEVEL 큰 숫자와 등급 사이 높이, 항해도 도착 ✕ 자리
+//   avoidLeft · avoidBottom: 등급 줄 오른쪽 단추(data-skin-avoid, 레벨 페이지 '등급 안내') — ✕ 가 단추 뒤에 숨지 않게
+export function deco(skin, w, h, ctx = {}) {
   // 📌 시즌 2 스킨 — 문자열 함수(lib/cardSkins)가 그린 SVG 를 그대로 얹는다(그림은 목록에 있는 key 로만 만든다 — 사용자 입력이 섞이지 않음)
   const s2 = Object.prototype.hasOwnProperty.call(STRING_SKINS, skin) ? STRING_SKINS[skin] : null;
   if (s2) {
-    const d = s2.deco(w, h, 1, true);
+    const d = s2.deco(w, h, 1, true, ctx);
     return <g dangerouslySetInnerHTML={{ __html: (d.defs ? `<defs>${d.defs}</defs>` : "") + (d.under || "") + (d.over || "") }} />;
   }
   const o = 12; // 바깥 테 여백 — 카드 모서리(24px 둥근 모서리) 안쪽
@@ -149,12 +154,29 @@ export default function SkinFrame({ skin }) {
     const ro = new ResizeObserver(([e]) => {
       const w = Math.round(e.contentRect.width);
       const h = Math.round(e.contentRect.height);
-      setBox((b) => (b && b.w === w && b.h === h ? b : { w, h }));
+      // 스탯 위 선 — 숨겨져 있으면(폰에서 스탯을 접었을 때) 없음. 카드가 확대 · 축소돼 있어도(상품 미리보기) 카드 기준 px 로 바꾼다
+      const c = el.getBoundingClientRect();
+      const at = (sel) => {
+        const n = el.parentElement?.querySelector(sel);
+        if (!n || n.offsetParent === null || !(c.height > 0) || !(c.width > 0)) return null;
+        const r = n.getBoundingClientRect();
+        const sy = h / c.height, sx = w / c.width;
+        return { top: Math.round((r.top - c.top) * sy), bottom: Math.round((r.bottom - c.top) * sy), left: Math.round((r.left - c.left) * sx), right: Math.round((r.right - c.left) * sx) };
+      };
+      const ln = at("[data-skin-line]"), bar = at("[data-skin-bar]"), goal = at("[data-skin-goal]"), avoid = at("[data-skin-avoid]");
+      const next = {
+        w, h,
+        lineY: ln ? ln.top : null, lineX0: ln ? ln.left : null, lineX1: ln ? ln.right : null,
+        barY: bar ? Math.round((bar.top + bar.bottom) / 2) : null, barBottom: bar ? bar.bottom : null,
+        goalY: goal ? goal.top : null,
+        avoidLeft: avoid ? avoid.left : null, avoidBottom: avoid ? avoid.bottom : null,
+      };
+      setBox((b) => (b && Object.keys(next).every((k) => b[k] === next[k]) ? b : next));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const body = box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h) : null;
+  const body = box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h, box) : null;
   return (
     <div ref={ref} aria-hidden className="absolute inset-0 pointer-events-none">
       {body && (

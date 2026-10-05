@@ -3065,7 +3065,7 @@ export default function LevelPage() {
                         <div className="mt-6 lg:mt-7 pt-5 lg:pt-6 border-t border-white/10">
                           <p className="text-[10px] font-black tracking-[0.35em] text-white/40 uppercase mb-2.5">LEVEL</p>
                           <p className="text-[52px] lg:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{guest ? "—" : me.level}</p>
-                          <div className="mt-4 flex items-center gap-3">
+                          <div data-skin-goal className="mt-4 flex items-center gap-3">
                             {guest ? (
                               // 로그인 전 — 등급은 모른다. 문장 대신 빈 자리(같은 크기)만
                               <span aria-hidden className="shrink-0 w-8 h-8 rounded-full bg-white/10"></span>
@@ -3094,6 +3094,7 @@ export default function LevelPage() {
                             <button
                               type="button"
                               onClick={openTier}
+                              data-skin-avoid
                               className="shrink-0 inline-flex items-center h-8 px-3.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 hover:text-white hover:border-white/45 transition-colors outline-none focus:outline-none"
                             >
                               등급 안내
@@ -3103,7 +3104,7 @@ export default function LevelPage() {
 
                         {/* 경험치 — 막대 하나, 글자 둘 */}
                         <div className="mt-6">
-                          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                          <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
                             <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${progPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
                           </div>
                           <div className="flex justify-between items-baseline mt-2.5">
@@ -3157,7 +3158,8 @@ export default function LevelPage() {
 
                         {/* 스탯 — 두 줄 두 칸. 선은 위 한 줄과 가운데 세로선만. 빙옥은 재화라 뺐다 */}
                         {/* 스탯 — 모바일에서 XP 테이블 · 시뮬레이터를 볼 때는 접는다 (화면이 너무 길어진다) */}
-                        <div className={`${deskOverview ? "grid" : "hidden lg:grid"} grid-cols-2 mt-4 pt-2 border-t border-white/10`}>
+                        {/* data-skin-line — 카드 스킨(항해도 · 새로운 세계)이 배 · 섬을 이 선 위에 얹는다(SkinFrame) */}
+                        <div data-skin-line className={`${deskOverview ? "grid" : "hidden lg:grid"} grid-cols-2 mt-4 pt-2 border-t border-white/10`}>
                           {[
                             { l: "누적 XP", v: guest ? "—" : (me.xp || 0).toLocaleString(), wallet: true },
                             { l: "오늘 획득", v: guest ? "—" : `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0 },

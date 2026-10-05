@@ -176,7 +176,7 @@ export function ProfileCardPreview({ who, skin }: { who: Who; skin: string }) {
         <div className="mt-7 pt-6 border-t border-white/10">
           <p className="text-[10px] font-black tracking-[0.35em] text-white/40 uppercase mb-2.5">LEVEL</p>
           <p className="text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{who.level}</p>
-          <div className="mt-4 flex items-center gap-3">
+          <div data-skin-goal className="mt-4 flex items-center gap-3">
             <span className="shrink-0"><TierEmblem tier={tier} size={32} /></span>
             <div className="min-w-0 flex-1">
               <p
@@ -196,7 +196,7 @@ export function ProfileCardPreview({ who, skin }: { who: Who; skin: string }) {
 
         {/* 경험치 */}
         <div className="mt-6">
-          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+          <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${max ? 100 : pct}%` }}></div>
           </div>
           <div className="flex justify-between items-baseline mt-2.5">
@@ -208,7 +208,8 @@ export function ProfileCardPreview({ who, skin }: { who: Who; skin: string }) {
         </div>
 
         {/* 스탯 — 두 줄 두 칸 */}
-        <div className="grid grid-cols-2 mt-4 pt-2 border-t border-white/10">
+        {/* data-skin-line — 카드 스킨(항해도 · 새로운 세계)이 배 · 섬을 이 선 위에 얹는다(SkinFrame) */}
+        <div data-skin-line className="grid grid-cols-2 mt-4 pt-2 border-t border-white/10">
           {stats.map((st, i) => (
             <div key={st.l} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
               <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
