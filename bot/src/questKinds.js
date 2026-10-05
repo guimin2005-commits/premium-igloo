@@ -390,7 +390,7 @@ export async function computeQuestState(M, userId) {
   const [quests, claims, user, setting, snapList, legacy] = await Promise.all([
     M.DailyQuest.find({ enabled: true }).sort({ order: 1, createdAt: 1 }).lean(),
     M.QuestClaim.find({ userId, date: { $in: Object.values(keys) } }, { questId: 1, date: 1 }).lean(),
-    M.UserXp.findOne({ userId }, { lastAttendDate: 1, attendCount: 1, attendStreak: 1 }).lean(),
+    M.UserXp.findOne({ userId }, { lastAttendDate: 1, attendCount: 1, attendStreak: 1, voiceCycle: 1 }).lean(),
     M.BotSetting.findOne(
       { key: "main" },
       { attendXp: 1, attendVoiceMin: 1, voiceIntervalSec: 1, questPickDaily: 1, questPickWeekly: 1, questPickMonthly: 1 }
@@ -525,7 +525,7 @@ export async function computeQuestState(M, userId) {
   };
   const wantPurchase = need.has("shop") || need.has("pass");
   const wantWallet = need.has("enhance") || need.has("pass");
-  const [buckets, acts, purchases, wallet, passPayouts, questClaims] = await Promise.all([
+  const [buckets, acts, purchases, wallet, passPayouts, questClaims, lastVoice] = await Promise.all([
     M.XpLog.aggregate([
       { $match: { userId, createdAt: { $gte: since } } },
       // s: 음성 줄의 실제 초(XpLog.sec — 2026-10-01 19:05 전 줄은 칸이 없고 전부 300초 주기였다)
@@ -545,11 +545,29 @@ export async function computeQuestState(M, userId) {
       : [],
     need.has("pass") ? M.Payout.find({ userId, source: "pass", createdAt: { $gte: since } }, { createdAt: 1, reason: 1 }).lean() : [],
     need.has("quest") ? M.QuestClaim.find({ userId, createdAt: { $gte: since } }, { questId: 1, createdAt: 1 }).lean() : [],
+    user?.voiceCycle ? M.XpLog.findOne({ userId, reason: "voice" }, { createdAt: 1 }).sort({ createdAt: -1 }).lean() : null,
   ]);
   const logs = buckets.map((b) => {
     const k = b._id || {};
     return { r: k.r || "", d: k.d || "", h: Number(k.h) || 0, ch: k.ch || "", pc: k.pc || "", cn: k.cn, lv: k.lv, mu: k.mu, df: k.df, n: b.n || 0, xp: b.xp || 0, s: b.s || 0 };
   });
+  // 📌 진행 중인 음성 바퀴(아직 지급 전 — 봇이 20초마다 UserXp.voiceCycle 에 적는다)도 음성 줄 하나로 센다 — 퀘스트 음성 분이
+  //    지급 주기(5분)마다가 아니라 1분 단위로 오르게(2026-10-05 "퀘스트 시간 재는 것도 1분 단위면 좋겠음").
+  //    종료 때 남긴 닫힌 바퀴(pend)도 같이. 조건(인원 · 마이크 · 화면 공유)은 지급 줄 ctx 와 같은 식(그 바퀴 동안 가장 오래였던 상황 — 봇 voiceTime.js ctxOf).
+  //    지급 줄이 바퀴 기록보다 나중이면(지급 직후 — 바퀴 기록은 다음 기록 때 바뀐다) 이미 지급에 들어간 시간일 수 있어 빼 둔다(두 번 세지 않게).
+  //    XP 는 아직 받지 않았으므로 0 — 횟수 · 분 · 일수 · 연속 · 채널 수만 오른다. 날짜 · 시각은 바퀴를 적은 때로 본다
+  const vc = user?.voiceCycle;
+  const vcAt = vc?.at ? new Date(vc.at).getTime() : 0;
+  if (vc && vcAt >= since.getTime() && !(lastVoice?.createdAt && new Date(lastVoice.createdAt).getTime() > vcAt)) {
+    const kst = new Date(vcAt + KST_MS);
+    for (const c of [vc, ...(Array.isArray(vc.pend) ? vc.pend : [])]) {
+      const sec = Number(c?.sec) || 0;
+      if (!(sec > 0)) continue;
+      let cn = 0, best = -1;
+      for (const [k, v] of Object.entries(c.nS || {})) if (Number(v) > best) [best, cn] = [Number(v), Number(k)];
+      logs.push({ r: "voice", d: kstDateKey(vcAt), h: kst.getUTCHours(), ch: String(c.ch || ""), pc: String(c.pc || ""), cn, lv: (Number(c.lvS) || 0) > sec / 2, mu: (Number(c.muS) || 0) > sec / 2, df: (Number(c.dfS) || 0) > sec / 2, n: 0, xp: 0, s: sec });
+    }
+  }
   const actBks = acts.map((a) => ({ r: a.k || "", d: a.d || "", h: Number(a.h) || 0, ch: a.ch || "", pc: a.pc || "", n: a.n || 0, xp: 0 }));
 
   // 📌 오늘 음성 누적 분 — 화면 안내용(음성 줄의 실제 초 합)

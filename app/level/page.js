@@ -188,7 +188,9 @@ const fmtVoiceTimeMin = (sec) => {
   const min = Math.floor((sec || 0) / 60);
   if (min < 1) return `${Math.max(0, Math.floor(sec || 0))}초`;
   if (min < 60) return `${min}분`;
-  return `${Math.floor(min / 60).toLocaleString()}시간 ${min % 60}분`;
+  // 딱 떨어지는 시간이면 분을 붙이지 않는다 — "68시간 0분" 말고 "68시간"(2026-10-05)
+  const h = Math.floor(min / 60).toLocaleString(), m = min % 60;
+  return m ? `${h}시간 ${m}분` : `${h}시간`;
 };
 
 // 음성 티어 경계·이름·색은 lib/voiceTiers.js 단일 소스 (봇 지급표와 1:1)
@@ -3759,10 +3761,11 @@ export default function LevelPage() {
                               <RankBadges badges={r.badges} />
                             </p>
 
-                            {/* 등급 — 레벨에서 바로 나온다 */}
+                            {/* 등급 · 레벨 — 등급은 레벨에서 바로 나온다. 레벨은 아래 목록 줄과 같은 "Lv.161"(시상대에만 빠져 있었다) */}
                             <span className="inline-flex items-center gap-1 mt-1.5">
                               <TierEmblem tier={tier} size={12} />
                               <span className="text-[10px] font-black" style={{ color: tier.c }}>{tier.name}</span>
+                              <span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">Lv.{r.level ?? 0}</span>
                             </span>
 
                             <p className={`font-black text-[#131313] tabular-nums mt-2 ${first ? "text-[15px]" : "text-[12px]"}`}>

@@ -106,7 +106,9 @@ const fmtVoiceTime = (sec: number) => {
   const min = Math.floor((sec || 0) / 60);
   if (min < 1) return `${Math.max(0, Math.floor(sec || 0))}초`;
   if (min < 60) return `${min}분`;
-  return `${Math.floor(min / 60).toLocaleString()}시간 ${min % 60}분`;
+  // 딱 떨어지는 시간이면 분을 붙이지 않는다 — "68시간 0분" 말고 "68시간"(2026-10-05)
+  const h = Math.floor(min / 60).toLocaleString(), m = min % 60;
+  return m ? `${h}시간 ${m}분` : `${h}시간`;
 };
 // 레벨 페이지 카드의 옅은 격자(lux-grid-bg-dark) — 그 화면의 style 태그에 있어 여기선 인라인으로
 const GRID_DARK: React.CSSProperties = {
