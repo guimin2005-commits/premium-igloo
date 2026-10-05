@@ -52,10 +52,10 @@ async function claimOne({ userId, userName, state, quest, bonusPct }) {
   //       지난 기간 달성분이 새 기간 몫을 잠가 버린다
   const lockKey = state.keys?.[quest.period] || periodKey(quest.period || "daily");
 
-  // 📌 퀘스트 보상 보너스(아이템 효과 questBonus — 상한 적용 %)는 XP · 빙옥 둘 다에 얹는다(버림). 패스 포인트는 그대로.
+  // 📌 퀘스트 보상 보너스(아이템 효과 questBonus — 상한 적용 %)는 XP 에만 얹는다(버림). 빙옥 · 패스 포인트는 그대로(2026-10-05 "XP로 한정").
   //    등급 배율은 없다(2026-10-03 "빙옥은 등급에 따라 더 받습니다 — 이딴 거 없어") — 승급 빙옥 없음(10/1)과 같은 결정
   const payXp = withBonus(quest.rewardXp || 0, bonusPct);
-  const payPoint = withBonus(quest.rewardPoint || 0, bonusPct);
+  const payPoint = Math.max(0, Math.floor(Number(quest.rewardPoint) || 0));
   const payPassPoint = quest.rewardPassPoint || 0;
   const label = `${PERIOD_LABEL[quest.period] || "일일"} 퀘스트: ${quest.name}`;
 
@@ -196,7 +196,7 @@ export async function POST(request) {
     const next = await getQuestState(userId);
     return NextResponse.json({
       success: true,
-      // amount · point 는 실제로 준 값(보너스 포함). bonusPct 는 붙은 퀘스트 보상 보너스 %
+      // amount · point 는 실제로 준 값(amount 만 보너스 포함). bonusPct 는 XP 에 붙은 퀘스트 보상 보너스 %
       data: { ...next, claimed: { name: quest.name, amount: r.got.amount, point: r.got.point, bonusPct } },
     });
   } catch (e) {
