@@ -2579,7 +2579,35 @@ export default function LevelPage() {
     }
   };
 
-  // 📌 PC 프로필 카드는 따라오지 않고 제자리에 둔다 (따라오기 · 가운데 · 끝까지를 거쳐 고정으로 정리)
+  // 📌 PC 대시보드 — 프로필 카드는 제자리에 서 있고 오른쪽 내용만 지나간다(2026-10-05 운영자 결정 "카드는 고정값이고 나머지가 움직이면" — 따라오기보다 "훨씬 깔끔하고 부드럽다").
+  //    · 서 있는 자리 = 맨 위에서의 제자리(오른쪽 내용과 윗변이 맞는 곳). 화면이 낮아 다 안 들어가면 카드가 다 보일 만큼만 올라가 선다
+  //    · 왼쪽 기둥(그리드 첫 줄) 안에서만 — 그 아래 전체 폭 섹션(획득 피드 등)을 덮지 않게, 기둥이 끝나면 같이 올라간다
+  //    · 따라오기(가운데로 미끄러지기)는 "갑자기 훅 내려간다"로 반려 — 다시 만들지 말 것. 모바일(lg 미만)은 그대로
+  const cardColRef = useRef(null);
+  const [fixTop, setFixTop] = useState(null);
+  useEffect(() => {
+    const col = cardColRef.current, card = dashCardRef.current;
+    if (!col || !card) return;
+    const calc = () => {
+      if (window.innerWidth < 1024) { setFixTop(null); return; }
+      if (!card.isConnected || !card.offsetHeight) return; // 탭을 옮겨 카드가 빠지는 순간 — 잰 값을 0 으로 덮지 않는다
+      const h = card.offsetHeight, H = window.innerHeight;
+      // 상단 바 높이는 재서 쓴다 — 카드는 절대 상단 바 밑으로 들어가지 않는다("랭킹 다녀오면 카드 윗부분이 바 밑에 숨는다")
+      const hd = document.querySelector("header");
+      const HEAD = Math.max(60, hd ? Math.round(hd.getBoundingClientRect().height) : 60);
+      // 화면이 낮아 카드가 다 안 들어가면 붙이지 않는다 — 그냥 같이 스크롤(아래까지 내려 볼 수 있게)
+      if (h + HEAD + 16 > H) { setFixTop(null); return; }
+      const home = Math.round(col.getBoundingClientRect().top + window.scrollY); // 맨 위에서의 자리
+      setFixTop(Math.max(HEAD + 8, Math.min(home, H - h - 8)));
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(card); ro.observe(col); ro.observe(document.body); // 위쪽 내용이 늦게 들어와 자리가 밀려도 다시 잰다
+    window.addEventListener("resize", calc);
+    return () => { ro.disconnect(); window.removeEventListener("resize", calc); };
+    // 카드가 생기고 없어질 때만 다시 건다 — 대시보드 탭은 랭킹 · 안내로 옮기면 카드가 빠졌다가 새로 생긴다(activeMainTab).
+    //   내 정보가 새로 올 때마다(실시간 동기화) 다시 걸 필요는 없다
+  }, [meLoaded, Boolean(me), guest, activeMainTab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // 진행 중인 것만 — 종료 태그 · 종료일이 지난 글 · 시작 전 글은 뺀다 (app/event/page.tsx getEventStatus 와 같은 판정)
     const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, ".");
@@ -2991,13 +3019,13 @@ export default function LevelPage() {
             {authReady && (guest || (session?.user && meLoaded && me)) && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-5 lg:gap-y-14 items-start">
 
-                {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 스크롤을 따라 내려온다 */}
-                <div className="contents lg:block lg:col-span-4 min-w-0">
+                {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 제자리에 서 있고 오른쪽 내용만 지나간다(기둥 높이 = 그리드 첫 줄, 오른쪽 열 끝까지) */}
+                <div ref={cardColRef} className="contents lg:block lg:col-span-4 lg:self-stretch min-w-0">
                     {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 → 등급 → 경험치 → 인벤토리 · 시즌 패스 · 강화 → 스탯 */}
                     <div
                       ref={dashCardRef}
-                      className="order-first relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
-                      style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, guest ? 0.1 : 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
+                      className="order-first relative lg:sticky lg:z-20 rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
+                      style={{ top: fixTop ?? undefined, background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, guest ? 0.1 : 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
                     >
                       <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                       {/* 📌 착용한 카드 스킨 — 봇 이미지 카드와 같은 액자를 옅게(등급 색과 헷갈리지 않게 색이 아니라 테두리 · 무늬로) */}
