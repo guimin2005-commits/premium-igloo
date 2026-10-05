@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
 import CardArt from "../CardArt";
-import { basePrice, salePrice, durationLabel, isPointOnly, priceText, shownPrice, priceUnit } from "@/lib/shopPricing";
+import { basePrice, salePrice, durationLabel, isPointOnly, isTimed, priceText, shownPrice, priceUnit } from "@/lib/shopPricing";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 import { pointToXp } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
@@ -213,6 +213,8 @@ export default function CartPage() {
                   const list = basePrice(r.item, r.days);
                   const discounted = sp < list;
                   const renew = isRenewal(orders, r.item, r.days);
+                  // 상품 상세 — 기간 상품은 담은 기간으로 연다(상세는 ?days= 가 그 상품의 기간일 때만 받는다)
+                  const itemHref = `/arctic/item/${r.itemId}${isTimed(r.item) ? `?days=${r.days || 0}` : ""}`;
                   // 📌 1개 단위 — 줄 값은 판매가 × 수량(빙옥 전용은 1개 값(올림) × 수량 — 결제와 같은 계산).
                   //    값 칸은 1회 최대 수량일 때의 값 폭을 미리 잡아 둔다(보이지 않는 글자) — 수량을 바꿔 자릿수가 늘어도 칸 · 이름이 밀리지 않게
                   const unit = isUnitSale(r.item);
@@ -254,8 +256,8 @@ export default function CartPage() {
                           {on && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </span>
                       </button>
-                      {/* 썸네일 — 상점 카드와 같은 그림(이미지 없으면 등록 색 + 아이콘) */}
-                      <Link href="/arctic" className="relative block w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
+                      {/* 썸네일 — 상점 카드와 같은 그림(이미지 없으면 등록 색 + 아이콘). 누르면 그 상품 상세(담은 기간으로) */}
+                      <Link href={itemHref} className="relative block w-20 h-20 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
                         <CardArt it={r.item} iconSize={36} />
                       </Link>
                       <div className="flex-1 min-w-0">
@@ -263,7 +265,7 @@ export default function CartPage() {
                           {TYPE_LABEL[r.item.type] || "상품"}
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
-                        {r.item.name}
+                        <Link href={itemHref} className="truncate hover:underline underline-offset-4">{r.item.name}</Link>
                         {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
                       </h3>
