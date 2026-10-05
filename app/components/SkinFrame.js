@@ -7,13 +7,10 @@ import { STRING_SKINS } from "@/lib/cardSkins";
 //    "'카드' 스킨인 만큼 좀 꾸며 달라"(테두리만으론 심심) — 스킨마다 액자 + 장식 요소:
 //      골드   금박 결 무늬 · 이중 테 · 네 모서리 장식 · 위아래 문장 · 반짝임
 //      오로라 밤하늘 별 · 위에서 드리우는 빛 커튼(가는 세로 빛줄) · 물결 선 · 빛 테
-//      아이스 서리 점 무늬 · 픽셀 액자 · 모서리 눈송이 · 흩날리는 도트 눈
-//      크림슨 빗금 · 붉은 테 · 모서리 꺾쇠 · 바닥 불꽃 선 · 떠오르는 불씨
-//    시즌 2(새로운 세계 · 항해도 · 비공정)는 lib/cardSkins 의 SVG 문자열 함수를 그대로 쓴다 — 봇 카드와 한 벌
+//    아이스 · 크림슨(2026-10-05 도트로 다시 그림)과 시즌 2(새로운 세계 · 항해도 · 비공정)는 lib/cardSkins 의 SVG 문자열 함수를 그대로 쓴다 — 봇 카드와 한 벌
 //    등급 색(카드 오른쪽 위 번지는 빛 · 링 · 문장)과 헷갈리지 않게 카드를 넓게 번지는 빛으로 칠하지 않는다 — 선 · 점 · 무늬 · 작은 장식만.
 //    아바타(왼쪽 위)와 글자 뒤에는 옅게, 진한 장식은 가장자리 · 모서리(오른쪽 위 · 아래쪽)에. 봇 이미지 카드(lib/botCards.js SKIN_DECO)와 같은 말.
 //    부모는 relative overflow-hidden 이어야 한다. 크기를 재서 그리므로 처음 한 번은 비어 있다가 나타난다(자리를 차지하지 않아 아무것도 밀지 않는다)
-const rect = (x, y, w, h) => `M${x} ${y}h${w}v${h}h${-w}Z`;
 const dia = (x, y, r) => `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`;
 // 네 갈래 반짝임(오목한 별)
 const star4 = (x, y, r) => `M${x} ${y - r}Q${x} ${y} ${x + r} ${y}Q${x} ${y} ${x} ${y + r}Q${x} ${y} ${x - r} ${y}Q${x} ${y} ${x} ${y - r}Z`;
@@ -31,25 +28,6 @@ function rng(seed) {
 const r1 = (n) => Math.round(n * 10) / 10;
 // 아바타 · 이름 자리(왼쪽 위) — 진한 점 장식은 피한다
 const inAvatar = (x, y) => x < 120 && y < 118;
-
-// 모서리를 steps 칸 깎은 픽셀 테 — { lt: 위 · 왼쪽, rb: 아래 · 오른쪽 }
-function pixelFrame(w, h, o, P, steps) {
-  const L = o, T = o, R = w - o, B = h - o, c = P * steps;
-  let lt = rect(L + c, T, R - L - c * 2, P) + rect(L, T + c, P, B - T - c * 2);
-  let rb = rect(L + c, B - P, R - L - c * 2, P) + rect(R - P, T + c, P, B - T - c * 2);
-  for (let s = 1; s < steps; s++) {
-    const a = P * s, b = c - a;
-    lt += rect(L + a, T + b, P, P) + rect(R - a - P, T + b, P, P);
-    rb += rect(L + a, B - b - P, P, P) + rect(R - a - P, B - b - P, P, P);
-  }
-  return { lt, rb };
-}
-const FLAKE = ["...#...", ".#.#.#.", "..###..", "###.###", "..###..", ".#.#.#.", "...#..."];
-function flake(cx, cy, P) {
-  let d = "";
-  FLAKE.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "#") d += rect(r1(cx + (x - 3.5) * P), r1(cy + (y - 3.5) * P), P, P); }));
-  return d;
-}
 
 export function deco(skin, w, h) {
   // 📌 시즌 2 스킨 — 문자열 함수(lib/cardSkins)가 그린 SVG 를 그대로 얹는다(그림은 목록에 있는 key 로만 만든다 — 사용자 입력이 섞이지 않음)
@@ -159,100 +137,6 @@ export function deco(skin, w, h) {
     );
   }
 
-  if (skin === "ice") {
-    const rand = rng(11);
-    const outer = pixelFrame(w, h, o, 4, 2);
-    const inner = pixelFrame(w, h, o + 6, 2, 2);
-    const q = o + 24;
-    let snow = "";
-    for (let n = 0; n < 34; n++) {
-      const x = Math.round(o + 8 + rand() * (w - o * 2 - 16));
-      const y = Math.round(o + 8 + rand() * (h - o * 2 - 16));
-      if (inAvatar(x, y)) continue;
-      const s = rand() < 0.3 ? 3 : 2;
-      snow += rect(x, y, s, s);
-    }
-    // 위 테에 매달린 픽셀 고드름 — 아바타 위쪽은 비운다
-    let icicles = "";
-    for (let x = 132; x < w - o - 20; x += 16 + Math.floor(rand() * 18)) {
-      const len = 2 + Math.floor(rand() * 5); // 칸 수(2px) — 위는 굵고 끝은 가늘게
-      icicles += rect(x, o + 4, 6, 2) + rect(x + 1, o + 6, 4, 2);
-      for (let k = 0; k < len; k++) icicles += rect(x + 2, o + 8 + k * 2, 2, 2);
-    }
-    // 바닥 눈 둔덕 — 아래 테 안쪽에 높낮이가 다른 계단
-    let drift = "";
-    for (let x = o + 4; x < w - o - 4; x += 4) {
-      const hh = Math.round((3 + Math.sin(x / 23) * 2 + Math.sin(x / 9) * 1.2 + 2) * 2) / 2;
-      drift += rect(x, h - o - 4 - hh * 2, 4, hh * 2);
-    }
-    return (
-      <>
-        <defs>
-          <pattern id="sf-frost" width="9" height="9" patternUnits="userSpaceOnUse">
-            <rect x="4" y="4" width="1" height="1" fill="#cdeeff" fillOpacity="0.1" />
-          </pattern>
-        </defs>
-        <rect width={w} height={h} fill="url(#sf-frost)" />
-        <g shapeRendering="crispEdges">
-          <path d={snow} fill="#e6f6ff" fillOpacity="0.28" />
-          <path d={outer.lt} fill="#cdeeff" fillOpacity="0.65" />
-          <path d={outer.rb} fill="#79b4d8" fillOpacity="0.6" />
-          <path d={inner.lt + inner.rb} fill="#b4e3ff" fillOpacity="0.16" />
-          <path d={drift} fill="#e6f6ff" fillOpacity="0.16" />
-          <path d={icicles} fill="#cdeeff" fillOpacity="0.5" />
-          <path d={flake(w - q, q, 3) + flake(q, h - q, 3) + flake(w - q, h - q, 3)} fill="#e6f6ff" fillOpacity="0.5" />
-        </g>
-      </>
-    );
-  }
-
-  if (skin === "crimson") {
-    const rand = rng(23);
-    const L = 36;
-    const br = (m, len) =>
-      `M${m} ${m + len}V${m}H${m + len}M${w - m - len} ${m}H${w - m}V${m + len}` +
-      `M${w - m} ${h - m - len}V${h - m}H${w - m - len}M${m + len} ${h - m}H${m}V${h - m - len}`;
-    // 바닥 불꽃 선 — 가장자리 안쪽에 높이가 다른 불꽃 혀 여러 개(선만)
-    let flames = "";
-    const base = h - o - 2;
-    const n = Math.max(6, Math.round((w - o * 2) / 34));
-    const tw = (w - o * 2 - 8) / n;
-    for (let k = 0; k < n; k++) {
-      const x0 = o + 4 + k * tw - tw * 0.25;
-      const ww = tw * 1.5; // 옆 불꽃과 겹치게
-      const th = 22 + rand() * 30;
-      const lean = (rand() - 0.5) * ww * 0.5; // 끝이 좌우로 살짝 휜다
-      flames += `M${r1(x0)} ${base}C${r1(x0 + ww * 0.1)} ${r1(base - th * 0.45)} ${r1(x0 + ww * 0.35 + lean * 0.3)} ${r1(base - th * 0.6)} ${r1(x0 + ww * 0.5 + lean)} ${r1(base - th)}`
-        + `C${r1(x0 + ww * 0.55 + lean * 0.3)} ${r1(base - th * 0.55)} ${r1(x0 + ww * 0.95)} ${r1(base - th * 0.4)} ${r1(x0 + ww)} ${base}Z`;
-    }
-    const embers = [];
-    const colors = ["#ff5a76", "#ffae3c", "#ffd8a0"];
-    for (let n = 0; n < 30; n++) {
-      const x = o + 10 + rand() * (w - o * 2 - 20);
-      const y = h * 0.42 + rand() * (h * 0.58 - o - 14);
-      const nearBottom = (y - h * 0.42) / (h * 0.58);
-      embers.push(<path key={`e${n}`} d={dia(r1(x), r1(y), r1(1 + rand() * 2.2))} fill={colors[n % 3]} fillOpacity={r1(0.15 + nearBottom * 0.5)} />);
-    }
-    return (
-      <>
-        <defs>
-          <pattern id="sf-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="1" height="10" fill="#ff5a76" fillOpacity="0.05" />
-          </pattern>
-        </defs>
-        <rect width={w} height={h} fill="url(#sf-hatch)" />
-        {embers}
-        <path d={flames} fill="#ff3a5c" fillOpacity="0.07" stroke="#ff5a76" strokeOpacity="0.38" strokeWidth="1.1" strokeLinejoin="round" />
-        <rect x={o} y={o} width={w - o * 2} height={h - o * 2} fill="none" stroke="#ff5a76" strokeOpacity="0.35" strokeWidth="1.2" />
-        <path d={br(o, L)} fill="none" stroke="#ff3a5c" strokeOpacity="0.9" strokeWidth="3" strokeLinecap="square" />
-        <path d={br(o + 7, 18)} fill="none" stroke="#ff5a76" strokeOpacity="0.5" strokeWidth="1" />
-        <path d={dia(w / 2, o, 6)} fill="#ff3a5c" />
-        <path d={dia(w / 2, o, 2.4)} fill="#1b1b1b" fillOpacity="0.85" />
-        <path d={dia(w / 2, h - o, 6)} fill="#ff3a5c" />
-        <path d={dia(w / 2, h - o, 2.4)} fill="#1b1b1b" fillOpacity="0.85" />
-      </>
-    );
-  }
   return null;
 }
 

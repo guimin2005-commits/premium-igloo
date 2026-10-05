@@ -37,6 +37,7 @@ export const ITEM_ARTS = [
   { key: "attend-potion", label: "출석 물약", group: "item" },
   { key: "music-ticket", label: "음악 티켓", group: "item" },
   { key: "slowmode-off", label: "슬로우 해제", group: "item" },
+  { key: "baby-bottle", label: "젖병", group: "item" },
   { key: "owl-charm", label: "올빼미 부적", group: "time" },
   { key: "early-bird", label: "얼리버드", group: "time" },
   { key: "lunch-box", label: "도시락", group: "time" },
@@ -220,6 +221,28 @@ const SPRITES = {
   },
 
   // ── 시간대 ──
+  // 젖병 — 애기 펭귄의 젖병, "거의 다 마셨다"(우유는 바닥에 두 줄만). 분홍 꼭지 · 하늘색 나사 고리 · 투명 몸통(왼쪽 흰 빛줄 · 오른쪽 눈금)
+  "baby-bottle": {
+    pal: { x: "k0", P: "k4", p: "k3", q: "k2", b: "s0", h: "s4", C: "s3", c: "s2", D: "s1", w: "w", g: "s4", G: "a3", S: "a2", m: "c4", M: "c3" },
+    map: [
+      "......xxxx......",
+      ".....xPpqqx.....",
+      ".....xPpqqx.....",
+      "....xPPppqqx....",
+      "...xPPpppqqqx...",
+      "..bbbbbbbbbbbb..",
+      "..bhCcCcCcCDDb..",
+      "..bbbbbbbbbbbb..",
+      "...bwgggggGSb...",
+      "...bwgqgqgcSb...",
+      "...bwgqqqgGSb...",
+      "...bwggqggcSb...",
+      "...bwgggggGSb...",
+      "...bwmmmmmMSb...",
+      "...bwmmmmmMMb...",
+      "....bbbbbbbb....",
+    ],
+  },
   "owl-charm": {
     pal: { o: "p0", l: "p1", m: "p2", L: "p3", h: "p4", Y: "y3", y: "y2", B: "o2", b: "o1", w: "w" },
     map: [

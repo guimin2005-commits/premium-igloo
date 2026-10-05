@@ -229,8 +229,6 @@ export function deco(w, h, S, site) {
   const inL = o + t; // 테 안쪽 시작
   const inR = w - o - t;
   const base = h - o - t; // 구름 바닥
-  // 사이트 카드 가운데 빈 줄(진행 막대 아래 ~ 누적 XP 위)
-  const gap = (330 + h - 196 * (w / 360)) / 2;
 
   // 바탕 — 사이트 카드에는 지도 경위선(점선)을 깐다(봇은 meta.grid 선 무늬)
   const defs = site
@@ -285,7 +283,8 @@ export function deco(w, h, S, site) {
     island(g, W, site ? 6 : 4, 9, { flowers: 1 });
     g.map(FLAG, 2, -FLAG.length);
     g.outline();
-    if (site) isles += draw(g, inL + P * 4, Math.round(gap - 4 * P), P, 0.9);
+    // 📌 2026-10-05 사이트 — 레벨 막대 줄(gap)에 걸쳤다. 운영자가 고른 바닥 띠로 — 두 스탯 칸 사이, 바닥 구름 위
+    if (site) isles += draw(g, Math.round(w * 0.37), base - 9 * P, P, 0.9);
     else isles += draw(g, inL + P, inL + 8 * P, P, 0.92);
   }
   // 중간 섬 — 덤불 (사이트: 가운데 빈 줄 오른쪽 · 봇: 오른쪽 가장자리)
@@ -295,7 +294,7 @@ export function deco(w, h, S, site) {
     island(g, W, site ? 7 : 4, 17, { flowers: 2 });
     g.map(BUSH, site ? 3 : 2, -2);
     g.outline();
-    if (site) isles += draw(g, inR - (W + 6) * P, Math.round(gap - 2 * P), P, 0.88);
+    if (site) isles += draw(g, inR - (W + 4) * P, base - 13 * P, P, 0.88); // 오른쪽 아래 — 시즌 글자 오른쪽 빈칸
     else isles += draw(g, inR - (W + 2) * P, Math.round(h * 0.5), P, 0.88);
   }
   // 아주 작은 섬 — 봇: 왼쪽 가장자리 · 왼쪽 아래 구름 위 / 사이트: 아래 구름 위(출석 글자 옆)
@@ -303,7 +302,7 @@ export function deco(w, h, S, site) {
     const g = grid();
     island(g, 9, 3, 23);
     g.outline();
-    if (site) isles += draw(g, Math.round(w * 0.3), base - P * 21, P, 0.88);
+    if (site) isles += draw(g, Math.round(w * 0.64), base - P * 6, P, 0.88); // 바닥 구름 위(스탯 글자 아래)
     else {
       isles += draw(g, inL + 2 * P, base - P * 24, P, 0.88);
       const g2 = grid();
@@ -315,7 +314,7 @@ export function deco(w, h, S, site) {
   }
   // 새 — 섬 사이(글자 자리 밖)
   const birds = site
-    ? [[150, 22, 0], [170, 28, 1], [w * 0.42, gap - 6, 1], [w * 0.5, gap - 14, 0], [w * 0.56, base - 36, 1]]
+    ? [[150, 22, 0], [170, 28, 1], [w * 0.7, base - 40, 1], [w * 0.77, base - 46, 0], [w * 0.52, base - 12, 1]]
     : [[w * 0.56, inL + 3 * P, 0], [w * 0.585, inL + 7 * P, 1], [w * 0.86, inL + 4 * P, 1], [inR - 11 * P, h * 0.4, 0], [inL + 2 * P, h * 0.27, 1]];
   for (const [bx, by, v] of birds) {
     const g = grid();
