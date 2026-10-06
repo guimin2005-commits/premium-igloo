@@ -108,14 +108,16 @@ export function deco(skin, w, h, ctx = {}) {
       if (x < 124) { rand(); continue; } // 아바타 위는 비운다
       const y0 = wave(x);
       const band = x < w / 3 ? "g" : x < (w * 2) / 3 ? "b" : "p";
-      rays.push(<rect key={`r${x}`} x={r1(x - 0.9)} y={r1(y0)} width="1.8" height={r1(len)} fill={`url(#sf-ray-${band})`} />);
+      // 📌 2026-10-06 "오로라 카드도 약간의 카드 효과" — 빛줄이 차례로 밝아지며 살짝 늘어난다(왼쪽 → 오른쪽으로 흐르는 물결). 늦춤은 가로 자리로
+      rays.push(<rect key={`r${x}`} className="sf-au-ray" style={{ animationDelay: `${-(r1((x / w) * 4.8))}s` }} x={r1(x - 0.9)} y={r1(y0)} width="1.8" height={r1(len)} fill={`url(#sf-ray-${band})`} />);
     }
     const stars = [];
     for (let n = 0; n < 22; n++) {
       const x = o + 10 + rand() * (w - o * 2 - 20);
       const y = o + 14 + rand() * (h * 0.55);
       if (inAvatar(x, y)) continue;
-      stars.push(<circle key={`s${n}`} cx={r1(x)} cy={r1(y)} r={r1(0.6 + rand() * 0.9)} fill="#ffffff" fillOpacity={r1(0.2 + rand() * 0.4)} />);
+      // 별 절반은 반짝인다(늦춤 제각각)
+      stars.push(<circle key={`s${n}`} className={n % 2 ? "sf-au-tw" : undefined} style={n % 2 ? { animationDelay: `${-(n % 7) * 0.45}s` } : undefined} cx={r1(x)} cy={r1(y)} r={r1(0.6 + rand() * 0.9)} fill="#ffffff" fillOpacity={r1(0.2 + rand() * 0.4)} />);
     }
     const rayGrad = (id, c) => (
       <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
@@ -131,13 +133,21 @@ export function deco(skin, w, h, ctx = {}) {
           {rayGrad("sf-ray-g", "#2fe3a0")}
           {rayGrad("sf-ray-b", "#38b4ff")}
           {rayGrad("sf-ray-p", "#a879ff")}
+          {/* 움직임 — 빛줄 물결 · 별 반짝 · 물결선 흔들림. 움직임 줄이기 설정이면 멈춘다 */}
+          <style>{`@keyframes sfAuRay{0%,100%{opacity:.4;transform:scaleY(.72)}50%{opacity:1;transform:scaleY(1.12)}}
+.sf-au-ray{transform-box:fill-box;transform-origin:50% 0;animation:sfAuRay 4.8s ease-in-out infinite}
+@keyframes sfAuTw{0%,100%{opacity:.25}50%{opacity:1}}.sf-au-tw{animation:sfAuTw 3.2s ease-in-out infinite}
+@keyframes sfAuDrift{0%,100%{transform:translateX(-3px)}50%{transform:translateX(3px)}}.sf-au-wave{animation:sfAuDrift 9s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.sf-au-ray,.sf-au-tw,.sf-au-wave{animation:none}}`}</style>
         </defs>
         {stars}
         {rays}
-        <path d={wavePath(0)} fill="none" stroke="url(#sf-au)" strokeOpacity="0.55" strokeWidth="1.4" />
-        <path d={wavePath(9)} fill="none" stroke="url(#sf-au)" strokeOpacity="0.25" strokeWidth="0.8" />
+        <g className="sf-au-wave">
+          <path d={wavePath(0)} fill="none" stroke="url(#sf-au)" strokeOpacity="0.55" strokeWidth="1.4" />
+          <path d={wavePath(9)} fill="none" stroke="url(#sf-au)" strokeOpacity="0.25" strokeWidth="0.8" />
+        </g>
         <rect x={o} y={o} width={w - o * 2} height={h - o * 2} fill="none" stroke="url(#sf-au)" strokeOpacity="0.55" strokeWidth="1.5" />
-        <path d={star4(w - 34, h - 36, 5) + star4(w - 48, h - 28, 2.6)} fill="#ffffff" fillOpacity="0.55" />
+        <path className="sf-au-tw" d={star4(w - 34, h - 36, 5) + star4(w - 48, h - 28, 2.6)} fill="#ffffff" fillOpacity="0.55" />
       </>
     );
   }
