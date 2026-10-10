@@ -16,6 +16,8 @@ const POP_CSS = `
 //    스크롤 잠금은 루트의 "fixed inset-0" + z-[120] 을 보고 전역 ScrollLock 이 건다.
 export const POP_THEME = {
   ink: { bg: "#131313", glow: "rgba(233,30,63,0.2)", grid: true },
+  // 무늬 · 번짐 없는 잉크 — 강화 창(2026-10-11 "AI 같아서 별로" 뒤 단색으로)
+  plain: { bg: "#131313" },
   pass: {
     bg: "linear-gradient(160deg, #2a1a4d 0%, #1a1233 42%, #120d22 100%)",
     glow: "rgba(155,107,255,0.4)",
@@ -51,7 +53,8 @@ export const POP_THEME = {
     ].join(","),
   },
 };
-export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink" }) => {
+// compact: 왼쪽 요약 판 없이 한 칸짜리 좁은 창(PC 최대 520px · 높이는 내용만큼, 모바일은 바텀시트 최대 88dvh) — 강화 창
+export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink", compact = false }) => {
   const closeRef = useRef(null);
   // 열리면 닫기 버튼에 포커스 — 키보드로도 바로 닫고, 탭 순서가 팝업 안에서 시작한다
   useEffect(() => { if (open) closeRef.current?.focus({ preventScroll: true }); }, [open]);
@@ -75,13 +78,13 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[520px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] rounded-t-3xl sm:rounded-3xl"}`}
         style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <style>{POP_CSS}</style>
         {t.grid && <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>}
         {t.dots && <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: t.dots }}></div>}
-        <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>
+        {t.glow && <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>}
         {t.glow2 && <div aria-hidden className="absolute -bottom-32 -left-20 w-80 h-80 blur-[110px] rounded-full pointer-events-none" style={{ background: t.glow2 }}></div>}
 
         {/* 모바일 바텀시트 손잡이 */}
@@ -90,9 +93,11 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         {/* 머리 */}
         <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-4 sm:pt-6 flex items-center justify-between gap-4">
           <div className="min-w-0 flex items-center gap-3">
-            <svg aria-hidden viewBox="0 0 24 24" className="w-[22px] h-[22px] shrink-0 text-white/55" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d={ICON_PATHS[icon]} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {icon && (
+              <svg aria-hidden viewBox="0 0 24 24" className="w-[22px] h-[22px] shrink-0 text-white/55" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d={ICON_PATHS[icon]} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
             <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-none truncate">{title}</h3>
             {count != null && <span className="shrink-0 text-sm font-black text-white/40 tabular-nums">{count}</span>}
             {badge}
@@ -110,11 +115,15 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         {/* 탭 */}
         <div className={`relative z-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.08] ${tabs ? "py-4 flex items-center gap-1.5 overflow-x-auto no-bar" : "pt-4"}`}>{tabs}</div>
 
-        {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤 */}
-        <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden sm:flex">
-          <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto sm:overflow-x-hidden no-bar flex flex-col">{left}</div>
-          <div data-pop-list className="pop-scroll min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
-        </div>
+        {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤. compact 는 한 칸 */}
+        {compact ? (
+          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 sm:px-7 pt-6 pb-6">{children}</div>
+        ) : (
+          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden sm:flex">
+            <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto sm:overflow-x-hidden no-bar flex flex-col">{left}</div>
+            <div data-pop-list className="pop-scroll min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
+          </div>
+        )}
 
         {footer}
       </div>

@@ -13,7 +13,8 @@ import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIM
 import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel, tierPaint, tierText } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { buildEnhanceView, chatRange, enhanceCost } from "@/lib/enhance";
+import { buildEnhanceView, chatRange } from "@/lib/enhance";
+import { ENH_PIXEL } from "@/lib/enhanceIcons";
 // 빙옥 가격 = XP 가격 ÷ 10,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
 import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS, FRAMES } from "@/lib/itemEffects";
@@ -422,70 +423,78 @@ const hexLift = (hex, t) => {
   return `#${f(m[1])}${f(m[2])}${f(m[3])}`;
 };
 
-// 📌 강화 창 — 카드의 "강화" 로 연다. 틀은 PopShell, 바탕은 불씨(다홍 · 주황).
-//    채팅 · 음성은 제 아이콘 · 제 색(ENH_KIND)으로 탭 · 링 · 이름 · 1회 카드 · 강화 버튼 · 레일 노드를 한 벌로 칠한다
-//    (2026-10-01 "채팅 강화인지 음성 강화인지 구분이 잘 안 된다": 예전엔 탭 글자만 달랐고 나머지는 둘 다 불씨 색이었다).
-//    머리: 보유 XP · 빙옥 배지. 왼쪽: 아이콘 + +N 링 메달(단계가 오르면 번쩍) · 이름 · 지금 1회 획득 → 강화 후.
-//    오른쪽: 다음 단계와 강화 버튼, 전 단계 레일(지난 단계는 채운 노드, 다음은 고리, 남은 건 빈 노드 · 1회 획득 · 비용).
-//    최대 단계도 같은 높이(버튼 자리에 MAX 알약) — 탭을 바꿔도 칸 · 버튼 · 레일이 움직이지 않는다.
-//    비용은 서버와 같은 식(lib/enhance enhanceCost). 최대 단계가 0 인 쪽은 탭을 만들지 않는다.
-// 📌 채팅 · 음성 색 — 불씨 바탕(다홍)과 등급색(아이언~이글루, 중간 밝기 색 덩어리)에 안 묻히게 밝은 하늘 · 라벤더.
-//    켜진 탭 · 강화 버튼은 밝은 바탕에 잉크 글자(흰 글자는 대비가 모자란다). 성공음도 갈린다 — 채팅은 높고 맑게, 음성은 낮고 둥글게
+// 📌 강화 창 — 카드의 "강화" 로 연다. 틀은 PopShell(compact — 한 칸짜리 좁은 창 · plain — 번짐 · 무늬 없는 잉크).
+//    2026-10-11 운영자 시안 「2 · 대시보드처럼 큰 숫자」: 탭(채팅 · 음성) → 고른 쪽 영문 눈썹 · 아주 큰 +N · 도트 아이콘(말풍선 둘 / 받침 고리 마이크 — lib/enhanceIcons)
+//    → 단계 칸 게이지(최대 단계 수만큼) → "채팅 1회 200~650 → 250~700 XP" 한 줄 → 강화 버튼(그쪽 색 단색) · 빙옥 버튼(테두리).
+//    재화는 글자만, 그라데이션 · 색 번짐 없음(운영자 "AI 같아서 별로 · 버튼도"). 최대 단계는 숫자 자리 MAX · 칸 금빛 · 버튼 자리 「최대 단계」(같은 높이).
+//    강화하면(0.7초 안): 다음 칸이 왼쪽부터 흰빛으로 차오름 → 숫자가 아래에서 올라오며 바뀜 → 아이콘 들썩 · 도트 불티. 마지막 단계는 칸이 왼쪽부터 한 칸씩 금빛으로.
+//    탭 폭은 고정(단계 · MAX 가 바뀌어도 탭 줄이 안 밀린다). 비용은 서버와 같은 식(lib/enhance). 최대 단계가 0 인 쪽은 탭을 만들지 않는다.
+// 📌 채팅 · 음성 색 — 밝은 하늘 · 라벤더(등급색에 안 묻히게). 켜진 탭 · 강화 버튼은 밝은 바탕에 잉크 글자. 성공음도 갈린다 — 채팅은 높고 맑게, 음성은 낮고 둥글게
 const ENH_KIND = {
-  chat: {
-    label: "채팅", icon: "chat", c: "#7dd8ff", soft: "rgba(110,205,255,0.12)", line: "rgba(125,216,255,0.36)",
-    grad: "linear-gradient(135deg, #4cc3ff 0%, #a6e9ff 100%)", ring: ["#4cc3ff", "#a6e9ff"], sparks: ["#ffffff", "#a6e9ff", "#4cc3ff"],
-    tone: 783.99, sfx: [783.99, 987.77, 1174.66, 1567.98], wave: "triangle",
-  },
-  voice: {
-    label: "음성", icon: "mic", c: "#c4b0ff", soft: "rgba(176,150,255,0.13)", line: "rgba(196,176,255,0.38)",
-    grad: "linear-gradient(135deg, #a084ff 0%, #ddd0ff 100%)", ring: ["#a084ff", "#ddd0ff"], sparks: ["#ffffff", "#ddd0ff", "#a084ff"],
-    tone: 523.25, sfx: [392, 493.88, 587.33, 783.99], wave: "sine",
-  },
+  chat: { label: "채팅", en: "CHAT", c: "#7dd8ff", tone: 783.99, sfx: [783.99, 987.77, 1174.66, 1567.98], wave: "triangle" },
+  voice: { label: "음성", en: "VOICE", c: "#c4b0ff", tone: 523.25, sfx: [392, 493.88, 587.33, 783.99], wave: "sine" },
 };
+const ENH_GOLD = "#ffd27a";
 const sfxEnhance = (kind) => {
   const t = ENH_KIND[kind] || ENH_KIND.chat;
   t.sfx.forEach((f, i) => setTimeout(() => playTone(f, 0.16, t.wave, 0.05), i * 110));
 };
-const EnhIcon = ({ k, className = "w-4 h-4", style }) => (
-  <svg aria-hidden viewBox="0 0 24 24" className={`${className} shrink-0`} style={style} fill="none" stroke="currentColor" strokeWidth="1.9">
-    <path d={ICON_PATHS[ENH_KIND[k].icon]} strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-// 📌 채팅 · 음성 탭 — 아이콘 + 이름 + 단계. 켜진 쪽은 제 색 바탕 · 잉크 글자, 꺼진 쪽도 아이콘 · 테두리는 제 색.
-//    폭 · 굵기 · 높이는 켜짐 · 꺼짐이 같다(고정 폭) — 고르는 쪽을 바꾸거나 단계가 두 자리가 돼도 탭 줄이 안 밀린다
-const EnhKindTab = ({ k, on, n, onClick }) => {
+// 도트 아이콘 — 같은 색 가로 줄을 한 칸짜리 rect 로 합쳐 그린다(crispEdges · 정수 배율)
+const EnhPixelIcon = ({ k, scale = 4, className = "", style }) => {
+  const a = ENH_PIXEL[k];
+  const W = a.rows[0].length, H = a.rows.length;
+  const rects = [];
+  a.rows.forEach((row, y) => {
+    for (let x = 0; x < W;) {
+      const ch = row[x];
+      if (ch === ".") { x++; continue; }
+      let e = x;
+      while (e + 1 < W && row[e + 1] === ch) e++;
+      rects.push(<rect key={`${x}-${y}`} x={x} y={y} width={e - x + 1} height="1" fill={a.pal[ch.charCodeAt(0) - 97]} />);
+      x = e + 1;
+    }
+  });
+  return <svg aria-hidden viewBox={`0 0 ${W} ${H}`} width={W * scale} height={H * scale} shapeRendering="crispEdges" className={`shrink-0 ${className}`} style={style}>{rects}</svg>;
+};
+// 📌 채팅 · 음성 탭 — 그쪽 색 네모 + 이름 + 단계. 켜진 쪽은 흰 알약 · 잉크 글자. 폭 · 높이 고정(단계가 두 자리 · MAX 가 돼도 탭 줄이 안 밀린다)
+const EnhKindTab = ({ k, on, n, max, onClick }) => {
   const t = ENH_KIND[k];
   return (
     <button
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`shrink-0 inline-flex items-center justify-center gap-1.5 w-[104px] h-8 rounded-full text-[13px] font-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${on ? "text-[#131313]" : "text-white/65 hover:text-white"}`}
-      style={on ? { background: t.grad } : { background: "rgba(255,255,255,0.05)", boxShadow: `inset 0 0 0 1px ${t.line}` }}
+      className={`shrink-0 inline-flex items-center justify-center gap-1.5 w-[104px] h-9 rounded-full text-[13px] font-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${on ? "bg-white text-[#131313]" : "text-white/70 hover:text-white"}`}
+      style={on ? undefined : { boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)" }}
     >
-      <EnhIcon k={k} className="w-4 h-4" style={on ? undefined : { color: t.c }} />
+      <span aria-hidden className="w-2 h-2 shrink-0" style={{ background: t.c }}></span>
       {t.label}
-      <span className={`tabular-nums text-[11px] ${on ? "text-[#131313]/55" : "text-white/40"}`}>+{n}</span>
+      <span className={`tabular-nums text-[11px] ${on ? "text-[#131313]/50" : "text-white/40"}`}>{max ? "MAX" : `+${n}`}</span>
     </button>
   );
 };
-const GOLD_TEXT = { backgroundImage: "linear-gradient(110deg, #ffb040 20%, #fff3c4 45%, #ffb040 70%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 3s linear infinite" };
 const sparksOf = (n, r0) => Array.from({ length: n }, (_, i) => {
   const a = (i / n) * Math.PI * 2 + (i % 2) * 0.2;
   const r = r0 + (i % 3) * 12;
   return { dx: Math.round(Math.cos(a) * r), dy: Math.round(Math.sin(a) * r), delay: (i % 4) * 45, c: i % 3 === 0 ? "#fff1c2" : i % 2 ? "#ffb040" : "#ff7a4a" };
 });
-const SPARKS = sparksOf(12, 80);
-const SPARKS_MAX = sparksOf(28, 96);
-// 시즌 패스 해금 — 같은 불티를 보라 · 분홍 · 흰빛으로
+// 시즌 패스 해금 — 불티를 보라 · 분홍 · 흰빛으로
 const PASS_SPARKS = sparksOf(20, 110).map((p, i) => ({ ...p, c: ["#d9c6ff", "#ff9fd6", "#ffffff", "#b69cff"][i % 4] }));
-const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voiceMin = 5, policy, onTone, onReset, resetBusy, discount = 0 }) => {
+// 강화 도트 불티 — 아이콘 둘레 8방향 네모(흰 · 그쪽 색), 퍼지며 사라진다
+const ENH_SPARKS = [[-1, -1], [0, -1.3], [1, -1], [1.3, 0], [1, 1], [0, 1.3], [-1, 1], [-1.3, 0]];
+const ENH_CSS = `
+@keyframes enhSegIn { 0% { transform: scaleX(0); background: #fff; } 55% { transform: scaleX(1); background: #fff; } 100% { transform: scaleX(1); background: var(--kc); } }
+@keyframes enhGold { 0% { background: var(--kc); } 45% { background: #fff; } 100% { background: ${ENH_GOLD}; } }
+@keyframes enhRoll { 0% { transform: translateY(105%); } 70% { transform: translateY(-3%) scale(1.06); } 100% { transform: none; } }
+@keyframes enhHop { 0%, 100% { transform: none; } 35% { transform: translateY(-6px); } 70% { transform: translateY(1px); } }
+@keyframes enhSpark { 0% { transform: translate(calc(var(--dx) * 0.4), calc(var(--dy) * 0.4)); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+`;
+const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin = 5, policy, onTone, onReset, resetBusy }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
   const [pick, setPick] = useState("chat");
   const kind = kinds.includes(pick) ? pick : kinds[0];
 
-  // 단계가 오르면 메달이 한 번 번쩍인다 (종류별로 따로 기억)
+  // 단계가 오르면 한 번 움직인다 (종류별로 따로 기억)
   const prevLv = useRef({ chat: enh.chat.level, voice: enh.voice.level });
   const [pop, setPop] = useState("");
   useEffect(() => {
@@ -508,6 +517,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   const kt = ENH_KIND[kind];
   const perLabel = isChat ? "채팅 1회" : `음성 ${voiceMin}분`;
   const atMax = v.level >= v.max;
+  const popped = pop === kind;
   const cost = v.nextCost || 0;
   // 📌 빙옥으로 낼 때는 XP 비용이 아니라 환산값(÷10,000 올림)과 비교한다
   const pointCost = xpToPoint(cost);
@@ -519,176 +529,130 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
   const gainAt = (add) => (isChat
     ? `${fmt(enh.chat.range[0] + add)}~${fmt(enh.chat.range[1] + add)}`
     : fmt((policy.voiceXp || 0) + (enh.voice.bonus || 0) + add));
-  const base = isChat ? policy.chatEnhanceBaseCost : policy.voiceEnhanceBaseCost;
-  const growth = isChat ? policy.chatEnhanceCostGrowthPct : policy.voiceEnhanceCostGrowthPct;
-  const steps = [];
-  for (let n = 1; n <= v.max; n++) steps.push({ n, g: gainAt((n - v.level) * stepXp), c: discountedCost(enhanceCost(base, growth, n), discount) });
-  const COLS = { gridTemplateColumns: "20px 44px minmax(0,1fr) 88px" };
 
   return (
     <PopShell
       open={open}
       onClose={onClose}
-      theme="enh"
+      theme="plain"
+      compact
       title="강화"
-      icon="bolt"
       badge={
-        <span
-          className="min-w-0 inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-black text-[#ffd2b8] tabular-nums truncate"
-          style={{ background: "rgba(255,120,80,0.14)", boxShadow: "inset 0 0 0 1px rgba(255,140,90,0.3)" }}
-        >
-          <span className="truncate">보유 {fmt(balance?.xp)} XP</span>
-          <span className="shrink-0 text-white/45">빙옥 {fmt(balance?.point)}</span>
+        <span className="min-w-0 inline-flex items-baseline gap-3 text-[12px] font-black tabular-nums">
+          <span className="truncate text-white/60">{fmt(balance?.xp)} XP</span>
+          <span className="shrink-0 text-[#5fe0c8]">빙옥 {fmt(balance?.point)}</span>
         </span>
       }
       tabs={kinds.length > 1 ? kinds.map((k) => (
-        <EnhKindTab key={k} k={k} on={k === kind} n={enh[k].level} onClick={() => { setPick(k); onTone?.(k); }} />
+        <EnhKindTab key={k} k={k} on={k === kind} n={enh[k].level} max={enh[k].level >= enh[k].max} onClick={() => { setPick(k); onTone?.(k); }} />
       )) : null}
-      left={
-        <>
-          <div className="flex flex-col items-center text-center sm:pt-2">
-            <div className="relative w-[136px] h-[136px]">
-              {atMax && (
-                <>
-                  <span aria-hidden className="enh-anim absolute -inset-2 rounded-full blur-md" style={{ background: "conic-gradient(from 0deg, #ffe08a, #ff7a3c, #ff4d3a, #ffb040, #ffe08a)", animation: "auraSpin 6s linear infinite, auraPulse 2.4s ease-in-out infinite" }}></span>
-                  <span aria-hidden className="absolute inset-[6px] rounded-full bg-[#1f0d0c]"></span>
-                </>
-              )}
-              {/* 📌 링은 고른 쪽 색(최대 단계만 금빛), 숫자 위에 그쪽 아이콘 — 링만 봐도 채팅인지 음성인지 */}
-              <div className="absolute inset-0">
-                <GlowRing id={`enhRing-${kind}`} from={atMax ? "#ffe08a" : kt.ring[0]} to={atMax ? "#ff9a3c" : kt.ring[1]} pct={(v.level / Math.max(1, v.max)) * 100} pop={pop === kind}>
-                  <EnhIcon k={kind} className="w-5 h-5 mb-1.5" style={{ color: kt.c }} />
-                  <span
-                    key={`${kind}-${v.level}`}
-                    className="enh-anim text-[42px] font-black text-white tabular-nums tracking-[-0.03em] leading-none"
-                    style={pop === kind ? { animation: "numPop .7s cubic-bezier(0.16,1,0.3,1)" } : undefined}
-                  >
-                    +{v.level}
-                  </span>
-                  {atMax
-                    ? <span className="mt-1.5 text-[11px] font-black tracking-[0.2em]" style={GOLD_TEXT}>MAX</span>
-                    : <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ +{v.max}</span>}
-                </GlowRing>
-              </div>
-              {/* 불티 — 보통은 고른 쪽 색, 최대 단계는 금빛 */}
-              {pop === kind && (atMax ? SPARKS_MAX : SPARKS).map((p, i) => (
-                <span
-                  key={i}
-                  aria-hidden
-                  className="enh-anim absolute left-1/2 top-1/2 w-1.5 h-1.5 rounded-full pointer-events-none opacity-0"
-                  style={{ background: atMax ? p.c : kt.sparks[i % 3], "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `sparkFly .85s ${p.delay}ms cubic-bezier(0.16,1,0.3,1) forwards` }}
-                ></span>
-              ))}
-            </div>
-            <p className="mt-4 text-[20px] font-black tracking-tight leading-none" style={{ color: kt.c }}>{kt.label} 강화</p>
-          </div>
-
-          {/* 지금 → 강화 후 — 이 창에서 유일한 카드. 고른 쪽 색 테두리 · 아이콘으로 어느 쪽 값인지 묶는다.
-                 최대 단계도 화살표 줄 자리를 MAX 로 채워 높이가 같다(탭을 바꿔도 아래가 안 움직인다) */}
-          <div
-            className="mt-7 sm:mt-auto rounded-2xl p-4"
-            style={{ background: kt.soft, boxShadow: `inset 0 0 0 1px ${kt.line}` }}
-          >
-            <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/55">
-              <EnhIcon k={kind} className="w-3.5 h-3.5" style={{ color: kt.c }} />
-              {perLabel}
-            </p>
-            <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none">{gainAt(0)}<span className="text-[11px] text-white/40 ml-1">XP</span></p>
-            {atMax ? (
-              <p className="mt-2.5 h-[18px] flex items-center text-[11px] font-black tracking-[0.2em]"><span style={GOLD_TEXT}>MAX</span></p>
-            ) : (
-              <p className="mt-2.5 h-[18px] flex items-center gap-1.5 text-[12px] font-black tabular-nums" style={{ color: kt.c }}>
-                <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
-                {gainAt(stepXp)} XP
-              </p>
-            )}
-          </div>
-          {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 강화 초기화" />}
-        </>
-      }
     >
-      {/* 다음 단계 — 최대 단계도 같은 틀(라벨 · 큰 글자 · 버튼 줄 높이)이라 탭을 바꿔도 레일이 제자리 */}
+      <style>{ENH_CSS}</style>
+      {/* 큰 단계 숫자 · 도트 아이콘 — 숫자는 칸 밖이 잘리는 상자 안에서 아래 → 위로 올라오며 바뀐다 */}
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold text-white/45">{atMax ? "최대 단계" : "다음 단계"}</p>
-          {atMax ? (
-            <p key={`max-${kind}`} className="enh-anim mt-2 text-[28px] font-black tracking-tight leading-none" style={{ ...GOLD_TEXT, transformOrigin: "left center", ...(pop === kind ? { animation: "numPop .8s cubic-bezier(0.16,1,0.3,1), shimmer 3s linear infinite" } : {}) }}>+{v.max} MAX</p>
-          ) : (
-            <p className="mt-2 text-[28px] font-black tabular-nums tracking-tight leading-none" style={{ color: kt.c }}>+{v.level + 1}</p>
-          )}
+          <p className="text-[10px] font-black tracking-[0.35em] text-white/40">{kt.en}</p>
+          <div className="mt-3 h-[62px] sm:h-[72px] overflow-hidden">
+            <p
+              key={`${kind}-${atMax ? "max" : v.level}`}
+              className="enh-anim text-[72px] sm:text-[84px] font-black leading-[0.86] tabular-nums tracking-[-0.04em] whitespace-nowrap origin-bottom-left"
+              style={{ color: atMax ? ENH_GOLD : "#ffffff", ...(popped ? { animation: "enhRoll .5s .18s cubic-bezier(0.16,1,0.3,1) both" } : {}) }}
+            >
+              {atMax ? "MAX" : `+${v.level}`}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 text-right">
-          <p className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white/45">
-            <EnhIcon k={kind} className="w-3.5 h-3.5" style={{ color: kt.c }} />
-            {perLabel}
-          </p>
-          <p className="mt-2 text-[15px] font-black text-white tabular-nums leading-none">{gainAt(atMax ? 0 : stepXp)} XP</p>
+        <div className="relative p-2 shrink-0">
+          {popped && ENH_SPARKS.map(([dx, dy], i) => (
+            <span
+              key={i}
+              aria-hidden
+              className="enh-anim absolute left-1/2 top-1/2 pointer-events-none"
+              style={{ width: i % 2 ? 6 : 8, height: i % 2 ? 6 : 8, marginLeft: i % 2 ? -3 : -4, marginTop: i % 2 ? -3 : -4, background: i % 3 === 0 ? "#ffffff" : atMax ? ENH_GOLD : kt.c, "--dx": `${dx * 60}px`, "--dy": `${dy * 60}px`, animation: "enhSpark .62s .3s cubic-bezier(0.16,1,0.3,1) both" }}
+            ></span>
+          ))}
+          {[3, 4].map((s) => (
+            <EnhPixelIcon
+              key={`ic-${kind}-${v.level}-${s}`}
+              k={kind}
+              scale={s}
+              className={`enh-anim ${s === 3 ? "sm:hidden" : "hidden sm:block"}`}
+              style={popped ? { animation: "enhHop .5s .3s ease-out both" } : undefined}
+            />
+          ))}
         </div>
       </div>
+
+      {/* 단계 칸 — 강화한 칸은 그쪽 색(최대 단계는 금빛). 방금 오른 칸은 왼쪽부터 흰빛으로 차오른 뒤 그쪽 색 */}
+      <div className="mt-5 flex gap-[3px]">
+        {Array.from({ length: v.max }, (_, i) => {
+          const n = i + 1;
+          const fresh = popped && !atMax && n === v.level;
+          return (
+            <span key={n} className="relative flex-1 h-3 overflow-hidden bg-white/10">
+              {n <= v.level && (
+                <span
+                  className="enh-anim absolute inset-0 origin-left"
+                  style={{
+                    background: atMax ? ENH_GOLD : kt.c,
+                    "--kc": kt.c,
+                    ...(fresh ? { animation: "enhSegIn .42s cubic-bezier(0.16,1,0.3,1) both" } : atMax && popped ? { animation: `enhGold .3s ${i * 45}ms ease-out both` } : {}),
+                  }}
+                ></span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex justify-between text-[11px] font-bold text-white/40 tabular-nums"><span>+0</span><span>+{v.max}</span></div>
+
+      {/* 1회 획득 — 지금 → 다음 단계(최대 단계면 지금 값만) */}
+      <div className="mt-4 py-3.5 border-y border-white/10 flex items-baseline justify-between gap-3">
+        <span className="shrink-0 text-[12px] font-bold text-white/55">{perLabel}</span>
+        {atMax ? (
+          <span className="text-[19px] font-black text-white tabular-nums">{gainAt(0)} <span className="text-[11px] text-white/40">XP</span></span>
+        ) : (
+          <span className="min-w-0 inline-flex items-baseline gap-2 font-black tabular-nums truncate">
+            <span className="text-[14px] text-white/45">{gainAt(0)}</span>
+            <span className="text-white/40">→</span>
+            <span className="text-[20px]" style={{ color: kt.c }}>{gainAt(stepXp)}</span>
+            <span className="text-[11px] text-white/40">XP</span>
+          </span>
+        )}
+      </div>
+
+      {/* 버튼 — XP 는 그쪽 색 단색, 빙옥은 테두리. 빙옥 칸은 104px 고정(여섯 자리 빙옥까지 폭이 같아 탭을 바꿔도 XP 버튼이 안 밀린다) */}
       <div className="mt-5 flex gap-2">
         {atMax ? (
-          <div className="flex-1 h-12 rounded-full flex items-center justify-center text-[14px] font-black tracking-[0.2em] bg-white/[0.05]" style={{ boxShadow: "inset 0 0 0 1px rgba(255,224,138,0.3)" }}>
-            <span style={GOLD_TEXT}>MAX</span>
+          <div className="flex-1 h-12 rounded-full flex items-center justify-center text-[13px] font-black" style={{ color: ENH_GOLD, boxShadow: "inset 0 0 0 1px rgba(255,210,122,0.5)" }}>
+            최대 단계
           </div>
         ) : (
           <>
-            {/* 📌 버튼도 그쪽 아이콘 · 색. 이름("채팅 강화")은 768px 부터 — 그보다 좁으면 8자리 비용("29,646,969 XP")이 잘려서 아이콘 + "강화" 로 줄인다
-                   (실측: 360 · 375 · 640 폭에서 안 잘림, 탭 줄은 늘 보여 어느 쪽인지 바로 확인된다). 빙옥 칸은 108px — 여섯 자리 빙옥("29,647 빙옥")까지 폭이 같아 탭을 바꿔도 XP 버튼이 안 밀린다 */}
             <button
               type="button"
               onClick={() => onEnhance(kind, "xp", cost)}
               disabled={!canXp}
               aria-label={`${kt.label} 강화 · ${fmt(cost)} XP`}
-              className="flex-1 min-w-0 h-12 px-3 rounded-full inline-flex items-center justify-center gap-1.5 text-[#131313] text-[14px] font-black tabular-nums transition-transform enabled:hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
-              style={{ background: kt.grad }}
+              className="flex-1 min-w-0 h-12 px-3 rounded-full inline-flex items-center justify-center text-[#131313] text-[14px] font-black tabular-nums transition-[transform,filter] enabled:hover:brightness-105 enabled:active:scale-[0.97] enabled:active:brightness-90 outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
+              style={{ background: kt.c }}
             >
-              <EnhIcon k={kind} className="w-4 h-4" />
-              <span className="truncate"><span className="hidden md:inline">{kt.label} </span>강화 · {fmt(cost)} XP</span>
+              <span className="truncate">강화 · {fmt(cost)} XP</span>
             </button>
             <button
               type="button"
               onClick={() => onEnhance(kind, "point", cost)}
               disabled={!canPoint}
               aria-label={`${kt.label} 강화 · ${fmt(pointCost)} 빙옥`}
-              className="shrink-0 min-w-[108px] h-12 px-4 rounded-full bg-white/[0.07] enabled:hover:bg-white/[0.13] text-white text-[13px] font-black tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
-              style={{ boxShadow: `inset 0 0 0 1px ${kt.line}` }}
+              className="shrink-0 min-w-[104px] h-12 px-4 rounded-full text-white text-[13px] font-black tabular-nums transition-colors enabled:hover:bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
+              style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.35)" }}
             >
               {fmt(pointCost)} 빙옥
             </button>
           </>
         )}
       </div>
-
-      {/* 단계 레일 — 노드 · 다음 줄 · 1회 칸 머리를 고른 쪽 색 · 아이콘으로 */}
-      <div className="mt-7 grid items-center gap-x-3 px-2 -mx-2 pb-2" style={COLS}>
-        <span></span>
-        <span className="text-[11px] font-bold text-white/40">단계</span>
-        <span className="min-w-0 flex items-center gap-1.5 text-[11px] font-bold text-white/40">
-          <EnhIcon k={kind} className="w-3.5 h-3.5" style={{ color: kt.c }} />
-          <span className="truncate">{perLabel}</span>
-        </span>
-        <span className="text-[11px] font-bold text-white/40 text-right">비용</span>
-      </div>
-      <div className="relative">
-        <span aria-hidden className="absolute left-[9.5px] top-5 bottom-5 w-px bg-white/12"></span>
-        {steps.map((r) => {
-          const done = r.n <= v.level;
-          const next = r.n === v.level + 1;
-          return (
-            <div key={r.n} className="relative grid items-center gap-x-3 h-10 px-2 -mx-2 rounded-xl tabular-nums" style={next ? { ...COLS, background: kt.soft } : COLS}>
-              <span className="relative z-10 flex justify-center">
-                <span
-                  className={`enh-anim w-3 h-3 rounded-full ${done ? "" : next ? "bg-[#1f0d0c]" : "ring-1 ring-white/25 bg-[#1f0d0c]"}`}
-                  style={done ? { background: kt.grad, "--nf": hexA(kt.ring[0], 0.8), ...(pop === kind && r.n === v.level ? { animation: "nodeFill .7s cubic-bezier(0.16,1,0.3,1)" } : {}) } : next ? { boxShadow: `0 0 0 2px ${kt.c}` } : undefined}
-                ></span>
-              </span>
-              <span className={`text-[13px] font-black ${done ? "text-white/45" : next ? "text-white" : "text-white/40"}`}>+{r.n}</span>
-              <span className={`text-[12px] font-bold ${done ? "text-white/35" : next ? "text-white" : "text-white/55"}`}>{r.g} XP</span>
-              <span className={`text-[12px] font-black text-right ${done ? "text-white/30" : next ? "" : "text-white/40"}`} style={next ? { color: kt.c } : undefined}>{done ? "완료" : fmt(r.c)}</span>
-            </div>
-          );
-        })}
-      </div>
+      {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 강화 초기화" />}
     </PopShell>
   );
 };
