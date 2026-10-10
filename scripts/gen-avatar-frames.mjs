@@ -443,6 +443,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const mod = `// 📌 아바타 테두리 정지 그림 — scripts/gen-avatar-frames.mjs 가 만든다(손으로 고치지 말 것). lib/avatarFrameArt.js 와 bot/src/avatarFrameArt.js 는 같은 파일이다
 //    디스코드 이미지 카드(botCards 공용 블록 profileCard)가 쓴다 — 사이트 화면은 public/avatar-borders/<키>.svg(움직임 있음)
 export const FRAME_ART = ${JSON.stringify(art)};
+// 그림이 사진 가운데에서 뻗는 거리(칸, 128칸 · 구멍 48칸) [위, 아래, 옆] — 카드가 사진 크기 · 자리를 맞출 때 쓴다(app/components/AvatarFrame FRAME_REACH 와 같은 값)
+export const FRAME_REACH = ${JSON.stringify(reach)};
 `;
   writeFileSync(join(root, "lib", "avatarFrameArt.js"), mod);
   writeFileSync(join(root, "bot", "src", "avatarFrameArt.js"), mod);

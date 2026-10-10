@@ -26,7 +26,7 @@ import { PopShell, PopTab, AdminReset, POP_THEME } from "../components/PopShell"
 import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, keepSavedFrame, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
-import AvatarFrame, { frameRoom } from "../components/AvatarFrame";
+import AvatarFrame, { frameRoom, frameSizeOf, FRAME_GRID, FRAME_REACH } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
 import PassPreview, { passCosmeticOf } from "./PassPreview";
 import PromoOverlay from "./PromoOverlay";
@@ -1727,6 +1727,33 @@ const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
 // 📌 랭킹 이름 옆 프로필 배지 — 최대 3개(/api/xp/leaderboard badges · 관리자 순서).
 //    도트 아이콘은 16px 보다 작게 부르면 16px 로 넘쳐 그려지므로 16 으로 부른다. 높이 16px 은 이름 줄(13px 글자의 줄 높이)보다
 //    낮아 배지가 있든 없든 줄 높이가 같고, shrink-0 이라 긴 이름은 이름만 줄어든다
+// 📌 시상대 사진 + 아바타 테두리(낀 사람만, 2026-10-10 "랭크에 적용되는 건 이번에 바뀐 걸로") — 색 링 대신 테두리.
+//    테두리가 사진 밖으로 나가는 만큼 위(paddingTop) · 아래를 띄우고 순위 숫자는 테두리 아래에 둔다. 크기가 모바일 · sm 이상 둘이라 두 벌을 그려 하나만 보인다
+const PODIUM_PX = { first: [80, 112], rest: [56, 80] }; // 사진 지름 — 테두리 없는 시상대(w-20 · sm:w-28 / w-14 · sm:w-20)와 같다
+const PodiumFramed = ({ r, c, first }) =>
+  (first ? PODIUM_PX.first : PODIUM_PX.rest).map((px, i) => {
+    const k = frameSizeOf(px) / FRAME_GRID;
+    const [u, d] = FRAME_REACH[r.avatarFrame] || [0, 0];
+    const up = Math.max(0, Math.round(u * k - px / 2)), down = Math.max(0, Math.round(d * k - px / 2));
+    return (
+      <span key={px} className={`${i ? "hidden sm:flex" : "flex sm:hidden"} flex-col items-center`} style={{ paddingTop: up }}>
+        <span className="relative shrink-0" style={{ width: px, height: px }}>
+          <span className="block w-full h-full rounded-full overflow-hidden" style={{ boxShadow: `0 18px 36px -16px ${c}` }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e0e0e0]" />
+          </span>
+          <AvatarFrame frame={r.avatarFrame} px={px} />
+        </span>
+        <span
+          className={`inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#ffffff] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
+          style={{ backgroundColor: c, marginTop: down + 2 }}
+        >
+          {r.rank}
+        </span>
+      </span>
+    );
+  });
+
 const RankBadges = ({ badges }) =>
   Array.isArray(badges) && badges.length > 0 ? (
     <span className="shrink-0 inline-flex items-center gap-0.5">
@@ -3802,6 +3829,7 @@ export default function LevelPage() {
                               </svg>
                             )}
 
+                            {r.avatarFrame ? <PodiumFramed r={r} c={c} first={first} /> : (
                             <span className="relative shrink-0">
                               <span
                                 className={`block rounded-full overflow-hidden ${first ? "w-20 h-20 sm:w-28 sm:h-28" : "w-14 h-14 sm:w-20 sm:h-20"}`}
@@ -3818,8 +3846,9 @@ export default function LevelPage() {
                                 {r.rank}
                               </span>
                             </span>
+                            )}
 
-                            <p className={`mt-5 w-full flex items-center justify-center gap-1 min-w-0 font-black ${first ? "text-[14px] sm:text-[15px]" : "text-[12px] sm:text-[13px]"} ${isMe ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                            <p className={`${r.avatarFrame ? "mt-2" : "mt-5"} w-full flex items-center justify-center gap-1 min-w-0 font-black ${first ? "text-[14px] sm:text-[15px]" : "text-[12px] sm:text-[13px]"} ${isMe ? "text-[#e91e3f]" : "text-[#131313]"}`}>
                               <span className="min-w-0 truncate">{r.name}</span>
                               <RankBadges badges={r.badges} />
                             </p>

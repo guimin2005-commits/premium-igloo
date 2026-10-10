@@ -13,7 +13,7 @@ import { currentSeason, seasonStartMs } from "@/lib/season";
 import { requireAdmin, getSession } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
 import { fetchGuildMember } from "@/lib/discordMember";
-import { badgesOfUsers } from "@/lib/itemPerks";
+import { badgesOfUsers, framesOfUsers } from "@/lib/itemPerks";
 
 // 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
 //    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
@@ -86,16 +86,26 @@ async function decorate(rows, skip) {
 
 // 📌 이름 옆 프로필 배지(최대 3) — 쪽 전체를 한 번에 모아 계산한다(lib/itemPerks badgesOfUsers · 구매 기록 기준 보유).
 //    사진 · 이름 채우기(decorate)와 함께 돌리고, 배지 계산이 실패해도 랭킹은 그대로 보낸다
+//    📌 시상대(첫 쪽 1~3위)는 낀 아바타 테두리(avatarFrame)도 — lib/itemPerks framesOfUsers. 실패해도 테두리만 빠진다
 async function finish(rows, skip) {
-  const [out, badgeMap] = await Promise.all([
+  const [out, badgeMap, frameMap] = await Promise.all([
     decorate(rows, skip),
     badgesOfUsers(rows.map((r) => r.userId)).catch((e) => {
       console.error("랭킹 배지 계산 오류:", e?.message || e);
       return null;
     }),
+    skip === 0
+      ? framesOfUsers(rows.slice(0, 3).map((r) => r.userId)).catch((e) => {
+          console.error("랭킹 테두리 계산 오류:", e?.message || e);
+          return null;
+        })
+      : null,
   ]);
-  if (!badgeMap?.size) return out;
-  return out.map((r) => (badgeMap.has(r.userId) ? { ...r, badges: badgeMap.get(r.userId) } : r));
+  if (!badgeMap?.size && !frameMap?.size) return out;
+  return out.map((r) => {
+    const badges = badgeMap?.get(r.userId), avatarFrame = frameMap?.get(r.userId);
+    return badges || avatarFrame ? { ...r, ...(badges ? { badges } : {}), ...(avatarFrame ? { avatarFrame } : {}) } : r;
+  });
 }
 
 // 📌 관리자가 없앤 XP — [XP 제거] · 음수 수동 지급(app/api/xp/grant → 봇 processPayouts 가 반영해 paid) · 관리자 초기화(같은 라우트 mode reset).
