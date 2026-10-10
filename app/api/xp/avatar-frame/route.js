@@ -4,12 +4,12 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireUser, denyIfMaintenance } from "@/lib/apiAuth";
 import { getPerks } from "@/lib/itemPerks";
-import { FRAME_OF, SKIN_NONE, pickAvatarFrame } from "@/lib/itemEffects";
+import { FRAME_OF, SKIN_NONE, pickAvatarFrame, withSeasonFrame } from "@/lib/itemEffects";
 import UserXp from "@/models/UserXp";
 
 // 📌 아바타 테두리 착용 · 해제 — 인벤토리 상세의 버튼이 부른다(카드 스킨 app/api/xp/card-skin 과 같은 모양).
 //    POST { frame }  frame: 테두리 키(착용 — 등급 키) · "none"(해제)
-//    가진 테두리만 착용할 수 있다(보유 판정은 lib/itemPerks getPerks — 인벤토리 · 봇과 같은 규칙).
+//    가진 테두리만 착용할 수 있다(보유 판정은 lib/itemPerks getPerks — 인벤토리 · 봇과 같은 규칙) + 시즌 티어 테두리(UserXp.seasonFrame).
 //    저장은 UserXp.avatarFramePick 하나. 반환: { avatarFrame } — 지금 쓰는 테두리 키("" 이면 없음)
 export async function POST(request) {
   try {
@@ -26,7 +26,8 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
-    const { avatarFrames } = await getPerks(auth.userId);
+    const [perks, mine] = await Promise.all([getPerks(auth.userId), UserXp.findOne({ userId: auth.userId }, { seasonFrame: 1 }).lean()]);
+    const avatarFrames = withSeasonFrame(perks.avatarFrames, mine);
     if (frame !== SKIN_NONE && !avatarFrames.includes(frame)) {
       return NextResponse.json({ success: false, error: "가지고 있지 않은 테두리입니다." }, { status: 403 });
     }

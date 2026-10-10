@@ -21,6 +21,9 @@ const SeasonResultSchema = new mongoose.Schema({
   roleGrantRequested: { type: Boolean, default: false },
   roleGrantedAt: { type: Date, default: null },
   announcedAt: { type: Date, default: null },
+  // 📌 시즌 티어 테두리를 적은 시각 · 받은 사람 수(아이언 제외) — 봇 settleFrames 가 끝난 시즌마다 한 번(bot/src/db.js 와 같은 칸)
+  framesAt: { type: Date, default: null },
+  frameCount: { type: Number, default: 0 },
   error: { type: String, default: "" },
 });
 

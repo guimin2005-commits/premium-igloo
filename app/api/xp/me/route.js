@@ -15,7 +15,7 @@ import BotSetting from "@/models/BotSetting";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
@@ -96,7 +96,7 @@ export async function GET() {
     // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick) 중 지금 가진 것만(최대 3). 안 골랐거나 전부 뗐으면 [] (2026-10-04 자동으로 달지 않음)
     const badges = pickBadges(allBadges, doc?.badgePick);
     // 📌 아바타 테두리 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 "")
-    const avatarFrame = pickAvatarFrame(perks.avatarFrames, doc?.avatarFramePick || "");
+    const avatarFrame = pickAvatarFrame(withSeasonFrame(perks.avatarFrames, doc), doc?.avatarFramePick || ""); // 시즌 티어 테두리(seasonFrame)도 가진 것
 
     return NextResponse.json({
       success: true,

@@ -704,6 +704,7 @@ const FX_COSMETIC_LINES = new Set([
   ...SKINS.map((s) => describeEffect({ on: "cardSkin", skin: s.v })),
   describeEffect({ on: "avatarFrame" }),
   ...FRAMES.map((f) => describeEffect({ on: "avatarFrame", frame: f.v })),
+  describeEffect({ on: "avatarFrame", frame: "all" }), // 관리자 전체(9종) 테두리
 ]);
 const fxLinesOf = (it) => (Array.isArray(it.effectLines) ? it.effectLines.filter((l) => l && !FX_COSMETIC_LINES.has(l)) : []);
 const FxRow = ({ l, v, dim }) => (
@@ -3104,16 +3105,17 @@ export default function LevelPage() {
                         <div className="flex items-center gap-4 lg:gap-5">
                           {/* 📌 착용한 아바타 테두리 — 사진 가운데에 겹친다(감싼 칸이 relative). 이름 줄이 relative 라 테두리 끝보다 위에 그려진다.
                               테두리를 낀 사람만 등급만큼 사진 칸에 여백(frameRoom) — 카드 모서리에 잘리거나 이름 · 칩에 닿지 않게 */}
-                          <span className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(me?.avatarFrame, 54, { box: 76, pad: 20, gap: 16 })}>
-                            <RingGauge pct={progPct} size={76} stroke={5} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
+                          {/* 📌 2026-10-10 운영자 "모바일에서 프로필이 왜 이리 작지?" → 사진 54 → 62px(링 76 → 86px) */}
+                          <span className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(me?.avatarFrame, 62, { box: 86, pad: 20, gap: 16 })}>
+                            <RingGauge pct={progPct} size={86} stroke={5} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={session.user.image} alt="" className="w-[54px] h-[54px] rounded-full object-cover" />
+                                <img src={session.user.image} alt="" className="w-[62px] h-[62px] rounded-full object-cover" />
                               ) : (
-                                <span className="w-[54px] h-[54px] rounded-full bg-white/10 flex items-center justify-center text-lg font-black text-white/60">{guest ? <GuestAvatar className="w-7 h-7" /> : (session.user.name || "?").slice(0, 1)}</span>
+                                <span className="w-[62px] h-[62px] rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60">{guest ? <GuestAvatar className="w-8 h-8" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
-                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={54} />}
+                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={62} />}
                           </span>
                           <span className="relative hidden lg:block" style={guest ? undefined : frameRoom(me?.avatarFrame, 68, { box: 96, pad: 28, gap: 20 })}>
                             <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>

@@ -35,6 +35,7 @@ export const invSubLabel = (it) => {
   if (it.source === "level") return it.rewardLevel != null ? `${base} · Lv.${it.rewardLevel} 도달` : base;
   if (it.source === "pass") return `${base} · 시즌 패스`;
   if (it.source === "grant") return `${base} · 운영진 지급`;
+  if (it.source === "season") return `${base} · 시즌 ${it.seasonNo} 보상`;
   if (it.days > 0) return `${base} · ${it.days}일 이용권`;
   return base;
 };
@@ -177,12 +178,13 @@ const InvSlot = ({ it, on, onClick }) => {
 //    카드 스킨 아이템(it.skinKey)이면 착용 · 해제 버튼 — skinOn: 지금 이 스킨을 쓰는 중, onSkin(키 | "none")
 //    프로필 배지 아이템(it.badgeId)이면 [배지 설정] 버튼 — 배지 창(BadgeWindow)을 그 자리에 연다. badgeSlot: 단 자리(0 · 1 · 2, 안 달았으면 -1), onBadgeOpen()
 //    아바타 테두리 아이템(it.frameKey)이면 착용 · 해제 버튼 — frameOn: 지금 이 테두리를 쓰는 중, onFrame(키 | "none")
-const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, onFrame, frameBusy = false }) => {
+//    전체(9종) 테두리 아이템(it.frameKeys)이면 등급 칸 9개 — frameCur: 지금 쓰는 테두리 키, 누르면 그 테두리 · 낀 칸을 다시 누르면 해제
+const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, frameCur = "", onFrame, frameBusy = false }) => {
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
   // 📌 스킨 · 배지 · 테두리 중 둘 이상인 아이템은 버튼이 여럿 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
-  const both = [it.skinKey, it.badgeId, it.frameKey].filter(Boolean).length > 1;
+  const both = [it.skinKey, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
   const wearBtn = (on) =>
     `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
       on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
@@ -211,7 +213,7 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
           <span className="text-[12px] font-black text-white/80 tabular-nums">
             {it.count != null
               ? `×${it.count}${it.pendingCount > 0 ? ` · 지급 대기 ${it.pendingCount}` : ""}`
-              : it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : "영구"}
+              : it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : it.source === "season" ? "다음 시즌까지" : "영구"}
           </span>
         </div>
         {it.expiresAt && !it.provisional && (
@@ -258,6 +260,21 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
           <button type="button" disabled={frameBusy} onClick={() => onFrame?.(frameOn ? SKIN_NONE : it.frameKey)} className={wearBtn(frameOn)}>
             {both ? (frameOn ? "테두리 해제" : "테두리 착용") : frameOn ? "착용 해제" : "착용"}
           </button>
+        )}
+        {it.frameKeys?.length > 1 && !compact && (
+          <div className="mt-1 grid grid-cols-3 gap-1.5">
+            {it.frameKeys.map((k) => {
+              const on = k === frameCur;
+              return (
+                <button key={k} type="button" disabled={frameBusy} aria-pressed={on} onClick={() => onFrame?.(on ? SKIN_NONE : k)}
+                  className={`h-8 rounded-full text-[10px] font-black truncate px-1.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
+                    on ? "bg-white text-[#131313]" : "border border-white/20 hover:border-white/45 text-white/75 hover:text-white"
+                  }`}>
+                  {FRAME_OF[k]?.l || k}
+                </button>
+              );
+            })}
+          </div>
         )}
         {it.rewardLevel != null && (
           <div className="flex items-center justify-between gap-3">
@@ -680,7 +697,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         {selItem ? (
           <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} onSkin={saveSkin} skinBusy={skinBusy}
             badgeSlot={selItem.badgeId ? wornIds.indexOf(selItem.badgeId) : -1} onBadgeOpen={openBadges}
-            frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} onFrame={saveFrame} frameBusy={frameBusy} />
+            frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} frameCur={curFrame} onFrame={saveFrame} frameBusy={frameBusy} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
             <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">

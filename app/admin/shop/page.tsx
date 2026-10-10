@@ -486,6 +486,7 @@ function EffectsEditor({
                 {t.needs === "frame" && (
                   <select value={d.frame} onChange={(e) => setRow(i, { frame: e.target.value })} aria-label="아바타 테두리" className={selectPick}>
                     {FRAMES.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
+                    <option value="all">전체</option>
                   </select>
                 )}
                 {!t.noAmount && t.needs !== "seconds" && (

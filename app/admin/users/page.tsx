@@ -71,7 +71,7 @@ type RoleState = { key: string; loading: boolean; present: boolean; roles: HeldR
 //    units: 회수 순서대로 한 건씩 — 지급 · 패스(낸 값 없음) 먼저, 그다음 구매(xp · point = 돌려줄 값, clawXp = 돌려줄 XP 로 다 못 뺀 캐시백 — 지갑에서 빠짐)
 type RevokeUnit = { src: "grant" | "pass" | "shop"; xp: number; point: number; clawXp: number };
 type Revoke = { mode: "rows" | "role" | "locked"; key: string; roleId: string; lock: string; stack: boolean; max: number; tool: number; units: RevokeUnit[] };
-type InvSource = "shop" | "grant" | "pass" | "item" | "level";
+type InvSource = "shop" | "grant" | "pass" | "item" | "level" | "season";
 type InvCard = {
   uid: string; kind: string; type: string; name: string; description?: string;
   icon?: string; imageUrl?: string; color?: string;
@@ -82,7 +82,7 @@ type InvCard = {
   revoke: Revoke;
 };
 type InvState = { key: string; synced: boolean; canGrant: boolean; items: InvCard[]; error: string };
-const INV_SOURCE: Record<InvSource, string> = { shop: "구매", grant: "지급", pass: "패스", item: "역할", level: "레벨 보상" };
+const INV_SOURCE: Record<InvSource, string> = { shop: "구매", grant: "지급", pass: "패스", item: "역할", level: "레벨 보상", season: "시즌 보상" };
 const UNIT_SRC: { src: RevokeUnit["src"]; l: string }[] = [{ src: "grant", l: "지급" }, { src: "pass", l: "패스" }, { src: "shop", l: "구매" }];
 
 const toInt = (v: unknown) => Math.max(0, Math.trunc(Number(v) || 0));
@@ -1125,7 +1125,7 @@ export default function AdminUsersPage() {
                           itemTypeLabel(it.type || it.kind),
                           (it.count || 0) > 1 && `×${num(it.count)}`,
                           // 📌 지급 대기인 기간제는 만료가 아직 임시(역할을 준 시각부터 센다 — 2026-10-04 #127) — 날짜 대신 기간만
-                          it.expiresAt ? (it.status === "pending" ? ((it.days || 0) > 0 ? `${num(it.days)}일` : "지급 대기") : `~ ${fmt(it.expiresAt)}`) : "무기한",
+                          it.expiresAt ? (it.status === "pending" ? ((it.days || 0) > 0 ? `${num(it.days)}일` : "지급 대기") : `~ ${fmt(it.expiresAt)}`) : it.source === "season" ? "다음 시즌까지" : "무기한",
                           it.siteOnly && "사이트 보유",
                         ])}
                       </p>
