@@ -2,11 +2,32 @@
 //    두 폼이 따로 굴러가면 "등록된 아이템 선택" 같은 규칙이 한쪽에서만 고쳐져 조용히 갈라진다.
 //    화면(JSX)은 각자 두되 상태 모양·기간 계산·유형 전환·아이템 적용은 여기 한 곳에서 정한다.
 
-import { isItemType } from "@/lib/items";
+import { isItemType, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import { POINT_RATE, xpToPoint, pointToXp } from "@/lib/pointRate";
 import { pointSaleFloor } from "@/lib/shopPricing";
 import { unitSaleAllowed, clampPerOrder, DEFAULT_PER_ORDER } from "@/lib/unitSale";
 import { isBackdropKey } from "@/lib/itemBackdrops";
+import { BUNDLE_TYPE, BUNDLE_MAX, BUNDLE_DAYS_MAX, normalizeBundle, partialValues } from "@/lib/bundle";
+import { hasConsumable } from "@/lib/itemEffects";
+
+// 📌 세트 구성 한 줄(lib/bundle.js) — 숫자 칸은 비울 수 있어야 해서 문자열로 든다.
+//    timed: 기간제 구성(days 일) · 아니면 영구. qty: 개수(역할 없는 영구 · 쌓이는 아이템만 2 이상 — canStackInBundle). value: 몸값 XP(빙옥 전용 세트여도 XP — 서버 저장값 그대로)
+//    key 는 화면 줄 키(저장하지 않는다)
+export type BundleRow = { key: string; itemId: string; timed: boolean; days: string; qty: string; value: string };
+const newRowKey = () => Math.random().toString(36).slice(2, 10);
+export const newBundleRow = (itemId: string): BundleRow => ({ key: newRowKey(), itemId, timed: false, days: "", qty: "1", value: "" });
+export const isBundleForm = (f: ProductForm | null | undefined) => f?.type === BUNDLE_TYPE;
+
+// 📌 세트 구성에 2개 이상 넣을 수 있는 아이템인가 — 서버(lib/bundle componentProblem)와 같은 조건: 역할 없고 쌓이는 아이템.
+//    쌓임은 관리자 아이템 목록 API 의 stackable, 없으면 서버 stackableIdsOf 와 같은 기준(소모형 효과 · 1개 단위로 파는 상품이 가리킴)
+type StackItem = { _id?: unknown; type?: string; roleId?: string; stackable?: boolean; effects?: unknown };
+type StackShop = { itemId?: unknown; type?: string; unitSale?: boolean };
+export const canStackInBundle = (item: StackItem | null | undefined, shops: readonly StackShop[] = []) => {
+  if (!item || item.type === "physical" || String(item.roleId || "").trim()) return false;
+  if (typeof item.stackable === "boolean") return item.stackable;
+  const id = String(item._id || "");
+  return hasConsumable(item) || shops.some((s) => s?.type !== BUNDLE_TYPE && !!s?.unitSale && String(s?.itemId || "") === id);
+};
 
 export type ProductForm = {
   id: string;
@@ -49,6 +70,8 @@ export type ProductForm = {
   unitSale: boolean;
   // 1회 최대 수량(1~99) — 1개 단위일 때만 저장된다
   maxPerOrder: string;
+  // 📌 세트 구성(type "bundle" 일 때만 저장 — 다른 유형으로 옮겨도 줄은 남겨 두고 보내지 않는다)
+  bundle: BundleRow[];
 };
 
 export const EMPTY_PRODUCT_FORM: ProductForm = {
@@ -80,7 +103,11 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   priceInf: "",
   unitSale: false,
   maxPerOrder: String(DEFAULT_PER_ORDER),
+  bundle: [],
 };
+
+// 📌 상품 유형 고르기 — 아이템 유형 다섯 + 세트(lib/bundle.js). 세트는 상품에만 있다(아이템 등록에는 없다)
+export const PRODUCT_TYPE_OPTIONS = [...ITEM_TYPE_OPTIONS, { v: BUNDLE_TYPE, l: "세트" }];
 
 // 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매). 네 칸 고정(고를 수 없는 칸도 자리를 지킨다)
 //    무제한 = 정가 한 값(durations 비움) · 기간제 = 7일 · 30일만 · 기간제 + 무제한 = 7일 · 30일 + 무제한(days 0)
@@ -135,6 +162,18 @@ const savedDurations = (it: { durations?: SavedDuration[] } | null | undefined):
 const timedDurations = (it: { durations?: SavedDuration[] } | null | undefined) => savedDurations(it).filter((d) => Number(d?.days) > 0 && Number(d?.price) > 0);
 const infDuration = (it: { durations?: SavedDuration[] } | null | undefined) => savedDurations(it).find((d) => Number(d?.days) === 0 && Number(d?.price) > 0) || null;
 
+// 저장된 세트 구성 → 폼 줄(lib/bundle.js normalizeBundle 로 모양을 맞춘 뒤)
+type SavedComp = { itemId?: unknown; days?: unknown; qty?: unknown; value?: unknown };
+const rowsFromBundle = (list: SavedComp[] | null | undefined): BundleRow[] =>
+  normalizeBundle(Array.isArray(list) ? list : []).map((c) => ({
+    key: newRowKey(),
+    itemId: c.itemId,
+    timed: c.days > 0,
+    days: c.days > 0 ? String(c.days) : "",
+    qty: String(c.qty || 1),
+    value: c.value > 0 ? String(c.value) : "",
+  }));
+
 // 저장된 상품 → 폼. 기존 기간·시즌 설정을 입력칸으로 되돌린다 (안 채우면 수정 저장할 때마다 조용히 꺼진다)
 //    빙옥 전용이면 가격 칸은 빙옥으로 되돌린다
 export const formFromShopItem = (it: any): ProductForm => ({
@@ -148,7 +187,8 @@ export const formFromShopItem = (it: any): ProductForm => ({
   color: it.color || "",
   // 목록에서 빠진 옛 키는 비운다 — 고를 수 없는 장면이 선택된 채로 남지 않게
   backdrop: isBackdropKey(it.backdrop) ? String(it.backdrop) : "",
-  type: isItemType(it.type) ? it.type : "role",
+  // 세트(lib/bundle.js)는 아이템 유형이 아니라 따로 본다 — 예전엔 "role" 로 읽혀 수정 저장하면 세트가 역할 상품이 됐다
+  type: isItemType(it.type) || it.type === BUNDLE_TYPE ? it.type : "role",
   roleId: it.roleId || "",
   roleName: it.roleName || "",
   detachOnSeason: !!it.detachOnSeason,
@@ -168,6 +208,7 @@ export const formFromShopItem = (it: any): ProductForm => ({
   priceInf: toField(infDuration(it)?.price, !!it.pointOnly),
   unitSale: !!it.unitSale,
   maxPerOrder: String(it.unitSale ? clampPerOrder(it.maxPerOrder || DEFAULT_PER_ORDER) : DEFAULT_PER_ORDER),
+  bundle: it.type === BUNDLE_TYPE ? rowsFromBundle(it.bundle) : [],
 });
 
 // 📌 빙옥 전용 켜기 · 끄기 — 입력해 둔 값은 같은 값어치로 바꿔 둔다(XP → 빙옥은 올림, 빙옥 → XP 는 ×10,000)
@@ -216,7 +257,8 @@ export const formSalePrice = (f: ProductForm | null | undefined, raw: string | n
 //    값은 입력칸 단위 그대로다(빙옥 전용이면 빙옥) — 서버로 보낼 때 toPayload 가 XP 로 바꾼다
 const intOf = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
 export const buildDurations = (f: ProductForm | null | undefined) => {
-  if (!f?.timed || f.unitSale || f.type === "physical") return [];
+  // 세트는 기간제 가격표를 쓰지 않는다(구성마다 기간 — lib/bundle.js)
+  if (!f?.timed || f.unitSale || f.type === "physical" || f.type === BUNDLE_TYPE) return [];
   return [
     { days: 7, price: intOf(f.price7) },
     { days: 30, price: intOf(f.price30) },
@@ -227,11 +269,46 @@ export const buildDurations = (f: ProductForm | null | undefined) => {
 // 📌 저장 전 확인 — 판매 방식마다 꼭 필요한 값. 두 폼(관리자 상품 관리 · 상점 인라인)이 같은 문구로 막는다. 문제가 없으면 ""
 export const saleModeError = (f: ProductForm | null | undefined) => {
   if (!f) return "";
-  const mode = f.type === "physical" ? "forever" : saleModeOf(f);
+  // 세트는 정가 한 값(판매 방식을 고르지 않는다)
+  const mode = f.type === "physical" || f.type === BUNDLE_TYPE ? "forever" : saleModeOf(f);
   if (mode === "forever" || mode === "unit") return intOf(f.price) > 0 ? "" : "가격을 입력해 주세요.";
   if (!(intOf(f.price7) > 0 || intOf(f.price30) > 0)) return "기간 가격(7일 · 30일)을 하나 이상 입력해 주세요.";
   if (mode === "both" && !(intOf(f.priceInf) > 0)) return "무제한 가격을 입력해 주세요.";
   return "";
+};
+
+// 📌 세트 구성 → 저장할 bundle 배열(서버 계약 lib/bundle.js normalizeBundle 과 같은 모양). 세트가 아니면 []
+//    기간제 구성은 1개(쌓기는 영구만), 몸값은 XP 그대로
+export const bundlePayload = (f: ProductForm | null | undefined) =>
+  f?.type === BUNDLE_TYPE
+    ? normalizeBundle((f.bundle || []).map((r) => ({
+        itemId: r.itemId,
+        days: r.timed ? intOf(r.days) : 0,
+        qty: r.timed ? 1 : Math.max(1, intOf(r.qty)),
+        value: intOf(r.value),
+      })))
+    : [];
+// 몸값을 일부 구성에만 적으면 저장을 막는다 — 상품 저장 API(app/api/shop/items)와 같은 문구
+export const BUNDLE_VALUE_ERROR = "몸값은 모든 구성에 적거나 모두 비워 주세요.";
+// 세트 저장 전 확인 — 2 ~ 12줄, 기간제 줄은 기간(일), 몸값은 모두 적거나 모두 비움(서버와 같은 partialValues). 문제가 없으면 ""
+export const bundleError = (f: ProductForm | null | undefined) => {
+  if (f?.type !== BUNDLE_TYPE) return "";
+  const rows = f.bundle || [];
+  if (rows.length < 2) return "세트에는 아이템을 2개 이상 넣어 주세요.";
+  if (rows.length > BUNDLE_MAX) return `세트에는 아이템을 ${BUNDLE_MAX}개까지 넣을 수 있습니다.`;
+  const bad = rows.findIndex((r) => r.timed && !(intOf(r.days) >= 1 && intOf(r.days) <= BUNDLE_DAYS_MAX));
+  if (bad >= 0) return `구성 ${bad + 1}번째 줄의 기간(1 ~ ${BUNDLE_DAYS_MAX.toLocaleString()}일)을 입력해 주세요.`;
+  if (partialValues(bundlePayload(f))) return BUNDLE_VALUE_ERROR;
+  return "";
+};
+// 구성 몸값 합(정가 합, XP)
+export const bundleValueSum = (f: ProductForm | null | undefined) =>
+  f?.type === BUNDLE_TYPE ? (f.bundle || []).reduce((s, r) => s + intOf(r.value), 0) : 0;
+// 몸값을 일부만 적었으면 빈 줄 수 — 저장이 막힌다(bundleError · BUNDLE_VALUE_ERROR). 모두 적었거나 모두 비웠으면 0
+export const bundleBlankValues = (f: ProductForm | null | undefined) => {
+  const rows = f?.type === BUNDLE_TYPE ? f.bundle || [] : [];
+  const blank = rows.filter((r) => !(intOf(r.value) > 0)).length;
+  return blank && blank < rows.length ? blank : 0;
 };
 
 // 📌 저장할 정가(price) — 무제한 · 1개 단위는 입력한 정가. 기간제는 따로 입력하지 않는다:
@@ -251,6 +328,23 @@ export const basePriceOf = (f: ProductForm) => {
 const autoPointOnly = (f: ProductForm, v: string): ProductForm =>
   f.id || f.type === v ? f : v === "physical" ? setPointOnly(f, true) : f.type === "physical" ? setPointOnly(f, false) : f;
 export const pickType = (f: ProductForm, v: string): ProductForm => {
+  // 📌 세트(lib/bundle.js) — 아이템 연결 · 역할 · 기간제 가격표 · 1개 단위 · 시즌 떼기를 쓰지 않는다. 기간제 + 무제한이던 값은 정가 칸으로 옮긴다
+  if (v === BUNDLE_TYPE) {
+    const base = autoPointOnly(f, v);
+    return {
+      ...base,
+      type: v,
+      itemId: "",
+      itemImageUrl: "",
+      roleId: "",
+      roleName: "",
+      timed: false,
+      withInf: false,
+      unitSale: false,
+      detachOnSeason: false,
+      price: !String(base.price ?? "").trim() && base.timed && base.withInf ? base.priceInf : base.price,
+    };
+  }
   const base = autoPointOnly(f, v);
   const roleId = v === "physical" || v === "cosmetic" ? "" : f.roleId;
   return {
@@ -309,6 +403,8 @@ export const toPayload = (f: ProductForm, roleName: string) => ({
   // 입력칸 값은 KST 벽시계 — 서버가 헷갈리지 않게 시간대를 붙여 보낸다
   //    "23:59까지" 가 그 1분이 끝날 때까지 되도록 59초로 보낸다
   discountUntil: f.discountUntil ? `${f.discountUntil}:59+09:00` : "",
+  // 📌 세트 구성 — 세트일 때만 배열, 아니면 [](서버는 세트가 아니면 이 값을 보지 않는다)
+  bundle: bundlePayload(f),
 });
 
 // 저장된 시각(ISO) → datetime-local 입력값(KST)

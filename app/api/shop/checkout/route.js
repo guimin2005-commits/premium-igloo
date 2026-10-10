@@ -92,6 +92,10 @@ export async function POST(request) {
       if (row.days != null) pickedDays.set(id, Math.floor(Number(row.days) || 0));
     }
     const docs = await ShopItem.find({ _id: { $in: [...wanted.keys()] }, active: true });
+    // 📌 세트 상품(lib/bundle.js)은 바로 구매만 — 구성마다 가진 것 · 깎은 값을 따로 정해야 해서 장바구니 결제에는 넣지 않는다
+    if (docs.some((d) => d.type === "bundle")) {
+      return NextResponse.json({ success: false, message: "세트 상품은 상품 화면에서 바로 구매해 주세요." }, { status: 400 });
+    }
     if (docs.length !== wanted.size) {
       return NextResponse.json({ success: false, message: "판매 중이 아닌 상품이 포함되어 있습니다." }, { status: 409 });
     }

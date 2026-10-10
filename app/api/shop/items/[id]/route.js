@@ -10,6 +10,7 @@ import { channelNamesFor } from "@/lib/channelNames";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
 import RoleConfig from "@/models/RoleConfig";
+import { withBundleItems } from "@/lib/bundleServer";
 
 // ── [조회] 상품 상세 — 공개 전에는 관리자만 ──
 //    📌 effects — 사면 붙는 효과 조각 [{ label, amount, unit, cond, once }] (인벤토리 문장과 같은 원천 — lib/itemEffects):
@@ -50,7 +51,9 @@ export async function GET(request, { params }) {
       console.error("상품 효과 문장 오류:", e);
     }
 
-    return NextResponse.json({ success: true, data: { ...item, effects, ...(cosmetic ? { cosmetic } : {}), ...(consumable ? { consumable } : {}) } });
+    // 📌 세트 상품(lib/bundle.js) — 구성 아이템마다 표기 · 효과 문장 · 꾸미기 미리보기(bundleItems)
+    const withBundle = item.type === "bundle" ? (await withBundleItems([item], { detail: true }))[0] : item;
+    return NextResponse.json({ success: true, data: { ...withBundle, effects, ...(cosmetic ? { cosmetic } : {}), ...(consumable ? { consumable } : {}) } });
   } catch (e) {
     return NextResponse.json({ success: false, data: null }, { status: 500 });
   }

@@ -10,6 +10,7 @@ import Purchase from "@/models/Purchase";
 import QuestClaim from "@/models/QuestClaim";
 import ShopItem from "@/models/ShopItem";
 import UserXp from "@/models/UserXp";
+import { withBundleItems } from "@/lib/bundleServer";
 import XpLog from "@/models/XpLog";
 
 // 📌 ARCTIC 홈 추천 — '지금 잘 나가는' · '○○에게 맞는' · '이번 주' 의 상품 id 와 제목만 돌려준다 (계산은 lib/shopRecommend.js)
@@ -69,6 +70,8 @@ async function loadStats() {
           createdAt: { $gte: since },
           status: { $in: SOLD_STATUS },
           itemId: { $regex: SHOP_ID_RE },
+          // 세트(lib/bundle.js)는 구성마다 한 건 — 첫 건(bundleHead)만 센다. 낸 XP 는 세트 결제 전체가 아니라 그 건 몫이다(근사용)
+          $or: [{ bundleName: { $in: ["", null] } }, { bundleHead: true }],
         },
         { _id: 0, userId: 1, itemId: 1, createdAt: 1, status: 1, paidXp: 1 }
       ).sort({ createdAt: -1 }).limit(50000).lean(),
@@ -112,8 +115,8 @@ export async function GET(request) {
       loadStats(),
       ShopItem.find(
         { active: true },
-        { _id: 1, type: 1, itemId: 1, roleId: 1, unitSale: 1, price: 1, durations: 1, discountPct: 1, discountUntil: 1, pointOnly: 1, stock: 1, sortOrder: 1, createdAt: 1, active: 1 }
-      ).lean(),
+        { _id: 1, type: 1, itemId: 1, roleId: 1, unitSale: 1, price: 1, durations: 1, discountPct: 1, discountUntil: 1, pointOnly: 1, stock: 1, sortOrder: 1, createdAt: 1, active: 1, bundle: 1 }
+      ).lean().then(withBundleItems), // 세트는 구성을 다 가졌을 때만 보유(lib/shopRecommend bundleAllOwned — bundleItems 의 쌓임 판정까지)
       userId
         ? UserXp.findOne({ userId }, {
           _id: 0, level: 1, xp: 1, point: 1,

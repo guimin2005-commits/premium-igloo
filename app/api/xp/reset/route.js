@@ -9,7 +9,7 @@ import { getLevelByXp } from "@/lib/leveling";
 import UserXp from "@/models/UserXp";
 import Purchase from "@/models/Purchase";
 import ShopItem from "@/models/ShopItem";
-import { refundValueOf, clawFromWallet, returnOrderCoupon } from "@/lib/orderRefund";
+import { refundValueOf, clawFromWallet, returnOrderCoupon, returnBundleStock } from "@/lib/orderRefund";
 
 // 📌 관리자 테스트 초기화 — 관리자 본인 계정만 되돌린다. body { what: "enhance" | "pass" | "shop" }
 //    관리자도 일반 유저와 똑같이 차감되므로(상점 · 강화 · 시즌 패스) 초기화는 낸 값을 돌려준다.
@@ -113,6 +113,7 @@ export async function POST(request) {
     let count = 0;
     const claws = [];
     const orders = new Map(); // 쿠폰을 쓴 주문 — 전부 되돌린 뒤 쿠폰도 돌려준다(주문 환불과 같은 returnOrderCoupon)
+    const bundleOrders = new Map(); // 세트 주문 — 전부 되돌린 뒤 세트 재고 · 판매 수를 한 번(returnBundleStock)
     for (const r of rows) {
       // 대기 건은 역할이 아직 없으니 취소, 지급된 건은 환불 — 봇이 roleDetached 를 보고 역할을 뗀다.
       //    만료 건은 봇이 이미 역할을 뗐으므로 roleDetached 를 세워 둔다 (다시 떼며 알림을 보내지 않게)
@@ -141,8 +142,12 @@ export async function POST(request) {
         if (v.claw > 0 || v.clawRest > 0) claws.push({ claw: v.claw, rest: v.clawRest, name: p.itemName, refId: String(p._id) });
       }
       if (p.orderId && p.couponId) orders.set(String(p.orderId), { userId, orderId: p.orderId, couponId: p.couponId });
-      await ShopItem.updateOne({ _id: p.itemId, stock: { $gte: 0 } }, { $inc: { stock: 1 } });
-      await ShopItem.updateOne({ _id: p.itemId, soldCount: { $gt: 0 } }, { $inc: { soldCount: -1 } });
+      // 세트 구성 건은 여기서 되돌리지 않는다 — 끝에서 세트 주문째로 한 번(lib/orderRefund returnBundleStock)
+      if (p.bundleName && p.orderId) bundleOrders.set(`${p.orderId}|${p.itemId}`, { userId, orderId: p.orderId, itemId: String(p.itemId) });
+      else {
+        await ShopItem.updateOne({ _id: p.itemId, stock: { $gte: 0 } }, { $inc: { stock: 1 } });
+        await ShopItem.updateOne({ _id: p.itemId, soldCount: { $gt: 0 } }, { $inc: { soldCount: -1 } });
+      }
     }
     if (!count) {
       return NextResponse.json({ success: true, message: "되돌릴 상점 구매가 없습니다." });
@@ -166,6 +171,7 @@ export async function POST(request) {
     }
     // 주문에 쓴 쿠폰 — 그 주문을 전부 되돌렸으면 다시 쓸 수 있게 돌려준다. 실패해도 초기화는 끝난 것이라 막지 않는다
     let couponBack = 0;
+    for (const o of bundleOrders.values()) await returnBundleStock(o).catch((e) => console.error("세트 재고 되돌리기 실패:", o.orderId, e?.message || e));
     for (const o of orders.values()) {
       if (await returnOrderCoupon(o).catch((e) => { console.error("주문 쿠폰 반환 실패:", o.orderId, e?.message || e); return false; })) couponBack++;
     }

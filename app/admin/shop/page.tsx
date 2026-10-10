@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { discountPctOf, discountUntilLabel, priceText, applyDiscount, COUPON_SCOPES, couponScopeTail } from "@/lib/shopPricing";
-import { POINT_RATE } from "@/lib/pointRate";
+import { POINT_RATE, pointToXp } from "@/lib/pointRate";
 import Dropdown, { type DropdownOption } from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
@@ -14,17 +14,19 @@ import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
   TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FRAMES, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
-  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines, cashbackRuleOf,
+  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines, cashbackRuleOf, hasConsumable,
 } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
   pickType as pickProductType, applyItem, unlinkItem, toPayload, toKstInput,
   setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
   SALE_MODES, saleModeOf, setSaleMode, saleModeError, unitSaleOk, pickRole,
+  PRODUCT_TYPE_OPTIONS, isBundleForm, newBundleRow, bundleError, bundleValueSum, bundleBlankValues, canStackInBundle, BUNDLE_VALUE_ERROR,
 } from "../../arctic/productForm";
 import { isUnitSale, maxPerOrderOf, MAX_PER_ORDER } from "@/lib/unitSale";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
-import type { ProductForm } from "../../arctic/productForm";
+import { BUNDLE_TYPE, BUNDLE_MAX, BUNDLE_QTY_MAX, BUNDLE_DAYS_MAX, isBundle } from "@/lib/bundle";
+import type { ProductForm, BundleRow } from "../../arctic/productForm";
 import {
   AdminPage,
   AdminTabs,
@@ -92,8 +94,8 @@ const TAB_ORDER = [
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불", expired: "만료" };
 const STATUS_TONE: Record<string, "warn" | "ok" | "bad" | "neutral"> = { pending: "warn", completed: "ok", cancelled: "bad", refunded: "bad", expired: "neutral" };
 
-// 상품 유형 — 라벨·색은 lib/items.js 가 단일 원천 (상점 카드와 같은 값)
-const typeLabel = (t: string) => itemTypeLabel(t);
+// 상품 유형 — 라벨·색은 lib/items.js 가 단일 원천 (상점 카드와 같은 값). 세트(lib/bundle.js)는 상품에만 있는 유형이라 여기서 붙인다
+const typeLabel = (t: string) => (t === BUNDLE_TYPE ? "세트" : itemTypeLabel(t));
 function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
   return (
     <span className={`rounded-full font-black text-white whitespace-nowrap ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
@@ -184,6 +186,23 @@ const fmtDateTime = (v: string | Date) => {
   const d = new Date(v);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
+
+// 📌 주문 묶기 — 세트 구성 건(bundleName — lib/bundle.js)은 구성 아이템마다 한 줄("세트 이름 · 아이템 이름").
+//    한 결제의 구성 건은 orderId · 상품(세트) id 가 모두 같아 groupOrders 가 세트 전체를 한 줄로 묶어 버린다 —
+//    묶는 열쇠에만 구성 아이템(itemRef)을 붙이고 묶은 뒤 orderId 를 되돌린다. 같은 구성 여러 개(qty)는 한 줄 "×N". 세트가 아닌 건은 그대로
+type OrderRow = { orderId?: string; itemRef?: string; bundleName?: string; itemName?: string };
+const groupOrderRows = (rows: OrderRow[]) =>
+  groupOrders(rows.map((r) => (r?.bundleName && r.orderId ? { ...r, orderId: `${r.orderId}#${r.itemRef || ""}`, bundleOrderId: r.orderId } : r)))
+    .map((g) => (g.bundleOrderId ? { ...g, orderId: g.bundleOrderId } : g));
+const orderName = (o: OrderRow | null | undefined) => (o?.bundleName ? `${o.bundleName} · ${o.itemName || ""}` : o?.itemName || "");
+// 주문 금액 — 정가 × 개수(빙옥 전용은 빙옥으로 올림). 빙옥 전용 세트의 구성 건은 나눠 적은 값이 1 빙옥의 배수가 아니라
+//    올림하면 합이 낸 값보다 커지므로 낸 빙옥(paidPoint 합 — lib/orderGroups)을 그대로 쓴다
+type OrderMoney = { bundleName?: string; pointOnly?: boolean; billed?: boolean; paidPoint?: number; price?: number; paidQty?: number; qty?: number };
+const orderAmount = (o: OrderMoney) =>
+  o.bundleName && o.pointOnly && o.billed ? `${(Number(o.paidPoint) || 0).toLocaleString()} 빙옥` : priceText(o, (o.price || 0) * (o.paidQty || o.qty || 1));
+// 세트 구성 한 칸 표기(상품 목록) — "이름 ×N 30일"
+const bundleCompLabel = (c: { name?: string; qty?: number; days?: number }) =>
+  `${c?.name || "알 수 없음"}${(Number(c?.qty) || 1) > 1 ? ` ×${c.qty}` : ""}${Number(c?.days) > 0 ? ` ${c.days}일` : ""}`;
 
 // 같은 건(_id)은 한 번만 — 앞의 것을 남긴다(구매 내역 더 보기의 겹친 건)
 const uniqById = <T extends { _id?: unknown }>(rows: T[]) => {
@@ -591,6 +610,122 @@ function EffectsEditor({
   );
 }
 
+// 📌 세트 구성 편집(lib/bundle.js) — 등록 아이템을 골라 줄을 더하고, 줄마다 기간(영구 / N일) · 개수 · 몸값 · 빼기. 2 ~ 12줄(저장 전 bundleError).
+//    개수는 역할 없는 영구 · 쌓이는 아이템만 2 이상(productForm canStackInBundle — 서버 componentProblem 과 같은 조건), 아니면 1로 잠근다.
+//    몸값은 XP(빙옥 전용 세트여도 — 서버 저장값 그대로). 모두 적거나 모두 비운다(bundleError).
+//    몸값 칸 옆 "상품가" — 그 아이템을 따로 파는 상품이 있으면 같은 기간의 정가로 채운다(없으면 단추 없음).
+//    ⚠️ 모듈 바깥에 둔다(페이지 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다)
+//    stackable: 관리자 아이템 목록 API(lib/unitSale unitThingSet)가 주는 쌓임 여부
+type RegLite = { _id: string; name?: string; icon?: string; imageUrl?: string; color?: string; type?: string; roleId?: string; stackable?: boolean; effects?: unknown };
+type ShopLite = { _id: string; itemId?: string; type?: string; active?: boolean; unitSale?: boolean; price?: number; durations?: { days?: number; price?: number }[] };
+// 구성 아이템을 따로 파는 상품의 정가 — N일 구성은 그 기간 값, 영구 구성은 무제한 값(기간제만 파는 상품은 없음) × 개수. 판매 중인 상품을 먼저
+const soloPriceOf = (shops: ShopLite[], itemId: string, days: number, qty: number): number | null => {
+  const list = shops
+    .filter((s) => s.type !== BUNDLE_TYPE && String(s.itemId || "") === itemId)
+    .sort((a, b) => Number(!!b.active) - Number(!!a.active));
+  for (const s of list) {
+    const durs = Array.isArray(s.durations) ? s.durations : [];
+    let p = 0;
+    if (days > 0) p = Number(durs.find((d) => Number(d?.days) === days)?.price) || 0;
+    else {
+      const inf = durs.find((d) => Number(d?.days) === 0 && Number(d?.price) > 0);
+      p = inf ? Number(inf.price) || 0 : durs.some((d) => Number(d?.days) > 0) ? 0 : Number(s.price) || 0;
+      p *= Math.max(1, qty);
+    }
+    if (p > 0) return p;
+  }
+  return null;
+};
+// 구성 줄의 개수를 1로 잠그나 — 역할 아이템 · 쌓이지 않는 아이템. 목록에 없는 아이템은 잠그지 않는다(저장 API 가 따로 막는다)
+const qtyLockedOf = (regItems: RegLite[], shops: ShopLite[], itemId: string) => {
+  const it = regItems.find((x) => String(x._id) === itemId);
+  return !!it && !canStackInBundle(it, shops);
+};
+function BundleEditor({ rows, regItems, shops, onChange }: { rows: BundleRow[]; regItems: RegLite[]; shops: ShopLite[]; onChange: (rows: BundleRow[]) => void }) {
+  const setRow = (i: number, patch: Partial<BundleRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const picked = new Set(rows.map((r) => r.itemId));
+  // 기프트카드는 세트에 넣을 수 없다(lib/bundle componentProblem) — 이미 고른 아이템과 함께 목록에서 뺀다
+  const options: DropdownOption[] = regItems
+    .filter((x) => x.type !== "physical" && !picked.has(String(x._id)))
+    .map((x) => ({
+      value: String(x._id), label: x.name || "이름 없음", hint: itemTypeLabel(x.type),
+      icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
+    }));
+  return (
+    <div className="min-w-0">
+      {rows.map((r, i) => {
+        const it = regItems.find((x) => String(x._id) === r.itemId);
+        const hasRole = !!String(it?.roleId || "").trim();
+        const qtyOk = !r.timed && !qtyLockedOf(regItems, shops, r.itemId);
+        const qty = qtyOk ? Math.max(1, Math.floor(Number(r.qty) || 1)) : 1;
+        const solo = soloPriceOf(shops, r.itemId, r.timed ? Math.floor(Number(r.days) || 0) : 0, qty);
+        return (
+          <div key={r.key} className="mb-2 rounded-xl border border-[#ededed] p-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="shrink-0"><ItemIcon icon={it?.icon} imageUrl={it?.imageUrl} type={it?.type || "item"} size={28} color={it?.color || itemTypeColor(it?.type)} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-bold text-[#131313]">{it?.name || "찾을 수 없는 아이템"}</span>
+                {it && <span className="block truncate text-[12px] text-[#5a5a5a]">{itemTypeLabel(it.type)}{hasRole ? " · 역할" : ""}</span>}
+              </span>
+              <button type="button" aria-label="구성 빼기" onClick={() => onChange(rows.filter((_, j) => j !== i))}
+                className="shrink-0 w-8 h-8 rounded-full text-[#8a8a8a] hover:text-[#d01634] hover:bg-[#f2f2f2] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* 기간 · 개수 — 기간제 구성은 1개(쌓기는 영구만) */}
+            <Inline className="mt-2.5">
+              <Segmented options={[{ v: "forever", l: "영구" }, { v: "timed", l: "기간" }]} value={r.timed ? "timed" : "forever"}
+                onChange={(v) => setRow(i, v === "timed" ? { timed: true, days: r.days || "30", qty: "1" } : { timed: false })} />
+              {r.timed && (
+                <span className="inline-flex items-center gap-2">
+                  <input type="number" min={1} max={BUNDLE_DAYS_MAX} inputMode="numeric" value={r.days} onChange={(e) => setRow(i, { days: e.target.value })}
+                    placeholder="30" aria-label="기간(일)" className={`${inputClass} !w-20 tabular-nums`} />
+                  <span>일</span>
+                </span>
+              )}
+              <span className="inline-flex items-center gap-2">
+                <span>×</span>
+                <input type="number" min={1} max={qtyOk ? BUNDLE_QTY_MAX : 1} inputMode="numeric" disabled={!qtyOk} value={qtyOk ? r.qty : "1"}
+                  onChange={(e) => setRow(i, { qty: e.target.value })} placeholder="1" aria-label="개수" className={`${inputClass} !w-16 tabular-nums`} />
+              </span>
+            </Inline>
+
+            {/* 몸값 — 이미 가진 구성만큼 세트 값을 깎는 비율(lib/bundle bundleQuote) */}
+            <Inline className="mt-2">
+              <span className="font-bold text-[#131313]">몸값</span>
+              <input type="number" min={0} inputMode="numeric" value={r.value} onChange={(e) => setRow(i, { value: e.target.value })}
+                placeholder="0" aria-label="몸값" className={numClass} />
+              <span>XP</span>
+              {solo != null && (
+                <Btn variant="secondary" size="sm" className="tabular-nums" disabled={Math.floor(Number(r.value) || 0) === solo}
+                  onClick={() => setRow(i, { value: String(solo) })}>
+                  상품가 {solo.toLocaleString()}
+                </Btn>
+              )}
+            </Inline>
+          </div>
+        );
+      })}
+      {rows.length >= BUNDLE_MAX ? (
+        <p className={fieldNote}>최대 {BUNDLE_MAX}개</p>
+      ) : regItems.length > 0 ? (
+        <Dropdown
+          theme="light"
+          buttonClassName={DD_BTN}
+          value=""
+          onChange={(v) => { if (v && !picked.has(v) && rows.length < BUNDLE_MAX) onChange([...rows, newBundleRow(v)]); }}
+          placeholder="아이템 추가"
+          options={options}
+          maxHeight={320}
+        />
+      ) : (
+        <p className={fieldNote}>등록된 아이템이 없습니다.</p>
+      )}
+    </div>
+  );
+}
+
 // 📌 추천 아이템 창 — 목록(lib/itemPresets.js · /api/admin/items/presets)에서 골라 한 번에 등록한다. 같은 이름이 이미 있으면 잠근다(등록됨).
 //    모바일은 아래에서 올라오는 판, PC 는 가운데 창. 머리 · 전체 선택 줄 · 아래 동작 줄은 고정이고 목록만 스크롤한다
 //    열 때만 그린다(페이지가 presetOpen 일 때 마운트) — 열 때마다 상태가 새로 시작하고 목록을 다시 읽는다
@@ -750,6 +885,8 @@ export default function AdminShopPage() {
   const [isRoleOpen, setIsRoleOpen] = useState(false);
   const selectedRole = guildRoles.find((r) => r.id === form.roleId);
   const linked = isLinked(form);
+  // 세트 상품(lib/bundle.js) — 아이템 연결 · 역할 · 판매 방식 · 시즌 동작 대신 구성 편집
+  const bundleOn = isBundleForm(form);
 
   const closePane = useCallback(() => { setPane(""); setIsRoleOpen(false); }, []);
 
@@ -1104,11 +1241,13 @@ export default function AdminShopPage() {
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     // 📌 판매 방식마다 꼭 필요한 가격 — 상점 인라인 폼과 같은 문구(productForm saleModeError)
-    const bad = saleModeError(form);
+    const bad = saleModeError(form) || bundleError(form);
     if (bad) return notify(bad, true);
+    // 세트 — 역할 · 쌓이지 않는 아이템 줄은 1개로 보낸다(개수 칸이 잠겨 1로 보이는 값 그대로)
+    const sendForm = isBundleForm(form) ? { ...form, bundle: form.bundle.map((r) => (qtyLockedOf(regItems, items, r.itemId) ? { ...r, qty: "1" } : r)) } : form;
     const res = await fetch("/api/shop/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...toPayload(form, selectedRole?.name || ""), sortOrder: undefined }),
+      body: JSON.stringify({ ...toPayload(sendForm, selectedRole?.name || ""), sortOrder: undefined }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) { setForm(emptyForm); fetchAll(); fetchRegItems(); closePane(); notify("저장되었습니다."); }
@@ -1205,14 +1344,28 @@ export default function AdminShopPage() {
 
   const meta = TAB_META[tab];
   // 📌 주문은 묶음(orderId + 상품 — lib/orderGroups.js)으로 센다 · 보인다. 1개 단위 상품 3개를 한 번에 샀으면 한 줄 "×3"
-  const groupCount = (s: string) => groupOrders(orders.filter((o) => o.status === s)).length;
+  const groupCount = (s: string) => groupOrderRows(orders.filter((o) => o.status === s)).length;
   const pendingCount = groupCount("pending");
-  const shownOrdersByStatus = groupOrders(orderFilter ? orders.filter((o) => o.status === orderFilter) : orders);
+  const shownOrdersByStatus = groupOrderRows(orderFilter ? orders.filter((o) => o.status === orderFilter) : orders);
 
   const discountPct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
   // 입력칸 단위 그대로(빙옥 전용이면 빙옥 — XP 로 할인한 뒤 올림, 상점 · 결제와 같은 계산)
   const salePreview = formSalePrice(form, form.price, discountPct);
   const unit = formUnit(form);
+  // 세트 — 구성 몸값 합(XP) · 판매가를 XP 로 바꿔 몇 % 싼지(내림 — 실제보다 크게 적지 않게)
+  const bundleSum = bundleValueSum(form);
+  const bundleSaleXp = form.pointOnly ? pointToXp(salePreview) : salePreview;
+  const bundlePct = bundleOn && bundleSum > 0 && bundleSaleXp > 0 && bundleSaleXp < bundleSum ? Math.floor((1 - bundleSaleXp / bundleSum) * 100) : 0;
+  // 카드 미리보기의 구성(GET /api/shop/items 의 bundleItems 와 같은 모양) — 상점 카드가 구성을 그릴 때 폼 값 그대로 따라가게
+  const previewBundleItems = bundleOn
+    ? form.bundle.map((r) => {
+        const x = regItems.find((it) => String(it._id) === r.itemId);
+        return {
+          itemId: r.itemId, days: r.timed ? Math.floor(Number(r.days) || 0) : 0, qty: r.timed || qtyLockedOf(regItems, items, r.itemId) ? 1 : Math.max(1, Math.floor(Number(r.qty) || 1)), value: Math.floor(Number(r.value) || 0),
+          name: x?.name || "", icon: x?.icon || "", imageUrl: x?.imageUrl || "", color: x?.color || "", type: x?.type || "", hasRole: !!String(x?.roleId || "").trim(), consumable: x ? hasConsumable(x) || !!x.stackable : false,
+        };
+      })
+    : undefined;
 
   // ── 목록 거르기 ──
   const qq = q.trim().toLowerCase();
@@ -1228,7 +1381,7 @@ export default function AdminShopPage() {
     return !c.active ? "중지" : expired ? "만료" : exhausted ? "소진" : "사용 가능";
   };
   const shownCoupons = coupons.filter((c) => (!couponView || couponState(c) === couponView) && hit(c.code, c.name));
-  const shownOrders = shownOrdersByStatus.filter((o) => hit(o.itemName, o.userName, o.contact, o.adminNote));
+  const shownOrders = shownOrdersByStatus.filter((o) => hit(o.itemName, o.bundleName, o.userName, o.contact, o.adminNote));
 
   const noResult = "검색 결과가 없습니다.";
   const orderSel = orderSelId ? shownOrdersByStatus.find((o) => o._id === orderSelId) || null : null;
@@ -1312,12 +1465,27 @@ export default function AdminShopPage() {
                 {[it.itemId && "등록 아이템", isUnitSale(it) && `1개 단위 · 1회 최대 ${maxPerOrderOf(it)}개`].filter(Boolean).join(" · ")}
               </span>
             )}
+            {/* 세트 — 구성 아이템(GET /api/shop/items 의 bundleItems) */}
+            {isBundle(it) && (
+              <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] tabular-nums truncate">
+                {(Array.isArray(it.bundleItems) ? it.bundleItems : []).map(bundleCompLabel).join(" · ")}
+              </span>
+            )}
           </span>
         </span>
       ),
     },
     { key: "status", label: "상태", mobile: "title", render: (it) => <StatusChip tone={it.active ? "ok" : "neutral"}>{it.active ? "판매 중" : "숨김"}</StatusChip> },
-    { key: "type", label: "유형 · 역할", render: (it) => <span className="text-[#5a5a5a]">{it.type === "physical" || it.type === "cosmetic" ? typeLabel(it.type) : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}</span> },
+    {
+      key: "type", label: "유형 · 역할",
+      render: (it) => (
+        <span className="text-[#5a5a5a]">
+          {isBundle(it)
+            ? `${typeLabel(it.type)} · ${(Array.isArray(it.bundle) ? it.bundle.length : 0)}개`
+            : it.type === "physical" || it.type === "cosmetic" ? typeLabel(it.type) : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}
+        </span>
+      ),
+    },
     {
       key: "price", label: "가격", align: "right",
       render: (it) => (
@@ -1403,7 +1571,7 @@ export default function AdminShopPage() {
       key: "item", label: "상품", mobile: "title",
       render: (o) => (
         <span className="block min-w-0 max-w-[280px]">
-          <span className="block truncate font-bold">{o.itemName}{o.qty > 1 && <span className="tabular-nums"> ×{o.qty}</span>}</span>
+          <span className="block truncate font-bold">{orderName(o)}{o.qty > 1 && <span className="tabular-nums"> ×{o.qty}</span>}</span>
           {orderSummary(o) && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate tabular-nums">{orderSummary(o)}</span>}
         </span>
       ),
@@ -1411,7 +1579,7 @@ export default function AdminShopPage() {
     { key: "type", label: "유형", render: (o) => <span className="text-[#5a5a5a]">{typeLabel(o.itemType)}</span> },
     { key: "user", label: "구매자", render: (o) => <span className="font-bold text-[#5a5a5a]">{o.userName}</span> },
     // 빙옥 전용 상품을 산 건은 빙옥으로 (o.pointOnly — 구매 시점 스냅샷). 여러 개는 돌려주지 않은 개수만큼(paidQty — lib/orderGroups.js)
-    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{priceText(o, (o.price || 0) * (o.paidQty || o.qty || 1))}</span> },
+    { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{orderAmount(o)}</span> },
     { key: "at", label: "일시", render: (o) => <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">{fmtDateTime(o.createdAt)}</span> },
     {
       key: "memo", label: "메모",
@@ -1664,7 +1832,7 @@ export default function AdminShopPage() {
                 <div aria-hidden className="rounded-xl border border-[#ededed] bg-white px-4 py-5 flex justify-center pointer-events-none select-none">
                   <div className="w-[200px]">
                     <ProductCard
-                      it={{ ...toPayload(form, ""), _id: form.id || "preview", stock: form.stock === "" ? -1 : Number(form.stock) || 0 }}
+                      it={{ ...toPayload(form, ""), _id: form.id || "preview", stock: form.stock === "" ? -1 : Number(form.stock) || 0, ...(previewBundleItems ? { bundleItems: previewBundleItems } : {}) }}
                       href="#" wished={false} onWish={() => {}}
                       overlay={!form.active ? <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span> : null}
                     />
@@ -1674,8 +1842,8 @@ export default function AdminShopPage() {
               <form onSubmit={saveItem}>
                 {/* ── 기본 정보 ── */}
                 <PaneSection title="기본 정보">
-                  {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다 */}
-                  <div className="mb-4">
+                  {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다. 세트는 아이템 하나에 연결하지 않는다(구성 편집) */}
+                  {!bundleOn && <div className="mb-4">
                     <Segmented options={SOURCE_OPTIONS} value={sourceOf(form)}
                       onChange={(v) => {
                         if (v === sourceOf(form)) return; // 이미 그 상태 — 연결 아이템이 첫 항목으로 바뀌지 않게
@@ -1719,7 +1887,7 @@ export default function AdminShopPage() {
                         </p>
                       </div>
                     )}
-                  </div>
+                  </div>}
 
                   <Field label={<>상품명<Req /></>}>
                     <input type="text" value={form.name} disabled={linked} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={inputClass} />
@@ -1728,7 +1896,7 @@ export default function AdminShopPage() {
                   <Field label={<>상품 유형<Req /></>}>
                     {linked
                       ? <TypeBadge type={form.type} className="inline-block px-3 py-1.5 text-[11px]" />
-                      : <Segmented options={ITEM_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />}
+                      : <Segmented options={PRODUCT_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />}
                   </Field>
 
                   <Field label="상품 설명">
@@ -1798,6 +1966,17 @@ export default function AdminShopPage() {
                   )}
                 </PaneSection>
 
+                {/* ── 구성 ── 세트만(lib/bundle.js). 줄마다 기간 · 개수 · 몸값 */}
+                {bundleOn && (
+                  <PaneSection title="구성">
+                    <div className="mb-4">
+                      <BundleEditor rows={form.bundle} regItems={regItems} shops={items} onChange={(rows) => setForm((f) => ({ ...f, bundle: rows }))} />
+                      {/* 몸값을 일부만 적으면 저장이 막힌다(productForm bundleError — 저장 API 와 같은 문구) */}
+                      {bundleBlankValues(form) > 0 && <p className="mt-2 text-[12px] font-bold text-[#d01634] break-keep">{BUNDLE_VALUE_ERROR}</p>}
+                    </div>
+                  </PaneSection>
+                )}
+
                 {/* ── 가격 · 기간 ── */}
                 <PaneSection title="가격 · 기간">
                   {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×10,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
@@ -1807,7 +1986,7 @@ export default function AdminShopPage() {
                   </div>
                   {/* 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매, lib/unitSale.js). 역할·권한·아이템·꾸미기만 (기프트카드는 기간 · 수량 개념이 없다).
                          고른 방식의 가격 칸만 아래에 나온다. 1개 단위는 역할 없는 아이템 · 꾸미기만 — 못 고르는 상품이면 칸은 그대로 두고 누르면 알린다(칸 수가 바뀌어 줄이 흔들리지 않게) */}
-                  {form.type !== "physical" && (
+                  {form.type !== "physical" && !bundleOn && (
                     <div className="mb-4">
                       <Segmented options={SALE_MODES} value={saleModeOf(form)} disabledValues={unitSaleOk(form) ? undefined : ["unit"]}
                         onChange={(v) => {
@@ -1862,6 +2041,19 @@ export default function AdminShopPage() {
                       </div>
                     </Field>
                   )}
+                  {/* 📌 세트 — 구성 몸값 합(정가 합)과 세트 판매가를 나란히. 몇 % 싼지는 XP 로 견준다(빙옥 전용은 1 빙옥 = 10,000 XP) */}
+                  {bundleOn && bundleSum > 0 && (
+                    <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-[#f7f7f7] px-3 py-2.5 text-[13px] text-[#5a5a5a] tabular-nums">
+                      <span>정가 합 <span className="font-bold text-[#131313]">{bundleSum.toLocaleString()} XP</span></span>
+                      {salePreview > 0 && (
+                        <>
+                          <span className="text-[#a3a3a3]">·</span>
+                          <span>세트 <span className="font-bold text-[#131313]">{salePreview.toLocaleString()} {unit}</span></span>
+                          {bundlePct > 0 && <span className="font-black text-[#e91e3f]">{bundlePct}% 싸게</span>}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                 </PaneSection>
 
@@ -1880,8 +2072,8 @@ export default function AdminShopPage() {
                   </Two>
                 </PaneSection>
 
-                {/* ── 시즌 동작 ── 기프트카드 · 꾸미기는 뗄 역할이 없으므로 아예 감춘다 */}
-                {form.type !== "physical" && form.type !== "cosmetic" && (
+                {/* ── 시즌 동작 ── 기프트카드 · 꾸미기는 뗄 역할이 없으므로 아예 감춘다(세트도 쓰지 않는다 — 서버가 끈다) */}
+                {form.type !== "physical" && form.type !== "cosmetic" && !bundleOn && (
                   <PaneSection title="시즌 동작">
                     {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 (등록된 아이템이면 아이템 설정을 따른다) */}
                     <div className="mb-4">
@@ -2250,7 +2442,7 @@ export default function AdminShopPage() {
               <SearchInput value={q} onChange={setQ} placeholder="상품 · 구매자 · 메모" />
               <Segmented
                 options={[
-                  { v: "", l: "전체", n: groupOrders(orders).length },
+                  { v: "", l: "전체", n: groupOrderRows(orders).length },
                   { v: "pending", l: "대기", n: pendingCount },
                   { v: "completed", l: "완료", n: groupCount("completed") },
                   { v: "cancelled", l: "취소", n: groupCount("cancelled") },
@@ -2282,7 +2474,7 @@ export default function AdminShopPage() {
             <DetailPane
               open={pane === "order" && !!orderSel}
               onClose={closePane}
-              title={orderSel ? `${orderSel.itemName}${orderSel.qty > 1 ? ` ×${orderSel.qty}` : ""}` : ""}
+              title={orderSel ? `${orderName(orderSel)}${orderSel.qty > 1 ? ` ×${orderSel.qty}` : ""}` : ""}
               sub={orderSel ? `${orderSel.userName} · ${fmtDateTime(orderSel.createdAt)}` : undefined}
               badge={orderSel ? <StatusChip tone={STATUS_TONE[orderSel.status] || "neutral"}>{STATUS_LABEL[orderSel.status]}</StatusChip> : undefined}
               footer={
@@ -2308,7 +2500,7 @@ export default function AdminShopPage() {
                   {/* 1개 단위 주문 — 수량과 쓴 · 돌려준 개수 */}
                   {orderSel.qty > 1 && <DefRow k="수량"><span className="tabular-nums">{orderSel.qty}개{orderSummary(orderSel) ? ` · ${orderSummary(orderSel)}` : ""}</span></DefRow>}
                   {orderSel.qty === 1 && orderSel.consumedAt && <DefRow k="사용"><span className="tabular-nums">{fmtDateTime(orderSel.consumedAt)}</span></DefRow>}
-                  <DefRow k="금액"><span className="tabular-nums">{priceText(orderSel, (orderSel.price || 0) * (orderSel.paidQty || orderSel.qty || 1))}</span></DefRow>
+                  <DefRow k="금액"><span className="tabular-nums">{orderAmount(orderSel)}</span></DefRow>
                   <DefRow k="일시"><span className="tabular-nums">{fmtDateTime(orderSel.createdAt)}</span></DefRow>
                   {orderSel.error && <DefRow k="지급 실패"><span className="text-[#d01634]">{orderSel.error}</span></DefRow>}
                   {orderSel.contact && <DefRow k="수령 정보"><span className="font-normal whitespace-pre-wrap break-words">{orderSel.contact}</span></DefRow>}
@@ -2423,7 +2615,7 @@ export default function AdminShopPage() {
           const cb = picked.reduce((s, r) => s + (r.cashbackXp || 0), 0);
           return (
             <>
-              <span className="block font-bold text-[#131313]">{cancelTarget.itemName}{cancelTarget.qty > 1 ? ` ×${cancelTarget.qty}` : ""}</span>
+              <span className="block font-bold text-[#131313]">{orderName(cancelTarget)}{cancelTarget.qty > 1 ? ` ×${cancelTarget.qty}` : ""}</span>
               <span className="block mb-3">
                 {cancelTarget.userName} · {[xp > 0 && `${xp.toLocaleString()} XP`, pt > 0 && `${pt.toLocaleString()} 빙옥`].filter(Boolean).join(" + ") || (cancelTarget.pointOnly ? "0 빙옥" : "0 XP")} 환불
                 {/* 결제 때 돌려준 캐시백은 환불에서 뺀다(app/api/shop/orders) */}

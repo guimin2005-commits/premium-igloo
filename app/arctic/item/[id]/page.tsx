@@ -5,25 +5,32 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPick, discountPctOf, discountUntilLabel, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
-import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import { itemTypeColor } from "@/lib/items";
 import { isAdminName } from "@/lib/admins";
 import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
-import ProductCard from "../../ProductCard";
+import ProductCard, { typeLabelOf, typeColorOf } from "../../ProductCard";
+import ItemIcon from "../../../components/ItemIcon";
 import CardArt from "../../CardArt";
 import AppliedPreview from "../../AppliedPreview";
-import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf } from "../../owned";
+import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf, bundleViewOf, bundlePickOf } from "../../owned";
+import { isBundle } from "@/lib/bundle";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 import { openLogin, LOGIN_CTX } from "../../../components/LoginPrompt";
 import { CART_KEY, WISH_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../../shopStore";
 
-// 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천
+// 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천(세트만 ProductCard 의 typeLabelOf · typeColorOf)
 const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
-  <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
-    {itemTypeLabel(type)}
+  <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: typeColorOf(type) }}>
+    {typeLabelOf(type)}
   </span>
 );
+
+// 📌 세트 구성 한 칸의 상태 표기 — 가진 것(owned)은 빠지고 그만큼 값이 깎인다(lib/bundle.js). 기간제로만 가진 것은 연장 · 무제한 전환
+const BUNDLE_MARK: Record<string, string> = { owned: "보유 중 · 빠짐", renew: "연장", upgrade: "무제한 전환" };
+type EffectPart = { label: string; amount: string; unit: string; cond?: string[]; once?: boolean };
+type BundleInfo = { itemId: string; name?: string; icon?: string; imageUrl?: string; color?: string; type?: string; hasRole?: boolean; consumable?: boolean; effects?: EffectPart[] };
 
 
 // 📌 상품 상세 — 카드에서 눌러 들어오는 화면
@@ -98,7 +105,8 @@ export default function ItemDetailPage() {
       if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point ?? 0); setMeData(me.data); }
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
       setAllItems(Array.isArray(all?.data) ? all.data : []);
-      if (all?.success && Array.isArray(all?.data)) setValidIds(new Set(all.data.map((x: any) => String(x._id))));
+      // 세트(lib/bundle.js)는 장바구니에 둘 수 없다 — 개수 기준에서 뺀다
+      if (all?.success && Array.isArray(all?.data)) setValidIds(new Set(all.data.filter((x: { type?: string }) => !isBundle(x)).map((x: { _id: string }) => String(x._id))));
     }).finally(() => setIsLoading(false));
   }, [status, id, isAdmin]);
 
@@ -115,6 +123,27 @@ export default function ItemDetailPage() {
       .catch(() => {});
     return () => { alive = false; };
   }, [status, id]);
+
+  // 📌 세트 값 · 구성 상태 · 보유 중은 서버 견적(api/shop/bundle-quote — 결제 API 와 같은 판정)으로 — 결제 화면(../../checkout)과 같다.
+  //    화면 계산(내 구매 목록)은 옛 건 · 숨김 상품 · 목록 창 밖 건을 다 못 봐 결제 화면 값과 어긋날 수 있었다. 받기 전 · 실패하면 화면 계산 그대로
+  const setId = item && isBundle(item) ? String(item._id) : "";
+  const [setQuote, setSetQuote] = useState<{ id: string; price: number; full: number; list: number; owned: number; all: boolean; states: string[] } | null>(null);
+  useEffect(() => {
+    if (!setId) return;
+    let alive = true;
+    fetch(`/api/shop/bundle-quote?id=${encodeURIComponent(setId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const q = j?.success ? j.data : null;
+        if (!alive || !q) return;
+        setSetQuote({
+          id: setId, price: Number(q.price) || 0, full: Number(q.full) || 0, list: Number(q.list) || 0, owned: Number(q.owned) || 0, all: !!q.all,
+          states: Array.isArray(q.states) ? q.states.map(String) : [],
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [setId, orders]);
 
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(""), 1800); };
 
@@ -146,12 +175,24 @@ export default function ItemDetailPage() {
   // 안 골랐으면 카드와 같은 기간(무제한, 없으면 가장 긴 기간) — 카드에서 본 값과 상세 첫 값이 같게.
   //    기간제를 가졌으면 연장이 기본 — 지금 가진 기간(없으면 가장 긴 기간제)으로 연다
   const days = timed ? (pickedDays ?? (renewBase != null ? renewPickOf(orders, item) : null) ?? cardPick(item)?.days ?? durationOptions(item)[0]?.days ?? 0) : 0;
-  const sp = salePrice(item, days);
-  const listPrice = basePrice(item, days);
+  // 📌 세트(lib/bundle.js) — 구성마다 보유를 보고 이 사람이 낼 값(가진 구성만큼 깎은 값)을 건다. 서버 견적(setQuote)이 오면 그 값 · 상태,
+  //    오기 전 · 실패하면 화면 계산(owned.ts bundleViewOf — 결제 API 와 같은 계산).
+  //    다 가졌으면 판매가 그대로 · 보유 중. 기간 고르기 · 수량 · 장바구니는 없다(바로 구매만 — 결제 화면이 바로 구매 API 로 보낸다)
+  const bundle = isBundle(item);
+  const localBv = bundle ? bundleViewOf(orders, item, allItems) : null;
+  const sq = setQuote && setQuote.id === setId ? setQuote : null;
+  const bv = localBv && sq
+    ? { ...localBv, states: localBv.comps.map((_, i) => ({ state: sq.states[i] || "new" })), quote: { ...localBv.quote, price: sq.price, full: sq.full, list: sq.list, owned: sq.owned, all: sq.all } }
+    : localBv;
+  const bundleInfo = new Map<string, BundleInfo>((bundle && Array.isArray(item.bundleItems) ? item.bundleItems : []).map((c: BundleInfo) => [String(c.itemId), c]));
+  const bundleInfos = bv ? bv.comps.map((c) => bundleInfo.get(c.itemId) || { itemId: c.itemId }) : [];
+  const sp = bv ? Number(bv.quote.all ? bv.quote.full : bv.quote.price) || 0 : salePrice(item, days);
+  const listPrice = bv ? Number(bv.quote.list) || 0 : basePrice(item, days);
   const discounted = sp < listPrice;
   // 📌 보유 상태 — 서버와 같은 기준(owned.ts). 연결된 아이템을 수동 지급 · 시즌 패스로 받은 건(itemRef)도 보유다.
   //    무제한 보유면 더 살 수 없다(보유 중). 기간제만 가졌으면 기간제는 연장(지금 만료 뒤에 이어 붙음) · 무제한은 업그레이드로 산다
-  const owned = ownStateOf(orders, item) === "forever";
+  //    세트는 구성을 다 가졌을 때만 보유 중
+  const owned = bv ? !!bv.quote.all : ownStateOf(orders, item) === "forever";
   const renewing = renewBase != null && days > 0;
   const inCart = cart.some((c) => c.itemId === item._id);
   // 📌 1개 단위(lib/unitSale.js) — 1부터 min(1회 최대, 재고)까지. 장바구니에 담긴 상품이면 그 수량에서 시작하고, 바꾸면 장바구니 줄도 같이 바꾼다
@@ -201,6 +242,7 @@ export default function ItemDetailPage() {
   // 담기 ↔ 삭제 토글
   const toggleCart = () => {
     if (!isLoggedIn) return askLogin();
+    if (bundle) return flash("세트는 바로 구매만 할 수 있습니다");
     if (owned) return flash("이미 구매하신 상품입니다");
     if (!inCart && pointShort) return flash("빙옥이 부족합니다");
     if (inCart) {
@@ -235,7 +277,7 @@ export default function ItemDetailPage() {
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
       <ArcticStoreBar
-        crumbs={[{ label: itemTypeLabel(item.type), href: `/arctic?type=${item.type}` }, { label: item.name }]}
+        crumbs={[{ label: typeLabelOf(item.type), href: bundle ? "/arctic?type=all" : `/arctic?type=${item.type}` }, { label: item.name }]}
         cartCount={cartCount}
         wishCount={wish.length}
       />
@@ -264,7 +306,8 @@ export default function ItemDetailPage() {
                 <span className="block mb-1.5 text-[14px] text-[#a3a3a3] line-through tabular-nums leading-none">{priceText(item, listPrice)}</span>
               )}
               <div className="flex items-center gap-2.5 flex-wrap">
-                {discounted && (
+                {/* 세트는 가진 구성만큼 깎여도 정가 취소선만 — 할인율은 할인 중일 때만 */}
+                {discounted && discountPctOf(item) > 0 && (
                   <span className="px-2 py-1 rounded-md bg-[#e91e3f] text-white text-[12px] font-black leading-none shrink-0">{discountPctOf(item)}% OFF</span>
                 )}
                 {/* 빙옥 전용은 단위만 빙옥 — 같은 판매가를 올림으로 바꿔 적는다 */}
@@ -311,26 +354,30 @@ export default function ItemDetailPage() {
             {/* 상세 정보 */}
             <div className="rounded-xl bg-white border border-[#ededed] divide-y divide-[#ededed] mb-6">
               {[
-                { l: "상품 유형", v: itemTypeLabel(item.type) },
+                { l: "상품 유형", v: typeLabelOf(item.type) },
                 ...(item.roleName ? [{ l: "지급 역할", v: item.roleName }] : []),
+                // 세트 — 구성 수 · 가진 수(가진 것은 빠지고 그만큼 깎인다)
+                ...(bv ? [{ l: "구성", v: `아이템 ${bv.comps.length}개${bv.quote.owned > 0 ? ` · ${bv.quote.owned}개 보유` : ""}` }] : []),
                 {
                   l: "재고",
                   v: item.stock < 0 ? "제한 없음" : item.stock === 0 ? "품절" : `${item.stock}개 남음`,
                   accent: item.stock >= 0 && item.stock > 0 && item.stock <= 5,
                 },
-                // 1개 단위는 한 번에 살 수 있는 개수, 나머지는 1인 1개
-                { l: "구매 제한", v: unit ? `1회 최대 ${perOrder}개` : "1인 1개" },
+                // 1개 단위는 한 번에 살 수 있는 개수, 나머지는 1인 1개 (세트는 구성마다 따로라 이 줄이 없다)
+                ...(bv ? [] : [{ l: "구매 제한", v: unit ? `1회 최대 ${perOrder}개` : "1인 1개" }]),
                 ...(heldCount > 0 ? [{ l: "보유 수량", v: `${heldCount.toLocaleString()}개` }] : []),
                 {
                   l: "지급 방식",
-                  v: item.type === "physical"
+                  v: bv
+                    ? bundleInfos.some((c) => c.hasRole) ? "결제 후 30초 이내 자동 지급" : "결제 후 인벤토리에 보관"
+                    : item.type === "physical"
                     ? "운영진 확인 후 발송"
                     : (item.type === "item" || item.type === "cosmetic") && !item.roleId
                     ? "결제 후 인벤토리에 보관"
                     : "결제 후 30초 이내 자동 지급",
                 },
-                // 📌 소모품(1회 소모권 · 보호막 — API consumable) — 쓴 뒤에는 취소 · 환불되지 않는다(2026-10-04 "주의 문구 써둬")
-                ...(item.consumable ? [{ l: "취소 · 환불", v: "사용 후 불가" }] : []),
+                // 📌 소모품(1회 소모권 · 보호막 — API consumable) — 쓴 뒤에는 취소 · 환불되지 않는다(2026-10-04 "주의 문구 써둬"). 세트는 구성 중 하나라도
+                ...((bv ? bundleInfos.some((c) => c.consumable) : item.consumable) ? [{ l: "취소 · 환불", v: "사용 후 불가" }] : []),
                 // 📌 수량 · 합계(1개 단위만) — 조절 칸은 폭 고정(숫자 칸 w-9, 99까지 두 자리)이라 숫자가 바뀌어도 줄이 흔들리지 않는다.
                 //    합계는 따로 한 줄 — 조절 칸 옆에 두면 자릿수가 늘 때 조절 칸이 밀린다. 빙옥 전용은 1개 값(올림) × 수량(결제와 같은 계산)
                 ...(unit
@@ -396,8 +443,8 @@ export default function ItemDetailPage() {
               </button>
 
               {/* 📌 담기 · 구매 두 칸은 늘 그대로 — 빙옥 전용인데 빙옥이 모자라면(기간을 바꾸면 달라진다) 잠그고 글자만 바꾼다.
-                     이미 담아 둔 건 뺄 수 있게 담기 칸은 열어 둔다 */}
-              <button onClick={toggleCart} disabled={cartLocked}
+                     이미 담아 둔 건 뺄 수 있게 담기 칸은 열어 둔다. 세트는 바로 구매만이라 담기 칸이 없다 */}
+              {!bundle && <button onClick={toggleCart} disabled={cartLocked}
                 className={`flex-1 h-12 rounded-full text-[13px] font-bold transition-colors ${
                   cartLocked
                     ? "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
@@ -406,7 +453,7 @@ export default function ItemDetailPage() {
                     : "bg-white text-[#131313] border border-[#ededed] hover:border-[#131313]"
                 }`}>
                 {inCart ? "장바구니에서 삭제" : "장바구니에 담기"}
-              </button>
+              </button>}
 
               <button onClick={openBuy} disabled={soldOut || owned || pointShort}
                 className={`flex-1 h-12 rounded-full text-[13px] font-bold transition-colors ${
@@ -422,6 +469,51 @@ export default function ItemDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* ── 세트 구성 — 효과 칸과 같은 자리 · 같은 바탕(아래 전체 폭). 칸 하나에 아이템 하나: 그림 · 이름 · 유형 · 기간 · 개수 · 효과 조각.
+               가진 구성은 "보유 중 · 빠짐"(그만큼 값이 깎였다), 기간제로만 가진 것은 연장 · 무제한 전환 ── */}
+        {bv && bv.comps.length > 0 && (
+          <div className="mt-14 pt-10 border-t border-[#ededed]">
+            <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">구성 <span className="ml-0.5 text-[#e91e3f] tabular-nums">{bv.comps.length}</span></h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {bv.comps.map((c, i) => {
+                const info = bundleInfos[i];
+                const st = String(bv.states[i]?.state || "new");
+                const mark = BUNDLE_MARK[st] || "";
+                const fx = Array.isArray(info.effects) ? info.effects : [];
+                return (
+                  <div key={c.itemId} className="flex gap-4 min-w-0 bg-[#f2f2f2] px-5 py-4">
+                    <span className={`w-12 h-12 shrink-0 bg-white flex items-center justify-center overflow-hidden ${st === "owned" ? "opacity-50" : ""}`}>
+                      <ItemIcon icon={info.icon} imageUrl={info.imageUrl} type={info.type} size={28} color={info.color || itemTypeColor(info.type || "")} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-[14px] font-black text-[#131313] break-keep">{info.name || "아이템"}</span>
+                        {mark && <span className={`shrink-0 mt-0.5 text-[11px] font-black whitespace-nowrap ${st === "owned" ? "text-[#8a8a8a]" : "text-[#e91e3f]"}`}>{mark}</span>}
+                      </div>
+                      <span className="block mt-1 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
+                        {typeLabelOf(info.type || "item")} · {durationLabel(c.days)}{c.qty > 1 ? ` · ${c.qty.toLocaleString()}개` : ""}
+                      </span>
+                      {fx.length > 0 && (
+                        <div className="mt-2.5 space-y-1">
+                          {fx.map((e, k) => {
+                            const cond = [...(Array.isArray(e.cond) ? e.cond : []), e.once ? "하루 1번" : ""].filter(Boolean);
+                            return (
+                              <p key={k} className="text-[12px] font-bold text-[#5a5a5a] break-keep">
+                                {e.label} <span className="font-black text-[#131313] tabular-nums">{e.amount}{e.unit === "XP" ? " XP" : e.unit}</span>
+                                {cond.length > 0 && <span className="text-[11px] text-[#8a8a8a]"> · {cond.join(" · ")}</span>}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── 효과 — 사면 붙는 것(등록 아이템 효과 + 지급 역할의 역할 버프). 오른쪽 정보 칸에 몰리지 않게 아래 전체 폭으로.
                칸 하나에 효과 하나: 무엇을 하면 · 얼마나 · 조건(요일 · 시간 · 채널 · 하루 1번) ── */}
@@ -464,7 +556,7 @@ export default function ItemDetailPage() {
             {/* 📌 상점 목록과 같은 카드(ProductCard) — 곳마다 카드 모양이 갈라지지 않게. 모바일은 가로로 넘기고, 카드 폭은 상점 두 칸 폭과 비슷하게 */}
             <div className="no-bar -mx-6 px-6 -my-2 py-2 flex gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-px-6 md:mx-0 md:px-0 md:my-0 md:py-0 md:grid md:grid-cols-4 md:gap-5 md:overflow-visible">
               {related.map((r) => (
-                <ProductCard key={r._id} it={r} href={`/arctic/item/${r._id}`} wished={wish.includes(r._id)} onWish={() => toggleWishOf(r._id)}
+                <ProductCard key={r._id} it={r} href={`/arctic/item/${r._id}`} pick={isBundle(r) ? bundlePickOf(orders, r, allItems) : undefined} wished={wish.includes(r._id)} onWish={() => toggleWishOf(r._id)}
                   className="snap-start shrink-0 w-[156px] md:w-auto" />
               ))}
             </div>

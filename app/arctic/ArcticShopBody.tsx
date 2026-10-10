@@ -26,12 +26,13 @@ import ArcticHome from "./ArcticHome";
 import BannerSlider, { useBanners } from "./BannerSlider";
 import { SeasonHead, SeasonPicks, seasonPicks } from "./ArcticSeason";
 import CardArt from "./CardArt";
-import ProductCard from "./ProductCard";
+import ProductCard, { typeLabelOf } from "./ProductCard";
+import { isBundle } from "@/lib/bundle";
 import ShopFilterBar from "./ShopFilterBar";
 import { priceBuckets, inBucket } from "./priceBuckets";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
-import { ownedIdsOf } from "./owned";
+import { ownedIdsOf, bundlePickOf } from "./owned";
 import { InventoryPopup } from "../components/Inventory";
 import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
 import { CART_KEY, WISH_KEY, readShopList, writeShopList, useShopUid } from "./shopStore";
@@ -279,6 +280,12 @@ export default function ArcticShopBody({
 
   const addToCart = (item: any) => {
     if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
+    // 📌 세트(lib/bundle.js)는 바로 구매만 — 장바구니 결제(api/shop/checkout)가 받지 않는다
+    if (isBundle(item)) {
+      setCartToast("세트는 바로 구매만 할 수 있습니다");
+      setTimeout(() => setCartToast(""), 1800);
+      return;
+    }
     if (ownedItemIds.has(item._id)) {
       setCartToast("이미 구매하신 상품입니다");
       setTimeout(() => setCartToast(""), 1800);
@@ -303,7 +310,7 @@ export default function ArcticShopBody({
 
   // 장바구니 줄 = 저장된 수량 + 최신 상품 정보
   const cartRows = useMemo(
-    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
+    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item && !isBundle(r.item)),
     [cart, items]
   );
   const cartCount = cartRows.reduce((n, r) => n + r.qty, 0);
@@ -387,6 +394,8 @@ export default function ArcticShopBody({
   }, [isAdmin]);
 
   const openEdit = (it?: any) => {
+    // 세트는 인라인 폼을 열지 않는다(구성 편집이 없다) — 관리자 상품 관리로
+    if (it && isBundle(it)) return router.push(`/admin/shop?edit=${it._id}`);
     setEditError("");
     setOpenGroups({ basic: true, price: false, stock: false, season: false });
     setEditForm(it ? formFromShopItem(it) : { ...EMPTY_PRODUCT_FORM });
@@ -467,7 +476,8 @@ export default function ArcticShopBody({
         const list = Array.isArray(d?.data) ? d.data : [];
         setItems(list);
         // 관리자 '유저 화면' 미리보기는 숨김 상품이 빠진 목록이라 정리 기준으로 쓰지 않는다 (숨김 상품을 지우지 않게)
-        if (d?.success && Array.isArray(d?.data) && !userPreview) setCartValidIds(new Set(list.map((i: any) => String(i._id))));
+        //    📌 세트(lib/bundle.js)는 장바구니에 둘 수 없다 — 기준에서 빼 두면 아래 정리가 담겨 있던 세트를 뺀다
+        if (d?.success && Array.isArray(d?.data) && !userPreview) setCartValidIds(new Set(list.filter((i: { type?: string }) => !isBundle(i)).map((i: { _id: string }) => String(i._id))));
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -497,7 +507,9 @@ export default function ArcticShopBody({
     return items.filter((it) => {
       if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : it.type !== typeFilter)) return false;
       if (wishOnly && !wish.includes(it._id)) return false;
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${itemTypeLabel(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}`.toLowerCase().includes(q)) return false;
+      // 세트는 "세트"와 구성 아이템 이름으로도 찾는다
+      const setText = isBundle(it) ? (Array.isArray(it.bundleItems) ? it.bundleItems.map((c: { name?: string }) => ` ${c?.name || ""}`).join("") : "") : "";
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${setText}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [items, typeFilter, wishOnly, wish, submitted]);
@@ -516,7 +528,8 @@ export default function ArcticShopBody({
     const filtered = scoped.flatMap((it) => {
       const afford = affordableOnly && myXp != null ? affordFor(it, myXp, myPoint ?? 0) : null;
       const priceOk = !priceBucket && !afford ? undefined : (p: number) => (!priceBucket || inBucket(priceBucket, it, p)) && (!afford || afford(p));
-      const pick = cardPick(it, priceOk);
+      // 📌 세트는 이 사람이 낼 값(가진 구성만큼 깎은 값 — owned.ts bundlePickOf)으로 거르고 · 줄 세우고 · 카드에 건다
+      const pick = isBundle(it) ? bundlePickOf(orders, it, items, priceOk) : cardPick(it, priceOk);
       if (!pick) return [];
       if (inStockOnly && it.stock === 0) return [];
       return [{ ...it, _pick: pick }];
@@ -529,7 +542,7 @@ export default function ArcticShopBody({
     else if (sort === "popular") sorted.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
     else sorted.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return sorted;
-  }, [scoped, priceBucket, inStockOnly, affordableOnly, sort, myXp, myPoint]);
+  }, [scoped, priceBucket, inStockOnly, affordableOnly, sort, myXp, myPoint, orders, items]);
 
   // 📌 시즌 탭 두 갈래 큐레이션 — 기본 상태(필터 · 정렬을 안 건)에서만. 무엇이든 걸면 지금처럼 격자 결과만.
   //    시즌 상품이 적으면 null → 바로 격자 (ArcticSeason)
@@ -560,6 +573,8 @@ export default function ArcticShopBody({
 
   const openBuy = (item: any) => {
     if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
+    // 📌 세트는 이 창이 아니라 상품 상세 → 결제 화면에서(가진 구성만큼 깎은 값 · 구성 표시)
+    if (isBundle(item)) return router.push(`/arctic/item/${item._id}`);
     // 고른 기간을 그대로 들고 모달로 넘어간다
     item = isTimed(item) ? { ...item, _days: daysFor(item) } : item;
     if (cart.some((c) => c.itemId === item._id)) {
@@ -696,13 +711,18 @@ export default function ArcticShopBody({
     // 필터로 기본(무제한)과 다른 기간을 걸었으면 상세도 그 기간으로 열리게
     const href = `/arctic/item/${it._id}${isTimed(it) && it._pick && it._pick.days != null && it._pick.days !== cardPick(it)?.days ? `?days=${it._pick.days}` : ""}`;
     return (
-      <ProductCard key={it._id} it={it} href={href} pick={it._pick} wished={wish.includes(it._id)} onWish={() => toggleWish(it)}
+      <ProductCard key={it._id} it={it} href={href} pick={isBundle(it) ? bundlePickOf(orders, it, items) : it._pick} wished={wish.includes(it._id)} onWish={() => toggleWish(it)}
         overlay={isAdmin && !it.active ? (
           <span className="absolute top-2 left-2 @min-[180px]:top-2.5 @min-[180px]:left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
         ) : null}>
         {isAdmin && (
           <div className="mt-2 flex gap-2 text-[11px] font-bold">
-            <button onClick={() => openEdit(it)} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+            {/* 📌 세트(lib/bundle.js)는 이 인라인 폼이 구성을 모른다 — 관리자 상품 관리(?edit=)에서 고친다 */}
+            {isBundle(it) ? (
+              <Link href={`/admin/shop?edit=${it._id}`} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">관리에서 수정</Link>
+            ) : (
+              <button onClick={() => openEdit(it)} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
+            )}
             <button onClick={() => setDeleteTarget(it)} className="text-[#e91e3f] hover:text-[#d01634] transition-colors">삭제</button>
           </div>
         )}

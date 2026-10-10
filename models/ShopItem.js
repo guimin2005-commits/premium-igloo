@@ -35,6 +35,13 @@ const ShopItemSchema = new mongoose.Schema({
   //    maxPerOrder: 한 결제에서 살 수 있는 최대 개수(1~99). 1개 단위가 아니면 0(= 1개)
   unitSale: { type: Boolean, default: false },
   maxPerOrder: { type: Number, default: 0 },
+  // 📌 세트 상품(type "bundle") — 등록 아이템 여러 개를 한 상품으로. 규칙 · 계산은 lib/bundle.js 한 곳(정리 normalizeBundle · 값 bundleQuote).
+  //    { itemId: Item id, days: 0 = 영구 | N일, qty: 개수(역할 없고 영구일 때만 2 이상), value: 몸값 XP — 이미 가진 구성만큼 세트 값을 깎는 비율 }
+  //    세트는 itemId(아이템 연결) · roleId · durations · unitSale 을 쓰지 않는다. 바로 구매만(장바구니 결제는 받지 않는다)
+  bundle: {
+    type: [{ _id: false, itemId: String, days: Number, qty: Number, value: Number }],
+    default: [],
+  },
   // 📌 시즌이 바뀔 때 디스코드 역할만 떼고 사이트 인벤토리에는 그대로 남길지.
   //    표시용 역할 상품에만 켠다. 권한 상품(perk)은 역할이 곧 디스코드 기능이라
   //    떼면 기능이 사라지므로 켜면 안 된다. 기본값 false — 실수로 권한이 날아가지 않게.

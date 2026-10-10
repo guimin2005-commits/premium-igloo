@@ -9,10 +9,12 @@ import { isTimed, durationOptions, durationLabel, cardPick, isPointOnly, affordF
 import { isAdminName } from "@/lib/admins";
 import ArcticStoreBar from "../ArcticStoreBar";
 import ProductCard from "../ProductCard";
-import { ownedIdsOf, renewableIdsOf } from "../owned";
+import { ownedIdsOf, renewableIdsOf, bundlePickOf } from "../owned";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
-import { CART_KEY, WISH_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
+import { CART_KEY, WISH_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
+import { isBundle } from "@/lib/bundle";
+import { useRouter } from "next/navigation";
 import { useGuestShopLogin } from "../useGuestShopLogin";
 
 // 📌 찜한 상품 — 상점 메인의 팝업 패널을 따로 뗀 페이지.
@@ -24,6 +26,7 @@ export default function WishPage() {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
   const isAdmin = isAdminName(session?.user?.name);
+  const router = useRouter();
 
   const [items, setItems] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -61,7 +64,8 @@ export default function WishPage() {
       .then((d) => {
         const list = Array.isArray(d?.data) ? d.data : [];
         setItems(list);
-        if (d?.success && Array.isArray(d?.data)) setValidIds(new Set(list.map((i: any) => String(i._id))));
+        // 📌 세트(lib/bundle.js)는 장바구니에 둘 수 없다(바로 구매만) — 기준에서 빼 두면 아래 정리가 담겨 있던 세트를 뺀다
+        if (d?.success && Array.isArray(d?.data)) setValidIds(new Set(list.filter((i: { type?: string }) => !isBundle(i)).map((i: { _id: string }) => String(i._id))));
       })
       .catch(() => setItems([]))
       .finally(() => setLoaded(true));
@@ -109,9 +113,19 @@ export default function WishPage() {
     say(`${it.name} 상품의 찜을 해제했습니다`);
   };
   // 📌 빙옥 전용 상품 — 카드에 걸린 값(담길 값)을 빙옥으로 낼 수 없으면 담기 잠금
-  const pointShort = (it: any) => isLoggedIn && isPointOnly(it) && myPoint != null && !affordFor(it, 0, myPoint)(cardPick(it)?.price ?? 0);
+  //    세트는 이 사람이 낼 값(가진 구성만큼 깎은 값 — owned.ts bundlePickOf)으로
+  const pointShort = (it: any) => isLoggedIn && isPointOnly(it) && myPoint != null && !affordFor(it, 0, myPoint)(isBundle(it) ? (bundlePickOf(orders, it, items)?.price ?? 0) : (cardPick(it)?.price ?? 0));
+  // 📌 세트는 장바구니에 넣지 않는다(장바구니 결제가 받지 않는다) — 담기 대신 바로 구매: 이 세트 하나만 결제 화면으로 넘긴다(상품 상세의 구매와 같다)
+  const buyNow = (it: { _id: string }) => {
+    if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
+    if (locked(it._id)) return say("이미 구매하신 상품입니다");
+    if (pointShort(it)) return say("빙옥이 부족합니다");
+    writeShopList(CHECKOUT_KEY, shopUid, [{ itemId: it._id, qty: 1, days: 0 }]);
+    router.push("/arctic/checkout");
+  };
   const toggleCart = (it: any) => {
     if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
+    if (isBundle(it)) return buyNow(it);
     if (locked(it._id)) return say("이미 구매하신 상품입니다");
     if (cart.some((c) => c.itemId === it._id)) {
       setCart((prev) => prev.filter((c) => c.itemId !== it._id));
@@ -160,11 +174,13 @@ export default function WishPage() {
             {rows.map((it: any) => {
               const soldOut = it.stock === 0;
               const has = locked(it._id);
-              const inCart = cart.some((c) => c.itemId === it._id);
+              // 세트는 장바구니에 없다 — 담기 자리가 바로 구매
+              const bundle = isBundle(it);
+              const inCart = !bundle && cart.some((c) => c.itemId === it._id);
               const short = !inCart && pointShort(it);
               // 상점 카드와 같은 카드(ProductCard) — 찜 목록이라 하트는 늘 채워져 있고, 누르면 찜 해제
               return (
-                <ProductCard key={it._id} it={it} href={`/arctic/item/${it._id}`} wished onWish={() => unwish(it)} wishLabel="찜 해제">
+                <ProductCard key={it._id} it={it} href={`/arctic/item/${it._id}`} pick={bundle ? bundlePickOf(orders, it, items) : undefined} wished onWish={() => unwish(it)} wishLabel="찜 해제">
                   {/* 찜 목록에서는 바로 담을 수 있게 — 다시 누르면 뺀다 */}
                   <button
                     type="button"
@@ -174,7 +190,7 @@ export default function WishPage() {
                       has || soldOut || short ? "bg-[#f2f2f2] text-[#a3a3a3]" : inCart ? "bg-[#131313] text-white hover:bg-black" : "border border-[#a3a3a3] text-[#131313] hover:border-[#131313]"
                     }`}
                   >
-                    {has ? "보유 중" : soldOut ? "품절" : inCart ? "담김 · 빼기" : short ? "빙옥 부족" : "장바구니에 담기"}
+                    {has ? "보유 중" : soldOut ? "품절" : inCart ? "담김 · 빼기" : short ? "빙옥 부족" : bundle ? "바로 구매" : "장바구니에 담기"}
                   </button>
                 </ProductCard>
               );

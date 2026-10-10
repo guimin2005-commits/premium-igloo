@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ICON_PATHS } from "../components/Icons";
 import { isTimed, durationLabel, cardPick, cardFrom, discountPctOf, shownPrice, priceUnit, priceText } from "@/lib/shopPricing";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
+import { isBundle, BUNDLE_TYPE } from "@/lib/bundle";
 import CardArt from "./CardArt";
 
 // 📌 상품 카드 한 벌 — 상점 목록 · ARCTIC 홈 · 찜 · 상품 상세의 '다른 상품'이 모두 이 카드를 쓴다(곳마다 모양이 갈라지지 않게).
@@ -17,10 +18,20 @@ import CardArt from "./CardArt";
 //       컨테이너 쿼리를 모르는 옛 브라우저는 작은 쪽 값 그대로 — 깨지지는 않는다.
 type Pick = { days?: number; price: number; list: number };
 
+// 📌 세트 상품(lib/bundle.js · type "bundle")은 lib/items.js 유형 목록에 없다 — 라벨 · 색만 여기서 더한다(나머지 유형은 lib/items.js 그대로).
+//    상점 카드 · 상세 · 결제 · 구매 내역이 이 두 함수를 같이 쓴다
+export const BUNDLE_LABEL = "세트";
+export const BUNDLE_COLOR = "#b0701b";
+export const typeLabelOf = (type: string) => (type === BUNDLE_TYPE ? BUNDLE_LABEL : itemTypeLabel(type));
+export const typeColorOf = (type: string) => (type === BUNDLE_TYPE ? BUNDLE_COLOR : itemTypeColor(type));
+// 세트 구성 수 — 목록 API 의 bundleItems(없으면 저장값 bundle)
+export const bundleCountOf = (it: { bundleItems?: unknown; bundle?: unknown } | null | undefined) =>
+  Array.isArray(it?.bundleItems) ? it.bundleItems.length : Array.isArray(it?.bundle) ? it.bundle.length : 0;
+
 export function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
   return (
-    <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
-      {itemTypeLabel(type)}
+    <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: typeColorOf(type) }}>
+      {typeLabelOf(type)}
     </span>
   );
 }
@@ -42,6 +53,9 @@ export default function ProductCard({
   const pick = pickIn || cardPick(it) || { days: undefined, price: 0, list: 0 };
   const from = cardFrom(it, pick);
   const pct = pick.price < pick.list ? discountPctOf(it) : 0;
+  // 📌 세트 — 가진 구성만큼 깎은 값(pick — owned.ts bundlePickOf)에도 정가 취소선을 단다. 할인율은 할인 중일 때만(할인 표기 그대로)
+  const bundle = isBundle(it);
+  const struck = bundle ? pick.price < pick.list : pct > 0;
   return (
     <div className={`@container group relative flex flex-col ${className}`}>
       <Link href={href} className="block relative aspect-square overflow-hidden rounded-md bg-[#f2f2f2]">
@@ -66,13 +80,15 @@ export default function ProductCard({
       <Link href={href} className="block mt-2.5 @min-[180px]:mt-3">
         {/* 이름 앞에 분류 — 무엇을 사는 것인지 이름만으로는 모른다 */}
         <TypeBadge type={it.type} className="inline-block mb-1.5 px-2 py-[3px] text-[10px] leading-none align-middle" />
+        {/* 세트는 유형 옆에 구성 수 — 이름 · 가격 자리는 다른 카드와 같다 */}
+        {bundle && <span className="inline-block mb-1.5 ml-1.5 text-[10.5px] font-bold text-[#8a8a8a] leading-none align-middle whitespace-nowrap">아이템 {bundleCountOf(it)}개</span>}
         {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}
         <h3 className="text-[12.5px] @min-[180px]:text-[13px] font-semibold text-[#5a5a5a] leading-snug line-clamp-2 break-keep">{it.name}</h3>
         {/* 할인 중이면 정가는 취소선으로 가격 위에(사용자 결정 — 아래로 내리면 어색), 할인율은 빨간 글자, 큰 숫자는 할인가.
             가격 줄 높이를 맞추려고 할인 없는 카드에 빈 줄을 두지는 않는다(이름-가격 사이가 떠 보여 반려) */}
         {/* 빙옥 전용 상품은 같은 규칙에 단위만 빙옥 (priceText · shownPrice — 올림) */}
-        {pct > 0 && <s className="block mt-2 text-[11px] text-[#a3a3a3] tabular-nums leading-none">{priceText(it, Number(pick.list || 0))}</s>}
-        <p className={`${pct > 0 ? "mt-1" : "mt-2"} text-[17px] @min-[180px]:text-[18px] @max-[150px]:text-[16px] font-black text-[#131313] tabular-nums leading-none`}>
+        {struck && <s className="block mt-2 text-[11px] text-[#a3a3a3] tabular-nums leading-none">{priceText(it, Number(pick.list || 0))}</s>}
+        <p className={`${struck ? "mt-1" : "mt-2"} text-[17px] @min-[180px]:text-[18px] @max-[150px]:text-[16px] font-black text-[#131313] tabular-nums leading-none`}>
           {/* 숫자 · 단위 · 기간은 각각 한 덩어리 — 좁은 칸(폰 2열 · 상세의 다른 상품)에서 "30 / 일"처럼 중간이 끊기지 않게, 넘치면 기간 덩어리째 다음 줄 */}
           {/* 📌 할인율도 한 덩어리 — 아주 좁은 칸(320px 폰 134px · 태블릿 홈 반반 143px)에서 할인율 + 8~9자리 값이 칸을 넘으면
                  카드 밖으로 삐져나와 옆 카드에 겹쳤다. 할인율 뒤(<wbr>)에서만 줄을 바꾼다 — 칸 안에 들어가면 지금과 같은 한 줄 */}

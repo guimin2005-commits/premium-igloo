@@ -12,6 +12,8 @@ import { isBackdropKey } from "@/lib/itemBackdrops";
 import mongoose from "mongoose";
 import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
+import { BUNDLE_TYPE, normalizeBundle, componentProblem, partialValues } from "@/lib/bundle";
+import { withBundleItems, stackableIdsOf } from "@/lib/bundleServer";
 
 // ── [조회] 상품 목록 — 공개 전에는 관리자만, 일반 유저는 판매 중인 상품만 ──
 export async function GET(request) {
@@ -39,7 +41,8 @@ export async function GET(request) {
     } catch (e) {
       console.error("상품 소모품 판정 오류:", e);
     }
-    const data = items.map((s) => (isUnitSale(s) || consumableIds.has(String(s.itemId || "")) ? { ...s, consumable: true } : s));
+    let data = items.map((s) => (isUnitSale(s) || consumableIds.has(String(s.itemId || "")) ? { ...s, consumable: true } : s));
+    data = await withBundleItems(data);
 
     return NextResponse.json({ success: true, data });
   } catch (e) {
@@ -58,7 +61,9 @@ export async function POST(request) {
     // 📌 등록된 아이템을 골랐으면 표기(이름·설명·아이콘·색·유형·역할·시즌 떼기)는
     //    서버가 Item 에서 다시 읽어 복사한다 — 클라이언트가 보낸 값은 믿지 않는다.
     //    상품 이미지(imageUrl)만은 상품 고유 값이라 연동 여부와 상관없이 클라이언트 값을 쓴다.
-    const itemId = String(b.itemId || "").trim();
+    // 📌 세트 상품(lib/bundle.js)은 아이템 하나에 연결하지 않는다 — 구성(bundle)이 아이템 목록이다
+    const wantsBundle = b.type === BUNDLE_TYPE;
+    const itemId = wantsBundle ? "" : String(b.itemId || "").trim();
     let linked = null;
     if (itemId) {
       linked = await Item.findById(itemId).lean().catch(() => null);
@@ -91,7 +96,25 @@ export async function POST(request) {
       if (!Number.isFinite(t.getTime())) return NextResponse.json({ success: false, message: "할인 종료 시각을 다시 확인해 주세요." }, { status: 400 });
       discountUntil = t;
     }
-    const type = isItemType(b.type) ? b.type : "role";
+    const type = wantsBundle ? BUNDLE_TYPE : isItemType(b.type) ? b.type : "role";
+    // 📌 세트 구성 — 모양을 정리하고(normalizeBundle) 아이템이 실제로 있는지 · 넣을 수 있는지 본다(기프트카드 · 역할 아이템 여러 개는 안 됨)
+    let bundle = [];
+    if (wantsBundle) {
+      bundle = normalizeBundle(b.bundle);
+      if (bundle.length < 2) {
+        return NextResponse.json({ success: false, message: "세트에는 아이템을 2개 이상 넣어야 합니다." }, { status: 400 });
+      }
+      if (partialValues(bundle)) {
+        return NextResponse.json({ success: false, message: "몸값은 모든 구성에 적거나 모두 비워 주세요." }, { status: 400 });
+      }
+      const found = await Item.find({ _id: { $in: bundle.map((c) => c.itemId) } }, { name: 1, type: 1, roleId: 1, effects: 1 }).lean();
+      const byId = new Map(found.map((i) => [String(i._id), i]));
+      const stack = await stackableIdsOf(found);
+      for (const c of bundle) {
+        const why = componentProblem(c, byId.get(c.itemId), { stackable: stack.has(c.itemId) });
+        if (why) return NextResponse.json({ success: false, message: why }, { status: 400 });
+      }
+    }
     // 아이템은 역할이 있어도 되고 없어도 된다 — 사이트 인벤토리에만 두는 수집품도 판다
     const grantsRole = type === "role" || type === "perk" || (type === "item" && !!b.roleId?.trim());
     const roleRequired = type === "role" || type === "perk";
@@ -102,7 +125,7 @@ export async function POST(request) {
     // 📌 1개 단위 판매(lib/unitSale.js) — 역할 없는 아이템 · 꾸미기만. 연결 아이템이면 위에서 덮어쓴 스냅샷(유형 · 역할)으로 본다.
     //    켜면 기간제 가격표는 비운다(함께 켤 수 없다). 조건이 안 맞는데 켜서 보내면 조용히 끄지 않고 알린다
     const roleIdIn = grantsRole ? String(b.roleId || "").trim() : "";
-    const unitSale = !!b.unitSale;
+    const unitSale = !wantsBundle && !!b.unitSale;
     if (unitSale && !unitSaleAllowed(type, roleIdIn)) {
       return NextResponse.json({ success: false, message: "1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다." }, { status: 400 });
     }
@@ -111,7 +134,7 @@ export async function POST(request) {
     // 📌 기간제 역할 — 기간(일)과 값이 모두 있는 것만 판매 목록에 올린다.
     //    기프트카드 · 1개 단위는 기간 개념이 없으므로 무시한다.
     //    days 0 은 무제한(영구) 옵션이다. 기간 옵션과 나란히 팔 수 있다.
-    const durations = type !== "physical" && !unitSale && Array.isArray(b.durations)
+    const durations = type !== "physical" && !unitSale && !wantsBundle && Array.isArray(b.durations)
       ? b.durations
           .map((d) => ({ days: Math.max(0, Math.floor(Number(d?.days) || 0)), price: toXp(d?.price) }))
           .filter((d) => d.price > 0)
@@ -121,6 +144,7 @@ export async function POST(request) {
     const payload = {
       durations,
       unitSale,
+      bundle,
       maxPerOrder,
       itemId: linked ? String(linked._id) : "",
       itemImageUrl: linked ? String(linked.imageUrl || "").trim() : "",
@@ -140,7 +164,7 @@ export async function POST(request) {
       discountPct,
       discountUntil: discountPct > 0 ? discountUntil : null,
       // 시즌 전환 때 디스코드 역할만 뗄 대상인지 (권한 상품에는 켜면 안 된다)
-      detachOnSeason: type !== "perk" && type !== "physical" && type !== "cosmetic" && !!b.detachOnSeason,
+      detachOnSeason: type !== "perk" && type !== "physical" && type !== "cosmetic" && type !== BUNDLE_TYPE && !!b.detachOnSeason,
       // 빈 값이면 무제한(-1)
       stock: b.stock === "" || b.stock == null ? -1 : Math.max(-1, Math.floor(Number(b.stock))),
       active: b.active !== false,

@@ -143,7 +143,9 @@ async function payoutRows(userId, currency, { before, since, limit }) {
   });
 }
 
-const itemLabel = (p) => `${p.itemName || "상품"}${p.days > 0 ? ` (${p.days}일)` : ""}${p.n > 1 ? ` ×${p.n}` : ""}`;
+// 📌 세트 주문(lib/bundle.js — 구성마다 한 건, 같은 orderId · 같은 세트 상품)은 세트 이름(bundleName)만 — 구성 이름 · 기간 · 개수를 붙이지 않는다
+const itemLabel = (p) =>
+  p.bundleName ? p.bundleName : `${p.itemName || "상품"}${p.days > 0 ? ` (${p.days}일)` : ""}${p.n > 1 ? ` ×${p.n}` : ""}`;
 
 // 📌 주문 묶음 키 — 1개 단위 상품은 1개가 한 건이라, 한 결제(orderId)의 같은 상품은 한 줄로 묶는다(lib/orderGroups.js 와 같은 기준).
 //    orderId 가 없는 옛 건은 건마다 한 줄. extra: 묶음을 더 나눌 값(환불은 처리 시각까지 같아야 한 줄)
@@ -172,6 +174,7 @@ async function purchaseRows(userId, currency, { before, since, limit }) {
         itemName: { $first: "$itemName" },
         days: { $first: "$days" },
         renewOf: { $first: "$renewOf" },
+        bundleName: { $max: "$bundleName" },
       },
     },
     { $match: { amt: { $gt: 0 } } },
@@ -179,13 +182,17 @@ async function purchaseRows(userId, currency, { before, since, limit }) {
   ];
   if (limit) pipe.push({ $limit: limit });
   const rows = await Purchase.aggregate(pipe);
-  return rows.map((p) => ({
-    at: p.createdAt,
-    currency,
-    amount: -p.amt,
-    label: `${p.renewOf ? "연장" : "구매"} · ${itemLabel(p)}`,
-    kind: p.renewOf ? "renew" : "purchase",
-  }));
+  return rows.map((p) => {
+    // 세트는 구성 하나가 연장이어도 세트 구매 한 줄
+    const renew = !!p.renewOf && !p.bundleName;
+    return {
+      at: p.createdAt,
+      currency,
+      amount: -p.amt,
+      label: `${renew ? "연장" : "구매"} · ${itemLabel(p)}`,
+      kind: renew ? "renew" : "purchase",
+    };
+  });
 }
 
 // Purchase 취소 · 환불 — 결제 때 낸 값을 그대로 돌려받았다.
@@ -217,6 +224,7 @@ async function refundRows(userId, currency, { before, since, limit }) {
         status: { $first: "$status" },
         itemName: { $first: "$itemName" },
         days: { $first: "$days" },
+        bundleName: { $max: "$bundleName" },
       },
     },
     { $match: { amt: { $gt: 0 } } },

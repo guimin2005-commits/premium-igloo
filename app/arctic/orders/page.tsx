@@ -9,6 +9,21 @@ import ArcticFooter from "../ArcticFooter";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
 import { useGuestShopLogin } from "../useGuestShopLogin";
+import { BUNDLE_LABEL } from "../ProductCard";
+
+// 📌 세트 구성 건(bundleName — lib/bundle.js)은 한 결제가 같은 orderId + 같은 itemId(세트 상품 id)라 주문 묶음(lib/orderGroups.js)이 이미 한 줄로 모은다.
+//    그 줄은 세트 이름을 제목으로, 아래에 구성 아이템 이름(같은 아이템 여러 개는 ×N)을 적는다. 순서는 건 id 순(결제 API 가 구성 순서대로 만든다)
+type OrderRow = { _id?: unknown; itemRef?: unknown; itemName?: unknown };
+const bundleNamesOf = (rows: readonly OrderRow[]) => {
+  const out: { key: string; name: string; n: number }[] = [];
+  for (const r of [...rows].sort((a, b) => String(a._id).localeCompare(String(b._id)))) {
+    const key = String(r.itemRef || r.itemName || "");
+    const hit = out.find((x) => x.key === key);
+    if (hit) hit.n += 1;
+    else out.push({ key, name: String(r.itemName || "아이템"), n: 1 });
+  }
+  return out.map((x) => (x.n > 1 ? `${x.name} ×${x.n}` : x.name)).join(" · ");
+};
 
 const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
   pending: { label: "처리 대기", cls: "bg-[#fdf3e3] text-[#a8763a]", desc: "지급·발송을 준비하고 있습니다" },
@@ -127,19 +142,22 @@ export default function OrdersPage() {
             {shown.map((o) => {
               const meta = STATUS_META[o.status] || STATUS_META.pending;
               const sum = orderSummary(o);
+              const bundle = !!o.bundleName;
               return (
                 <div key={o._id} className="p-5">
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${meta.cls}`}>{meta.label}</span>
-                        <span className="text-[10px] font-bold text-[#8a8a8a]">{TYPE_LABEL[o.itemType] || "상품"}</span>
+                        <span className="text-[10px] font-bold text-[#8a8a8a]">{bundle ? BUNDLE_LABEL : TYPE_LABEL[o.itemType] || "상품"}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-[#131313] truncate">{o.itemName}</h3>
-                      {/* 여러 개 산 줄 — 수량과 쓴 · 돌려받은 개수. 한 개짜리 소모권은 썼으면 "사용함" */}
+                      <h3 className="text-sm font-bold text-[#131313] truncate">{bundle ? o.bundleName : o.itemName}</h3>
+                      {/* 세트 — 구성 아이템 이름들 */}
+                      {bundle && <p className="text-[12px] font-bold text-[#5a5a5a] mt-0.5 break-keep">{bundleNamesOf(o.rows || [])}</p>}
+                      {/* 여러 개 산 줄 — 수량과 쓴 · 돌려받은 개수. 한 개짜리 소모권은 썼으면 "사용함" (세트는 위에 구성이 있어 수량을 적지 않는다) */}
                       <p className="text-[11px] text-[#a3a3a3] mt-0.5 tabular-nums">
                         {fmtDate(o.createdAt)}
-                        {o.qty > 1 && ` · 수량 ${o.qty}`}
+                        {o.qty > 1 && !bundle && ` · 수량 ${o.qty}`}
                         {sum && ` · ${sum}`}
                         {o.qty === 1 && o.consumedAt && " · 사용함"}
                       </p>

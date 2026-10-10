@@ -13,7 +13,9 @@ import { itemTypeLabel } from "@/lib/items";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
-import { renewBaseOf, expiryLabel } from "../owned";
+import { renewBaseOf, expiryLabel, bundleViewOf } from "../owned";
+import { isBundle } from "@/lib/bundle";
+import { typeLabelOf } from "../ProductCard";
 import { isUnitSale, qtyCapOf } from "@/lib/unitSale";
 import { CART_KEY, CHECKOUT_KEY, readShopList, readShopRaw, writeShopList, removeShopKey, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
@@ -93,22 +95,54 @@ export default function CheckoutPage() {
 
   // 📌 수량은 결제 직전에도 한 번 더 맞춘다 — 1개 단위 상품은 1 ~ min(1회 최대, 재고), 나머지는 1(lib/unitSale.js).
   //    담아 둔 사이 관리자가 1회 최대를 줄였어도 화면 금액과 청구 금액이 같게(서버도 넘으면 400 으로 막는다)
+  //    📌 세트(lib/bundle.js)는 혼자일 때만 — 상품 상세 · 찜의 바로 구매로 들어온 한 줄. 장바구니 결제(api/shop/checkout)는 세트를 받지 않아
+  //       다른 상품과 섞여 있으면 뺀다(담기 길은 모두 막혀 있다 — 옛 저장값 대비)
   const rows = useMemo(
-    () => cart
-      .map((c) => {
-        const item = items.find((i) => i._id === c.itemId);
-        const q = Math.max(1, Math.floor(Number(c.qty) || 1));
-        return { ...c, item, qty: item && isUnitSale(item) ? Math.min(Math.max(1, qtyCapOf(item)), q) : 1 };
-      })
-      .filter((r) => r.item),
+    () => {
+      const list = cart
+        .map((c) => {
+          const item = items.find((i) => i._id === c.itemId);
+          const q = Math.max(1, Math.floor(Number(c.qty) || 1));
+          return { ...c, item, qty: item && isUnitSale(item) ? Math.min(Math.max(1, qtyCapOf(item)), q) : 1 };
+        })
+        .filter((r) => r.item);
+      return list.length > 1 ? list.filter((r) => !isBundle(r.item)) : list;
+    },
     [cart, items]
   );
+  // 📌 세트 바로 구매 — 값은 가진 구성만큼 깎은 값(owned.ts bundleViewOf — 결제 API 와 같은 bundleQuote), 결제는 바로 구매 API(api/shop/purchase).
+  //    쿠폰은 받지 않는다(바로 구매 API 에 쿠폰이 없다). 구성을 다 가졌으면 결제할 수 없다
+  const setRow = rows.length === 1 && isBundle(rows[0].item) ? rows[0] : null;
+  const localSetView = setRow ? bundleViewOf(orders, setRow.item, items) : null;
+  // 📌 세트 값은 서버 견적(api/shop/bundle-quote — 결제 API 와 같은 판정)을 쓴다. 화면 계산(내 구매 목록)은 옛 건 · 숨김 상품 · 목록 창 밖 건을
+  //    다 못 봐 서버 값과 어긋나면 결제가 늘 '가격이 바뀌었습니다'로 막혔다. 받기 전 · 실패하면 화면 계산 그대로
+  const setId = setRow?.itemId || "";
+  const [setQuote, setSetQuote] = useState<{ id: string; price: number; full: number; list: number; owned: number; all: boolean; states: string[] } | null>(null);
+  useEffect(() => {
+    if (!setId) return;
+    let alive = true;
+    fetch(`/api/shop/bundle-quote?id=${encodeURIComponent(setId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (alive && j?.success && j.data) setSetQuote({ id: setId, ...j.data }); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [setId, orders]);
+  const sq = setQuote && setQuote.id === setId ? setQuote : null;
+  const setView = localSetView
+    ? sq
+      ? { ...localSetView, states: localSetView.comps.map((_, i) => ({ state: sq.states[i] || "new" })), quote: { ...localSetView.quote, price: sq.price, full: sq.full, list: sq.list, owned: sq.owned, all: sq.all } }
+      : localSetView
+    : null;
+  const setPrice = setView ? Number(setView.quote.price) || 0 : 0;
+  const setAll = !!setView?.quote.all;
+  // 줄 판매가 — 세트는 이 사람이 낼 값, 나머지는 고른 기간의 판매가
+  const linePrice = (r: (typeof rows)[number]) => (setRow && r === setRow ? setPrice : salePrice(r.item, r.days));
   // 상품 합계(쿠폰 전, 일반 + 빙옥 전용 — XP 로 친 값). 쿠폰 조건 · 서버의 가격 확인(expectedSubtotal)이 이 값을 본다
-  const subtotal = rows.reduce((n, r) => n + salePrice(r.item, r.days) * r.qty, 0);
+  const subtotal = rows.reduce((n, r) => n + linePrice(r) * r.qty, 0);
   const count = rows.reduce((n, r) => n + r.qty, 0);
   const needsContact = rows.some((r) => r.item.type === "physical");
   // 📌 소모품(1회 소모권 · 보호막 — 상품 목록 API consumable)이 있으면 [필수] 확인 줄에 '사용 후 환불 불가'를 붙인다(바로 구매 창 · 상품 상세와 같은 안내)
-  const hasConsumable = rows.some((r) => !!r.item.consumable);
+  const hasConsumable = rows.some((r) => !!r.item.consumable || (isBundle(r.item) && Array.isArray(r.item.bundleItems) && r.item.bundleItems.some((c: { consumable?: boolean }) => !!c?.consumable)));
   // 📌 빙옥 전용 줄은 빙옥으로만, 나머지 줄은 XP + 고른 빙옥 — 서버(api/shop/checkout)와 같은 함수(lib/shopPay planPayment)
   //    쿠폰은 planPayment 가 범위대로 잰다 — XP · 빙옥은 주문 전체 판매가 비율로 줄마다(빙옥 전용 줄 몫은 빙옥이 그만큼 줄어든다 — 올림),
   //    XP 전용은 XP 로 내는 금액에서만, 빙옥 전용은 빙옥으로 내는 금액에서만(서버와 같은 계산)
@@ -116,10 +150,10 @@ export default function CheckoutPage() {
   const poRows = rows.filter((r) => isPointOnly(r.item));
   const hasNormal = normalRows.length > 0;
   const hasPO = poRows.length > 0;
-  const planLines = rows.flatMap((r) => Array.from({ length: r.qty }, () => ({ price: salePrice(r.item, r.days), pointOnly: isPointOnly(r.item) })));
+  const planLines = rows.flatMap((r) => Array.from({ length: r.qty }, () => ({ price: linePrice(r), pointOnly: isPointOnly(r.item) })));
   type CouponSpecIn = { type: string; value: number; maxDiscount?: number; payScope?: string } | null | undefined;
   const couponSpec = (c: CouponSpecIn) => (c ? { type: c.type, value: c.value, maxDiscount: c.maxDiscount || 0, payScope: c.payScope || "both" } : null);
-  const plan = planPayment({ lines: planLines, coupon: couponSpec(coupon), pointUse, pointBalance: myPoint ?? 0 });
+  const plan = planPayment({ lines: planLines, coupon: setRow ? null : couponSpec(coupon), pointUse, pointBalance: myPoint ?? 0 });
   const couponDiscount = coupon ? plan.discount : 0;
   // 📌 범위 쿠폰(XP 전용 · 빙옥 전용)은 그 수단으로 낼 금액이 없으면 0 — 결제 API 도 거절한다. 카드에 짧게 알린다
   //    빙옥 전용 쿠폰의 할인이 1 빙옥이 안 되고 올릴 수도 없으면 그 이유(plan.couponReject — 결제 API 와 같은 문구)
@@ -127,7 +161,9 @@ export default function CheckoutPage() {
   // 보유 쿠폰 목록의 예상 할인 — 지금 장바구니 · 고른 빙옥으로 같은 계산(범위 쿠폰은 서버의 주문 전체 값과 다르다)
   const walletDisc = (w: CouponSpecIn) => planPayment({ lines: planLines, coupon: couponSpec(w), pointUse, pointBalance: myPoint ?? 0 });
   const listTotal = normalRows.reduce((n, r) => n + basePrice(r.item, r.days) * r.qty, 0);
-  const itemDiscount = listTotal - plan.normalSubtotal;
+  // 세트 — 가진 구성만큼 깎은 몫은 상품 할인과 따로 한 줄(보유 제외)
+  const setOwnedCut = setView && setRow && !isPointOnly(setRow.item) ? Math.max(0, (Number(setView.quote.full) || 0) - setPrice) : 0;
+  const itemDiscount = listTotal - plan.normalSubtotal - setOwnedCut;
   const couponXp = plan.normalDiscount; // 쿠폰 할인 중 일반 줄 몫(XP)
   const couponPoint = plan.pointOnlyListPoint - plan.pointOnlyPoint; // 쿠폰 할인 중 빙옥 전용 줄 몫(빙옥)
   const poPoint = plan.pointOnlyPoint;
@@ -225,15 +261,23 @@ export default function CheckoutPage() {
     const w = wallet.find((x: any) => x.id === pendingCouponId);
     if (w) pickCoupon(w);
   };
-  const canPay = rows.length > 0 && enoughXp && agreeTerms && agreeFinal && (!needsContact || contact.trim().length > 0) && !isPaying;
+  const canPay = rows.length > 0 && !setAll && enoughXp && agreeTerms && agreeFinal && (!needsContact || contact.trim().length > 0) && !isPaying;
 
   const pay = async () => {
     if (!canPay) return;
     setIsPaying(true);
     const lines = rows.map((r) => ({ itemId: r.itemId, qty: r.qty, days: r.days || 0 }));
-    const orderId = orderIdFor(JSON.stringify([...lines].sort((a, b) => a.itemId.localeCompare(b.itemId) || a.days - b.days)));
+    // 주문 id 는 장바구니 결제만(세트 바로 구매는 서버가 정한다)
+    const orderId = setRow ? "" : orderIdFor(JSON.stringify([...lines].sort((a, b) => a.itemId.localeCompare(b.itemId) || a.days - b.days)));
     try {
-      const res = await fetch("/api/shop/checkout", {
+      // 📌 세트는 바로 구매 API — 화면에서 본 값(가진 구성만큼 깎은 값)을 expectedPrice 로. 다르면 서버가 409(PRICE_CHANGED)로 돌려보낸다
+      const res = setRow
+        ? await fetch("/api/shop/purchase", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ itemId: setRow.itemId, pointUse: usePoint, expectedPrice: setPrice, expectedPointOnly: isPointOnly(setRow.item) }),
+          })
+        : await fetch("/api/shop/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // 화면에 보이는 줄만 보낸다 — 저장소에 남은 옛 항목(지금은 없는 상품)이 결제 요청에 섞이지 않게
@@ -244,7 +288,7 @@ export default function CheckoutPage() {
       setResult({ ok: !!d.success, message: d.message || (d.success ? "결제가 완료되었습니다." : "결제에 실패했습니다.") });
       if (d.code === "PRICE_CHANGED") { setPointUse(0); setReloadKey((k) => k + 1); }
       if (d.success) {
-        try { localStorage.removeItem(ORDER_KEY); } catch {}
+        try { if (!setRow) localStorage.removeItem(ORDER_KEY); } catch {}
         const paidIds = new Set(cart.map((c) => c.itemId));
         const all = readShopList<{ itemId: string; qty: number }>(CART_KEY, shopUid);
         writeShopList(CART_KEY, shopUid, all.filter((c) => !paidIds.has(c.itemId)));
@@ -343,6 +387,45 @@ export default function CheckoutPage() {
               </div>
               <div className="divide-y divide-[#ededed]">
                 {rows.map((r) => {
+                  // 📌 세트 한 줄 — 세트 이름 · 값(가진 구성만큼 깎은 값, 정가 취소선) + 아래에 구성 아이템(가진 것은 "보유 중 · 빠짐")
+                  if (setRow && setView && r === setRow) {
+                    const info = new Map<string, { name?: string }>((Array.isArray(r.item.bundleItems) ? r.item.bundleItems : []).map((c: { itemId: string; name?: string }) => [String(c.itemId), c]));
+                    const list = Number(setView.quote.list) || 0;
+                    return (
+                      <div key={r.itemId} className="px-6 py-4">
+                        <div className="flex gap-4 items-center">
+                          <div className="relative w-14 h-14 rounded-xl bg-[#f2f2f2] overflow-hidden shrink-0">
+                            <CardArt it={r.item} iconSize={28} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
+                            <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5 truncate">{typeLabelOf(r.item.type)} · 아이템 {setView.comps.length}개</p>
+                          </div>
+                          <div className="relative text-right shrink-0">
+                            <div className="text-sm font-black tabular-nums">{shownPrice(r.item, setPrice).toLocaleString()} {priceUnit(r.item)}</div>
+                            {setPrice < list && (
+                              <div className="absolute right-0 top-full whitespace-nowrap text-[10px] text-[#a3a3a3] line-through tabular-nums">{shownPrice(r.item, list).toLocaleString()} {priceUnit(r.item)}</div>
+                            )}
+                          </div>
+                        </div>
+                        <ul className="mt-4 pl-[72px] space-y-1.5">
+                          {setView.comps.map((c, i) => {
+                            const st = String(setView.states[i]?.state || "new");
+                            return (
+                              <li key={c.itemId} className="flex items-baseline justify-between gap-3 text-[12px]">
+                                <span className={`min-w-0 truncate font-bold ${st === "owned" ? "text-[#a3a3a3]" : "text-[#5a5a5a]"}`}>
+                                  {info.get(c.itemId)?.name || "아이템"}{c.qty > 1 ? ` ×${c.qty}` : ""}
+                                </span>
+                                <span className={`shrink-0 text-[11px] font-bold tabular-nums ${st === "renew" || st === "upgrade" ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
+                                  {st === "owned" ? "보유 중 · 빠짐" : st === "renew" ? `${durationLabel(c.days)} 연장` : st === "upgrade" ? "무제한 전환" : durationLabel(c.days)}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  }
                   // 연장 — 기간제를 가진 상품을 기간제로 산다. 새 만료 = 지금 가장 늦은 만료 + 고른 일수 (서버와 같은 계산)
                   const base = (r.days ?? 0) > 0 ? renewBaseOf(orders, r.item) : null;
                   return (
@@ -417,8 +500,8 @@ export default function CheckoutPage() {
             <div className="bg-white rounded-2xl border border-[#ededed] p-6 lg:sticky lg:top-24">
               <h2 className="text-sm font-black text-[#131313] mb-5">결제 정보</h2>
 
-              {/* 쿠폰 — 보유 쿠폰에서 고르거나 코드 입력 (선택) */}
-              <div className="mb-5">
+              {/* 쿠폰 — 보유 쿠폰에서 고르거나 코드 입력 (선택). 세트 바로 구매는 쿠폰을 받지 않아 칸이 없다 */}
+              {!setRow && <div className="mb-5">
                 <label className="block text-[11px] font-bold text-[#5a5a5a] mb-2">쿠폰 <span className="text-[#a3a3a3] font-medium">(선택)</span></label>
 
                 {coupon ? (
@@ -525,7 +608,7 @@ export default function CheckoutPage() {
                   </>
                 )}
                 {couponMsg && <p className={`mt-2 text-[11px] font-bold ${couponMsgOk ? "text-[#3f7a35]" : "text-[#d01634]"}`}>{couponMsg}</p>}
-              </div>
+              </div>}
 
               {/* 📌 빙옥 사용 — 원하는 만큼 쓰고 나머지는 XP 로. 바로 구매 창(ArcticShopBody)과 같은 모양.
                      빙옥 전용 상품만 있으면 고를 게 없어 감춘다 */}
@@ -555,6 +638,10 @@ export default function CheckoutPage() {
                 )}
                 {itemDiscount > 0 && (
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">상품 할인</span><span className="font-bold text-[#d01634] tabular-nums">-{itemDiscount.toLocaleString()} XP</span></div>
+                )}
+                {/* 세트 — 이미 가진 구성만큼 깎은 값 */}
+                {setOwnedCut > 0 && (
+                  <div className="flex justify-between"><span className="text-[#5a5a5a]">보유 제외</span><span className="font-bold text-[#d01634] tabular-nums">-{setOwnedCut.toLocaleString()} XP</span></div>
                 )}
                 {hasPO && (
                   <div className="flex justify-between"><span className="text-[#5a5a5a]">빙옥 전용 · {poRows.reduce((n, r) => n + r.qty, 0)}개</span><span className="font-bold tabular-nums">{plan.pointOnlyListPoint.toLocaleString()} 빙옥</span></div>
@@ -619,6 +706,7 @@ export default function CheckoutPage() {
                   canPay ? "bg-[#e91e3f] text-white hover:bg-[#d01634]" : "bg-[#f2f2f2] text-[#a3a3a3] cursor-not-allowed"
                 }`}>
                 {isPaying ? "결제 중..."
+                  : setAll ? "보유 중"
                   : pointShort ? "빙옥이 부족합니다"
                   : !enoughXp ? "XP가 부족합니다"
                   : pointAll === 0 && hasNormal ? `${chargedXp.toLocaleString()} XP 결제하기`
@@ -626,7 +714,7 @@ export default function CheckoutPage() {
                   : "결제하기"}
               </button>
 
-              {!canPay && enoughXp && !isPaying && (
+              {!canPay && enoughXp && !isPaying && !setAll && (
                 <p className="mt-3 text-center text-[11px] text-[#8a8a8a]">
                   {needsContact && !contact.trim() ? "수령 정보를 입력해주세요" : "필수 약관에 동의해주세요"}
                 </p>

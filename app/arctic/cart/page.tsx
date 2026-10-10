@@ -13,6 +13,7 @@ import { ITEM_TYPE_LABEL, itemTypeColor } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { isRenewal } from "../owned";
+import { isBundle } from "@/lib/bundle";
 import { CART_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
 
@@ -65,7 +66,8 @@ export default function CartPage() {
     ]).then(([it, me, ord]) => {
       const list = Array.isArray(it?.data) ? it.data : [];
       setItems(list);
-      if (it?.success && Array.isArray(it?.data)) setValidIds(new Set(list.map((i: any) => String(i._id))));
+      // 📌 세트(lib/bundle.js)는 장바구니에 둘 수 없다(바로 구매만) — 기준에서 빼 두면 아래 정리가 담겨 있던 세트를 뺀다
+      if (it?.success && Array.isArray(it?.data)) setValidIds(new Set(list.filter((i: { type?: string }) => !isBundle(i)).map((i: { _id: string }) => String(i._id))));
       if (me?.success) { setMyXp(me.data.xp); setMyPoint(me.data.point || 0); }
       setOrders(Array.isArray(ord?.data) ? ord.data : []);
     }).finally(() => setIsLoading(false));
@@ -107,7 +109,7 @@ export default function CartPage() {
   };
 
   const rows = useMemo(
-    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item),
+    () => cart.map((c) => ({ ...c, item: items.find((i) => i._id === c.itemId) })).filter((r) => r.item && !isBundle(r.item)),
     [cart, items]
   );
 

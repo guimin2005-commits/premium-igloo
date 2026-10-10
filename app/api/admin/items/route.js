@@ -84,6 +84,9 @@ export async function GET(request) {
         { $group: { _id: "$itemId", count: { $sum: 1 } } },
       ]);
       const countOf = new Map(usage.map((u) => [String(u._id), u.count]));
+      // 세트 구성(bundle.itemId)으로 쓰는 것도 '쓰는 상품'으로 센다(삭제 확인과 같은 기준)
+      const inSets = await ShopItem.aggregate([{ $match: { type: "bundle" } }, { $unwind: "$bundle" }, { $group: { _id: "$bundle.itemId", count: { $sum: 1 } } }]);
+      for (const u of inSets) countOf.set(String(u._id), (countOf.get(String(u._id)) || 0) + u.count);
       const passOf = await passUsageOf();
       for (const r of rows) {
         r.usage = countOf.get(String(r._id)) || 0;
@@ -124,6 +127,10 @@ export async function POST(request) {
       //    쓰고 나도 역할이 남는다(소모품과 같은 이유). 상품의 판매 방식을 먼저 바꾸게 한다(lib/unitSale.js)
       if (id && mongoose.isValidObjectId(id) && (await ShopItem.exists({ itemId: id, unitSale: true }))) {
         return NextResponse.json({ success: false, message: "1개 단위로 파는 상품이 있어 역할을 연결할 수 없습니다." }, { status: 400 });
+      }
+      // 📌 세트(lib/bundle.js)에 2개 이상으로 든 아이템도 같은 이유로 역할을 붙이지 않는다(한 결제가 역할 아이템을 여러 건 준다)
+      if (id && mongoose.isValidObjectId(id) && (await ShopItem.exists({ type: "bundle", bundle: { $elemMatch: { itemId: id, qty: { $gt: 1 } } } }))) {
+        return NextResponse.json({ success: false, message: "여러 개를 넣은 세트가 있어 역할을 연결할 수 없습니다." }, { status: 400 });
       }
     }
     let doc;
@@ -179,7 +186,8 @@ export async function DELETE(request) {
     const id = String(new URL(request.url).searchParams.get("id") || "").trim();
     if (!id) return NextResponse.json({ success: false, message: "삭제할 아이템을 지정해 주세요." }, { status: 400 });
 
-    const used = await ShopItem.countDocuments({ itemId: id });
+    // 세트 구성(bundle.itemId)으로 쓰는 상품도 센다 — 지우면 그 세트는 "구성을 확인할 수 없습니다"로 팔리지 않는다
+    const used = await ShopItem.countDocuments({ $or: [{ itemId: id }, { "bundle.itemId": id }] });
     if (used > 0) {
       return NextResponse.json(
         { success: false, message: `이 아이템을 쓰는 상품 ${used}개를 먼저 정리해 주세요.`, usage: used },

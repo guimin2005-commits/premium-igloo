@@ -134,7 +134,7 @@ export async function GET() {
         cardSkin,
         // 지금 쓰는 아바타 테두리 키("" 이면 없음) — public/avatar-borders/<키>.svg
         avatarFrame,
-        // 승급 화면을 본 가장 높은 등급 인덱스(null = 아직 안 적음) — app/level/PromoOverlay
+        // 승급 화면을 마지막으로 본 등급 인덱스(null = 아직 안 적음) — app/level/PromoOverlay
         promoSeen: Number.isInteger(doc?.promoSeen) ? doc.promoSeen : null,
         rolesSynced: heldRoles !== null,
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP

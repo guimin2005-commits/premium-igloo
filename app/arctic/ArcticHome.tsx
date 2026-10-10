@@ -7,6 +7,8 @@ import BannerSlider from "./BannerSlider";
 import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText, salePrice, basePrice } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
+import { isBundle } from "@/lib/bundle";
+import { bundleCountOf } from "./ProductCard";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
 
@@ -273,7 +275,7 @@ export default function ArcticHome({
                 {deal.kind === "sale"
                   // 카드와 같은 값(cardPick — 기본 무제한) — 한 상품이 곳마다 다른 값으로 보이지 않게
                   //    빙옥 전용 상품은 단위만 빙옥 (priceText — 올림)
-                  ? `${shownPrice(deal.it, cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${priceText(deal.it, cardPick(deal.it)?.price ?? 0)}${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""}${isUnitSale(deal.it) ? ` · 1회 최대 ${maxPerOrderOf(deal.it)}개` : " · 1인 1개"}`
+                  ? `${shownPrice(deal.it, cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${priceText(deal.it, cardPick(deal.it)?.price ?? 0)}${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""}${isBundle(deal.it) ? ` · 아이템 ${bundleCountOf(deal.it)}개` : isUnitSale(deal.it) ? ` · 1회 최대 ${maxPerOrderOf(deal.it)}개` : " · 1인 1개"}`
                   : priceText(deal.it, cardPick(deal.it)?.price ?? 0)}
               </p>
               <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">

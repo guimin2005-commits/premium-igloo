@@ -22,6 +22,193 @@ import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal"
 import { stripAdminTag, isAdminName } from "@/lib/admins";
 import { REFUND_MARK_RE, CLEANUP_MARK_RE } from "@/lib/roleMigrationTerms";
 import mongoose from "mongoose";
+import { isBundle, bundleUnits, splitAmount } from "@/lib/bundle";
+import { bundleStateFor } from "@/lib/bundleServer";
+
+// 캐시백 % · 설정 · XP 획득 중단 — 이번 결제 전에 가진 것으로 정한다(아래 POST 와 같은 규칙). 읽지 못하면 캐시백 없이
+async function cashbackPlan(userId) {
+  const [perkPct, cashRule, xpStopped] = await Promise.all([
+    getPerks(userId)
+      .then((p) => p.shopCashback || 0)
+      .catch((e) => { console.error("캐시백 조회 실패:", e); return 0; }),
+    BotSetting.findOne({ key: "main" }, { shopCashbackCap: 1, cashbackOnPoint: 1 }).lean()
+      .then(cashbackRuleOf)
+      .catch((e) => { console.error("캐시백 설정 조회 실패:", e); return cashbackRuleOf(null); }),
+    activeXpStopUntil(userId)
+      .then((until) => !!until)
+      .catch((e) => { console.error("XP 획득 중단 조회 실패:", e); return true; }),
+  ]);
+  return { cashPct: xpStopped ? 0 : Math.min(perkPct, cashRule.cap), cashRule };
+}
+
+// ── [구매 · 세트] 구성 아이템을 한 결제로 — 가진 구성은 빼고 그만큼 깎는다(lib/bundle.js). 낱개 구매와 같은 자물쇠 · 재고 · 지갑 · 캐시백 순서 ──
+//    건마다 itemId = 세트 상품, itemRef = 구성 아이템, bundleName = 세트 이름, 같은 orderId, 첫 건만 bundleHead.
+//    낸 값(price · paidXp · paidPoint · cashbackXp)은 구성 몸값 비율로 나눠 적는다(합이 정확히 결제액) — 건마다 환불해도 낸 만큼만 돌아간다
+async function buyBundle({ session, userId, item, body }) {
+  let lock = null;
+  try {
+    // 📌 유저 자물쇠 — 보유 확인부터 기록까지 다른 결제가 끼지 못하게(낱개 구매와 같다)
+    lock = await ShopLock.acquire(userId);
+    if (!lock) {
+      return NextResponse.json({ success: false, message: "처리 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요." }, { status: 409 });
+    }
+    // 구성 · 보유 판정 · 값 — 견적 API 와 같은 함수(lib/bundleServer bundleStateFor)
+    const st = await bundleStateFor(userId, item);
+    if (!st.ok) {
+      return NextResponse.json({ success: false, message: st.why === "empty" ? "세트 구성이 비어 있습니다." : "세트 구성을 확인할 수 없습니다. 운영진에게 문의해 주세요." }, { status: 409 });
+    }
+    const { comps, byId, states, quote } = st;
+
+    if (quote.all) {
+      return NextResponse.json({ success: false, message: "세트 안의 아이템을 이미 모두 가지고 있습니다." }, { status: 409 });
+    }
+
+    // 가격 — 화면에서 본 값(가진 만큼 깎은 값)과 다르면 결제하지 않는다
+    const price = quote.price;
+    if (body?.expectedPrice != null && Number(body.expectedPrice) !== price) {
+      return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "가격이 바뀌었습니다. 바뀐 금액을 확인하고 다시 구매해 주세요." }, { status: 409 });
+    }
+    if (body?.expectedPointOnly != null && !!body.expectedPointOnly !== !!item.pointOnly) {
+      return NextResponse.json({ success: false, code: "PRICE_CHANGED", message: "결제 수단이 바뀌었습니다. 다시 확인하고 구매해 주세요." }, { status: 409 });
+    }
+
+    const { cashPct, cashRule } = await cashbackPlan(userId);
+
+    // 1) 재고 — 세트 한 번
+    if (item.stock >= 0) {
+      const claimed = await ShopItem.updateOne({ _id: item._id, stock: { $gt: 0 } }, { $inc: { stock: -1, soldCount: 1 } });
+      if (!claimed.modifiedCount) {
+        return NextResponse.json({ success: false, message: "품절된 상품입니다." }, { status: 409 });
+      }
+    } else {
+      await ShopItem.updateOne({ _id: item._id }, { $inc: { soldCount: 1 } });
+    }
+    const releaseStock = () =>
+      ShopItem.updateOne({ _id: item._id }, item.stock >= 0 ? { $inc: { stock: 1, soldCount: -1 } } : { $inc: { soldCount: -1 } });
+
+    // 2) 결제 — 낱개 구매와 같은 계약(lib/shopPay.js)
+    const pay = planPayment({
+      lines: [{ price, pointOnly: !!item.pointOnly }],
+      pointUse: body?.payMethod === "point" ? "max" : body?.pointUse,
+    });
+    const chargedXp = pay.chargedXp;
+    const pointUse = pay.point;
+    const payMethod = pay.payMethod;
+    const shortOf = (w) =>
+      (w?.point ?? 0) < pointUse ? "보유 빙옥이 부족합니다." : (w?.xp ?? 0) < chargedXp ? "보유 XP가 부족합니다." : "";
+    const wallet = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+    const short = shortOf(wallet);
+    if (short) {
+      await releaseStock();
+      return NextResponse.json({ success: false, message: short }, { status: 400 });
+    }
+    const filter = { userId };
+    const inc = {};
+    if (chargedXp > 0) { filter.xp = { $gte: chargedXp }; inc.xp = -chargedXp; inc.passBaseXp = -chargedXp; }
+    if (pointUse > 0) { filter.point = { $gte: pointUse }; inc.point = -pointUse; }
+    if (Object.keys(inc).length) {
+      const paid = await UserXp.updateOne(filter, { $inc: inc, $set: { updatedAt: new Date() } });
+      if (!paid.matchedCount) {
+        const now = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+        await releaseStock();
+        return NextResponse.json({ success: false, message: shortOf(now) || "보유 XP가 부족합니다." }, { status: 400 });
+      }
+    }
+
+    // 3) 구성 건 기록 — 가진 구성은 빼고, qty 는 1개씩. 낸 값은 몸값 비율로 나눈다
+    const units = bundleUnits(comps, states);
+    const w = units.map((u) => u.weight);
+    const priceSplit = splitAmount(price, w);
+    const xpSplit = splitAmount(chargedXp, w);
+    const pointSplit = splitAmount(pointUse, w);
+    const cashTotal = cashbackOf(cashbackBaseOf(chargedXp, pointUse, cashRule.onPoint), cashPct);
+    const cashSplit = splitAmount(cashTotal, w);
+    const ids = units.map(() => new mongoose.Types.ObjectId());
+    const orderId = String(ids[0]);
+    const docs = units.map((u, k) => {
+      const it = byId.get(u.comp.itemId);
+      const timing = timingOf(u.state.state === "renew" ? { renew: u.state.base } : {}, u.comp.days);
+      return {
+        _id: ids[k],
+        orderId,
+        userId,
+        userName: session.user.name || "",
+        itemId: String(item._id),
+        itemRef: u.comp.itemId,
+        itemName: it.name,
+        itemType: it.type,
+        roleId: it.roleId || "",
+        bundleName: item.name,
+        bundleHead: k === 0,
+        price: priceSplit[k],
+        payMethod,
+        pointOnly: !!item.pointOnly,
+        paidXp: xpSplit[k],
+        paidPoint: pointSplit[k],
+        billed: true,
+        cashbackXp: cashSplit[k],
+        days: u.comp.days,
+        expiresAt: timing.expiresAt,
+        renewOf: timing.renewOf,
+        startsAt: timing.startsAt,
+        status: "pending",
+      };
+    });
+    try {
+      await Purchase.insertMany(docs, { ordered: true });
+    } catch (e) {
+      await Purchase.deleteMany({ _id: { $in: ids } });
+      const back = Object.fromEntries(Object.entries(inc).map(([k, v]) => [k, -v]));
+      if (Object.keys(back).length) await UserXp.updateOne({ userId }, { $inc: back });
+      await releaseStock();
+      throw e;
+    }
+
+    // 4) 캐시백 — 결제 전체에 한 번(건마다 나눠 적어 둔 값의 합). 실패하면 건마다 0 으로
+    let cashbackGiven = 0;
+    if (cashTotal > 0) {
+      try {
+        const cb = await UserXp.updateOne({ userId }, { $inc: { xp: cashTotal, passBaseXp: cashTotal }, $set: { updatedAt: new Date() } });
+        if (!cb.matchedCount) throw new Error("지갑 문서 없음");
+        cashbackGiven = cashTotal;
+        await logWallet({
+          userId,
+          currency: "xp",
+          amount: cashTotal,
+          kind: "cashback",
+          label: `캐시백 · ${item.name}`,
+          refId: orderId,
+          meta: { pct: cashPct, purchaseIds: ids.map(String) },
+        });
+      } catch (e) {
+        console.error("캐시백 지급 실패:", e);
+        await Purchase.updateMany({ _id: { $in: ids } }, { $set: { cashbackXp: 0 } }).catch(() => {});
+      }
+    }
+
+    const doc = await UserXp.findOne({ userId }, { xp: 1, point: 1 }).lean();
+    if (chargedXp > 0 || cashbackGiven > 0) {
+      await UserXp.updateOne({ userId }, { $set: { level: getLevelByXp(doc?.xp ?? 0), needsRoleSync: true } });
+    }
+    const remain = { xp: doc?.xp ?? 0, point: doc?.point ?? 0 };
+    const skipped = quote.owned ? ` 이미 가진 ${quote.owned}개는 빼고 그만큼 깎았습니다.` : "";
+    const doneMsg = `세트 구매가 완료되었습니다. 아이템 ${units.length}개가 잠시 후 자동으로 지급됩니다.${skipped}`;
+    return NextResponse.json({
+      success: true,
+      message: cashbackGiven > 0 ? `${doneMsg} (캐시백 +${cashbackGiven.toLocaleString("ko-KR")} XP)` : doneMsg,
+      data: {
+        purchaseId: ids[0], orderId, purchaseIds: ids, payMethod,
+        charged: payMethod === "point" ? pointUse : chargedXp,
+        usedPoint: pointUse, chargedXp,
+        cashbackXp: cashbackGiven, cashbackPct: cashPct,
+        remain, remainXp: remain.xp, remainPoint: remain.point,
+        bundle: { granted: units.length, owned: quote.owned },
+      },
+    });
+  } finally {
+    if (lock) await ShopLock.release(lock);
+  }
+}
 
 // ── [구매] 본인 XP · 빙옥을 소모해 상품 구매 — pointUse: 쓸 빙옥 개수(나머지는 XP) ──
 //    역할 상품은 봇이 큐(status:pending)를 보고 자동 지급, 실물은 관리자가 발송 처리
@@ -60,6 +247,8 @@ export async function POST(request) {
     if (!item || !item.active) {
       return NextResponse.json({ success: false, message: "판매 중인 상품이 아닙니다." }, { status: 404 });
     }
+    // 📌 세트 상품 — 구성 아이템마다 한 건씩(lib/bundle.js). 자물쇠 · 결제 · 기록을 따로 처리한다
+    if (isBundle(item)) return await buyBundle({ session, userId, item, body });
     if (item.type === "physical" && !contact?.trim()) {
       return NextResponse.json({ success: false, message: "수령 정보를 입력해주세요." }, { status: 400 });
     }
