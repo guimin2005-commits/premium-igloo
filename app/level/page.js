@@ -23,7 +23,7 @@ import SystemGuide from "./SystemGuide";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
-import { PopShell, PopTab, AdminReset, POP_THEME } from "../components/PopShell";
+import { PopShell, AdminReset, POP_THEME } from "../components/PopShell";
 import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, keepSavedFrame, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
@@ -913,21 +913,42 @@ const ConfirmDialog = ({ state, onDone }) => {
   );
 };
 
-// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 바탕은 보라 · 별빛(POP_THEME.pass).
-//    위(요약): 봇 /시즌패스 카드 문법 + 티어 링 (2026-10-01 "봇 카드랑 동그란 디자인 합치기")
-//      눈썹(SEASON · 이름 · D-day) · 큰 제목 · 프리미엄 칩(잠겨 있으면 그 자리가 해금 단추)
-//      → 티어 링 | 다음 티어까지 | 받을 보상 → T7 ━ T8 막대 → 다음 보상 · T8(그 티어 보상 전부 — 무료 → 프리미엄)
-//    아래: 탭(전체 티어 / 받을 보상) + 가로 트랙 — 게임 배틀패스처럼 티어가 왼쪽 → 오른쪽(2026-10-01 "이 부분을 가로로 바꾸던지").
+// 📌 시즌 패스 창 — 카드의 "시즌 패스" 로 연다. 바탕은 보라 · 별빛(POP_THEME.pass) — 화려한 게 이 창의 정체성(2026-10-11 운영자 "시즌 패스는 화려한 게 특징").
+//    2026-10-11 운영자 확정 개선(시안 .claude/mockups/시즌패스-개선시안.png):
+//      머리 = 시즌 배너 그림(PASS_BANNER, 위에 해금 · 닫기 · D-day). 배너가 없는 시즌은 예전 머리(눈썹 · 큰 제목)
+//      → 진행도 하나로(티어 링 | "T8까지 6,500 XP" · 막대 하나) + 대표 보상 칸(앞으로 받을 가장 좋은 보상 하나 — passFeatureOf)
+//      → 「다음 보상 · T8」 칸은 뺌(아래 트랙 T8 칸과 같은 내용이라 트랙만 밀어냈다 — 이제 폰 첫 화면에도 트랙이 보인다)
+//      → 탭은 밑줄 탭(알약 말고) + 오른쪽 큰 「모두 받기」(받을 개수, 받을 게 없어도 자리는 지키고 흐리게) → 가로 트랙(스크롤바는 숨김 — 휠 · 끌기로 넘긴다)
+//    아래: 가로 트랙 — 게임 배틀패스처럼 티어가 왼쪽 → 오른쪽(2026-10-01 "이 부분을 가로로 바꾸던지").
 //      칸 하나 = 티어 하나: T 번호 · 필요 XP → 진행선 · 점 → 무료 줄 → 프리미엄 줄. 열면 다음 티어 칸이 가운데 오게 가로로 맞춘다
 //    틀은 PopShell 과 같은 문법이지만 왼쪽 | 오른쪽 두 판이 아니라 위 → 아래라 여기서 직접 짠다(PopShell 은 인벤토리 · 강화가 같이 쓴다)
 //    수령 · 해금 판정은 서버가 다시 한다 — 여기서는 서버가 준 상태만 그린다.
 const PASS_KIND_ICON = { xp: "bolt", point: "sparkles", role: "shieldCheck", item: "gift" };
 const CROWN = "M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z";
-const GlowRing = ({ id, from, to, pct = 0, pop = false, children }) => {
+// 📌 시즌 패스 창 머리 그림 — 시즌 번호 → 배너(public/banners, 2400×600). 새 시즌 배너를 만들면 여기 한 줄. 없는 시즌은 예전 머리로
+const PASS_BANNER = { 2: "/banners/season2-pass-pc.png" };
+// 📌 대표 보상 — 앞으로 받을(아직 못 넘은 티어) 보상 중 가장 좋은 것 하나: 꾸미기 → 아이템 → 역할 순, 같은 급이면 가까운 티어(같은 티어면 프리미엄 먼저).
+//    남은 게 XP · 빙옥뿐이면 null(칸을 숨긴다). 2026-10-11 운영자 — 최종 티어를 고정으로 띄우면 별것 없는 시즌엔 초라하다 · 여러 개면 하나만
+const passFeatureRank = (r) => (passCosmeticOf(r) ? 0 : r.kind === "item" ? 1 : r.kind === "role" ? 2 : -1);
+const passFeatureOf = (tiers, fromIdx) => {
+  let best = null;
+  for (let i = Math.max(0, fromIdx); i < tiers.length; i++) {
+    const t = tiers[i];
+    const list = [...(t.paid?.rewards || []).map((r) => ({ r, premium: true })), ...(t.free?.rewards || []).map((r) => ({ r, premium: false }))];
+    for (const u of list) {
+      const k = passFeatureRank(u.r);
+      if (k < 0 || u.r.claimed) continue; // 이미 받은 보상은 빼고(진행도가 내려가 못 넘은 티어가 된 경우)
+      if (!best || k < best.k) best = { ...u, k, level: t.level };
+    }
+  }
+  return best;
+};
+// 티어 링 — size 는 바깥 크기(폰 · PC 를 클래스로 따로 줄 수 있게)
+const GlowRing = ({ id, from, to, pct = 0, pop = false, size = "w-[136px] h-[136px]", children }) => {
   const R = 54;
   const C = 2 * Math.PI * R;
   return (
-    <div className="relative w-[136px] h-[136px] shrink-0" style={pop ? { animation: "ringPop .7s cubic-bezier(0.16,1,0.3,1)" } : undefined}>
+    <div className={`relative shrink-0 ${size}`} style={pop ? { animation: "ringPop .7s cubic-bezier(0.16,1,0.3,1)" } : undefined}>
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
@@ -986,33 +1007,6 @@ const PassTileBody = ({ r, big = false }) => {
   );
 };
 
-// 📌 다음 보상 한 칸 — 봇 /시즌패스 카드의 "다음 보상" 타일. 머리: 무료 / 왕관 프리미엄(잠겨 있으면 자물쇠 · 흐리게)
-//    티어 번호는 줄 이름("다음 보상 · T8")에 한 번만 — 다음 티어 한 칸의 보상만 늘어놓으니 타일마다 되풀이하지 않는다
-const PassNextTile = ({ r, premium = false, locked = false, peekKey = "", onPeek }) => {
-  const pk = `next:${premium ? "p" : "f"}:${r.key}`;
-  const named = passNamed(r);
-  const view = !!passCosmeticOf(r);
-  const Tag = named ? "button" : "div";
-  return (
-    <Tag
-      {...(named ? { type: "button", "aria-label": r.label, ...(view ? { "aria-haspopup": "dialog" } : {}), onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
-      className={`block w-full min-w-0 text-left rounded-2xl px-3.5 pt-2.5 pb-3 ${named ? PASS_PEEK_BTN : ""}`}
-      style={{ ...passChipBg(premium), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
-    >
-      {/* 머리 줄은 높이 고정(h-4) — 눈 · 자물쇠가 붙어도 아래 몸이 밀리지 않는다 */}
-      <div className={`flex items-center h-4 text-[11px] font-black ${premium ? "text-[#d9c6ff]" : "text-white/50"}`}>
-        {premium && <svg aria-hidden viewBox="0 0 24 24" className="mr-1 w-3 h-3 shrink-0" fill="currentColor"><path d={CROWN} /></svg>}
-        {premium ? "프리미엄" : "무료"}
-        {view && <span className="ml-auto inline-flex text-white/55">{PASS_EYE}</span>}
-        {locked && <span className={`${view ? "ml-1.5" : "ml-auto"} inline-flex text-white/45`}>{PASS_LOCK}</span>}
-      </div>
-      <div className={`mt-2 h-8 flex items-center min-w-0 ${locked ? "opacity-45" : ""}`}>
-        <PassTileBody r={r} big />
-      </div>
-    </Tag>
-  );
-};
-
 // 📌 이름 말풍선 — 이름이 긴 보상(아이템 · 역할)은 칸 안에서 두 줄로 잘린다. 칸을 누르면 그 자리 위(위가 좁으면 아래)에 전체 이름을 띄운다.
 //    칸 크기는 그대로라 트랙이 밀리지 않는다. 다른 곳 누르기 · 트랙 넘기기 · Esc 로 닫힌다(PassModal)
 const passNamed = (r) => r.kind !== "xp" && r.kind !== "point";
@@ -1052,8 +1046,8 @@ const PassPeek = ({ peek, boxW }) => {
 // 📌 가로 트랙 치수(px) — 칸 폭은 고정(보상 수가 달라도 옆 칸이 밀리지 않게), 무료 · 프리미엄 줄 높이는 전 티어 중 가장 많은 칸 기준.
 //    높이를 여기서 셈해 두면 탭(전체 / 받을 보상)을 바꿔도 트랙 높이가 그대로라 창이 출렁이지 않는다
 //    col 140 = 타일 128 — "1,000,000 빙옥" 이 잘리지 않는 폭
-//    bar = 가로 스크롤바 자리(얇은 스크롤바 + 여백) — 스크롤바가 생기든 말든 트랙 높이가 같게
-const PT = { col: 140, gap: 8, head: 40, line: 24, tile: 44, tileGap: 6, slot: 28, rowGap: 8, pad: 6, label: 22, bar: 20 };
+//    bar = 트랙 아래 여백 — 스크롤바는 숨긴다(2026-10-11 운영자 "휠 바 안 보이게", 휠 · 끌기 · 트랙패드로 넘긴다)
+const PT = { col: 140, gap: 8, head: 40, line: 24, tile: 44, tileGap: 6, slot: 28, rowGap: 8, pad: 6, label: 22, bar: 6 };
 const passRowH = (n) => n * PT.tile + (n - 1) * PT.tileGap + PT.tileGap + PT.slot;
 const PASS_VERTICAL = { writingMode: "vertical-rl", letterSpacing: "0.14em" };
 
@@ -1259,10 +1253,15 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
   // 받을 보상 — 무료 · 프리미엄 칸 수 (봇 카드 claimFree · claimPaid 와 같은 셈)
   const claimFree = tiers.filter((t) => t.free?.claimable).length;
   const claimPaid = tiers.filter((t) => t.paid?.claimable).length;
-  // 📌 다음 보상 — 다음 티어(지금 향해 가는 티어) 한 칸의 보상 전부, 무료 → 프리미엄 (2026-10-01 "이번 티어 보상만 보여주고")
-  const nextRewards = nextTier
-    ? [...(nextTier.free?.rewards || []).map((r) => ({ r, premium: false })), ...(nextTier.paid?.rewards || []).map((r) => ({ r, premium: true }))]
-    : [];
+  const claimN = claimFree + claimPaid;
+  // 📌 대표 보상 — 앞으로 받을 가장 좋은 보상 하나(passFeatureOf). 남은 게 XP · 빙옥뿐이면 칸을 숨긴다
+  const feature = passFeatureOf(tiers, nextIdx);
+  const featureKey = feature ? `feat:${feature.premium ? "p" : "f"}:${feature.r.key}` : "";
+  // 📌 머리 그림 — 시즌 배너(PASS_BANNER). 없는 시즌은 예전 머리(눈썹 · 큰 제목)
+  const banner = PASS_BANNER[seasonNo] || "";
+  const ddayLabel = dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`;
+  const md = (d) => (typeof d === "string" && d.length >= 10 ? `${d.slice(5, 7)}.${d.slice(8, 10)}` : "");
+  const seasonSpan = md(pass.season?.start) && md(pass.season?.end) ? `${md(pass.season.start)} – ${md(pass.season.end)}` : "";
   // 📌 트랙 줄 높이 — 전 티어 기준(탭과 무관). 진행선은 0 → T1 점 → … → 끝 점, 채움은 지난 티어 점 + 다음 티어 쪽으로 링과 같은 비율
   const hFree = passRowH(Math.max(1, ...tiers.map((t) => t.free?.rewards?.length || 0)));
   const hPaid = passRowH(Math.max(1, ...tiers.map((t) => t.paid?.rewards?.length || 0)));
@@ -1311,31 +1310,52 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
       style={{ background: PASS_GRAD }}
     >
       {crown}
-      <span><span className="hidden sm:inline">프리미엄 </span>해금</span>
+      <span><span className="hidden md:inline">프리미엄 </span>해금</span>
       <span aria-hidden className="w-px h-3 bg-white/35"></span>
       <span className="tabular-nums">{fmt(pointPrice)} 빙옥</span>
     </button>
   );
 
-  // T7 ━━━ T8 막대 + 이번 티어 진행(작게). PC 는 링 오른쪽 칸 아래, 폰은 링 줄 아래 — 같은 것을 자리만 바꿔 그린다
-  const bar = (
-    <>
-      <div className="flex items-center">
-        <span className="shrink-0 text-[12px] font-black text-white tabular-nums">T{tierNo}</span>
-        <span className="relative flex-1 mx-3 h-2 rounded-full bg-white/10 overflow-hidden">
-          <span
-            className="absolute inset-y-0 left-0 rounded-full"
-            style={{ width: `${ringPct}%`, background: "linear-gradient(90deg, #9b6bff, #e05bb5)", transition: "width .9s cubic-bezier(0.16,1,0.3,1)" }}
-          ></span>
-        </span>
-        <span className="shrink-0 text-[12px] font-black text-white/45 tabular-nums">{nextTier ? `T${nextTier.level}` : tiers.length ? "MAX" : "—"}</span>
-      </div>
-      <p className="mt-1.5 text-right text-[11px] font-bold text-white/35 tabular-nums">
-        {nextTier ? `${fmt(Math.max(0, (pass.progress || 0) - prevNeed))} / ${fmt(nextTier.need - prevNeed)} XP` : `이번 시즌 ${fmt(pass.progress)} XP`}
-      </p>
-    </>
+  // 닫기 — 배너 위에서는 어두운 바탕을 깔아 그림 위에서도 보이게
+  const closeBtn = (onArt) => (
+    <button
+      ref={closeRef}
+      onClick={close}
+      aria-label="닫기"
+      className={`shrink-0 w-9 h-9 rounded-full border transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${onArt ? "bg-[rgba(18,13,34,0.55)] border-white/25 text-white/80 hover:text-white hover:border-white/50" : "border-white/15 text-white/55 hover:text-white hover:border-white/35"}`}
+    >
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
+    </button>
   );
-  const claimNum = (n) => <span className={`ml-1.5 text-[24px] sm:text-[28px] font-black tabular-nums tracking-[-0.02em] leading-none ${n > 0 ? "text-white" : "text-white/30"}`}>{n}</span>;
+  // 📌 대표 보상 칸 — 금빛 테 · 그림 크게 · 이름. 누르면 꾸미기는 적용 미리보기, 그 밖은 이름 말풍선(트랙 칸과 같은 showPeek)
+  const featureCard = feature && (
+    <button
+      type="button"
+      aria-label={`대표 보상 · T${feature.level} · ${feature.r.label}`}
+      {...(passCosmeticOf(feature.r) ? { "aria-haspopup": "dialog" } : {})}
+      onClick={(e) => showPeek(e, featureKey, feature.r)}
+      className={`w-full min-w-0 flex items-center gap-3 sm:gap-3.5 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-2xl text-left ${PASS_PEEK_BTN}`}
+      style={{ ...passChipBg(true), boxShadow: "inset 0 0 0 1px rgba(255,214,140,0.45), 0 0 30px -10px rgba(255,190,90,0.55)", ...(peek?.key === featureKey ? PASS_PEEK_ON : null) }}
+    >
+      <span className="shrink-0 w-[52px] h-[52px] sm:w-[68px] sm:h-[68px] rounded-xl flex items-center justify-center" style={{ background: "radial-gradient(circle at 50% 40%, rgba(255,220,150,0.35), transparent 70%)" }}>
+        {feature.r.kind === "item" ? (
+          <ItemIcon icon={feature.r.icon} imageUrl={feature.r.imageUrl} type={feature.r.itemType} size={48} color={feature.r.color || (feature.r.itemType ? itemTypeColor(feature.r.itemType) : undefined)} />
+        ) : (
+          <svg aria-hidden viewBox="0 0 24 24" className="w-9 h-9 text-white" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d={ICON_PATHS[PASS_KIND_ICON[feature.r.kind] || "gift"]} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+      <span className="min-w-0">
+        <span className="flex items-center gap-1 text-[10px] font-black tracking-[0.08em] text-[#ffd9a0] whitespace-nowrap">
+          {feature.premium && <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3 shrink-0" fill="currentColor"><path d={CROWN} /></svg>}
+          대표 보상 · T{feature.level}
+          {feature.premium && !pass.unlocked && <span className="ml-0.5 inline-flex text-white/45">{PASS_LOCK}</span>}
+        </span>
+        <span className="mt-1 block text-[13px] sm:text-[15px] font-black text-white leading-[1.25] line-clamp-2 break-keep" style={PASS_WRAP}>{feature.r.short || feature.r.label}</span>
+      </span>
+    </button>
+  );
 
   return (
     <>
@@ -1361,105 +1381,110 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
         {/* 모바일 바텀시트 손잡이 */}
         <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
 
-        {/* 머리 — 눈썹 한 줄(넓게) · 제목 줄(제목 | 프리미엄 칩 · 닫기). 탭 · 상태와 무관하게 늘 같은 높이 */}
-        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-3 sm:pt-6">
-          <p className="flex items-center min-w-0 text-[11px] font-black text-white/50 whitespace-nowrap">
-            <span className="shrink-0 tracking-[0.28em]">SEASON {seasonNo}</span>
-            {seasonName && <span className="ml-1 min-w-0 truncate tracking-[0.02em]">· {seasonName}</span>}
-            <span className="shrink-0 ml-2 text-white/35 tabular-nums">{dday?.ended ? "종료" : `D-${Math.max(0, dday?.days ?? 0)}`}</span>
-          </p>
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <h3 className="min-w-0 truncate text-[26px] sm:text-[30px] font-black text-white tracking-tight leading-none">시즌 패스</h3>
-            <div className="shrink-0 flex items-center gap-2">
-              {premiumChip}
-              <button
-                ref={closeRef}
-                onClick={close}
-                aria-label="닫기"
-                className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-              >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
-              </button>
+        {/* 📌 머리 — 시즌 배너 그림(2026-10-11 운영자 "배너 뜨는 거 감다살"). 위에 프리미엄 칩 · 닫기(폰은 칩을 오른쪽 아래로 — 좁은 배너에서 가운데 제목 글자를 가리지 않게), 왼쪽 아래 D-day · 기간.
+               배너가 없는 시즌은 예전 머리: 눈썹 한 줄 · 제목 줄(제목 | 프리미엄 칩 · 닫기). 탭 · 상태와 무관하게 늘 같은 높이 */}
+        {banner ? (
+          // 📌 그림 이름(role img)은 따로 깐 빈 칸에 — 단추를 감싸면 화면 읽기에서 단추가 그림 속으로 사라진다.
+          //    가로 자리: 폰이 아주 좁으면(배너가 옆으로 넘칠 때) 제목 오른쪽 끝이 닫기 단추에 안 걸리게 왼쪽으로 조금 민다
+          <div
+            className="relative z-10 shrink-0 h-[112px] sm:h-[184px] bg-cover"
+            style={{ backgroundImage: `url(${banner})`, backgroundPosition: "min(50%, calc(100% + 44px)) 32%" }}
+          >
+            <span role="img" aria-label={`SEASON ${seasonNo}${seasonName ? ` · ${seasonName}` : ""}`} className="absolute inset-0 pointer-events-none"></span>
+            <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(18,13,34,0) 45%, rgba(26,18,51,0.92) 100%)" }}></div>
+            <div className="absolute right-3 bottom-2.5 sm:hidden">{premiumChip}</div>
+            <div className="absolute top-3 right-3 sm:top-2.5 sm:right-5 flex items-center gap-2">
+              <span className="hidden sm:inline-flex">{premiumChip}</span>
+              {closeBtn(true)}
+            </div>
+            <div className="absolute left-5 sm:left-7 bottom-2.5 sm:bottom-3.5 flex items-center gap-2 text-[11px] font-black text-white/75 tabular-nums">
+              <span className="px-2 py-0.5 rounded-full bg-[rgba(18,13,34,0.6)] ring-1 ring-white/20">{ddayLabel}</span>
+              {seasonSpan && <span className="hidden sm:inline">{seasonSpan}</span>}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-3 sm:pt-6">
+            <p className="flex items-center min-w-0 text-[11px] font-black text-white/50 whitespace-nowrap">
+              <span className="shrink-0 tracking-[0.28em]">SEASON {seasonNo}</span>
+              {seasonName && <span className="ml-1 min-w-0 truncate tracking-[0.02em]">· {seasonName}</span>}
+              <span className="shrink-0 ml-2 text-white/35 tabular-nums">{ddayLabel}</span>
+            </p>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <h3 className="min-w-0 truncate text-[26px] sm:text-[30px] font-black text-white tracking-tight leading-none">시즌 패스</h3>
+              <div className="shrink-0 flex items-center gap-2">
+                {premiumChip}
+                {closeBtn(false)}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 본문 — 요약 → 탭 → 가로 트랙을 한 번에 세로 스크롤. 폰은 탭이 위에 붙는다. 가로 넘침은 트랙 안에서만 */}
-        <div ref={bodyRef} className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.22) transparent" }}>
-          <div className="px-5 sm:px-7 pt-5 pb-4">
-            {/* 링 | 다음 티어까지 | 받을 보상 — 폰은 두 칸을 링 오른쪽에 위아래로 */}
+        <div ref={bodyRef} className="no-bar relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div className="px-5 sm:px-7 pt-4 sm:pt-5 pb-4 sm:pb-5">
+            {/* 📌 진행도는 한 번만 — 링(T7 / T20) | "T8까지 6,500 XP" · 막대(링과 같은 비율). 예전 "T7 ━ T8" 막대 · "3,500 / 10,000 XP" · 받을 보상 숫자는 같은 정보라 뺐다(받을 수는 「모두 받기」 단추에).
+                   넓은 화면(md~)은 오른쪽에 대표 보상 칸, 그보다 좁으면 그 아래 한 줄(옆에 두면 큰 XP 숫자가 잘린다) */}
             <div className="flex items-center">
-              <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct}>
-                <span className="text-[40px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
-                <span className="mt-1.5 text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
+              <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct} size="w-[84px] h-[84px] sm:w-[112px] sm:h-[112px]">
+                <span className="text-[26px] sm:text-[34px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
+                <span className="mt-1 text-[10px] sm:text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
               </GlowRing>
-              <div className="min-w-0 flex-1 ml-5 sm:ml-7">
-                <div className="flex flex-col sm:flex-row">
-                  <div className="min-w-0 sm:flex-1 sm:pl-6 sm:border-l border-white/10">
-                    <p className="text-[11px] font-bold text-white/45">다음 티어까지</p>
-                    <p className="mt-1.5 flex items-baseline min-w-0">
-                      <span className="min-w-0 truncate text-[24px] sm:text-[28px] font-black text-white tabular-nums tracking-[-0.02em] leading-none">{needV}</span>
-                      {nextTier && <span className="ml-1.5 shrink-0 text-[12px] font-bold text-white/45">XP</span>}
-                    </p>
-                  </div>
-                  <div className="min-w-0 sm:flex-1 mt-3 pt-3 border-t sm:mt-0 sm:pt-0 sm:border-t-0 sm:ml-6 sm:pl-6 sm:border-l border-white/10">
-                    {/* 📌 모두 받기 — 받을 칸이 있을 때만, 라벨 줄 오른쪽 작은 알약. 음수 여백(-my-1)으로 줄 높이를 키우지 않아
-                           생기고 사라져도 아래 숫자 · 막대가 그대로다(프로필 카드 "내역" 알약과 같은 방식) */}
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-[11px] font-bold text-white/45">받을 보상</p>
-                      {claimFree + claimPaid > 0 && onClaimAll && (
-                        <button
-                          type="button"
-                          onClick={onClaimAll}
-                          disabled={!!busyKey}
-                          className="relative shrink-0 -my-1 inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-black text-white whitespace-nowrap transition-transform hover:-translate-y-px disabled:hover:translate-y-0 disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                          style={{ background: PASS_GRAD }}
-                        >
-                          <span className={busyKey === "all" ? "invisible" : undefined}>모두 받기</span>
-                          {busyKey === "all" && <span className="absolute inset-0 flex items-center justify-center">…</span>}
-                        </button>
-                      )}
-                    </div>
-                    <p className="mt-1.5 flex items-baseline whitespace-nowrap">
-                      <span className="text-[12px] font-bold text-white/50">무료</span>
-                      {claimNum(claimFree)}
-                      <span className="ml-4 text-[12px] font-bold text-white/50">프리미엄</span>
-                      {claimNum(claimPaid)}
-                    </p>
-                  </div>
-                </div>
-                <div className="hidden sm:block mt-5">{bar}</div>
-              </div>
-            </div>
-            <div className="sm:hidden mt-4">{bar}</div>
-
-            {/* 다음 보상 · T8 — 그 티어 보상 전부(트랙마다 최대 4개, 많으면 줄을 바꿔 다 보인다). 만렙이면 MAX */}
-            {tiers.length > 0 && (
-              <div className="mt-5">
-                <p className="text-[11px] font-bold text-white/45">
-                  다음 보상{nextTier && <span className="tabular-nums"> · T{nextTier.level}</span>}
+              <div className="min-w-0 flex-1 ml-4 sm:ml-6">
+                <p className="text-[11px] font-bold text-white/50">{!tiers.length ? "다음 티어까지" : nextTier ? `T${nextTier.level}까지` : "최고 티어"}</p>
+                <p className="mt-1.5 flex items-baseline min-w-0">
+                  <span className="min-w-0 truncate text-[24px] sm:text-[30px] font-black text-white tabular-nums tracking-[-0.02em] leading-none">{needV}</span>
+                  {nextTier && <span className="ml-1.5 shrink-0 text-[12px] font-bold text-white/45">XP</span>}
                 </p>
-                {nextRewards.length > 0 ? (
-                  <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-                    {nextRewards.map((u) => (
-                      <PassNextTile key={`${u.premium ? "paid" : "free"}:${u.r.key}`} r={u.r} premium={u.premium} locked={u.premium && !pass.unlocked} peekKey={peek?.key} onPeek={showPeek} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-2.5 h-[78px] rounded-2xl flex items-center justify-center text-[13px] font-black text-white/30 tracking-[0.2em]" style={passChipBg(false)}>
-                    {nextTier ? "—" : "MAX"}
-                  </div>
-                )}
+                <span className="relative block mt-3 h-1.5 sm:h-2 rounded-full bg-white/10 overflow-hidden">
+                  <span
+                    className="absolute inset-y-0 left-0 rounded-full"
+                    style={{ width: `${ringPct}%`, background: "linear-gradient(90deg, #9b6bff, #e05bb5)", transition: "width .9s cubic-bezier(0.16,1,0.3,1)" }}
+                  ></span>
+                </span>
               </div>
-            )}
+              {featureCard && <div className="hidden md:block shrink-0 w-[250px] ml-6">{featureCard}</div>}
+            </div>
+            {featureCard && <div className="md:hidden mt-3">{featureCard}</div>}
           </div>
 
-          {/* 탭 — 폰에서는 스크롤해도 위에 붙어 있다(바탕을 깔아 아래 트랙이 비치지 않게) */}
-          <div className="sticky top-0 z-20 sm:static px-5 sm:px-7 py-2.5 flex items-center gap-1.5 border-y border-white/[0.08] bg-[#1c1338] sm:bg-transparent">
-            <PopTab on={tab === "all"} onClick={() => { setTab("all"); setPeek(null); onTone?.(); }} label="전체 티어" n={tiers.length} />
-            <PopTab on={tab === "claim"} onClick={() => { setTab("claim"); setPeek(null); onTone?.(); }} label="받을 보상" n={claimable} />
-            {/* 관리자 테스트 초기화 — 탭 줄 오른쪽 작은 알약(따로 한 줄을 두면 PC 에서도 창에 세로 스크롤이 생겼다) */}
-            {onReset && <span className="ml-auto"><AdminReset compact onReset={onReset} busy={resetBusy} label="초기화 (관리자)" /></span>}
+          {/* 📌 탭 — 밑줄 탭(2026-10-11 운영자 "알약 디자인 말고" → A안): 글자만, 고른 쪽 흰 글자 + 보라→분홍 밑줄(빛). 두 탭 굵기 · 크기가 같아 안 밀린다.
+                 오른쪽은 큰 「모두 받기」(받을 수) — 받을 게 없어도 자리는 지키고 흐리게(생겼다 사라지며 줄이 출렁이지 않게).
+                 폰에서는 스크롤해도 위에 붙어 있다(바탕을 깔아 아래 트랙이 비치지 않게) */}
+          <div className="sticky top-0 z-20 sm:static px-5 sm:px-7 flex items-center border-b border-white/[0.08] bg-[#1c1338] sm:bg-transparent">
+            <div role="tablist" aria-label="시즌 패스 보기" className="flex items-stretch">
+              {[["all", "전체 티어", tiers.length], ["claim", "받을 보상", claimable]].map(([k, label, n]) => {
+                const on = tab === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => { setTab(k); setPeek(null); onTone?.(); }}
+                    className={`relative mr-5 sm:mr-8 last:mr-3 py-3.5 sm:py-4 text-[14px] sm:text-[15px] font-black whitespace-nowrap transition-colors rounded-sm outline-none focus-visible:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${on ? "text-white" : "text-white/45 hover:text-white/75"}`}
+                  >
+                    {label}
+                    <span className={`ml-1.5 text-[12px] tabular-nums ${on ? "text-[#d9c6ff]" : "text-white/30"}`}>{n}</span>
+                    {on && <span aria-hidden className="absolute left-0 right-0 -bottom-px h-[3px]" style={{ background: "linear-gradient(90deg, #9b6bff, #e05bb5)", boxShadow: "0 0 12px rgba(224,91,181,0.8)" }}></span>}
+                  </button>
+                );
+              })}
+            </div>
+            {onClaimAll && (
+              <button
+                type="button"
+                onClick={onClaimAll}
+                disabled={!!busyKey || claimN === 0}
+                className="relative ml-auto shrink-0 inline-flex items-center h-9 sm:h-[38px] pl-3 pr-2.5 sm:pl-4 sm:pr-3 rounded-[10px] text-[12px] sm:text-[13px] font-black text-white whitespace-nowrap transition-[transform,opacity] enabled:hover:-translate-y-px disabled:opacity-35 disabled:cursor-default outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                style={{ background: PASS_GRAD, boxShadow: claimN > 0 ? "0 8px 24px -8px rgba(224,91,181,0.95), inset 0 0 0 1px rgba(255,255,255,0.25)" : "inset 0 0 0 1px rgba(255,255,255,0.15)" }}
+              >
+                <span className={`inline-flex items-center gap-1.5 sm:gap-2 ${busyKey === "all" ? "invisible" : ""}`}>
+                  모두 받기
+                  <span className="min-w-[26px] h-5 px-1 rounded-md bg-white/95 text-[#9b3c8f] text-[11px] tabular-nums inline-flex items-center justify-center">{claimN}</span>
+                </span>
+                {busyKey === "all" && <span className="absolute inset-0 flex items-center justify-center">…</span>}
+              </button>
+            )}
           </div>
 
           {/* 가로 트랙 — 왼쪽 줄 이름(무료 · 프리미엄)은 제자리, 티어 칸만 가로로 넘긴다(폰도 같은 모양) */}
@@ -1479,8 +1504,8 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             {/* 📌 높이는 고정(칸 높이 + 가로 스크롤바 자리) — 받을 보상 탭처럼 칸이 적어 스크롤바가 사라져도 창 높이가 그대로(PC 는 창이 가운데 정렬이라 줄면 머리 · 탭이 뜬다) */}
             <div
               ref={trackRef}
-              className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
-              style={{ height: colH + PT.bar, scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.22) transparent", overscrollBehaviorX: "contain" }}
+              className="no-bar min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+              style={{ height: colH + PT.bar, overscrollBehaviorX: "contain" }}
             >
               {rows.length === 0 ? (
                 <div className="flex items-center justify-center text-[12px] font-bold text-white/35" style={{ height: colH }}>{tab === "claim" ? "지금 받을 보상이 없습니다" : "등록된 티어가 없습니다"}</div>
@@ -1532,6 +1557,8 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               )}
             </div>
           </div>
+          {/* 관리자 테스트 초기화 — 트랙 아래 오른쪽 작은 알약(탭 줄 오른쪽은 「모두 받기」 자리) */}
+          {onReset && <div className="flex justify-end px-5 sm:px-7 pb-4"><AdminReset compact onReset={onReset} busy={resetBusy} label="초기화 (관리자)" /></div>}
         </div>
         {peek && <PassPeek peek={peek} boxW={peek.boxW} />}
       </div>
