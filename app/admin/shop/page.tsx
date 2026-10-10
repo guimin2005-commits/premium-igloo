@@ -13,7 +13,7 @@ import ProductCard from "../../arctic/ProductCard";
 import { InventoryItemPreview } from "../../components/Inventory";
 import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor } from "@/lib/items";
 import {
-  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
+  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FRAMES, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
   normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines, cashbackRuleOf,
 } from "@/lib/itemEffects";
 import {
@@ -130,12 +130,12 @@ function Thumb({ it }: { it: any }) {
 //    open(조건 펼침)은 화면 상태라 저장하지 않는다. chText 는 채널 목록을 못 불러왔을 때 쓰는 ID 입력칸의 날 글자
 type EffectDraft = {
   id: string; on: string; mode: string; amount: string; minMinutes: string; everyN: string;
-  chance: string; minMembers: string; seconds: string; skin: string;
+  chance: string; minMembers: string; seconds: string; skin: string; frame: string;
   days: number[]; hourFrom: string; hourTo: string; channelIds: string[]; chText: string; open: boolean;
 };
 const newEffectId = () => Math.random().toString(36).slice(2, 10);
 const newEffect = (): EffectDraft => ({
-  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "",
+  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "", frame: "",
   days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false,
 });
 // 빈 칸은 undefined 로 넘긴다 — normalizeEffects 는 "" 를 0 으로 읽어 분 · 번째를 최솟값(1분 · 2번째)으로 채워 버린다
@@ -144,7 +144,7 @@ const numOrNone = (s: string) => (String(s ?? "").trim() === "" ? undefined : Nu
 const effectOf = (d: EffectDraft) => ({
   id: d.id, on: d.on, mode: d.mode, amount: TRIGGER_OF[d.on]?.needs === "seconds" ? undefined : numOrNone(d.amount),
   minMinutes: numOrNone(d.minMinutes), everyN: numOrNone(d.everyN),
-  chance: numOrNone(d.chance), minMembers: numOrNone(d.minMembers), seconds: numOrNone(d.seconds), skin: d.skin || undefined,
+  chance: numOrNone(d.chance), minMembers: numOrNone(d.minMembers), seconds: numOrNone(d.seconds), skin: d.skin || undefined, frame: d.frame || undefined,
   days: d.days, hourFrom: d.hourFrom, hourTo: d.hourTo, channelIds: d.channelIds,
 });
 const draftOf = (e: any): EffectDraft => {
@@ -154,6 +154,7 @@ const draftOf = (e: any): EffectDraft => {
     amount: e?.amount ? String(e.amount) : "", minMinutes: e?.minMinutes ? String(e.minMinutes) : "", everyN: e?.everyN ? String(e.everyN) : "",
     chance: e?.chance ? String(e.chance) : "", minMembers: e?.minMembers ? String(e.minMembers) : "",
     seconds: e?.seconds ? String(e.seconds) : "", skin: typeof e?.skin === "string" ? e.skin : "",
+    frame: typeof e?.frame === "string" ? e.frame : "",
     days: Array.isArray(e?.days) ? e.days.map(Number) : [], hourFrom: e?.hourFrom != null ? String(e.hourFrom) : "", hourTo: e?.hourTo != null ? String(e.hourTo) : "",
     channelIds, chText: channelIds.join(", "), open: false,
   };
@@ -321,6 +322,7 @@ const DEL_BTN = "ml-auto !text-[#d01634]";
 const HOUR_FROM = Array.from({ length: 24 }, (_, h) => h);
 const HOUR_TO = Array.from({ length: 24 }, (_, h) => h + 1);
 const selectSm = `${inputClass} !w-[84px] tabular-nums`;
+const selectPick = `${inputClass} !w-[180px]`;
 const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
 // 크기 칸 앞 기호 · 뒤 단위 — 문구(describeEffect)와 같은 모양: 할인 · 단축 · 완화는 "−", 캐시백은 기호 없음, 나머지 "+"
 const PERK_SIGN: Record<string, string> = { enhanceDiscount: "−", muteRelief: "−", shopCashback: "" };
@@ -353,7 +355,7 @@ function EffectsEditor({
   };
   // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다).
   //    채널 종류는 TRIGGERS 의 channels("voice" 면 음성, true 면 텍스트)
-  //    발동형이 아니면(상시 · 소모 · 꾸미기) 요일 · 시간대 · 채널 조건이 없다 — 비우고 접는다. 카드 스킨은 첫 스킨을 골라 둔다
+  //    발동형이 아니면(상시 · 소모 · 꾸미기) 요일 · 시간대 · 채널 조건이 없다 — 비우고 접는다. 카드 스킨 · 아바타 테두리는 첫 것을 골라 둔다
   const pickOn = (i: number, v: string) => {
     const t = TRIGGER_OF[v];
     if (!t) return;
@@ -368,6 +370,7 @@ function EffectsEditor({
       on: v, mode: t.modes.includes(d.mode) ? d.mode : t.modes[0], channelIds: ids, chText: ids.join(", "),
       ...(trig ? {} : { days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false }),
       ...(t.needs === "skin" && !d.skin ? { skin: SKINS[0].v } : {}),
+      ...(t.needs === "frame" && !d.frame ? { frame: FRAMES[0].v } : {}),
     });
   };
   const toggleDay = (i: number, day: number) => {
@@ -474,8 +477,16 @@ function EffectsEditor({
                     <span>초</span>
                   </>
                 )}
+                {/* 📌 스킨 · 테두리 고르기는 목록 칸 — 알약 줄은 칸이 많으면 옆으로 넘쳐 뒤쪽(챌린저 · 이글루 등)을 못 골랐다 */}
                 {t.needs === "skin" && (
-                  <Segmented options={SKINS.map((s) => ({ v: s.v, l: s.l }))} value={d.skin} onChange={(v) => setRow(i, { skin: v })} />
+                  <select value={d.skin} onChange={(e) => setRow(i, { skin: e.target.value })} aria-label="카드 스킨" className={selectPick}>
+                    {SKINS.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
+                  </select>
+                )}
+                {t.needs === "frame" && (
+                  <select value={d.frame} onChange={(e) => setRow(i, { frame: e.target.value })} aria-label="아바타 테두리" className={selectPick}>
+                    {FRAMES.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
+                  </select>
                 )}
                 {!t.noAmount && t.needs !== "seconds" && (
                   <>

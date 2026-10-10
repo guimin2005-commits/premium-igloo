@@ -56,8 +56,14 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 고른 카드 스킨 — "" 안 고름(기본 카드 — 2026-10-04 자동 착용 없음) · "none" 끔(기본 카드) · 스킨 키. 인벤토리에서 착용 · 해제 (app/api/xp/card-skin)
   //    봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
   cardSkinPick: { type: String, default: "" },
-  // 📌 단 프로필 배지 — 아이템 id 배열(최대 3). 칸이 없으면 안 고름(배지 없음 — 2026-10-04 자동 착용 없음), [] 는 전부 뗌.
-  //    인벤토리에서 착용 · 해제 (app/api/xp/badge — 규칙은 lib/itemEffects pickBadges).
+  // 📌 고른 아바타 테두리 — 카드 스킨과 같은 규칙("" 안 고름 · "none" 끔 · 테두리 키 = 등급 키). 인벤토리에서 착용 · 해제 (app/api/xp/avatar-frame)
+  //    봇(bot/src/db.js)도 같은 칸
+  avatarFramePick: { type: String, default: "" },
+  // 📌 승급 화면을 본 가장 높은 등급(lib/voiceTiers 인덱스) — LEVEL 에 들어왔을 때 지금 등급이 이보다 높으면 승급 화면을 한 번 띄운다(app/level/PromoOverlay).
+  //    칸이 없으면 아직 안 봄 → 그때의 등급을 조용히 적는다(기능을 넣기 전부터 그 등급이던 사람에게는 띄우지 않는다). 쓰기는 app/api/xp/promo-seen 만
+  promoSeen: { type: Number, default: undefined },
+  // 📌 단 프로필 배지 — 아이템 id 배열(최대 3, 앞에서부터 1 · 2 · 3번 자리 = 이름 옆 순서). 칸이 없으면 안 고름(배지 없음 — 2026-10-04 자동 착용 없음), [] 는 전부 뗌.
+  //    인벤토리 배지 창에서 달기 · 떼기 · 자리 정하기 (app/api/xp/badge — 규칙은 lib/itemEffects pickBadges).
   //    default: undefined — 배열 칸은 기본값이 [] 라 그대로 두면 기존 유저가 "전부 뗌"이 된다. 봇(bot/src/db.js)도 같은 칸(/인벤토리 '착용' 표시에만 읽는다)
   badgePick: { type: [String], default: undefined },
   // 해금 때 낸 값 — 관리자 테스트 초기화(app/api/xp/reset)가 이만큼 돌려준다. 시즌이 바뀌면 함께 비운다

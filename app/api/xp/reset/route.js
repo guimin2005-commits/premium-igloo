@@ -148,9 +148,9 @@ export async function POST(request) {
       return NextResponse.json({ success: true, message: "되돌릴 상점 구매가 없습니다." });
     }
     const msg = await refund(userId, backXp, backPoint);
-    // 고른 카드 스킨 · 단 배지도 처음(안 고름)으로 — 되돌린 아이템을 가리키는 고른 값("none" · 키 · 배열)이 다음 테스트에 남지 않게.
+    // 고른 카드 스킨 · 아바타 테두리 · 단 배지도 처음(안 고름)으로 — 되돌린 아이템을 가리키는 고른 값("none" · 키 · 배열)이 다음 테스트에 남지 않게.
     //    2026-10-04 부터 자동 착용이 없어 다시 사면 인벤토리에서 직접 착용한다
-    await UserXp.updateOne({ userId }, { $set: { cardSkinPick: "" }, $unset: { badgePick: "" } });
+    await UserXp.updateOne({ userId }, { $set: { cardSkinPick: "", avatarFramePick: "" }, $unset: { badgePick: "" } });
     // 회수한 캐시백은 원장에 따로 남긴다 — 환불(+paidXp)은 구매 기록이 세므로, 빼고 돌려준 몫(claw) · 지갑에서 뺀 몫(rest)을 여기서 맞춘다
     let restXp = 0;
     for (const c of claws) {

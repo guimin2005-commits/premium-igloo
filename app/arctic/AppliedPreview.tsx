@@ -3,14 +3,15 @@
 import React, { useState } from "react";
 import { FitBox, ProfileCardPreview, BadgePreview, whoOf, badgeOfItem, type ShopItemLike } from "./CosmeticPreview";
 
-// 📌 상품 상세 '적용 미리보기' — 꾸미기 상품(카드 스킨 · 프로필 배지 — API item.cosmetic)을 효과 칸 아래 전체 폭으로 보여 준다
+// 📌 상품 상세 '적용 미리보기' — 꾸미기 상품(카드 스킨 · 아바타 테두리 · 프로필 배지 — API item.cosmetic)을 효과 칸 아래 전체 폭으로 보여 준다
 //    (2026-10-01 사용자: "미리보기 이미지가 효과 아래 부분에 들어가면 좋겠어", "미리보기는 개인의 프로필이 적용되게").
 //    로그인했으면 내 이름 · 사진 · 레벨 · 순위로 — 레벨 페이지 프로필 카드(사이트에서 그림) + 디스코드 /레벨 카드(/api/shop/skin-card?me=1, 서버가 세션의 본인 값으로 그림).
 //    로그인 안 했으면 예시 사람. 디스코드 카드는 봇이 그 스킨을 그릴 수 있을 때만(cosmetic.botCard), 그림을 못 받으면 그 칸을 뺀다.
 //    칸 크기는 바깥이 정하고 안의 그림은 FitBox 가 줄이기만 해서 그림이 늦게 와도 아무것도 밀리지 않는다.
+//    아바타 테두리는 프로필 카드에만 — 디스코드 카드엔 없다(테두리만 있으면 프로필 카드 한 칸)
 const DISCORD_BG = "#313338"; // 디스코드 채팅 바탕 — 봇 카드가 실제로 놓이는 자리
 
-type Item = ShopItemLike & { cosmetic?: { skin?: string; badge?: boolean; botCard?: boolean } | null };
+type Item = ShopItemLike & { cosmetic?: { skin?: string; frame?: string; badge?: boolean; botCard?: boolean } | null };
 
 const Label = ({ children }: { children: React.ReactNode }) => (
   <p className="mb-2 text-[12px] font-bold text-[#5a5a5a]">{children}</p>
@@ -23,8 +24,9 @@ export default function AppliedPreview({ item, user, me }: {
 }) {
   const cos = item?.cosmetic && typeof item.cosmetic === "object" ? item.cosmetic : null;
   const skin = typeof cos?.skin === "string" ? cos.skin : "";
+  const frame = typeof cos?.frame === "string" ? cos.frame : "";
   const [discordFail, setDiscordFail] = useState(false);
-  if (!cos || (!skin && !cos.badge)) return null;
+  if (!cos || (!skin && !frame && !cos.badge)) return null;
   const who = whoOf(user, me);
   const showDiscord = !!skin && !!cos.botCard && !discordFail;
   // 로그인했으면 본인 카드(me=1 — 세션으로만 판단, 남의 값을 그릴 길은 없다), 아니면 예시 카드(공개 캐시)
@@ -33,14 +35,14 @@ export default function AppliedPreview({ item, user, me }: {
   return (
     <div className="mt-14 pt-10 border-t border-[#ededed]">
       <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">적용 미리보기</h2>
-      <div className={`grid grid-cols-1 gap-4 ${skin ? "md:grid-cols-2" : ""}`}>
-        {skin && (
+      <div className={`grid grid-cols-1 gap-4 ${skin || (frame && cos.badge) ? "md:grid-cols-2" : ""}`}>
+        {(skin || frame) && (
           <div>
             <Label>프로필 카드</Label>
             {/* 레벨 페이지 카드(360 폭)를 제 크기 이하로 — 폰은 칸 폭에 맞춰 줄인다 */}
             <div className="relative w-full aspect-[4/5] md:aspect-auto md:h-[600px] rounded-2xl bg-[#f2f2f2] overflow-hidden">
               <FitBox pad={0.92} max={1}>
-                <ProfileCardPreview who={who} skin={skin} />
+                <ProfileCardPreview who={who} skin={skin} frame={frame} />
               </FitBox>
             </div>
           </div>

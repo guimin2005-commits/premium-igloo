@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { VOICE_TIERS, tierRangeLabel } from "@/lib/voiceTiers";
+import { VOICE_TIERS, tierRangeLabel, tierPaint } from "@/lib/voiceTiers";
 import { SEASON } from "@/lib/season";
 import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
 import TierEmblem from "../components/TierEmblem";
@@ -141,7 +141,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
                   return (
                     <span key={t.key} title={`${t.name} +${fmt(t.bonus)}`}
                       className={`flex-1 rounded-t-[3px] ${on ? "ring-2 ring-[#131313] ring-offset-1" : ""}`}
-                      style={{ height: t.bonus > 0 ? `${(t.bonus / maxBonus) * 100}%` : "2px", backgroundColor: t.c }} />
+                      style={{ height: t.bonus > 0 ? `${(t.bonus / maxBonus) * 100}%` : "2px", background: tierPaint(t, 0) }} />
                   );
                 })}
               </div>
@@ -202,7 +202,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
                   {on && <span className="mb-1.5 inline-flex items-center h-5 px-2 rounded-full bg-[#131313] text-white text-[10px] font-black">나</span>}
                   <span className="text-[13px] font-black tabular-nums mb-1.5">+{fmt(t.bonus)}</span>
                   <span className={`w-full rounded-t-md ${on ? "ring-2 ring-[#131313] ring-offset-2" : ""}`}
-                    style={{ height: t.bonus > 0 ? `${(t.bonus / maxBonus) * 136}px` : "2px", backgroundColor: t.c }} />
+                    style={{ height: t.bonus > 0 ? `${(t.bonus / maxBonus) * 136}px` : "2px", background: tierPaint(t, 0) }} />
                 </div>
               );
             })}
@@ -236,7 +236,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
                   <p className="text-[10px] font-bold text-[#8a8a8a] tabular-nums truncate">{tierRangeLabel(i)}</p>
                 </div>
                 <div className="flex-1 min-w-0 h-2 rounded-full bg-[#f2f2f2] overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: t.bonus > 0 ? `${(t.bonus / maxBonus) * 100}%` : "2px", backgroundColor: t.c }} />
+                  <div className="h-full rounded-full" style={{ width: t.bonus > 0 ? `${(t.bonus / maxBonus) * 100}%` : "2px", background: tierPaint(t) }} />
                 </div>
                 <div className="w-[64px] shrink-0 text-right">
                   <p className="text-[13px] font-black tabular-nums">+{fmt(t.bonus)}</p>

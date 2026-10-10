@@ -10,24 +10,26 @@ import {
   StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
 } from "../components/Hud";
 import { SEASON, getSeasonProgress, getSeasonDday, isVoiceTimeTracked, VOICE_TIME_START } from "@/lib/season";
-import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel } from "@/lib/voiceTiers";
+import { VOICE_TIERS, TIER_COLORS, getTierIndex, getVoiceBonus, tierRangeLabel, tierPaint, tierText } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { buildEnhanceView, chatRange, enhanceCost } from "@/lib/enhance";
 // 빙옥 가격 = XP 가격 ÷ 10,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
-import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS } from "@/lib/itemEffects";
+import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS, FRAMES } from "@/lib/itemEffects";
 import TierEmblem from "../components/TierEmblem";
 import SystemGuide from "./SystemGuide";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, PopTab, AdminReset, POP_THEME } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, keepSavedFrame, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
+import AvatarFrame, { frameRoom } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
 import PassPreview, { passCosmeticOf } from "./PassPreview";
+import PromoOverlay from "./PromoOverlay";
 import { openLogin } from "../components/LoginPrompt";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
@@ -281,7 +283,7 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
               </div>
               <div className="flex items-center gap-2.5 mt-4">
                 <TierEmblem tier={tier} size={24} />
-                <span className="text-[16px] font-black leading-none" style={{ color: hexLift(tier.c, 0.3) }}>{tier.name}</span>
+                <span className="text-[16px] font-black leading-none" style={tierText(tier, hexLift(tier.c, 0.3))}>{tier.name}</span>
                 <span className="text-[12px] font-bold text-white/40 tabular-nums">{tierRangeLabel(getTierIndex(lv))}</span>
               </div>
             </div>
@@ -356,7 +358,7 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
                 tierTab === i ? "bg-[#131313] text-white" : "bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313]"
               }`}
             >
-              <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: t.c }}></span>
+              <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: tierPaint(t) }}></span>
               {t.name}
             </button>
           ))}
@@ -694,12 +696,14 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, gain, voic
 //    오른쪽: 카드 숫자에 안 잡히는 것 — 보유 아이템의 효과 문장(서버 my-items 의 effectLines: "매일 음성 120분 +1,000 XP" 같은 발동형,
 //    역할 버프, 등급 보상)과 상시 효과(me.perks). 빈 묶음은 그리지 않는다.
 const fxFmt = (n) => (Number(n) || 0).toLocaleString();
-// 📌 꾸미기 문장(카드 스킨 · 프로필 배지)은 뺀다 — XP 효과가 아니고 아이템 이름과 같은 말이 한 번 더 붙는다("카드 스킨 · 골드" 아래 "카드 스킨 · 골드").
+// 📌 꾸미기 문장(카드 스킨 · 프로필 배지 · 아바타 테두리)은 뺀다 — XP 효과가 아니고 아이템 이름과 같은 말이 한 번 더 붙는다("카드 스킨 · 골드" 아래 "카드 스킨 · 골드").
 //    서버가 만든 문장(lib/itemEffects describeEffect)과 같은 식으로 만들어 비교한다
 const FX_COSMETIC_LINES = new Set([
   describeEffect({ on: "profileBadge" }),
   describeEffect({ on: "cardSkin" }),
   ...SKINS.map((s) => describeEffect({ on: "cardSkin", skin: s.v })),
+  describeEffect({ on: "avatarFrame" }),
+  ...FRAMES.map((f) => describeEffect({ on: "avatarFrame", frame: f.v })),
 ]);
 const fxLinesOf = (it) => (Array.isArray(it.effectLines) ? it.effectLines.filter((l) => l && !FX_COSMETIC_LINES.has(l)) : []);
 const FxRow = ({ l, v, dim }) => (
@@ -1610,7 +1614,7 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
                   <span
                     aria-hidden
                     className="absolute -left-6 sm:-left-8 top-0 bottom-0 w-[3px]"
-                    style={{ backgroundColor: t.c }}
+                    style={{ background: tierPaint(t, 180) }}
                   ></span>
                 )}
                 <span
@@ -1627,9 +1631,9 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
 
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2">
-                    <span className="text-[15px] font-black tracking-tight" style={{ color: t.c }}>{t.name}</span>
+                    <span className="text-[15px] font-black tracking-tight" style={tierText(t)}>{t.name}</span>
                     {cur && (
-                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[9px] font-black tracking-[0.12em] uppercase text-white" style={{ backgroundColor: t.c }}>
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[9px] font-black tracking-[0.12em] uppercase text-white" style={{ background: tierPaint(t) }}>
                         현재
                       </span>
                     )}
@@ -1693,7 +1697,7 @@ const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
                 className="w-full rounded-t-[5px] transition-all duration-300 group-hover:brightness-110"
                 style={{
                   height: `${10 + hRatio * 86}%`,
-                  backgroundColor: t.c,
+                  background: tierPaint(t, 0),
                   opacity: top ? 1 : 0.85,
                   boxShadow: top ? `0 0 18px ${t.c}55` : "none",
                 }}
@@ -1705,7 +1709,7 @@ const TierStairs = ({ base = 3000, intervalMin = 5 }) => {
       <div className="flex gap-1.5 md:gap-2 border-t border-black/10 pt-2.5 mt-0.5">
         {VOICE_TIERS.map((t) => (
           <div key={t.key} className="flex-1 text-center min-w-0">
-            <p className="text-[9px] md:text-[11px] font-black truncate" style={{ color: t.c }}>{t.name}</p>
+            <p className="text-[9px] md:text-[11px] font-black truncate" style={tierText(t)}>{t.name}</p>
             <p className="text-[8px] md:text-[10px] font-bold text-[#a3a3a3] tabular-nums mt-0.5">{t.min}+</p>
           </div>
         ))}
@@ -1733,8 +1737,8 @@ const RankBadges = ({ badges }) =>
     </span>
   ) : null;
 
-// 조회 결과에 방금 저장한 카드 스킨 · 배지를 지킨다 — 저장보다 먼저 떠난 조회가 옛 값으로 되돌리지 않게(keepSavedSkin · keepSavedBadges)
-const keepSaved = (data, t0, skin, badge) => keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge);
+// 조회 결과에 방금 저장한 카드 스킨 · 배지 · 아바타 테두리를 지킨다 — 저장보다 먼저 떠난 조회가 옛 값으로 되돌리지 않게(keepSavedSkin · keepSavedBadges · keepSavedFrame)
+const keepSaved = (data, t0, skin, badge, frame) => keepSavedFrame(keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge), t0, frame);
 
 // ══ 진행 중 이벤트 판 — 대시보드 맨 아래 전체 폭(2026-10-03 "따로 새로 디자인해서 내 대시보드 아래에다가") ══
 //    이벤트 글(/api/posts?category=이벤트)의 그림 · 제목 · 기간 · 남은 날. 본문 미리보기는 두지 않는다(/event 목록과 같다).
@@ -1970,6 +1974,7 @@ export default function LevelPage() {
   const [passBusy, setPassBusy] = useState("");      // 수령·해금 진행 중 키 ("t2:free" / "unlock") — 티어는 인덱스가 아니라 tid 로 잡는다
   const skinSavedRef = useRef({ at: 0, v: "" });      // 마지막 카드 스킨 저장 — 그 전에 떠난 조회가 옛 스킨으로 되돌리지 않게(keepSavedSkin)
   const badgeSavedRef = useRef({ at: 0, v: [] });     // 마지막 배지 저장 — 같은 이유(keepSavedBadges)
+  const frameSavedRef = useRef({ at: 0, v: "" });     // 마지막 아바타 테두리 저장 — 같은 이유(keepSavedFrame)
 
   const loadMe = useCallback(async () => {
     try {
@@ -1990,7 +1995,7 @@ export default function LevelPage() {
       if (passRes?.body?.success) setPass(passRes.body);
       else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
       if (meRes?.success) {
-        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current);
+        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current);
         const prev = prevXpRef.current;
         if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
         if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); }
@@ -2000,7 +2005,7 @@ export default function LevelPage() {
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success) setQuests(qRes.data);
-      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current)));
+      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current)));
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
@@ -2011,7 +2016,7 @@ export default function LevelPage() {
     const t0 = Date.now();
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current))); })
+      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current))); })
       .catch(() => {});
   }, []);
 
@@ -2729,6 +2734,39 @@ export default function LevelPage() {
   const levelOpen = !!policy?.levelPublic || isAdminUser;
   // ARCTIC 상점 동선 — 공개 전에는 관리자에게만 노출 (policy.shopPublic). 레벨이 닫혀 있으면 함께 닫힌다.
   const canSeeShop = (!!policy?.shopPublic && levelOpen) || isAdminUser;
+
+  // 📌 승급 화면 — 지금 등급이 본 적 있는 가장 높은 등급(me.promoSeen)보다 높으면 한 번 띄운다(app/level/PromoOverlay).
+  //    promoSeen 이 없으면(처음) 지금 등급을 조용히 적는다 — 기능을 넣기 전부터 그 등급이던 사람에게는 띄우지 않는다.
+  //    닫으면 서버에 적는다(app/api/xp/promo-seen). 관리자는 /level?promo=<등급 키> 로 미리 볼 수 있다(적지 않는다)
+  const [promo, setPromo] = useState(null); // { from, to, preview }
+  const promoShownRef = useRef(-1);
+  const promoInitRef = useRef(false);
+  const savePromoSeen = useCallback((tier) => {
+    fetch("/api/xp/promo-seen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tier }) }).catch(() => {});
+    setMe((cur) => (cur ? { ...cur, promoSeen: Math.max(tier, cur.promoSeen ?? -1) } : cur));
+  }, []);
+  useEffect(() => {
+    if (!me || guest || !levelOpen) return;
+    const ti = getTierIndex(me.level || 0);
+    if (me.promoSeen == null) {
+      if (!promoInitRef.current) { promoInitRef.current = true; savePromoSeen(ti); }
+      return;
+    }
+    if (ti > me.promoSeen && promoShownRef.current < ti) {
+      promoShownRef.current = ti;
+      setPromo({ from: me.promoSeen, to: ti });
+    }
+  }, [me?.level, me?.promoSeen, guest, levelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isAdminUser) return;
+    const k = new URLSearchParams(window.location.search).get("promo");
+    const to = VOICE_TIERS.findIndex((t) => t.key === k);
+    if (to >= 0) setPromo({ from: to - 1, to, preview: true });
+  }, [isAdminUser]);
+  const closePromo = useCallback(() => {
+    if (promo && !promo.preview) savePromoSeen(promo.to);
+    setPromo(null);
+  }, [promo, savePromoSeen]);
   const P_chatCooldownLabel = P.chatCooldownSec >= 60 ? `${Math.round(P.chatCooldownSec / 60)}분` : `${P.chatCooldownSec}초`;
 
   // ── 시즌 패스 파생값 ──
@@ -2964,7 +3002,16 @@ export default function LevelPage() {
           setMyItems((cur) => (cur ? { ...cur, badges: list } : cur));
           setMe((cur) => (cur ? { ...cur, badges: list } : cur));
         }}
+        avatarFrame={myItems?.avatarFrame || ""}
+        // 테두리 착용 · 해제 즉시 프로필 사진 테두리도 바꾼다(스킨과 같은 흐름)
+        onFrameChange={(k) => {
+          frameSavedRef.current = { at: Date.now(), v: k };
+          setMyItems((cur) => (cur ? { ...cur, avatarFrame: k } : cur));
+          setMe((cur) => (cur ? { ...cur, avatarFrame: k } : cur));
+        }}
       />
+
+      {promo && <PromoOverlay from={promo.from} to={promo.to} onClose={closePromo} />}
 
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
       {tabBar}
@@ -3055,8 +3102,10 @@ export default function LevelPage() {
                       <div className={`relative z-10 p-5 md:p-7 ${guest ? "opacity-45 pointer-events-none select-none" : ""}`} aria-hidden={guest || undefined} inert={guest || undefined}>
                         {/* 정체성 — 아바타 옆에 이름 */}
                         <div className="flex items-center gap-4 lg:gap-5">
-                          <span className="shrink-0 lg:hidden">
-                            <RingGauge pct={progPct} size={76} stroke={5} trackClass="rgba(255,255,255,0.12)">
+                          {/* 📌 착용한 아바타 테두리 — 사진 가운데에 겹친다(감싼 칸이 relative). 이름 줄이 relative 라 테두리 끝보다 위에 그려진다.
+                              테두리를 낀 사람만 등급만큼 사진 칸에 여백(frameRoom) — 카드 모서리에 잘리거나 이름 · 칩에 닿지 않게 */}
+                          <span className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(me?.avatarFrame, 54, { box: 76, pad: 20, gap: 16 })}>
+                            <RingGauge pct={progPct} size={76} stroke={5} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="w-[54px] h-[54px] rounded-full object-cover" />
@@ -3064,9 +3113,10 @@ export default function LevelPage() {
                                 <span className="w-[54px] h-[54px] rounded-full bg-white/10 flex items-center justify-center text-lg font-black text-white/60">{guest ? <GuestAvatar className="w-7 h-7" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
+                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={54} />}
                           </span>
-                          <span className="hidden lg:block">
-                            <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)">
+                          <span className="relative hidden lg:block" style={guest ? undefined : frameRoom(me?.avatarFrame, 68, { box: 96, pad: 28, gap: 20 })}>
+                            <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="w-[68px] h-[68px] rounded-full object-cover" />
@@ -3074,8 +3124,9 @@ export default function LevelPage() {
                                 <span className="w-[68px] h-[68px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{guest ? <GuestAvatar className="w-9 h-9" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
+                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={68} />}
                           </span>
-                          <div className="min-w-0 flex-1">
+                          <div className="relative min-w-0 flex-1">
                           <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{guest ? "— — —" : session.user.name}</p>
                           <div className="flex flex-wrap items-center gap-2 mt-3">
                             <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 tabular-nums">
@@ -3117,7 +3168,7 @@ export default function LevelPage() {
                               )}
                               {!guest && tierNext && tierNextBound !== null && (
                                 <p className="text-[11px] font-bold text-white/50 mt-1.5 truncate tabular-nums">
-                                  <span style={{ color: hexLift(tierNext.c, 0.15) }}>{tierNext.name}</span>까지 {Math.max(0, tierNextBound - me.level)}레벨
+                                  <span style={tierText(tierNext, hexLift(tierNext.c, 0.15))}>{tierNext.name}</span>까지 {Math.max(0, tierNextBound - me.level)}레벨
                                 </p>
                               )}
                             </div>
@@ -3764,7 +3815,7 @@ export default function LevelPage() {
                             {/* 등급 · 레벨 — 등급은 레벨에서 바로 나온다. 레벨은 아래 목록 줄과 같은 "Lv.161"(시상대에만 빠져 있었다) */}
                             <span className="inline-flex items-center gap-1 mt-1.5">
                               <TierEmblem tier={tier} size={12} />
-                              <span className="text-[10px] font-black" style={{ color: tier.c }}>{tier.name}</span>
+                              <span className="text-[10px] font-black" style={tierText(tier)}>{tier.name}</span>
                               <span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">Lv.{r.level ?? 0}</span>
                             </span>
 

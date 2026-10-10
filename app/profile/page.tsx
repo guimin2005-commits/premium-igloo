@@ -10,7 +10,7 @@ import { VerifyBadge } from "../components/VerifyMark";
 import BackLink from "../components/BackLink";
 import ArcticDock from "../arctic/ArcticDock";
 import { ICON_PATHS } from "../components/Icons";
-import { VOICE_TIERS, getTierIndex } from "@/lib/voiceTiers";
+import { VOICE_TIERS, getTierIndex, tierPaint } from "@/lib/voiceTiers";
 import ItemIcon from "../components/ItemIcon";
 import { itemTypeColor } from "@/lib/items";
 import { openLogin } from "../components/LoginPrompt";
@@ -247,7 +247,7 @@ export default function MyInfoPage() {
                   </div>
                   {canSeeLevel && (
                     <Link href="/level" className="mt-1.5 inline-flex items-center gap-x-1.5 gap-y-0.5 flex-wrap text-[12px] md:text-[13px] font-bold text-white/65 hover:text-white tabular-nums transition-colors">
-                      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: tier.c }}></span>
+                      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: tierPaint(tier) }}></span>
                       <span className="text-white">{tier.name}</span>
                       <span aria-hidden>·</span>
                       <span>서버 #{shopMe?.rank ?? "—"}</span>

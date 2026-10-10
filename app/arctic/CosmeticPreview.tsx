@@ -3,9 +3,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import SkinFrame from "../components/SkinFrame";
 import TierEmblem from "../components/TierEmblem";
+import AvatarFrame, { frameRoom } from "../components/AvatarFrame";
 import ItemIcon from "../components/ItemIcon";
 import { RingGauge } from "../components/Hud";
-import { VOICE_TIERS, getTierIndex } from "@/lib/voiceTiers";
+import { VOICE_TIERS, getTierIndex, tierPaint } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { currentSeason } from "@/lib/season";
 import { itemTypeColor } from "@/lib/items";
@@ -130,7 +131,8 @@ function Avatar({ who, px, text }: { who: Who; px: number; text: string }) {
 }
 
 // ── 카드 스킨 — 레벨 페이지 프로필 카드(PC 모양)와 같은 잉크 판에 SkinFrame 으로 스킨을 입힌다 ──
-export function ProfileCardPreview({ who, skin }: { who: Who; skin: string }) {
+//    아바타 테두리(frame)는 사진(68px) 가운데에 겹친다 — 이름 칸은 relative 라 테두리 위에 그려진다
+export function ProfileCardPreview({ who, skin, frame }: { who: Who; skin: string; frame?: string }) {
   const tIdx = getTierIndex(who.level);
   const tier = VOICE_TIERS[tIdx];
   const next = VOICE_TIERS[tIdx + 1] || null;
@@ -158,10 +160,13 @@ export function ProfileCardPreview({ who, skin }: { who: Who; skin: string }) {
       <div className="relative z-10 p-7">
         {/* 정체성 — 아바타(진행 링) 옆에 이름 · 랭크 칩 */}
         <div className="flex items-center gap-5">
-          <RingGauge pct={pct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)">
-            <Avatar who={who} px={68} text="text-2xl" />
-          </RingGauge>
-          <div className="min-w-0 flex-1">
+          <div className="relative shrink-0" style={frame ? frameRoom(frame, 68, { box: 96, pad: 28, gap: 20 }) : undefined}>
+            <RingGauge pct={pct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)" hideRing={!!frame}>
+              <Avatar who={who} px={68} text="text-2xl" />
+            </RingGauge>
+            <AvatarFrame frame={frame} px={68} />
+          </div>
+          <div className="relative min-w-0 flex-1">
             <p className="max-w-full text-[26px] font-black text-white truncate tracking-tight leading-none">{who.name}</p>
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 tabular-nums">
@@ -266,7 +271,7 @@ export function BadgePreview({ who, badge }: { who: Who; badge: Badge }) {
               <BadgeIcons list={list} size={28} gap="gap-1" />
             </div>
             <p className="mt-1.5 flex items-center gap-x-1.5 text-[12px] font-bold text-white/65 tabular-nums">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tier.c }}></span>
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tierPaint(tier) }}></span>
               <span className="text-white">{tier.name}</span>
               <span>·</span>
               <span>서버 #{who.rank ? who.rank.toLocaleString() : "—"}</span>

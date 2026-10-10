@@ -8,7 +8,7 @@ import { useId } from "react";
 //    마스터부터 바깥 테, 그랜드마스터부터 양옆 날개, 챌린저부터 머리 보석이 붙는다.
 //    확대해도 싸 보이지 않게: 금속 결 그라데이션 · 위가 밝고 아래가 어두운 테 · 한 단 파인 안쪽 판 ·
 //    부드러운 광택(딱딱한 면 음영 대신) · 표식의 얕은 그림자.
-//    색은 등급색(tier.c) 하나에서 밝히고 어둡혀 만든다. 한 화면에 여럿 그려도 그라데이션 id 가 겹치지 않게 useId 를 쓴다.
+//    색은 등급색(tier.c) 하나에서 밝히고 어둡혀 만든다. 두 색 등급(챌린저 · 이글루, tier.g)은 몸통 · 테 결을 그 색들로 잇는다. 한 화면에 여럿 그려도 그라데이션 id 가 겹치지 않게 useId 를 쓴다.
 
 const mix = (hex, t, toWhite) => {
   const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
@@ -92,6 +92,7 @@ export default function TierEmblem({ tier, size = 24, className = "", muted = fa
   const light = mix(c, 0.62, true);
   const lo = mix(c, 0.32, false);
   const deep = mix(c, 0.55, false);
+  const g = Array.isArray(tier?.g) && tier.g.length > 1 ? tier.g : null;
   const id = (n) => `te-${n}-${uid}`;
 
   return (
@@ -106,15 +107,21 @@ export default function TierEmblem({ tier, size = 24, className = "", muted = fa
       <defs>
         {/* 몸통 — 금속 결 */}
         <linearGradient id={id("metal")} x1="0.15" y1="0" x2="0.55" y2="1">
-          <stop offset="0%" stopColor={hi} />
-          <stop offset="48%" stopColor={c} />
-          <stop offset="100%" stopColor={lo} />
+          {g ? (
+            g.map((col, i) => <stop key={i} offset={`${Math.round((i / (g.length - 1)) * 100)}%`} stopColor={i === 0 ? mix(col, 0.25, true) : i === g.length - 1 ? mix(col, 0.15, false) : col} />)
+          ) : (
+            <>
+              <stop offset="0%" stopColor={hi} />
+              <stop offset="48%" stopColor={c} />
+              <stop offset="100%" stopColor={lo} />
+            </>
+          )}
         </linearGradient>
         {/* 테 · 날개 · 머리 보석 — 위는 밝고 아래는 어둡다 */}
         <linearGradient id={id("rim")} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={light} />
-          <stop offset="55%" stopColor={mix(c, 0.15, true)} />
-          <stop offset="100%" stopColor={deep} />
+          <stop offset="0%" stopColor={g ? mix(g[0], 0.45, true) : light} />
+          <stop offset="55%" stopColor={g ? g[Math.floor(g.length / 2)] : mix(c, 0.15, true)} />
+          <stop offset="100%" stopColor={g ? mix(g[g.length - 1], 0.4, false) : deep} />
         </linearGradient>
         {/* 안쪽 판 — 한 단 파여 위가 어둡다 */}
         <linearGradient id={id("field")} x1="0" y1="0" x2="0" y2="1">

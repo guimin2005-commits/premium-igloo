@@ -15,7 +15,7 @@ import BotSetting from "@/models/BotSetting";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin, pickBadges, PERK_KEYS, cashbackRuleOf } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
@@ -95,6 +95,8 @@ export async function GET() {
     const cardSkin = pickCardSkin(cardSkins, doc?.cardSkinPick || "");
     // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick) 중 지금 가진 것만(최대 3). 안 골랐거나 전부 뗐으면 [] (2026-10-04 자동으로 달지 않음)
     const badges = pickBadges(allBadges, doc?.badgePick);
+    // 📌 아바타 테두리 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 "")
+    const avatarFrame = pickAvatarFrame(perks.avatarFrames, doc?.avatarFramePick || "");
 
     return NextResponse.json({
       success: true,
@@ -127,9 +129,13 @@ export async function GET() {
         // 강화 비용 할인 % 와 할인을 반영한 다음 단계 비용 { chat, voice } (최대 단계면 null) — 강화 창 비용 표시가 이 값을 쓴다
         enhanceDiscount: perks.enhanceDiscount,
         enhanceNextCost,
-        // 단 프로필 배지(최대 3, 관리자 순서) [{ itemId, name, icon, imageUrl, color, type }] · 카드 스킨 키("" 이면 기본)
+        // 단 프로필 배지(최대 3, 유저가 정한 순서) [{ itemId, name, icon, imageUrl, color, type }] · 카드 스킨 키("" 이면 기본)
         badges,
         cardSkin,
+        // 지금 쓰는 아바타 테두리 키("" 이면 없음) — public/avatar-borders/<키>.svg
+        avatarFrame,
+        // 승급 화면을 본 가장 높은 등급 인덱스(null = 아직 안 적음) — app/level/PromoOverlay
+        promoSeen: Number.isInteger(doc?.promoSeen) ? doc.promoSeen : null,
         rolesSynced: heldRoles !== null,
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {

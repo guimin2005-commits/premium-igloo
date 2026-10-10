@@ -16,7 +16,7 @@ import ItemIcon from "../../components/ItemIcon";
 import TierEmblem from "../../components/TierEmblem";
 import { invIconType, invTierOf } from "../../components/Inventory";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { getTier } from "@/lib/voiceTiers";
+import { getTier, tierPaint, tierText } from "@/lib/voiceTiers";
 
 type Row = { userId: string; username: string; displayName: string; xp: number; level: number; point: number; noXp?: boolean };
 type Pass = {
@@ -78,7 +78,7 @@ type InvCard = {
   status: "pending" | "completed" | "missing";
   days?: number; expiresAt?: string | null; acquiredAt?: string | null; siteOnly?: boolean;
   source: InvSource; rewardLevel?: number | null; exclusive?: boolean;
-  count?: number; pendingCount?: number; effectLines?: string[]; skinKey?: string; badgeId?: string;
+  count?: number; pendingCount?: number; effectLines?: string[]; skinKey?: string; frameKey?: string; badgeId?: string;
   revoke: Revoke;
 };
 type InvState = { key: string; synced: boolean; canGrant: boolean; items: InvCard[]; error: string };
@@ -219,7 +219,7 @@ function LevelText({ level }: { level: number }) {
   const t = getTier(level);
   return (
     <span className="inline-flex items-center gap-1.5 tabular-nums">
-      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.c }} />
+      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: tierPaint(t) }} />
       Lv.{level}
     </span>
   );
@@ -917,7 +917,7 @@ export default function AdminUsersPage() {
     ? [
         { l: "XP", v: num(u.xp) },
         { l: "빙옥", v: num(u.point) },
-        { l: "레벨", v: `Lv.${u.level}`, s: <span style={{ color: tier.c }}>{tier.name}</span> },
+        { l: "레벨", v: `Lv.${u.level}`, s: <span style={tierText(tier)}>{tier.name}</span> },
         { l: "강화", v: `${u.chatEnhance} · ${u.voiceEnhance}`, s: "채팅 · 음성" },
         {
           l: "패스",

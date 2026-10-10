@@ -23,7 +23,7 @@ export async function GET() {
     const userId = session.user.id;
 
     // 역할 · 상점 접근은 DB 조회와 함께 기다린다(buildInventory 의 Promise.all) — 상점을 못 보는 유저에게는 연장 링크를 주지 않는다
-    const { synced, badges, cardSkin, items } = await buildInventory({
+    const { synced, badges, cardSkin, avatarFrame, items } = await buildInventory({
       userId,
       roleInfo: fetchMemberRoleInfo(userId),
       canRenew: getShopAccess().then((access) => !!access?.canView),
@@ -37,6 +37,8 @@ export async function GET() {
         // 지금 단 프로필 배지 [{ itemId, name, icon, imageUrl, color, type }] (최대 3) · 지금 쓰는 카드 스킨 키("" 이면 기본 카드)
         badges,
         cardSkin,
+        // 지금 쓰는 아바타 테두리 키("" 이면 없음)
+        avatarFrame,
         items,
       },
     });

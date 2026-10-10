@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
+import PromoOverlay from "@/app/level/PromoOverlay";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
-import { VOICE_TIERS } from "@/lib/voiceTiers";
+import { VOICE_TIERS, tierPaint, tierText } from "@/lib/voiceTiers";
 import { POINT_RATE } from "@/lib/pointRate";
 import { parseTargetKeys, MAX_TARGETS } from "@/lib/adminTargetKeys";
 import { groupOrders } from "@/lib/orderGroups";
@@ -1076,6 +1077,10 @@ export default function AdminBotPage() {
   //       예전엔 늘 빈칸으로 시작해, 저장해 둔 연결이 새로고침하면 사라진 것처럼 보였다(DB 에는 그대로 있었다).
   //    tierEdits 는 바꾼 칸만 든다 — 바꾼 티어만 저장하고, 빠진 역할은 티어에서 뗀다.
   const [tierEdits, setTierEdits] = useState<Record<string, string>>({});
+  // 승급 화면 미리보기(임시) — 고른 등급의 승급 화면을 소리째 띄운다. 서버에 아무것도 적지 않는다
+  const [promoPick, setPromoPick] = useState(3);
+  const [promoPlay, setPromoPlay] = useState<number | null>(null);
+  const [promoRun, setPromoRun] = useState(0);
   const [tierSaving, setTierSaving] = useState(false);
   const savedTier: Record<string, string> = {};
   for (const t of VOICE_TIERS as any[]) {
@@ -1980,8 +1985,8 @@ export default function AdminBotPage() {
                   changed={tierChanged(t.key)}
                   label={
                     <span className="inline-flex items-center gap-2 min-w-0">
-                      <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ backgroundColor: t.c }} />
-                      <span className="truncate" style={{ color: t.c }}>{t.name}</span>
+                      <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ background: tierPaint(t) }} />
+                      <span className="truncate" style={tierText(t)}>{t.name}</span>
                       <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">Lv.{t.min}+</span>
                     </span>
                   }
@@ -1995,6 +2000,23 @@ export default function AdminBotPage() {
                 </FieldRow>
               ))}
             </Panel>
+
+            <Panel
+              id="sec-promo"
+              className="scroll-mt-24"
+              title="승급 화면 미리보기"
+              right={<Btn size="sm" onClick={() => { setPromoRun((n) => n + 1); setPromoPlay(promoPick); }}>재생</Btn>}
+              flush
+            >
+              <FieldRow label="등급">
+                <select value={promoPick} onChange={(e) => setPromoPick(Number(e.target.value))} className={inputClass}>
+                  {(VOICE_TIERS as any[]).map((t, i) => i > 0 && (
+                    <option key={t.key} value={i}>{VOICE_TIERS[i - 1].name} → {t.name}</option>
+                  ))}
+                </select>
+              </FieldRow>
+            </Panel>
+            {promoPlay != null && <PromoOverlay key={promoRun} from={promoPlay - 1} to={promoPlay} onClose={() => setPromoPlay(null)} />}
           </div>
 
           <div className="min-w-0 space-y-5">

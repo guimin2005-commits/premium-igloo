@@ -57,13 +57,14 @@ export const LiveDot = ({ color = "bg-emerald-600" }) => (
 
 // ── 레이디얼 게이지 — 캐릭터 XP 링 (중앙에 children 배치) ─────
 /** @type {import("react").FC<any>} */
-export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClass = "rgba(0,0,0,0.07)" }) => {
+// hideRing: 아바타 테두리를 낀 사람 — 링 자리를 테두리가 대신한다(2026-10-09, 진행도는 카드 아래 막대). 크기 · 자리는 그대로
+export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClass = "rgba(0,0,0,0.07)", hideRing = false }) => {
   const R = (120 - stroke) / 2 - 2;
   const C = 2 * Math.PI * R;
   const off = C * (1 - Math.min(100, Math.max(0, pct)) / 100);
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+      {!hideRing && <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         <circle cx="60" cy="60" r={R} fill="none" stroke={trackClass} strokeWidth={stroke} />
         <circle
           cx="60" cy="60" r={R} fill="none"
@@ -71,7 +72,7 @@ export const RingGauge = ({ pct = 0, size = 148, stroke = 7, children, trackClas
           strokeDasharray={C} strokeDashoffset={off}
           style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)", filter: "drop-shadow(0 0 6px rgba(233,30,63,0.55))" }}
         />
-      </svg>
+      </svg>}
       <div className="absolute inset-0 flex items-center justify-center">{children}</div>
     </div>
   );

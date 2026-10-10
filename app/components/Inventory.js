@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { playTone } from "@/lib/sfx";
@@ -9,7 +9,10 @@ import TierEmblem from "./TierEmblem";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { ICON_PATHS } from "./Icons";
 import { PopShell, PopTab, AdminReset } from "./PopShell";
-import { SKIN_OF, SKIN_NONE } from "@/lib/itemEffects";
+import {
+  SKIN_OF, SKIN_NONE, FRAME_OF,
+  MAX_BADGES, badgeSlotsOf, badgeOrderOf, firstEmptySlot, pickSlot, nextEmptySlot, putBadgeAt, takeBadgeAt,
+} from "@/lib/itemEffects";
 
 // 📌 인벤토리 — 레벨 대시보드의 가방 팝업을 내 정보 · ARCTIC 에서도 그 자리에 띄운다 (다른 화면으로 넘기지 않는다)
 
@@ -172,13 +175,14 @@ const InvSlot = ({ it, on, onClick }) => {
 // 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · (기간제면) 연장 · 효과.
 //    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다). onGo 는 연장으로 떠날 때 가방을 닫는다
 //    카드 스킨 아이템(it.skinKey)이면 착용 · 해제 버튼 — skinOn: 지금 이 스킨을 쓰는 중, onSkin(키 | "none")
-//    프로필 배지 아이템(it.badgeId)이면 착용 · 해제 버튼 — badgeOn: 지금 단 배지, onBadge(아이템 id, 착용 여부)
-const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false, badgeOn = false, onBadge, badgeBusy = false }) => {
+//    프로필 배지 아이템(it.badgeId)이면 [배지 설정] 버튼 — 배지 창(BadgeWindow)을 그 자리에 연다. badgeSlot: 단 자리(0 · 1 · 2, 안 달았으면 -1), onBadgeOpen()
+//    아바타 테두리 아이템(it.frameKey)이면 착용 · 해제 버튼 — frameOn: 지금 이 테두리를 쓰는 중, onFrame(키 | "none")
+const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, onFrame, frameBusy = false }) => {
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
-  // 📌 스킨이면서 배지인 아이템은 버튼이 둘 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
-  const both = !!it.skinKey && !!it.badgeId;
+  // 📌 스킨 · 배지 · 테두리 중 둘 이상인 아이템은 버튼이 여럿 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
+  const both = [it.skinKey, it.badgeId, it.frameKey].filter(Boolean).length > 1;
   const wearBtn = (on) =>
     `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
       on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
@@ -239,10 +243,20 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
             {both ? (skinOn ? "스킨 해제" : "스킨 착용") : skinOn ? "착용 해제" : "착용"}
           </button>
         )}
-        {/* 📌 프로필 배지 — 이름 옆(내 정보 · 랭킹)에 최대 3개. 직접 단 것만 보인다(2026-10-04 자동으로 달지 않음) */}
+        {/* 📌 프로필 배지 — 이름 옆(내 정보 · 랭킹)에 최대 3개. 직접 단 것만 보인다(2026-10-04 자동으로 달지 않음).
+               달기 · 떼기 · 자리는 배지 창에서 — 버튼은 하나, 단 배지면 자리 번호만 붙인다 */}
         {it.badgeId && !compact && (
-          <button type="button" disabled={badgeBusy} onClick={() => onBadge?.(it.badgeId, !badgeOn)} className={wearBtn(badgeOn)}>
-            {both ? (badgeOn ? "배지 해제" : "배지 착용") : badgeOn ? "착용 해제" : "착용"}
+          <button type="button" onClick={() => onBadgeOpen?.()} className={`${wearBtn(badgeSlot >= 0)} gap-1.5`}>
+            배지 설정
+            {badgeSlot >= 0 && (
+              <span aria-label={`${badgeSlot + 1}번 자리`} className="w-4 h-4 rounded-full bg-white/15 text-[9px] font-black tabular-nums flex items-center justify-center">{badgeSlot + 1}</span>
+            )}
+          </button>
+        )}
+        {/* 📌 아바타 테두리 — 가진 테두리 중 하나를 골라 프로필 사진에 씌운다. 해제하면 테두리 없음(스킨과 같은 흐름) */}
+        {it.frameKey && !compact && (
+          <button type="button" disabled={frameBusy} onClick={() => onFrame?.(frameOn ? SKIN_NONE : it.frameKey)} className={wearBtn(frameOn)}>
+            {both ? (frameOn ? "테두리 해제" : "테두리 착용") : frameOn ? "착용 해제" : "착용"}
           </button>
         )}
         {it.rewardLevel != null && (
@@ -291,23 +305,261 @@ export function InventoryItemPreview({ item, effectLines }) {
   );
 }
 
+// 📌 배지 창 — 게임 장비창처럼 위에 단 배지 칸 3개(1 · 2 · 3번 자리 = 이름 옆 순서), 아래 상자에 가진 배지 전부.
+//    가방(PopShell) 위에 겹쳐 뜬다(그 자리 팝업 — 화면 이동 없음). 모바일 바텀시트 · 데스크톱 가운데 모달, 닫기 · Esc · 바깥 누르면 닫힘.
+//    조작: 늘 고른 칸이 하나 있다(처음 = 첫 빈 칸, 다 찼으면 1번). 칸을 누르면 그 칸을 고르고, 직접 고른 칸을 한 번 더 누르면 그 칸의 배지를 뺀다
+//          (📌 저절로 골라진 칸 — 창을 열 때 · 넣은 뒤 — 은 처음 누르면 고르기만 한다(armed). 열자마자 1번 칸을 누르면 바로 빠지던 것 막음)
+//          상자의 배지를 누르면 고른 칸에 넣는다(있던 건 빠짐 · 다른 칸에 있던 배지면 두 칸을 맞바꿈) → 고른 칸은 다음 빈 칸으로.
+//          데스크톱은 끌어다 놓기도 — 상자 → 칸(넣기), 칸 → 칸(맞바꾸기), 칸 → 상자(빼기). 칸 계산은 lib/itemEffects(putBadgeAt …)
+//          📌 칸은 늘 앞에서부터 찬다(칸 번호 = 이름 옆 순서) — 빼면 뒤 칸이 당겨지고, 빈 칸을 누르면 첫 빈 칸을 고른다(pickSlot)
+//    저장: 바뀔 때마다 onSave(새 순서, 종류, 바꾸기 전 순서) — 저장하는 동안만 새 배치를 보이고(pending), 끝나면 badges 를 그대로 그린다
+//          (실패면 저장 전 · 서버가 다시 준 목록으로). busy 동안은 바꾸지 않는다
+//    items: 가진 배지 아이템(배지 id 마다 하나 — it.badgeId), badges: 지금 단 배지(순서 있음)
+const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) => {
+  const worn = Array.isArray(badges) ? badges : [];
+  const wornIds = worn.map((b) => b.itemId);
+  const [pending, setPending] = useState(null); // 저장 중인 배치
+  const slots = pending ?? badgeSlotsOf(wornIds);
+  const [selAt, setSel] = useState(() => firstEmptySlot(badgeSlotsOf(wornIds)));
+  const sel = pickSlot(slots, selAt); // 밖에서 목록이 줄어 고른 칸이 비면 첫 빈 칸으로
+  const [armed, setArmed] = useState(-1); // 유저가 직접 누른 칸 — 이 칸을 한 번 더 눌러야 뺀다
+  const [over, setOver] = useState(-1); // 끌어다 놓는 중 위에 있는 칸
+  // 칸 · 상자 그림 재료 — 가방 아이템 우선(가방과 같은 색 · 아이콘), 없으면 서버가 준 단 배지
+  const info = new Map([...worn.map((b) => [b.itemId, b]), ...items.map((it) => [it.badgeId, it])]);
+  const ownedIds = new Set(items.map((it) => it.badgeId));
+  const short = (n) => String(n || "").replace(/^배지\s*·\s*/, ""); // 창 안 이름은 "배지 · " 머리말 없이
+
+  const closeRef = useRef(null);
+  // 열리면 닫기 버튼에 포커스, 닫히면 연 버튼(배지 설정)으로 돌려준다
+  useEffect(() => {
+    const back = document.activeElement;
+    closeRef.current?.focus({ preventScroll: true });
+    return () => { if (back && typeof back.focus === "function") back.focus({ preventScroll: true }); };
+  }, []);
+  // 📌 Esc 는 이 창만 닫는다 — 캡처 단계에서 먼저 받아 멈춰, 뒤 가방(PopShell)의 Esc 까지 가지 않게
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  const commit = async (next, kind, nextSel) => {
+    const prevSel = sel;
+    setPending(next);
+    setSel(nextSel);
+    setArmed(-1);
+    const ok = await onSave(badgeOrderOf(next), kind, badgeOrderOf(slots));
+    setPending(null);
+    if (!ok) setSel(prevSel);
+  };
+  const tapSlot = (i) => {
+    const at = pickSlot(slots, i);
+    if (at !== sel || armed !== at) { setSel(at); setArmed(at); onTone?.(); return; }
+    if (!slots[at] || busy) return;
+    const next = takeBadgeAt(slots, at);
+    commit(next, "take", firstEmptySlot(next));
+  };
+  const tapBadge = (id) => {
+    if (busy) return;
+    const r = putBadgeAt(slots, sel, id);
+    if (r.kind === "same") { onTone?.(); return; }
+    commit(r.slots, r.kind, nextEmptySlot(r.slots, r.at));
+  };
+  // 끌어다 놓기 — 이 창 안에서 시작한 것만 받는다(dragRef: { id, from: "box" | "slot" }). 다른 곳에서 끌어온 글자는 무시
+  const dragRef = useRef(null);
+  const dragStart = (id, from) => (e) => {
+    if (busy) { e.preventDefault(); return; }
+    dragRef.current = { id, from };
+    e.dataTransfer.setData("text/plain", ""); // 파이어폭스는 데이터가 있어야 끌기가 시작된다
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const dragEnd = () => { dragRef.current = null; setOver(-1); };
+  const dropOnSlot = (i) => (e) => {
+    e.preventDefault();
+    const d = dragRef.current;
+    dragEnd();
+    if (!d || busy || !(ownedIds.has(d.id) || slots.includes(d.id))) return;
+    const r = putBadgeAt(slots, i, d.id);
+    if (r.kind === "same") { setSel(i); setArmed(i); return; }
+    commit(r.slots, r.kind, r.at);
+  };
+  const dropOnBox = (e) => {
+    e.preventDefault();
+    const d = dragRef.current;
+    dragEnd();
+    const at = d?.from === "slot" ? slots.indexOf(d.id) : -1;
+    if (at < 0 || busy) return;
+    const next = takeBadgeAt(slots, at);
+    commit(next, "take", firstEmptySlot(next));
+  };
+
+  const cells = Math.max(8, Math.ceil(items.length / 4) * 4); // 4열 — 빈 자리는 점선 칸으로 채운다
+  const ring = "0 0 0 2px rgba(255,255,255,0.85), 0 0 22px -4px rgba(255,255,255,0.45)";
+  return (
+    <div
+      className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="배지"
+        aria-busy={busy || undefined}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full sm:max-w-[440px] max-h-[86dvh] sm:max-h-[88vh] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)] flex flex-col"
+        style={{ background: "#131313", animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+      >
+        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
+        <div aria-hidden className="absolute -top-28 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.2)" }}></div>
+
+        {/* 모바일 바텀시트 손잡이 */}
+        <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
+
+        {/* 머리 — 가방과 같은 문법(아이콘 · 제목 · 수 · 닫기) */}
+        <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-4 sm:pt-6 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex items-center gap-3">
+            <svg aria-hidden viewBox="0 0 24 24" className="w-[22px] h-[22px] shrink-0 text-white/55" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d={ICON_PATHS.shieldCheck} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-none truncate">배지</h3>
+            <span className="shrink-0 text-sm font-black text-white/40 tabular-nums">{badgeOrderOf(slots).length}/{MAX_BADGES}</span>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="shrink-0 w-9 h-9 rounded-full border border-white/15 text-white/55 hover:text-white hover:border-white/35 transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        <div
+          className="pop-scroll relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 sm:px-7 pt-6"
+          style={{ paddingBottom: "max(24px, env(safe-area-inset-bottom))" }}
+        >
+          {/* 단 배지 칸 — 1 · 2 · 3번(이름 옆 순서). 고른 칸은 흰 테 · 빛, 빈 칸은 점선 */}
+          <div aria-label="배지 칸" className="flex justify-center gap-3 sm:gap-4">
+            {slots.map((id, i) => {
+              const b = id ? info.get(id) : null;
+              const accent = b ? invAccentOf(b) : "";
+              const on = sel === i;
+              const shadow = [on ? ring : "", over === i ? "0 0 0 2px rgba(255,255,255,0.45)" : "", b ? `inset 0 0 0 1px ${accent}55` : ""].filter(Boolean).join(", ");
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${i + 1}번 칸${b ? ` · ${short(b.name)}` : ""}`}
+                  title={b ? short(b.name) : undefined}
+                  draggable={!!b && !busy}
+                  onDragStart={b ? dragStart(id, "slot") : undefined}
+                  onDragEnd={dragEnd}
+                  onDragOver={(e) => { if (!dragRef.current) return; e.preventDefault(); if (over !== i) setOver(i); }}
+                  onDragLeave={() => setOver((v) => (v === i ? -1 : v))}
+                  onDrop={dropOnSlot(i)}
+                  onClick={() => tapSlot(i)}
+                  className="relative shrink-0 w-[84px] h-[84px] sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center transition-[box-shadow,transform] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+                  style={{
+                    background: b ? `linear-gradient(160deg, ${accent}33, ${accent}0f)` : "rgba(255,255,255,0.02)",
+                    boxShadow: shadow || undefined,
+                  }}
+                >
+                  {!b && <span aria-hidden className="absolute inset-0 rounded-2xl border border-dashed border-white/20 pointer-events-none"></span>}
+                  <span aria-hidden className={`absolute top-1.5 left-2 text-[10px] font-black tabular-nums leading-none pointer-events-none ${on ? "text-white" : "text-white/40"}`}>{i + 1}</span>
+                  {b && <span aria-hidden className="pointer-events-none flex items-center justify-center"><InvIcon it={b} size={46} color={accent} /></span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 상자 — 가진 배지 전부. 단 배지는 칸 번호 표식 + 살짝 어둡게 */}
+          <div
+            className="mt-6 rounded-2xl p-3 bg-black/25"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.07)" }}
+            onDragOver={(e) => { if (dragRef.current?.from === "slot") e.preventDefault(); }}
+            onDrop={dropOnBox}
+          >
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: cells }, (_, n) => {
+                const it = items[n];
+                if (!it) return <div key={`empty-${n}`} aria-hidden className="aspect-square rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02]"></div>;
+                const accent = invAccentOf(it);
+                const at = slots.indexOf(it.badgeId);
+                return (
+                  <button
+                    key={it.badgeId}
+                    type="button"
+                    title={short(it.name)}
+                    aria-label={at >= 0 ? `${short(it.name)} · ${at + 1}번 칸` : short(it.name)}
+                    draggable={!busy}
+                    onDragStart={dragStart(it.badgeId, "box")}
+                    onDragEnd={dragEnd}
+                    onClick={() => tapBadge(it.badgeId)}
+                    className="relative aspect-square min-w-0 rounded-xl flex flex-col items-center justify-center px-1 transition-transform hover:-translate-y-0.5 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+                    style={{ background: `linear-gradient(160deg, ${accent}2e, ${accent}0d)`, boxShadow: `inset 0 0 0 1px ${accent}44` }}
+                  >
+                    <span className={`w-full flex flex-col items-center pointer-events-none ${at >= 0 ? "opacity-40" : ""}`}>
+                      <span aria-hidden className="mb-1.5 h-7 flex items-center justify-center">
+                        <InvIcon it={it} size={28} color={accent} />
+                      </span>
+                      <span className="w-full text-[10px] font-black leading-tight text-center line-clamp-1 text-white/85">{short(it.name)}</span>
+                    </span>
+                    {at >= 0 && (
+                      <span aria-hidden className="absolute top-1 right-1 w-[18px] h-[18px] rounded-full bg-white text-[#131313] text-[10px] font-black tabular-nums flex items-center justify-center pointer-events-none">
+                        {at + 1}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 📌 가방 — 인벤토리를 대시보드에 펼치지 않고 오버레이로 연다.
 //    껍데기는 TierModal 과 같은 문법(모바일 바텀시트 / 데스크톱 모달, 잉크 패널).
 //    스크롤 잠금은 손대지 않는다 — 루트 className 에 "fixed inset-0" 이 붙어 있고
 //    z-index 가 50 이상이면 ScrollLock 이 알아서 건다(iOS 대응 포함).
 // 📌 cardSkin: 서버(my-items)가 준 지금 쓰는 스킨 키("" 이면 기본 카드). 착용 · 해제는 가방이 직접 저장하고(POST /api/xp/card-skin)
 //    결과를 바로 보여 준다 — 다음 폴링으로 같은 값이 오면 그대로. onSkinChange(키) 가 있으면 부모에도 알린다(프로필 카드 장식)
-// 📌 badges: 서버(my-items)가 준 지금 단 배지 목록. 착용 · 해제는 POST /api/xp/badge 로 저장하고 onBadgesChange(목록) 로 부모에 알린다(스킨과 같은 흐름)
-export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "", cardSkin = "", onSkinChange, badges, onBadgesChange }) => {
+// 📌 badges: 서버(my-items)가 준 지금 단 배지 목록(순서 = 이름 옆 자리). 배지 창(BadgeWindow)에서 바꿀 때마다 POST /api/xp/badge { order } 로 저장하고
+//    onBadgesChange(목록) 로 부모에 알린다(스킨과 같은 흐름)
+// 📌 avatarFrame: 서버(my-items)가 준 지금 쓰는 테두리 키("" 이면 없음). POST /api/xp/avatar-frame 로 저장하고 onFrameChange(키) 로 부모에 알린다(스킨과 같은 흐름)
+export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, onReset, resetBusy, loading = false, error = "", cardSkin = "", onSkinChange, badges, onBadgesChange, avatarFrame = "", onFrameChange }) => {
   const [sel, setSel] = useState(null); // 선택한 아이템 uid
   const [skinNow, setSkinNow] = useState(null); // 방금 저장한 값(서버 값이 오기 전까지)
   const [skinBusy, setSkinBusy] = useState(false);
   const [badgeBusy, setBadgeBusy] = useState(false);
+  const [badgeOpen, setBadgeOpen] = useState(false); // 배지 창
+  // 가방이 닫히면 배지 창도 닫는다(다시 열 때 겹쳐 뜨지 않게)
+  if (!open && badgeOpen) setBadgeOpen(false);
+  const [frameNow, setFrameNow] = useState(null); // 방금 저장한 테두리(서버 값이 오기 전까지)
+  const [frameBusy, setFrameBusy] = useState(false);
   const [toast, setToast] = useState("");
   useEffect(() => { setSkinNow(null); }, [cardSkin]);
   const curSkin = skinNow ?? cardSkin;
+  useEffect(() => { setFrameNow(null); }, [avatarFrame]);
+  const curFrame = frameNow ?? avatarFrame;
   // 📌 단 배지는 부모 값 그대로 — 저장 결과는 onBadgesChange 로 부모가 바로 반영한다(옛 조회가 덮지 않게 막는 건 keepSavedBadges)
-  const wornIds = new Set((Array.isArray(badges) ? badges : []).map((b) => b.itemId));
+  const wornIds = (Array.isArray(badges) ? badges : []).map((b) => b.itemId);
+  // 배지 창 상자 — 가진 배지 아이템(같은 배지 id 는 한 번, 가방 순서)
+  const badgeItems = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const g of groups) for (const it of g.items) if (it.badgeId && !seen.has(it.badgeId)) { seen.add(it.badgeId); out.push(it); }
+    return out;
+  }, [groups]);
   const say = (msg) => {
     setToast(msg);
     setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800);
@@ -335,29 +587,57 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       setSkinBusy(false);
     }
   };
-  const saveBadge = async (itemId, on) => {
-    if (badgeBusy) return;
+  const saveFrame = async (frame) => {
+    if (frameBusy) return;
+    setFrameBusy(true);
+    try {
+      const res = await fetch("/api/xp/avatar-frame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frame }),
+      }).then((r) => r.json()).catch(() => null);
+      if (res?.success) {
+        const next = res.data?.avatarFrame || "";
+        setFrameNow(next);
+        onFrameChange?.(next);
+        playTone(frame === SKIN_NONE ? 523 : 784, 0.07, "sine", 0.03);
+        say(frame === SKIN_NONE ? "아바타 테두리를 해제했습니다" : `${FRAME_OF[frame]?.l || ""} 테두리를 착용했습니다`);
+      } else {
+        playTone(220, 0.09, "square", 0.02);
+        say(res?.error || "저장하지 못했습니다");
+      }
+    } finally {
+      setFrameBusy(false);
+    }
+  };
+  // 📌 배지 창 저장 — 단 배지 전체를 이 순서로(order). kind: "put" 달기 · "swap" 자리 바꿈 · "take" 떼기. 성공하면 true(실패면 창이 되돌린다)
+  //    base: 창이 보고 있던 순서 — 서버 목록이 그새 바뀌었으면(다른 탭 · 역할 확인 실패로 빠져 보이던 배지) 409 + 지금 목록이 오고, 그 목록으로 다시 맞춘다
+  const saveBadgeOrder = async (order, kind, base) => {
+    if (badgeBusy) return false;
     setBadgeBusy(true);
     try {
       const res = await fetch("/api/xp/badge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, on }),
+        body: JSON.stringify({ order, base }),
       }).then((r) => r.json()).catch(() => null);
       if (res?.success) {
-        const next = Array.isArray(res.data?.badges) ? res.data.badges : [];
-        onBadgesChange?.(next);
-        playTone(on ? 784 : 523, 0.07, "sine", 0.03);
-        say(on ? "배지를 달았습니다" : "배지를 뗐습니다");
-      } else {
-        // 3개를 넘기면 서버가 409 와 안내 문구를 준다
-        playTone(220, 0.09, "square", 0.02);
-        say(res?.error || "저장하지 못했습니다");
+        onBadgesChange?.(Array.isArray(res.data?.badges) ? res.data.badges : []);
+        playTone(kind === "take" ? 523 : kind === "swap" ? 659 : 784, 0.07, "sine", 0.03);
+        say(kind === "take" ? "배지를 뗐습니다" : kind === "swap" ? "자리를 바꿨습니다" : "배지를 달았습니다");
+        return true;
       }
+      if (Array.isArray(res?.data?.badges)) onBadgesChange?.(res.data.badges);
+      // 3개를 넘기면 서버가 409 와 안내 문구를 준다
+      playTone(220, 0.09, "square", 0.02);
+      say(res?.error || "저장하지 못했습니다");
+      return false;
     } finally {
       setBadgeBusy(false);
     }
   };
+  const openBadges = () => { setBadgeOpen(true); playTone(660, 0.06, "sine", 0.03); };
+  const closeBadges = useCallback(() => { setBadgeOpen(false); playTone(523, 0.06, "sine", 0.025); }, []);
   // 정렬 — 보는 사람 브라우저에 기억(편의용). 못 읽으면 기본
   const [sort, setSort] = useState("default");
   useEffect(() => {
@@ -399,7 +679,8 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         <>
         {selItem ? (
           <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} onSkin={saveSkin} skinBusy={skinBusy}
-            badgeOn={!!selItem.badgeId && wornIds.has(selItem.badgeId)} onBadge={saveBadge} badgeBusy={badgeBusy} />
+            badgeSlot={selItem.badgeId ? wornIds.indexOf(selItem.badgeId) : -1} onBadgeOpen={openBadges}
+            frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} onFrame={saveFrame} frameBusy={frameBusy} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
             <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
@@ -450,6 +731,9 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
         <p className="text-[12px] font-bold text-white/35 text-center mt-6">{loading ? "불러오는 중…" : error || "아직 보유한 아이템이 없습니다"}</p>
       )}
     </PopShell>
+    {badgeOpen && (
+      <BadgeWindow onClose={closeBadges} items={badgeItems} badges={badges} busy={badgeBusy} onSave={saveBadgeOrder} onTone={onTone} />
+    )}
     {/* 착용 · 해제 알림 — 가방 창 밖(뷰포트 기준)에 띄운다 */}
     {toast && (
       <div className="fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-10 z-[400] px-5 py-3 rounded-full bg-white text-[#131313] text-[12px] font-bold shadow-[0_18px_44px_-14px_rgba(0,0,0,0.5)] pointer-events-none">
@@ -483,6 +767,10 @@ export function keepSavedSkin(data, t0, saved) {
 export function keepSavedBadges(data, t0, saved) {
   return data && saved && t0 < saved.at ? { ...data, badges: saved.v } : data;
 }
+// 📌 아바타 테두리도 같은 규칙 — 저장보다 먼저 떠난 조회는 avatarFrame 만 저장한 키로 둔다. saved: { at: 저장 시각, v: 저장 결과 테두리 키 }
+export function keepSavedFrame(data, t0, saved) {
+  return data && saved && t0 < saved.at ? { ...data, avatarFrame: saved.v } : data;
+}
 
 // 📌 그 자리에서 여는 인벤토리 — 내 정보 · ARCTIC 이 쓴다. 열 때마다 /api/shop/my-items 를 새로 읽는다.
 //    처음 읽기 전에는 빈 가방 문구 대신 불러오는 중. 여닫는 소리는 레벨 가방과 같다(낮은음 → 높은음 / 반대).
@@ -491,6 +779,7 @@ export function InventoryPopup({ open, onClose }) {
   const [tab, setTab] = useState("all");
   const skinSaved = useRef({ at: 0, v: "" }); // 마지막 스킨 저장(keepSavedSkin)
   const badgeSaved = useRef({ at: 0, v: [] }); // 마지막 배지 저장(keepSavedBadges)
+  const frameSaved = useRef({ at: 0, v: "" }); // 마지막 테두리 저장(keepSavedFrame)
   useEffect(() => {
     if (!open) return;
     playTone(392, 0.06, "sine", 0.03);
@@ -502,7 +791,7 @@ export function InventoryPopup({ open, onClose }) {
       .then((d) => {
         if (!alive) return;
         // 실패는 빈 가방과 구분한다 — 받아 둔 목록(과 지금 스킨 · 연동 여부)이 있으면 그대로 두고 문구만 바꾼다
-        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedBadges(keepSavedSkin(d.data, t0, skinSaved.current), t0, badgeSaved.current)));
+        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedFrame(keepSavedBadges(keepSavedSkin(d.data, t0, skinSaved.current), t0, badgeSaved.current), t0, frameSaved.current)));
         else setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
       })
       .catch(() => { if (alive) setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: "불러오지 못했습니다" })); });
@@ -534,6 +823,11 @@ export function InventoryPopup({ open, onClose }) {
       onBadgesChange={(list) => {
         badgeSaved.current = { at: Date.now(), v: list };
         setData((cur) => (cur ? { ...cur, badges: list } : cur));
+      }}
+      avatarFrame={data?.avatarFrame || ""}
+      onFrameChange={(k) => {
+        frameSaved.current = { at: Date.now(), v: k };
+        setData((cur) => (cur ? { ...cur, avatarFrame: k } : cur));
       }}
     />
   );
