@@ -53,7 +53,7 @@ export const POP_THEME = {
     ].join(","),
   },
 };
-// compact: 왼쪽 요약 판 없이 한 칸짜리 좁은 창(PC 최대 520px · 높이는 내용만큼, 모바일은 바텀시트 최대 88dvh) — 강화 창
+// compact: 왼쪽 요약 판 없이 한 칸짜리 창(PC 최대 680px · 높이는 내용만큼, 모바일은 바텀시트 최대 88dvh) — 강화 창
 export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink", compact = false }) => {
   const closeRef = useRef(null);
   // 열리면 닫기 버튼에 포커스 — 키보드로도 바로 닫고, 탭 순서가 팝업 안에서 시작한다
@@ -78,7 +78,7 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[520px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] rounded-t-3xl sm:rounded-3xl"}`}
+        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] rounded-t-3xl sm:rounded-3xl"}`}
         style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <style>{POP_CSS}</style>
@@ -117,7 +117,7 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
 
         {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤. compact 는 한 칸 */}
         {compact ? (
-          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 sm:px-7 pt-6 pb-6">{children}</div>
+          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 sm:px-9 pt-6 sm:pt-8 pb-6 sm:pb-9">{children}</div>
         ) : (
           <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden sm:flex">
             <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto sm:overflow-x-hidden no-bar flex flex-col">{left}</div>
