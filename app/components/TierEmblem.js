@@ -20,7 +20,16 @@ const lighten = (hex, t) => {
 };
 
 // 그 자리(size px)에 쓸 판 · 배율 — 너비는 size × 1.3, 높이는 size 까지(예전 그림 크기를 넘지 않게)
+//    📌 아이언은 그림이 가장 작아 자리에 꽉 채우면 배율이 크게 잡혀 칸이 굵게 퍼졌다(2026-10-10 "엠블럼이 뚱뚱하잖아") —
+//       브론즈와 같은 판 · 배율로 그린다(칸 크기가 같아 작은 받침은 작게 보인다)
 function pick(key, size) {
+  if (key === "iron") {
+    const b = pickFit("bronze", size), [x, y, w, h] = EMBLEM_BOX.iron[b.n];
+    return { n: b.n, s: b.s, x, y, w, h, H: h * b.s };
+  }
+  return pickFit(key, size);
+}
+function pickFit(key, size) {
   const ns = size >= 28 ? [48, 32] : size >= 18 ? [32, 24] : [32, 24, 20];
   let best = null;
   for (const n of ns) {
