@@ -614,7 +614,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
           <div className="mt-2 flex justify-between text-[11px] font-bold text-white/40 tabular-nums"><span>+0</span><span>+{v.max}</span></div>
 
           <div className="mt-5 sm:mt-auto pt-4 border-t border-white/10">
-            <p className="text-[11px] font-bold text-white/45">지금 · {perLabel}</p>
+            <p className="text-[11px] font-bold text-white/45">{perLabel}</p>
             <p className="mt-1.5 text-[20px] font-black text-white tabular-nums leading-none">{gainAt(0)} <span className="text-[11px] text-white/40">XP</span></p>
           </div>
           {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 강화 초기화" />}
