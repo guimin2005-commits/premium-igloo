@@ -2303,6 +2303,10 @@ export default function LevelPage() {
   // 대시보드 파생값
   const prog = me?.levelProgress || { current: 0, required: 1, needToNext: 0 };
   const progPct = Math.min(100, Math.floor((prog.current / Math.max(1, prog.required)) * 100));
+  // 📌 프로필 사진 크기 — 테두리를 끼면 링이 빠지므로 사진이 링 자리를 채운다(2026-10-10 "아이템까지 적용시키면 너무 작아짐 · 비율이 안 맞음").
+  //    링 칸(모바일 86 · PC 96)은 그대로, 사진만 모바일 62 → 78 · PC 68 → 88. 테두리는 사진 크기에 맞춰 함께 커진다
+  const framedAvatar = !!me?.avatarFrame && !!session?.user;
+  const avatarPx = framedAvatar ? { m: 78, d: 88 } : { m: 62, d: 68 };
   const rankPct = me?.total ? Math.max(1, Math.ceil((me.rank / me.total) * 100)) : null;
   const attendedToday = !!me && me.lastAttendDate === kstTodayStr();
   const todayTotal = myLogs?.today?.total ?? 0;
@@ -2736,21 +2740,27 @@ export default function LevelPage() {
   // ARCTIC 상점 동선 — 공개 전에는 관리자에게만 노출 (policy.shopPublic). 레벨이 닫혀 있으면 함께 닫힌다.
   const canSeeShop = (!!policy?.shopPublic && levelOpen) || isAdminUser;
 
-  // 📌 승급 화면 — 지금 등급이 본 적 있는 가장 높은 등급(me.promoSeen)보다 높으면 한 번 띄운다(app/level/PromoOverlay).
+  // 📌 승급 화면 — 지금 등급이 마지막으로 본 등급(me.promoSeen)보다 높으면 한 번 띄운다(app/level/PromoOverlay).
   //    promoSeen 이 없으면(처음) 지금 등급을 조용히 적는다 — 기능을 넣기 전부터 그 등급이던 사람에게는 띄우지 않는다.
+  //    등급이 내려가 있으면 본 등급도 지금 등급으로 조용히 내린다 — 다시 올라가면 승급 화면이 또 뜬다
   //    닫으면 서버에 적는다(app/api/xp/promo-seen). 관리자는 /level?promo=<등급 키> 로 미리 볼 수 있다(적지 않는다)
   const [promo, setPromo] = useState(null); // { from, to, preview }
   const promoShownRef = useRef(-1);
   const promoInitRef = useRef(false);
   const savePromoSeen = useCallback((tier) => {
     fetch("/api/xp/promo-seen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tier }) }).catch(() => {});
-    setMe((cur) => (cur ? { ...cur, promoSeen: Math.max(tier, cur.promoSeen ?? -1) } : cur));
+    setMe((cur) => (cur ? { ...cur, promoSeen: tier } : cur));
   }, []);
   useEffect(() => {
     if (!me || guest || !levelOpen) return;
     const ti = getTierIndex(me.level || 0);
     if (me.promoSeen == null) {
       if (!promoInitRef.current) { promoInitRef.current = true; savePromoSeen(ti); }
+      return;
+    }
+    if (ti < me.promoSeen) {
+      promoShownRef.current = -1;
+      savePromoSeen(ti);
       return;
     }
     if (ti > me.promoSeen && promoShownRef.current < ti) {
@@ -3106,27 +3116,27 @@ export default function LevelPage() {
                           {/* 📌 착용한 아바타 테두리 — 사진 가운데에 겹친다(감싼 칸이 relative). 이름 줄이 relative 라 테두리 끝보다 위에 그려진다.
                               테두리를 낀 사람만 등급만큼 사진 칸에 여백(frameRoom) — 카드 모서리에 잘리거나 이름 · 칩에 닿지 않게 */}
                           {/* 📌 2026-10-10 운영자 "모바일에서 프로필이 왜 이리 작지?" → 사진 54 → 62px(링 76 → 86px) */}
-                          <span className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(me?.avatarFrame, 62, { box: 86, pad: 20, gap: 16 })}>
+                          <span className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(me?.avatarFrame, avatarPx.m, { box: 86, pad: 20, gap: 16 })}>
                             <RingGauge pct={progPct} size={86} stroke={5} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={session.user.image} alt="" className="w-[62px] h-[62px] rounded-full object-cover" />
+                                <img src={session.user.image} alt="" className="rounded-full object-cover" style={{ width: avatarPx.m, height: avatarPx.m }} />
                               ) : (
-                                <span className="w-[62px] h-[62px] rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60">{guest ? <GuestAvatar className="w-8 h-8" /> : (session.user.name || "?").slice(0, 1)}</span>
+                                <span className="rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60" style={{ width: avatarPx.m, height: avatarPx.m }}>{guest ? <GuestAvatar className="w-8 h-8" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
-                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={62} />}
+                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.m} />}
                           </span>
-                          <span className="relative hidden lg:block" style={guest ? undefined : frameRoom(me?.avatarFrame, 68, { box: 96, pad: 28, gap: 20 })}>
+                          <span className="relative hidden lg:block" style={guest ? undefined : frameRoom(me?.avatarFrame, avatarPx.d, { box: 96, pad: 28, gap: 20 })}>
                             <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={session.user.image} alt="" className="w-[68px] h-[68px] rounded-full object-cover" />
+                                <img src={session.user.image} alt="" className="rounded-full object-cover" style={{ width: avatarPx.d, height: avatarPx.d }} />
                               ) : (
-                                <span className="w-[68px] h-[68px] rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60">{guest ? <GuestAvatar className="w-9 h-9" /> : (session.user.name || "?").slice(0, 1)}</span>
+                                <span className="rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: avatarPx.d, height: avatarPx.d }}>{guest ? <GuestAvatar className="w-9 h-9" /> : (session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
-                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={68} />}
+                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.d} />}
                           </span>
                           <div className="relative min-w-0 flex-1">
                           <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{guest ? "— — —" : session.user.name}</p>
