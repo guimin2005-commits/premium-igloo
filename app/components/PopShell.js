@@ -113,7 +113,7 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         </div>
 
         {/* 탭 */}
-        <div className={`relative z-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.08] ${tabs ? "py-4 flex items-center gap-1.5 overflow-x-auto no-bar" : "pt-4"}`}>{tabs}</div>
+        <div className={`relative z-10 shrink-0 ${compact ? "px-5 sm:px-9" : "px-5 sm:px-7 border-b border-white/[0.08]"} ${tabs ? (compact ? "pt-4 sm:pt-5 flex" : "py-4 flex items-center gap-1.5 overflow-x-auto no-bar") : "pt-4"}`}>{tabs}</div>
 
         {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤. compact 는 한 칸 */}
         {compact ? (

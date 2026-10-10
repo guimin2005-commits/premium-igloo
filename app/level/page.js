@@ -456,23 +456,28 @@ const EnhPixelIcon = ({ k, scale = 4, className = "", style }) => {
   });
   return <svg aria-hidden viewBox={`0 0 ${W} ${H}`} width={W * scale} height={H * scale} shapeRendering="crispEdges" className={`shrink-0 ${className}`} style={style}>{rects}</svg>;
 };
-// 📌 채팅 · 음성 탭 — 그쪽 색 네모 + 이름 + 단계. 켜진 쪽은 흰 알약 · 잉크 글자. 폭 · 높이 고정(단계가 두 자리 · MAX 가 돼도 탭 줄이 안 밀린다)
-const EnhKindTab = ({ k, on, n, max, onClick }) => {
-  const t = ENH_KIND[k];
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`shrink-0 inline-flex items-center justify-center gap-1.5 w-[104px] sm:w-[124px] h-9 sm:h-11 rounded-full text-[13px] sm:text-[15px] font-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${on ? "bg-white text-[#131313]" : "text-white/70 hover:text-white"}`}
-      style={on ? undefined : { boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)" }}
-    >
-      <span aria-hidden className="w-2 h-2 shrink-0" style={{ background: t.c }}></span>
-      {t.label}
-      <span className={`tabular-nums text-[11px] sm:text-[12px] ${on ? "text-[#131313]/50" : "text-white/40"}`}>{max ? "MAX" : `+${n}`}</span>
-    </button>
-  );
-};
+// 📌 채팅 · 음성 탭 — 각진 막대 하나를 반으로 나눠 고른 쪽만 그쪽 색으로 채운다(잉크 글자). 2026-10-11 운영자: 흰 알약 탭은 "밤티" → 3안 「한 줄 둘로 나눔」
+//    두 칸이 늘 반반이라 고르는 쪽을 바꿔도 탭 줄이 안 밀린다
+const EnhKindBar = ({ kinds, kind, onPick }) => (
+  <div role="tablist" aria-label="강화 종류" className="w-full grid grid-cols-2 h-11 sm:h-12 bg-[#1d1d21]">
+    {kinds.map((k) => {
+      const on = k === kind;
+      return (
+        <button
+          key={k}
+          type="button"
+          role="tab"
+          aria-selected={on}
+          onClick={() => onPick(k)}
+          className={`flex items-center justify-center text-[14px] sm:text-[15px] font-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60 ${on ? "text-[#131313]" : "text-white/55 hover:text-white"}`}
+          style={on ? { background: ENH_KIND[k].c } : undefined}
+        >
+          {ENH_KIND[k].label} 강화
+        </button>
+      );
+    })}
+  </div>
+);
 const sparksOf = (n, r0) => Array.from({ length: n }, (_, i) => {
   const a = (i / n) * Math.PI * 2 + (i % 2) * 0.2;
   const r = r0 + (i % 3) * 12;
@@ -545,9 +550,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
           <span className="shrink-0 text-[#5fe0c8]">빙옥 {fmt(balance?.point)}</span>
         </span>
       }
-      tabs={kinds.length > 1 ? kinds.map((k) => (
-        <EnhKindTab key={k} k={k} on={k === kind} n={enh[k].level} max={enh[k].level >= enh[k].max} onClick={() => { setPick(k); onTone?.(k); }} />
-      )) : null}
+      tabs={kinds.length > 1 ? <EnhKindBar kinds={kinds} kind={kind} onPick={(k) => { setPick(k); onTone?.(k); }} /> : null}
     >
       <style>{ENH_CSS}</style>
       {/* 큰 단계 숫자 · 도트 아이콘 — 숫자는 칸 밖이 잘리는 상자 안에서 아래 → 위로 올라오며 바뀐다 */}
