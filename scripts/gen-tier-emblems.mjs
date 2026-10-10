@@ -1,4 +1,5 @@
 // 📌 티어 엠블럼 그림 생성 — public/tier-emblems/<등급 키>.svg(32칸 · 작은 자리) · <등급 키>-lg.svg(48칸 · 승급 화면처럼 크게)
+//    · <등급 키>-20.svg · -24.svg(칸이 굵은 작은 판 — 사이트 작은 자리에서 또렷하게) + lib/tierEmblemBox.js(판마다 그림 영역 — app/components/TierEmblem 이 고른다)
 //    실행: node scripts/gen-tier-emblems.mjs   (그림을 고치면 다시 돌려 SVG 를 커밋한다)
 //
 //    2026-10-08 운영자 확정("2번으로 가자"): 아바타 테두리(scripts/gen-avatar-borders.mjs)를 구멍을 작게(R=9) 찍어 날개 겹이 가운데로 모인 문장.
@@ -81,11 +82,26 @@ export function emblemSvg(c) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const out = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "tier-emblems");
   mkdirSync(out, { recursive: true });
+  // 그림 영역 [x, y, 너비, 높이](칸) — 판(칸 수)마다
+  const boxOf = (c) => { let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1; c.forEach((r, y) => r.forEach((v, x) => { if (v) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } })); return [x0, y0, x1 - x0 + 1, y1 - y0 + 1]; };
+  const boxes = {};
   for (const T of EMBLEM_TIERS) {
+    boxes[T.key] = {};
+    for (const n of [20, 24, 32, 48]) {
+      const c = renderEmblem(T, n);
+      boxes[T.key][n] = boxOf(c);
+      if (n < 32) writeFileSync(join(out, `${T.key}-${n}.svg`), emblemSvg(c));
+    }
     const sm = emblemSvg(renderEmblem(T, 32)), lg = emblemSvg(renderEmblem(T, 48));
     writeFileSync(join(out, `${T.key}.svg`), sm);
     writeFileSync(join(out, `${T.key}-lg.svg`), lg);
     writeFileSync(join(out, `${T.key}-parts.json`), JSON.stringify(emblemParts(T, 48)));
     console.log(T.key, sm.length, lg.length);
   }
+  const mod = `// 📌 등급 엠블럼 그림 영역 — scripts/gen-tier-emblems.mjs 가 만든다(손으로 고치지 말 것). 판(칸 수 20 · 24 · 32 · 48)마다 [x, y, 너비, 높이](칸)
+//    그림: public/tier-emblems/<키>-20.svg · <키>-24.svg · <키>.svg(32) · <키>-lg.svg(48) — app/components/TierEmblem 이 자리 크기에 맞는 판을 고른다
+export const EMBLEM_BOX = ${JSON.stringify(boxes)};
+`;
+  writeFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "lib", "tierEmblemBox.js"), mod);
+  console.log("box module", mod.length);
 }

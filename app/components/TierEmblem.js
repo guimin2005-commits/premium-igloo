@@ -1,46 +1,60 @@
 "use client";
 
-// 📌 등급 엠블럼 — 날개 도트 엠블럼(public/tier-emblems/<키>.svg · <키>-lg.svg, scripts/gen-tier-emblems.mjs — 승급 화면과 같은 그림).
-//    2026-10-10 운영자: 예전 육각 각인(2026-09 시안 A) 대신 사이트 전체를 날개 도트로.
-//    그림은 32칸(큰 크기는 48칸 -lg) 안에 작게 들어 있어 등급마다 그림 영역(BOX)만 잘라 크게 보인다.
-//    자리(레이아웃)는 지금처럼 size × size 정사각 — 날개가 옆으로 넓은 아래 등급은 좌우로 조금 넘친다(overflow visible).
+import { EMBLEM_BOX } from "@/lib/tierEmblemBox";
+
+// 📌 등급 엠블럼 — 날개 도트 엠블럼(public/tier-emblems, scripts/gen-tier-emblems.mjs — 승급 화면과 같은 그림).
+//    2026-10-10 운영자: 예전 육각 각인 대신 사이트 전체를 날개 도트로 → "사이트로 가면 너무 안 보여"(외곽이 검은 그림이라 어두운 바탕에 묻힘).
+//    · 칸 판(20 · 24 · 32 · 48칸) 중 그 자리에서 가장 크게 들어가는 판을 반 칸 단위 배율로(칸이 또렷하게) — 같은 높이면 칸이 많은 판(모양이 덜 뭉개진다)
+//    · 어두운 바탕(onDark, 기본)에는 뒤에 은은한 등급색 빛(운영자가 고른 "1 — 은은하게"). 흰 바탕에는 빛 없이(onDark={false})
+//    ⚠️ 밝은 외곽선은 "개짜치잖아"로 반려 — 그림에 선을 두르지 않는다
+//    자리: 높이는 size, 너비는 size 와 그림 너비 중 큰 쪽(날개가 옆으로 넓어도 옆 글자에 겹치지 않게)
 
 const RANK = ["iron", "bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
-// 그림 영역 [x, y, 너비, 높이](칸) — s: <키>.svg(32칸), lg: <키>-lg.svg(48칸). 그림을 다시 찍으면 같이 고칠 것
-const BOX = {
-  iron: { s: [9, 16, 14, 7], lg: [15, 25, 18, 9] },
-  bronze: { s: [7, 15, 18, 9], lg: [11, 23, 26, 13] },
-  silver: { s: [7, 15, 18, 9], lg: [10, 21, 28, 15] },
-  gold: { s: [6, 14, 20, 11], lg: [10, 19, 28, 18] },
-  platinum: { s: [6, 13, 20, 12], lg: [10, 20, 28, 17] },
-  diamond: { s: [6, 12, 20, 13], lg: [9, 18, 30, 20] },
-  master: { s: [6, 8, 20, 17], lg: [9, 13, 30, 25] },
-  grandmaster: { s: [5, 8, 22, 18], lg: [8, 11, 32, 28] },
-  challenger: { s: [5, 5, 22, 21], lg: [7, 7, 34, 32] },
-  igloo: { s: [4, 7, 24, 19], lg: [6, 9, 36, 31] },
+const COLOR = { iron: "#8a8a8a", bronze: "#a06a3c", silver: "#8d99a6", gold: "#c39220", platinum: "#3f9e93", diamond: "#5a6ad8", master: "#8557b0", grandmaster: "#d8352a", challenger: "#2f9cf0", igloo: "#e0609e" }; // lib/voiceTiers 대표색
+const FILE = { 20: "-20", 24: "-24", 32: "", 48: "-lg" };
+const lighten = (hex, t) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return hex;
+  return `#${[1, 2, 3].map((i) => { const v = parseInt(m[i], 16); return Math.round(v + (255 - v) * t).toString(16).padStart(2, "0"); }).join("")}`;
 };
-const WIDE = 1.3; // 옆으로 넓은 날개는 자리 너비의 1.3배까지 쓴다(넘친 만큼은 좌우로)
-const LG_FROM = 44; // 이 크기(px)부터 48칸 그림 — 작은 크기는 칸이 굵은 32칸이 또렷하다
 
-/** 등급 엠블럼 · tier = VOICE_TIERS 항목 */
-export default function TierEmblem({ tier, size = 24, className = "", muted = false }) {
+// 그 자리(size px)에 쓸 판 · 배율 — 너비는 size × 1.35, 높이는 size × 1.05 까지
+function pick(key, size) {
+  const ns = size >= 28 ? [48, 32] : size >= 18 ? [32, 24] : [32, 24, 20];
+  let best = null;
+  for (const n of ns) {
+    const [x, y, w, h] = EMBLEM_BOX[key][n];
+    const fit = Math.min((size * 1.35) / w, (size * 1.05) / h);
+    const s = fit >= 1 ? Math.floor(fit * 2) / 2 : n === 48 && fit >= 0.75 ? fit : 0; // 48칸 판만 1배 아래로 줄여도 된다(높은 등급의 큰 그림)
+    if (!s) continue;
+    if (!best || h * s > best.H || (h * s === best.H && n > best.n)) best = { n, s, x, y, w, h, H: h * s };
+  }
+  if (!best) { const n = ns[ns.length - 1], [x, y, w, h] = EMBLEM_BOX[key][n]; best = { n, s: 1, x, y, w, h, H: h }; }
+  return best;
+}
+
+/** 등급 엠블럼 · tier = VOICE_TIERS 항목 · onDark: 어두운 바탕(뒤에 은은한 빛) */
+export default function TierEmblem({ tier, size = 24, className = "", muted = false, onDark = true }) {
   const key = RANK.includes(tier?.key) ? tier.key : "iron";
-  const lg = size >= LG_FROM;
-  const [x, y, w, h] = BOX[key][lg ? "lg" : "s"];
-  // 자리(정사각)에 맞춘 보기 창 — 그림 높이를 꽉 채우되, 너비가 WIDE 를 넘으면 너비 기준으로 줄인다
-  const side = Math.max(h, w / WIDE);
-  const vx = x + w / 2 - side / 2, vy = y + h / 2 - side / 2;
-  const grid = lg ? 48 : 32;
+  const p = pick(key, size);
+  const W = Math.round(p.w * p.s), H = Math.round(p.h * p.s);
+  const c = COLOR[key];
+  const glowW = Math.round(Math.max(W, H) * 1.5), glowH = Math.round(Math.max(W, H) * 1.25);
   return (
-    <svg
-      viewBox={`${vx} ${vy} ${side} ${side}`}
-      width={size}
-      height={size}
-      className={`shrink-0 ${className}`}
-      style={{ opacity: muted ? 0.45 : 1, overflow: "visible" }}
+    <span
       aria-hidden
+      className={`relative inline-flex items-center justify-center shrink-0 ${className}`}
+      style={{ width: Math.max(size, W), height: size, overflow: "visible", opacity: muted ? 0.45 : 1 }}
     >
-      <image href={`/tier-emblems/${key}${lg ? "-lg" : ""}.svg`} x="0" y="0" width={grid} height={grid} style={{ imageRendering: "pixelated" }} />
-    </svg>
+      {onDark && (
+        <span
+          className="absolute left-1/2 top-1/2 rounded-full pointer-events-none"
+          style={{ width: glowW, height: glowH, transform: "translate(-50%, -50%)", background: `radial-gradient(closest-side, ${lighten(c, 0.55)}5c 0%, ${lighten(c, 0.15)}26 55%, transparent 100%)` }}
+        />
+      )}
+      <svg width={W} height={H} viewBox={`${p.x} ${p.y} ${p.w} ${p.h}`} className="relative shrink-0" style={{ overflow: "visible" }}>
+        <image href={`/tier-emblems/${key}${FILE[p.n]}.svg`} x="0" y="0" width={p.n} height={p.n} />
+      </svg>
+    </span>
   );
 }

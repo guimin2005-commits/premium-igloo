@@ -124,7 +124,7 @@ function InvThumb({ it }: { it: InvCard }) {
   const tier = invTierOf(it);
   return (
     <span className="w-10 h-10 shrink-0 rounded-lg bg-[#f2f2f2] overflow-hidden inline-flex items-center justify-center">
-      {tier ? <TierEmblem tier={tier} size={25} />
+      {tier ? <TierEmblem tier={tier} size={25} onDark={false} />
         : it.imageUrl ? <ItemIcon imageUrl={it.imageUrl} size={40} style={{ borderRadius: 0 }} />
         : <ItemIcon icon={it.icon} type={invIconType(it)} size={22} color={it.color || undefined} />}
     </span>
