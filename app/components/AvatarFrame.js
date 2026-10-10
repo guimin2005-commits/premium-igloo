@@ -10,24 +10,25 @@ export const FRAME_GRID = 128;
 export const FRAME_HOLE = 48;
 export const frameSizeOf = (px, overlap = 0.92) => Math.round((px * overlap * FRAME_GRID) / FRAME_HOLE);
 
-// 📌 그림이 가운데에서 뻗는 거리(칸, 128칸 기준 — 빛무리 · 반짝이까지) [위, 아래, 옆]. 그림(scripts/gen-avatar-frames.mjs)을 고치면 다시 잰다(실행하면 끝에 찍힌다)
+// 📌 그림이 가운데에서 뻗는 거리(칸, 128칸 기준) [위, 아래, 옆, 옆(테두리 몸만 — 반짝이 · 빛무리 빼고)]. 그림(scripts/gen-avatar-frames.mjs)을 고치면 다시 잰다(실행하면 끝에 찍힌다)
 export const FRAME_REACH = {
-  bronze: [0, 34, 30], silver: [0, 35, 31], gold: [0, 35, 32], platinum: [0, 37, 32], diamond: [0, 37, 33],
-  master: [36, 37, 47], grandmaster: [47, 39, 35], challenger: [41, 42, 49], igloo: [46, 40, 52],
+  bronze: [0, 34, 30, 30], silver: [0, 35, 31, 31], gold: [0, 35, 32, 32], platinum: [0, 37, 32, 32], diamond: [0, 37, 33, 33],
+  master: [36, 37, 47, 34], grandmaster: [47, 39, 35, 34], challenger: [41, 42, 49, 35], igloo: [46, 40, 52, 38],
 };
 
 // 📌 테두리를 낀 사람만 사진 칸에 더할 여백(px) — 카드 모서리에 잘리거나 옆 이름 · 칩에 닿지 않게(2026-10-06 "닉네임이나 표기 되는 걸 조금 수정").
 //    box: 사진을 감싼 칸(진행 링) 지름, pad: 카드 안쪽 여백, gap: 옆 글자 칸까지 간격. 테두리가 없거나 작으면 undefined → 자리 그대로
+//    카드 가장자리 쪽(위 · 왼쪽)은 반짝이까지 들게, 옆 글자 쪽(오른쪽)은 테두리 몸만 — 반짝이는 글자 칸에 살짝 걸쳐도 된다(2026-10-10 이글루만 칩이 3줄로 밀리던 것)
 export function frameRoom(frame, px, { box, pad, gap }, overlap = 0.92) {
   const r = FRAME_REACH[frame];
   if (!r || !(px > 0)) return undefined;
   const k = frameSizeOf(px, overlap) / FRAME_GRID;
   const half = box / 2;
-  const up = r[0] * k, side = r[2] * k;
+  const up = r[0] * k, side = r[2] * k, core = (r[3] ?? r[2]) * k;
   const room = {
     marginTop: Math.max(0, Math.ceil(up - half - pad + 2)),
     marginLeft: Math.max(0, Math.ceil(side - half - pad + 2)),
-    marginRight: Math.max(0, Math.ceil(side - half - gap + 4)),
+    marginRight: Math.max(0, Math.ceil(core - half - gap + 4)),
   };
   return room.marginTop || room.marginLeft || room.marginRight ? room : undefined;
 }

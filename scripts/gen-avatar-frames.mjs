@@ -416,14 +416,18 @@ export function renderFrame(T0) {
   return LINES[T.key] ? addSide(g, T) : g;
 }
 
-// 그림이 가운데에서 뻗는 거리(칸) [위, 아래, 옆] — 빛무리 · 반짝이까지
+// 그림이 가운데에서 뻗는 거리(칸) [위, 아래, 옆, 옆(테두리 몸만)] — 앞의 셋은 빛무리 · 반짝이까지, 넷째는 반투명 빛무리 · 반짝이를 뺀 테두리 몸.
+//    화면은 카드 가장자리 쪽 여백엔 앞의 셋(잘리지 않게), 옆 글자 쪽 여백엔 넷째(반짝이는 글자 칸에 살짝 걸쳐도 된다 — 2026-10-10 이글루만 칩이 3줄 되던 것)
 export function reachOf(g) {
-  let up = 0, down = 0, side = 0;
+  let up = 0, down = 0, side = 0, core = 0;
+  const fx = new Set(); (g.roles?.fx || []).forEach((st) => st.forEach((k) => fx.add(k)));
   g.c.forEach((row, y) => row.forEach((v, x) => {
     if (!v) return;
-    up = Math.max(up, C - y); down = Math.max(down, y + 1 - C); side = Math.max(side, Math.abs(x + 0.5 - C) + 0.5);
+    const d = Math.abs(x + 0.5 - C) + 0.5;
+    up = Math.max(up, C - y); down = Math.max(down, y + 1 - C); side = Math.max(side, d);
+    if (!v.includes("|") && !fx.has(x + "," + y)) core = Math.max(core, d);
   }));
-  return [Math.max(0, Math.round(up)), Math.round(down), Math.round(side)];
+  return [Math.max(0, Math.round(up)), Math.round(down), Math.round(side), Math.round(core)];
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
