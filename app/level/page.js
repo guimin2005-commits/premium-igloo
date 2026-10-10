@@ -2331,9 +2331,9 @@ export default function LevelPage() {
   const prog = me?.levelProgress || { current: 0, required: 1, needToNext: 0 };
   const progPct = Math.min(100, Math.floor((prog.current / Math.max(1, prog.required)) * 100));
   // 📌 프로필 사진 크기 — 테두리를 끼면 링이 빠지므로 사진이 링 자리를 채운다(2026-10-10 "아이템까지 적용시키면 너무 작아짐 · 비율이 안 맞음").
-  //    링 칸(모바일 86 · PC 96)은 그대로, 사진만 모바일 62 → 78 · PC 68 → 88. 테두리는 사진 크기에 맞춰 함께 커진다
+  //    링 칸(모바일 86 · PC 96)은 그대로, 사진은 모바일만 62 → 78(PC 68 그대로). 테두리는 사진 크기에 맞춰 함께 커진다
   const framedAvatar = !!me?.avatarFrame && !!session?.user;
-  const avatarPx = framedAvatar ? { m: 78, d: 88 } : { m: 62, d: 68 };
+  const avatarPx = framedAvatar ? { m: 78, d: 68 } : { m: 62, d: 68 }; // PC 는 그대로(운영자 "PC까지 키워달라는 게 아니었는데")
   const rankPct = me?.total ? Math.max(1, Math.ceil((me.rank / me.total) * 100)) : null;
   const attendedToday = !!me && me.lastAttendDate === kstTodayStr();
   const todayTotal = myLogs?.today?.total ?? 0;
