@@ -15,7 +15,7 @@ import BotSetting from "@/models/BotSetting";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
@@ -92,7 +92,7 @@ export async function GET() {
     //    10/4 결정: 숨은 상한은 관리자 칸에만 적고 유저 화면에는 실제 값. 설정을 못 읽었으면(null) 기본 상한(30%)
     perkSums.shopCashback = Math.min(perkSums.shopCashback || 0, cashbackRuleOf(setting).cap);
     // 📌 카드 스킨 — 유저가 인벤토리에서 고른 것(cardSkinPick)만. 안 골랐거나 끔이거나 더 이상 없으면 "" (기본 카드 — 봇 카드와 같은 규칙, 2026-10-04 자동 착용 없음)
-    const cardSkin = pickCardSkin(cardSkins, doc?.cardSkinPick || "");
+    const cardSkin = pickCardSkin(withSeasonSkin(cardSkins, doc), doc?.cardSkinPick || ""); // 시즌 등급 카드 스킨(seasonFrame 등급)도 가진 것
     // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick) 중 지금 가진 것만(최대 3). 안 골랐거나 전부 뗐으면 [] (2026-10-04 자동으로 달지 않음)
     const badges = pickBadges(allBadges, doc?.badgePick);
     // 📌 아바타 테두리 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 "")

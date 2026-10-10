@@ -176,15 +176,16 @@ const InvSlot = ({ it, on, onClick }) => {
 // 📌 가방 왼쪽 상세 — 큰 아이콘 · 이름 · 설명(줄바꿈 그대로) · 상태 · 기간 · (기간제면) 연장 · 효과.
 //    compact 는 아이템 등록 미리보기용으로 크기만 줄인다(내용 · 순서는 같다). onGo 는 연장으로 떠날 때 가방을 닫는다
 //    카드 스킨 아이템(it.skinKey)이면 착용 · 해제 버튼 — skinOn: 지금 이 스킨을 쓰는 중, onSkin(키 | "none")
+//    등급 전체(9종) 카드 스킨 아이템(it.skinKeys)이면 등급 칸 9개 — skinCur: 지금 쓰는 스킨 키(테두리 전체 아이템과 같은 흐름)
 //    프로필 배지 아이템(it.badgeId)이면 [배지 설정] 버튼 — 배지 창(BadgeWindow)을 그 자리에 연다. badgeSlot: 단 자리(0 · 1 · 2, 안 달았으면 -1), onBadgeOpen()
 //    아바타 테두리 아이템(it.frameKey)이면 착용 · 해제 버튼 — frameOn: 지금 이 테두리를 쓰는 중, onFrame(키 | "none")
 //    전체(9종) 테두리 아이템(it.frameKeys)이면 등급 칸 9개 — frameCur: 지금 쓰는 테두리 키, 누르면 그 테두리 · 낀 칸을 다시 누르면 해제
-const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, frameCur = "", onFrame, frameBusy = false }) => {
+const InvDetail = ({ it, compact = false, onGo, skinOn = false, skinCur = "", onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, frameCur = "", onFrame, frameBusy = false }) => {
   const accent = invAccentOf(it);
   const dday = ddayOf(it);
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
   // 📌 스킨 · 배지 · 테두리 중 둘 이상인 아이템은 버튼이 여럿 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
-  const both = [it.skinKey, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
+  const both = [it.skinKey || it.skinKeys?.length, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
   const wearBtn = (on) =>
     `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
       on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
@@ -244,6 +245,21 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, onSkin, skinBusy
           <button type="button" disabled={skinBusy} onClick={() => onSkin?.(skinOn ? SKIN_NONE : it.skinKey)} className={wearBtn(skinOn)}>
             {both ? (skinOn ? "스킨 해제" : "스킨 착용") : skinOn ? "착용 해제" : "착용"}
           </button>
+        )}
+        {it.skinKeys?.length > 1 && !compact && (
+          <div className="mt-1 grid grid-cols-3 gap-1.5">
+            {it.skinKeys.map((k) => {
+              const on = k === skinCur;
+              return (
+                <button key={k} type="button" disabled={skinBusy} aria-pressed={on} onClick={() => onSkin?.(on ? SKIN_NONE : k)}
+                  className={`h-8 rounded-full text-[10px] font-black truncate px-1.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
+                    on ? "bg-white text-[#131313]" : "border border-white/20 hover:border-white/45 text-white/75 hover:text-white"
+                  }`}>
+                  {(SKIN_OF[k]?.l || k).replace(/ 등급$/, "")}
+                </button>
+              );
+            })}
+          </div>
         )}
         {/* 📌 프로필 배지 — 이름 옆(내 정보 · 랭킹)에 최대 3개. 직접 단 것만 보인다(2026-10-04 자동으로 달지 않음).
                달기 · 떼기 · 자리는 배지 창에서 — 버튼은 하나, 단 배지면 자리 번호만 붙인다 */}
@@ -695,7 +711,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       left={
         <>
         {selItem ? (
-          <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} onSkin={saveSkin} skinBusy={skinBusy}
+          <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} skinCur={curSkin} onSkin={saveSkin} skinBusy={skinBusy}
             badgeSlot={selItem.badgeId ? wornIds.indexOf(selItem.badgeId) : -1} onBadgeOpen={openBadges}
             frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} frameCur={curFrame} onFrame={saveFrame} frameBusy={frameBusy} />
         ) : (

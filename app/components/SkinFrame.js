@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { STRING_SKINS } from "@/lib/cardSkins";
 
 // 📌 카드 스킨 장식 — 레벨 페이지 프로필 카드(잉크 판)에 착용한 카드 스킨을 얹는다.
@@ -186,7 +186,8 @@ export default function SkinFrame({ skin }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const body = box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h, box) : null;
+  // 📌 그림은 스킨 · 카드 크기 · 자리가 바뀔 때만 다시 만든다 — 등급 카드 스킨(랭크 깃발)은 한 번에 수십 ms 라 부모가 다시 그릴 때마다 만들면 화면이 버벅인다
+  const body = useMemo(() => (box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h, box) : null), [skin, box]);
   return (
     <div ref={ref} aria-hidden className="absolute inset-0 pointer-events-none">
       {body && (

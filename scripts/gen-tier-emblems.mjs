@@ -9,6 +9,7 @@
 import { mkdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 import { BORDER_TIERS, renderBorder } from "./gen-avatar-borders.mjs";
 
 const IR = { o: "#1c1c1e", d: "#4a4a4e", m: "#77777c", l: "#a3a3a8", h: "#cfcfd4" };
@@ -84,24 +85,55 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   mkdirSync(out, { recursive: true });
   // 그림 영역 [x, y, 너비, 높이](칸) — 판(칸 수)마다
   const boxOf = (c) => { let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1; c.forEach((r, y) => r.forEach((v, x) => { if (v) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } })); return [x0, y0, x1 - x0 + 1, y1 - y0 + 1]; };
-  const boxes = {};
+  const boxes = {}, arts = {}, mids = {};
   for (const T of EMBLEM_TIERS) {
     boxes[T.key] = {};
+    arts[T.key] = {};
     for (const n of [20, 24, 32, 48]) {
       const c = renderEmblem(T, n);
       boxes[T.key][n] = boxOf(c);
       if (n < 32) writeFileSync(join(out, `${T.key}-${n}.svg`), emblemSvg(c));
     }
     const sm = emblemSvg(renderEmblem(T, 32)), lg = emblemSvg(renderEmblem(T, 48));
+    // 봇 이미지 카드용 — 32 · 48칸 판의 칸 그림(바깥 svg 껍데기 없이)
+    const inner = (svg) => svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "");
+    arts[T.key] = { 32: inner(sm), 48: inner(lg) };
+    // 눈으로 보이는 가운데(칸 밝기로 무게를 단 무게중심) — 어두운 카드 바탕에선 짙은 외곽선은 거의 안 보이고 밝은 칸이 무게를 만든다.
+    //   그림 상자 가운데에 맞추면 위가 무거운 날개 그림이 위로 떠 보였다(2026-10-10 "코드 중앙과 시각적 중앙은 다르다")
+    mids[T.key] = {};
+    for (const n of [32, 48]) {
+      const c = renderEmblem(T, n); let sw = 0, sx = 0, sy = 0;
+      c.forEach((row, y) => row.forEach((v, x) => { if (!v) return; const h = v.replace("#", ""); const L = (0.2126 * parseInt(h.slice(0, 2), 16) + 0.7152 * parseInt(h.slice(2, 4), 16) + 0.0722 * parseInt(h.slice(4, 6), 16)) / 255; const w = 0.12 + L; sw += w; sx += w * (x + 0.5); sy += w * (y + 0.5); }));
+      mids[T.key][n] = [+(sx / sw).toFixed(2), +(sy / sw).toFixed(2)];
+    }
     writeFileSync(join(out, `${T.key}.svg`), sm);
     writeFileSync(join(out, `${T.key}-lg.svg`), lg);
+    // 📌 사이트 엠블럼(app/components/TierEmblem)용 — 같은 48칸 그림을 칸 1개 = 1px PNG 로. 화면은 image-rendering: pixelated 로 키우고 줄여
+    //    어느 크기에서도 칸 경계가 섞이지 않는다(SVG 를 1배 아래로 줄이면 크롬이 칸 가장자리를 섞어 흐려졌다 — 2026-10-10 "어떤 건 흐리고 어떤 건 선명하고")
+    {
+      const sharp = createRequire(import.meta.url)("sharp");
+      const c = renderEmblem(T, 48), raw = Buffer.alloc(48 * 48 * 4);
+      c.forEach((row, y) => row.forEach((v, x) => { if (!v) return; const i = (y * 48 + x) * 4; raw[i] = parseInt(v.slice(1, 3), 16); raw[i + 1] = parseInt(v.slice(3, 5), 16); raw[i + 2] = parseInt(v.slice(5, 7), 16); raw[i + 3] = 255; }));
+      await sharp(raw, { raw: { width: 48, height: 48, channels: 4 } }).png({ compressionLevel: 9 }).toFile(join(out, `${T.key}-48.png`));
+    }
     writeFileSync(join(out, `${T.key}-parts.json`), JSON.stringify(emblemParts(T, 48)));
     console.log(T.key, sm.length, lg.length);
   }
   const mod = `// 📌 등급 엠블럼 그림 영역 — scripts/gen-tier-emblems.mjs 가 만든다(손으로 고치지 말 것). 판(칸 수 20 · 24 · 32 · 48)마다 [x, y, 너비, 높이](칸)
-//    그림: public/tier-emblems/<키>-20.svg · <키>-24.svg · <키>.svg(32) · <키>-lg.svg(48) — app/components/TierEmblem 이 자리 크기에 맞는 판을 고른다
+//    그림: 48칸 판 하나 — 사이트는 public/tier-emblems/<키>-48.png(칸 1개 = 1px, pixelated 로 크기 맞춤), 봇 카드는 lib|bot tierEmblemArt.js · 승급 화면은 <키>-lg.svg · -parts.json.
+//    <키>-20 · -24 · <키>.svg(32) 는 예전 작은 판(같은 그림을 작게 다시 찍어 모양이 달라 지금은 안 씀)
 export const EMBLEM_BOX = ${JSON.stringify(boxes)};
+// 📌 눈으로 보이는 가운데 [x, y](칸 — 밝은 칸 무게중심). 그림 상자 가운데로 맞추면 위가 밝고 아래가 짙은 그림이 떠 보여 이 점을 자리 가운데에 둔다(봇 카드 emblemSvg 와 같은 값)
+export const EMBLEM_MID = ${JSON.stringify(mids)};
 `;
   writeFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "lib", "tierEmblemBox.js"), mod);
   console.log("box module", mod.length);
+  // 📌 봇 이미지 카드(lib|bot botCards emblemSvg — /레벨 · 레벨업 · 역할 지급 사진 아래, /랭크 줄)가 쓰는 같은 그림 — 사이트 · 봇 두 곳에 같은 파일(봇은 따로 배포)
+  const artMod = `// 📌 등급 엠블럼 도트 그림(봇 이미지 카드용) — scripts/gen-tier-emblems.mjs 가 만든다(손으로 고치지 말 것).
+//    사이트 lib/tierEmblemArt.js · 봇 bot/src/tierEmblemArt.js 는 같은 파일. 사이트 화면은 public/tier-emblems/*.svg 를 쓴다(같은 그림).
+//    EMBLEM_ART[등급 키] = { box: { 32 · 48: [x, y, 너비, 높이](칸 — 그림 영역) }, mid: { 32 · 48: [x, y](칸 — 눈으로 보이는 가운데, 밝기 무게중심) }, art: { 32 · 48: 칸 path 묶음(viewBox 0 0 n n, crispEdges) } }
+export const EMBLEM_ART = ${JSON.stringify(Object.fromEntries(Object.keys(arts).map((k) => [k, { box: { 32: boxes[k][32], 48: boxes[k][48] }, mid: mids[k], art: arts[k] }])))};
+`;
+  for (const p of [["lib"], ["bot", "src"]]) writeFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ...p, "tierEmblemArt.js"), artMod);
+  console.log("art module", artMod.length);
 }

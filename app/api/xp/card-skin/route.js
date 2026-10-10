@@ -4,12 +4,12 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireUser, denyIfMaintenance } from "@/lib/apiAuth";
 import { getPerks } from "@/lib/itemPerks";
-import { SKIN_OF, SKIN_NONE, pickCardSkin } from "@/lib/itemEffects";
+import { SKIN_OF, SKIN_NONE, pickCardSkin, withSeasonSkin } from "@/lib/itemEffects";
 import UserXp from "@/models/UserXp";
 
 // 📌 카드 스킨 착용 · 해제 — 인벤토리 상세의 버튼이 부른다.
 //    POST { skin }  skin: 스킨 키(착용) · "none"(해제 — 기본 카드)
-//    가진 스킨만 착용할 수 있다(보유 판정은 lib/itemPerks getPerks — 인벤토리 · 봇과 같은 규칙).
+//    가진 스킨만 착용할 수 있다(보유 판정은 lib/itemPerks getPerks — 인벤토리 · 봇과 같은 규칙) + 시즌 등급 카드 스킨(UserXp.seasonFrame 등급 — withSeasonSkin).
 //    저장은 UserXp.cardSkinPick 하나 — 봇이 이미지 카드(레벨업 · /레벨 · /랭크 · /출석체크)를 그릴 때 읽는다.
 //    반환: { cardSkin } — 지금 쓰는 스킨 키("" 이면 기본 카드)
 export async function POST(request) {
@@ -27,7 +27,8 @@ export async function POST(request) {
     }
 
     await connectToDatabase();
-    const { cardSkins } = await getPerks(auth.userId);
+    const [perks, mine] = await Promise.all([getPerks(auth.userId), UserXp.findOne({ userId: auth.userId }, { seasonFrame: 1 }).lean()]);
+    const cardSkins = withSeasonSkin(perks.cardSkins, mine);
     if (skin !== SKIN_NONE && !cardSkins.includes(skin)) {
       return NextResponse.json({ success: false, error: "가지고 있지 않은 스킨입니다." }, { status: 403 });
     }
