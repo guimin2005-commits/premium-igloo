@@ -212,7 +212,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
               const on = myTier && i === tierIdx;
               return (
                 <div key={t.key} className="min-w-0 flex flex-col items-center text-center">
-                  <TierEmblem tier={t} size={28} onDark={false} />
+                  <TierEmblem tier={t} size={22} onDark={false} />
                   <span className={`mt-1.5 text-[12px] font-extrabold truncate max-w-full ${on ? "text-[#d01634]" : ""}`}>{t.name}</span>
                   <span className="mt-0.5 text-[10px] font-bold text-[#8a8a8a] tabular-nums whitespace-nowrap">{tierRangeLabel(i).replace("Lv.", "")}</span>
                 </div>
@@ -227,7 +227,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
             const on = myTier && i === tierIdx;
             return (
               <div key={t.key} className="flex items-center gap-3 py-3 border-b border-[#ededed]">
-                <TierEmblem tier={t} size={28} onDark={false} />
+                <TierEmblem tier={t} size={22} onDark={false} />
                 <div className="w-[96px] shrink-0 min-w-0">
                   <p className="flex items-center gap-1 min-w-0">
                     <span className={`min-w-0 truncate text-[13px] font-extrabold ${on ? "text-[#d01634]" : ""}`}>{t.name}</span>

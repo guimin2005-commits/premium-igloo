@@ -282,13 +282,15 @@ const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
                 <button type="button" onClick={() => pick(lv + 1)} aria-label="한 레벨 위" className="w-9 h-9 rounded-full border border-white/20 text-white/70 hover:text-white hover:border-white/45 transition-colors flex items-center justify-center outline-none focus:outline-none text-lg font-black">+</button>
               </div>
               <div className="flex items-center gap-2.5 mt-4">
-                <TierEmblem tier={tier} size={32} />
-                <span className="text-[16px] font-black leading-none" style={tierText(tier, hexLift(tier.c, 0.3))}>{tier.name}</span>
+                <TierEmblem tier={tier} size={24} />
+                {/* 📌 등급 이름 칸은 가장 긴 이름(그랜드마스터) 폭으로 고정 — 등급이 바뀔 때 옆 레벨 범위가 움직이지 않게(2026-10-10 "티어 바뀔 때마다 자꾸 움직여대") */}
+                <span className="inline-block min-w-[6.2em] text-[16px] font-black leading-none" style={tierText(tier, hexLift(tier.c, 0.3))}>{tier.name}</span>
                 <span className="text-[12px] font-bold text-white/40 tabular-nums">{tierRangeLabel(getTierIndex(lv))}</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5">
+            {/* 📌 PC — 숫자 칸 폭을 남은 자리(최대 480)로 고정. 예전엔 숫자 자릿수에 따라 칸 전체가 좌우로 밀렸다(2026-10-10 "자꾸 움직여대") */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5 md:flex-1 md:max-w-[480px]">
               <div>
                 <p className="text-[11px] font-bold text-white/45">필요 XP</p>
                 <p className="mt-2 text-[22px] font-black text-[#ff5c77] tabular-nums tracking-tight leading-none">{req.toLocaleString()}</p>
@@ -787,7 +789,7 @@ const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks,
                       style={{ background: `linear-gradient(160deg, ${accent}33, ${accent}0f)`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
                     >
                       {tier
-                        ? <TierEmblem tier={tier} size={28} />
+                        ? <TierEmblem tier={tier} size={20} />
                         : <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={18} color={accent} />}
                     </span>
                     <div className="min-w-0 flex-1 pt-0.5">
@@ -1627,7 +1629,7 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
                     boxShadow: cur ? `0 0 22px -6px ${t.c}` : "none",
                   }}
                 >
-                  <TierEmblem tier={t} size={32} />
+                  <TierEmblem tier={t} size={24} />
                 </span>
 
                 <div className="min-w-0 flex-1">
@@ -3188,9 +3190,9 @@ export default function LevelPage() {
                           <div data-skin-goal className="mt-4 flex items-center gap-3">
                             {guest ? (
                               // 로그인 전 — 등급은 모른다. 문장 대신 빈 자리(같은 크기)만
-                              <span aria-hidden className="shrink-0 w-10 h-10 rounded-full bg-white/10"></span>
+                              <span aria-hidden className="shrink-0 w-8 h-8 rounded-full bg-white/10"></span>
                             ) : (
-                              <span className="tier-emblem shrink-0 cursor-default"><TierEmblem tier={tierCur} size={40} /></span>
+                              <span className="tier-emblem shrink-0 cursor-default"><TierEmblem tier={tierCur} size={32} /></span>
                             )}
                             <div className="min-w-0 flex-1">
                               {guest ? (
@@ -3855,7 +3857,7 @@ export default function LevelPage() {
 
                             {/* 등급 · 레벨 — 등급은 레벨에서 바로 나온다. 레벨은 아래 목록 줄과 같은 "Lv.161"(시상대에만 빠져 있었다) */}
                             <span className="inline-flex items-center gap-1 mt-1.5">
-                              <TierEmblem tier={tier} size={16} onDark={false} />
+                              <TierEmblem tier={tier} size={12} onDark={false} />
                               <span className="text-[10px] font-black" style={tierText(tier)}>{tier.name}</span>
                               <span className="text-[10px] font-bold text-[#a3a3a3] tabular-nums">Lv.{r.level ?? 0}</span>
                             </span>
