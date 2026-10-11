@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 import { POP_THEME } from "../components/PopShell";
-import { itemTypeColor } from "@/lib/items";
+import { itemTypeColor, itemTypeLabel } from "@/lib/items";
+import { invShortName } from "../components/Inventory";
 import { FitBox, ProfileCardPreview, BadgePreview, whoOf, badgeOfItem } from "../arctic/CosmeticPreview";
 
 // 📌 시즌 패스 꾸미기 보상(카드 스킨 · 아바타 테두리 · 프로필 배지)의 적용 미리보기 — 상점 상품 상세 '적용 미리보기'(app/arctic/AppliedPreview)와 같은 그림.
@@ -18,7 +19,7 @@ const BOX_BG = "rgba(255,255,255,0.05)";
 
 type Cosmetic = { skin?: string; frame?: string; badge?: boolean; botCard?: boolean };
 export type PassReward = {
-  key?: string; itemId?: string; itemName?: string; icon?: string; imageUrl?: string; color?: string; itemType?: string;
+  key?: string; kind?: string; itemId?: string; itemName?: string; roleName?: string; days?: number; icon?: string; imageUrl?: string; color?: string; itemType?: string;
   short?: string; label?: string; cosmetic?: Cosmetic | null;
 };
 
@@ -27,6 +28,23 @@ export const passCosmeticOf = (r: PassReward | null | undefined): Cosmetic | nul
   const c = r?.cosmetic;
   return c && typeof c === "object" && (c.skin || c.frame || c.badge) ? c : null;
 };
+
+// 📌 보상 분류 · 짧은 이름 · 기간 — 패스 창(트랙 칸 · 대표 보상 칸 · app/level/page.js)과 이 미리보기 머리가 같이 쓴다.
+//    인벤토리처럼 분류(카드 스킨 · 아바타 테두리 · 프로필 배지 · 아이템 · 역할)는 작게, 이름은 머리말("카드 스킨 · ")을 뗀 짧은 이름(2026-10-11 운영자 "카테고리는 작게").
+//    기간제(아이템 days > 0)는 이름 꼬리(" · 7일") 대신 금빛 시계 + "7일"로 따로(2026-10-11 운영자 "기간제도 표기를 다르게"). 전체 이름은 aria-label · 말풍선에 그대로
+export const passKindOf = (r: PassReward): string => {
+  const c = passCosmeticOf(r);
+  if (c?.skin) return "카드 스킨";
+  if (c?.frame) return "아바타 테두리";
+  if (c?.badge) return "프로필 배지";
+  return r.kind === "role" ? "역할" : itemTypeLabel(r.itemType || "item");
+};
+export const passShortName = (r: PassReward): string =>
+  invShortName({ name: (r.kind === "item" && r.itemName) || (r.kind === "role" && r.roleName) || String(r.short || r.label || "").replace(/\s·\s[\d,]+일$/, "") });
+export const passDays = (r: PassReward): number => (r.kind === "item" ? Math.max(0, Math.floor(Number(r.days) || 0)) : 0);
+export const PassClock = ({ className = "w-2.5 h-2.5" }: { className?: string }) => (
+  <svg aria-hidden viewBox="0 0 24 24" className={`${className} shrink-0`} fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
+);
 
 const Label = ({ children }: { children: React.ReactNode }) => (
   <p className="mb-2 text-[11px] font-bold text-white/45">{children}</p>
@@ -57,6 +75,7 @@ export default function PassPreview({ r, user, me, onClose }: {
   // 로그인했으면 본인 카드(me=1 — 세션으로만 판단), 아니면 예시 카드(공개 캐시)
   const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${user ? "&me=1" : ""}`;
   const name = r.short || r.label || r.itemName || "";
+  const days = passDays(r);
   // 배지 그림 — 보상 칸에 실린 등록 아이템 스냅샷(상점 상세의 badgeOfItem 과 같은 칸 이름으로 옮겨 담는다)
   const badge = badgeOfItem({ itemId: r.itemId, name: r.itemName, icon: r.icon, itemImageUrl: r.imageUrl, color: r.color, type: r.itemType || "cosmetic" });
 
@@ -81,12 +100,18 @@ export default function PassPreview({ r, user, me, onClose }: {
         {/* 모바일 바텀시트 손잡이 */}
         <div aria-hidden className="sm:hidden shrink-0 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
 
-        {/* 머리 — 보상 아이콘 · 이름 | 닫기 */}
+        {/* 머리 — 보상 아이콘 · (분류 작게 + 기간제 금빛 시계 / 짧은 이름 크게) | 닫기. 패스 칸과 같은 표기(2026-10-11) */}
         <div className="shrink-0 flex items-center px-4 sm:px-6 pt-3 sm:pt-5 pb-3 sm:pb-4">
-          <span className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: BOX_BG }}>
-            <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType} size={28} color={r.color || (r.itemType ? itemTypeColor(r.itemType) : undefined)} />
+          <span className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: BOX_BG }}>
+            <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType} size={32} color={r.color || (r.itemType ? itemTypeColor(r.itemType) : undefined)} />
           </span>
-          <h3 className="ml-3 min-w-0 flex-1 truncate text-[17px] font-black text-white tracking-tight">{name}</h3>
+          <div className="ml-3 min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 min-w-0 text-[11px] font-black leading-none">
+              <span className="truncate text-white/45">{passKindOf(r)}</span>
+              {days > 0 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[#ffd27a] tabular-nums"><PassClock />{days.toLocaleString()}일</span>}
+            </p>
+            <h3 className="mt-1.5 truncate text-[18px] font-black text-white tracking-tight leading-tight">{passShortName(r)}</h3>
+          </div>
           <button
             ref={closeRef}
             type="button"

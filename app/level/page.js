@@ -24,12 +24,13 @@ import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, AdminReset, POP_THEME } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, keepSavedFrame, invTierOf, invIconType, invAccentOf, invShortName } from "../components/Inventory";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, keepSavedFrame, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
 import AvatarFrame, { frameRoom, frameSizeOf, FRAME_GRID, FRAME_REACH } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
-import PassPreview, { passCosmeticOf } from "./PassPreview";
+import PassPreview, { passCosmeticOf, passKindOf, passShortName, passDays, PassClock } from "./PassPreview";
+import { CURRENCY_PIXEL } from "@/lib/currencyIcons";
 import PromoOverlay from "./PromoOverlay";
 import { openLogin } from "../components/LoginPrompt";
 
@@ -984,59 +985,75 @@ const passChipBg = (premium) => premium
 //    이름은 두 줄까지(긴 이름 · " · 7일" 꼬리가 한 줄 말줄임에 잘려 안 보이던 것) — 타일 높이는 그대로라 칸이 안 밀린다.
 //    트랙 칸은 오른쪽 위 모서리 표시(왕관 · 자물쇠 · ✓)와 첫 줄이 겹치지 않게 오른쪽을 비운다
 const PASS_WRAP = { overflowWrap: "anywhere" };
-// 📌 보상 분류 · 짧은 이름 — 인벤토리처럼 분류(카드 스킨 · 아바타 테두리 · 프로필 배지 · 아이템 · 역할)는 작게 위에, 이름은 머리말("카드 스킨 · ")을 뗀 짧은 이름
-//    (2026-10-11 운영자 "인벤토리처럼 카드 스킨 같은 카테고리는 작게"). 전체 이름은 말풍선 · 미리보기 · aria-label 에 그대로
-const passKindOf = (r) => {
-  const c = passCosmeticOf(r);
-  if (c?.skin) return "카드 스킨";
-  if (c?.frame) return "아바타 테두리";
-  if (c?.badge) return "프로필 배지";
-  return r.kind === "role" ? "역할" : itemTypeLabel(r.itemType || "item");
-};
-//    📌 기간제(아이템 days > 0)는 이름 꼬리(" · 7일")를 떼고 분류 줄 옆에 금빛 시계 + "7일"로 따로(2026-10-11 운영자 "기간제도 표기를 다르게") — 이름이 세 줄로 밀리지 않는다
-const passShortName = (r) => invShortName({ name: (r.kind === "item" && r.itemName) || (r.kind === "role" && r.roleName) || String(r.short || r.label || "").replace(/\s·\s[\d,]+일$/, "") });
-const passDays = (r) => (r.kind === "item" ? Math.max(0, Math.floor(Number(r.days) || 0)) : 0);
-const PASS_CLOCK = <svg aria-hidden viewBox="0 0 24 24" className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>;
+// 📌 보상 분류 · 짧은 이름 · 기간(passKindOf · passShortName · passDays · PassClock)은 PassPreview.tsx 에 — 미리보기 머리도 같은 표기
 // 분류 줄 — 분류(작게, 흐리게) + 기간제면 금빛 시계 · 기간. 트랙 칸은 폭이 좁아 기간을 그림 위 작은 딱지로 옮긴다(days={false})
 const PassKindLine = ({ r, className = "", days = true }) => {
   const d = days ? passDays(r) : 0;
   return (
     <span className={`flex items-center gap-1.5 min-w-0 font-black leading-none ${className}`}>
       <span className="truncate text-white/45">{passKindOf(r)}</span>
-      {d > 0 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[#ffd27a] tabular-nums">{PASS_CLOCK}{d.toLocaleString()}일</span>}
+      {d > 0 && <span className="shrink-0 inline-flex items-center gap-0.5 text-[#ffd27a] tabular-nums"><PassClock />{d.toLocaleString()}일</span>}
     </span>
   );
 };
-const PassTileBody = ({ r, big = false }) => {
+// 📌 보상 칸 틀(2026-10-11 운영자 확정 「C 틀 + 재화 도트」 — 시안 .claude/mockups/시즌패스-보상칸-추천(C+도트).png):
+//    테 1.5px — 무료 은색 · 프리미엄 금보라, 안은 짙은 판. 왼쪽 그림 칸(빛 받침) | 오른쪽 글자. 칸 높이는 그대로(PT.tile)
+const PASS_EDGE = { free: "linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0.12))", paid: "linear-gradient(135deg, #ffd9a0, #c49bff 50%, #ff7ac6)" };
+const PASS_FILL = { free: "#1b1630", paid: "#251843" };
+// 그림 칸 빛 받침 — XP 금빛 · 빙옥 하늘 · 그 밖은 무료 푸른빛 / 프리미엄 분홍빛
+const passGlowOf = (r, premium) => (r.kind === "xp" ? "rgba(255,210,90,0.28)" : r.kind === "point" ? "rgba(122,212,245,0.3)" : premium ? "rgba(255,170,230,0.3)" : "rgba(190,210,255,0.2)");
+// 도트 그림(rows · pal) — 같은 색 가로 줄을 rect 하나로(crispEdges · 정수 배율)
+const PassPixel = ({ art, size }) => {
+  const W = art.rows[0].length, H = art.rows.length;
+  const rects = [];
+  art.rows.forEach((row, y) => {
+    for (let x = 0; x < W;) {
+      const ch = row[x];
+      if (!art.pal[ch]) { x++; continue; }
+      let e = x;
+      while (e + 1 < W && row[e + 1] === ch) e++;
+      rects.push(<rect key={`${x}-${y}`} x={x} y={y} width={e - x + 1} height="1" fill={art.pal[ch]} />);
+      x = e + 1;
+    }
+  });
+  return <svg aria-hidden viewBox={`0 0 ${W} ${H}`} width={size} height={size} shapeRendering="crispEdges" className="shrink-0">{rects}</svg>;
+};
+// 그림 칸 속 — XP 번개 도트(lib/itemArt "xp-bolt") · 빙옥 구슬 도트(lib/currencyIcons) · 아이템은 등록 아이콘(기간제면 아래 금빛 시계 딱지) · 역할은 방패
+const PassTileArt = ({ r }) => {
+  if (r.kind === "xp") return <ItemIcon icon="art:xp-bolt" size={32} />;
+  if (r.kind === "point") return <PassPixel art={CURRENCY_PIXEL.point} size={32} />;
+  if (r.kind === "item") {
+    return (
+      <>
+        <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType} size={32} color={r.color || (r.itemType ? itemTypeColor(r.itemType) : undefined)} />
+        {passDays(r) > 0 && (
+          <span className="absolute bottom-1 left-1/2 -translate-x-1/2 inline-flex items-center gap-0.5 h-3.5 px-1 rounded-[4px] text-[9px] font-black tabular-nums leading-none whitespace-nowrap text-[#ffd27a] bg-[#1a1233]" style={{ boxShadow: "inset 0 0 0 1px rgba(255,210,122,0.45)" }}>
+            <PassClock />{passDays(r).toLocaleString()}일
+          </span>
+        )}
+      </>
+    );
+  }
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="w-7 h-7 shrink-0 text-white" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d={ICON_PATHS[PASS_KIND_ICON[r.kind] || "gift"]} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+// 글자 칸 — 재화는 단위(그 색) 위 · 수량 크게, 그 밖은 분류(작게) 위 · 짧은 이름(두 줄까지)
+const PassTileText = ({ r }) => {
   if (r.kind === "xp" || r.kind === "point") {
     return (
-      <span className="min-w-0 flex items-baseline">
-        <span className={`min-w-0 truncate font-black text-white tabular-nums tracking-[-0.02em] leading-none ${big ? "text-[20px]" : "text-[18px]"}`}>{(r.amount || 0).toLocaleString()}</span>
-        <span className={`ml-1 shrink-0 font-bold text-white/55 ${big ? "text-[11px]" : "text-[10px]"}`}>{r.kind === "xp" ? "XP" : "빙옥"}</span>
+      <span className="min-w-0 flex flex-col">
+        <span className="text-[10px] font-black leading-none" style={{ color: r.kind === "xp" ? "#ffe27a" : "#8fd9f6" }}>{r.kind === "xp" ? "XP" : "빙옥"}</span>
+        <span className="mt-1 truncate text-[16px] font-black text-white tabular-nums tracking-[-0.02em] leading-none">{(r.amount || 0).toLocaleString()}</span>
       </span>
     );
   }
   return (
-    <span className="min-w-0 flex items-center">
-      {r.kind === "item" ? (
-        <span className="relative shrink-0 flex">
-          <ItemIcon icon={r.icon} imageUrl={r.imageUrl} type={r.itemType} size={32} color={r.color || (r.itemType ? itemTypeColor(r.itemType) : undefined)} />
-          {/* 기간제 딱지 — 그림 아래 모서리에 금빛 시계 · 기간(게임 아이템 칸의 기간 표시처럼) */}
-          {passDays(r) > 0 && (
-            <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center gap-0.5 h-3.5 px-1 rounded-[4px] text-[9px] font-black tabular-nums leading-none whitespace-nowrap text-[#ffd27a] bg-[#1a1233]" style={{ boxShadow: "inset 0 0 0 1px rgba(255,210,122,0.45)" }}>
-              {PASS_CLOCK}{passDays(r).toLocaleString()}일
-            </span>
-          )}
-        </span>
-      ) : (
-        <svg aria-hidden viewBox="0 0 24 24" className={`${big ? "w-7 h-7" : "w-6 h-6"} shrink-0 text-white`} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d={ICON_PATHS[PASS_KIND_ICON[r.kind] || "gift"]} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-      <span className={`min-w-0 flex flex-col ${big ? "ml-2" : "ml-2 pr-2"}`}>
-        <PassKindLine r={r} days={false} className="text-[10px]" />
-        <span className={`mt-1 line-clamp-2 break-keep font-black text-white leading-[1.2] ${big ? "text-[13px]" : "text-[12px]"}`} style={PASS_WRAP}>{passShortName(r)}</span>
-      </span>
+    <span className="min-w-0 flex flex-col">
+      <PassKindLine r={r} days={false} className="text-[10px]" />
+      <span className="mt-1 line-clamp-2 break-keep text-[12px] font-black text-white leading-[1.2]" style={PASS_WRAP}>{passShortName(r)}</span>
     </span>
   );
 };
@@ -1085,7 +1102,7 @@ const PT = { col: 140, gap: 8, head: 40, line: 24, tile: 60, tileGap: 6, slot: 2
 // 📌 마디 티어 — 5 · 10 · 15 … 와 마지막 티어. 칸 머리 번호를 금빛 알약으로(트랙에서 큰 고비가 한눈에, 2026-10-11 시안)
 const passMilestone = (t, tiers) => t.level % 5 === 0 || t === tiers[tiers.length - 1];
 const passRowH = (n) => n * PT.tile + (n - 1) * PT.tileGap + PT.tileGap + PT.slot;
-const PASS_VERTICAL = { writingMode: "vertical-rl", letterSpacing: "0.14em" };
+const PASS_VERTICAL = { writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: "0.14em" };
 
 // 📌 트랙 칸 — 한 티어의 무료(또는 프리미엄) 보상 전부를 위 → 아래로 쌓는다("+N" 으로 접지 않는다, 2026-10-01 "보상도 +1 표기 말고 다 보여주게").
 //    맨 아래는 받기 자리(고정 높이) — 받을 수 있으면 받기, 다 받았으면 받음. 받기는 칸 단위(그 칸 보상 전부)
@@ -1093,8 +1110,9 @@ const PASS_VERTICAL = { writingMode: "vertical-rl", letterSpacing: "0.14em" };
 const PassCell = ({ track, premium = false, locked = false, busy = false, onClaim, peekKey = "", onPeek }) => {
   const list = track?.rewards || [];
   if (!list.length) return <div className="h-full flex items-center justify-center text-[12px] font-bold text-white/15">—</div>;
-  // 📌 받을 수 있는 칸은 분홍 테두리 + 은은한 빛 — 일부만 받은 칸이면 이미 받은 타일은 빼고(받은 것까지 빛나 헷갈리지 않게)
-  const glow = { boxShadow: "inset 0 0 0 1.5px rgba(255,150,214,0.85), 0 0 16px -4px rgba(255,122,198,0.6)" };
+  // 📌 받을 수 있는 칸은 분홍 빛 — 일부만 받은 칸이면 이미 받은 타일은 빼고(받은 것까지 빛나 헷갈리지 않게)
+  const glow = { boxShadow: "0 0 18px -3px rgba(255,122,198,0.85)" };
+  const tone = premium ? "paid" : "free";
   return (
     <div className="h-full flex flex-col">
       {list.map((r, j) => {
@@ -1107,10 +1125,15 @@ const PassCell = ({ track, premium = false, locked = false, busy = false, onClai
           <Tag
             key={r.key}
             {...(named ? { type: "button", "aria-label": r.label, ...(view ? { "aria-haspopup": "dialog" } : {}), onClick: (e) => onPeek?.(e, pk, r) } : { title: r.label })}
-            className={`relative shrink-0 flex items-center w-full min-w-0 px-2.5 rounded-xl text-left ${named ? PASS_PEEK_BTN : ""}`}
-            style={{ height: PT.tile, marginTop: j ? PT.tileGap : 0, ...passChipBg(premium), ...(track.claimable && !r.claimed ? glow : null), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
+            className={`relative shrink-0 block w-full min-w-0 p-[1.5px] rounded-[14px] text-left ${named ? PASS_PEEK_BTN : ""}`}
+            style={{ height: PT.tile, marginTop: j ? PT.tileGap : 0, background: PASS_EDGE[tone], ...(track.claimable && !r.claimed ? glow : null), ...(peekKey === pk ? PASS_PEEK_ON : null) }}
           >
-            <span className={`min-w-0 flex ${dim ? "opacity-40" : ""}`}><PassTileBody r={r} /></span>
+            <span className="h-full flex items-center overflow-hidden rounded-[12.5px]" style={{ background: PASS_FILL[tone] }}>
+              <span className={`relative shrink-0 w-[46px] h-full flex items-center justify-center ${dim ? "opacity-45" : ""}`} style={{ background: `radial-gradient(circle, ${passGlowOf(r, premium)}, transparent 70%)` }}>
+                <PassTileArt r={r} />
+              </span>
+              <span className={`min-w-0 pr-3.5 ${dim ? "opacity-50" : ""}`}><PassTileText r={r} /></span>
+            </span>
             <span className={`absolute top-1.5 right-1.5 inline-flex ${dim ? "text-white/45" : "text-[#d6b4ff]"}`}>
               {r.claimed && !track.claimed ? PASS_CHECK : locked ? PASS_LOCK : premium ? PASS_CROWN_SM : null}
             </span>
@@ -1529,12 +1552,13 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             {rows.length > 0 && (
               <div aria-hidden className="shrink-0 mr-2 flex flex-col" style={{ width: PT.label }}>
                 <div className="shrink-0" style={{ height: PT.head + PT.line }}></div>
-                <div className="shrink-0 rounded-lg flex items-center justify-center bg-white/[0.05] text-[11px] font-black text-white/45" style={{ height: hFree }}>
+                {/* 📌 줄 이름은 그 줄 첫 칸과 같은 높이 · 같은 자리(2026-10-11 운영자 "배열 안 맞는 거") — 줄 전체 높이(받기 자리 · 둘째 칸까지)에 걸쳐 가운데 두면 첫 칸과 어긋났다 */}
+                <div className="shrink-0 rounded-lg flex items-center justify-center bg-white/[0.05] text-[11px] font-black text-white/45" style={{ height: PT.tile }}>
                   <span style={PASS_VERTICAL}>무료</span>
                 </div>
-                <div className="shrink-0 rounded-lg flex flex-col items-center justify-center text-[11px] font-black text-[#d9c6ff]" style={{ height: hPaid, marginTop: PT.rowGap, ...passChipBg(true) }}>
-                  <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3 mb-1.5 shrink-0" fill="currentColor"><path d={CROWN} /></svg>
-                  <span style={PASS_VERTICAL}>프리미엄</span>
+                <div className="shrink-0 rounded-lg flex flex-col items-center justify-center text-[10px] font-black text-[#d9c6ff]" style={{ height: PT.tile, marginTop: hFree - PT.tile + PT.rowGap, ...passChipBg(true) }}>
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-2.5 h-2.5 mb-1 shrink-0" fill="currentColor"><path d={CROWN} /></svg>
+                  <span style={{ ...PASS_VERTICAL, letterSpacing: "0.02em", lineHeight: 1 }}>프리미엄</span>
                 </div>
               </div>
             )}
