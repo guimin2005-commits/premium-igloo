@@ -630,23 +630,24 @@ export default function ArcticShopBody({
 
   // 검색창 아래 패널 — 입력 중이면 추천 단어, 비어 있으면 최근 검색어
   const searchPanel = (
-    <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl border border-[#ededed] bg-white shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)] overflow-hidden">
+    // 📌 모바일 검색 시트 안 · 검색칸 바로 아래에 붙는 목록(2026-10-11 운영자 "모바일 이거 좀 수정해") — 전엔 떠 있는 카드(absolute)라 흰 시트 밖으로 반쯤 삐져나왔다
+    <div className="overflow-hidden">
       {query.trim() ? (
         suggestions.length > 0 ? (
           <div className="py-2">
             {suggestions.map((sg) => (
               <button key={sg} onMouseDown={(e) => { e.preventDefault(); submitSearch(sg); }}
-                className="w-full text-left px-4 py-2.5 text-[14px] font-bold text-[#131313] hover:bg-black/[0.03] transition-colors truncate">
+                className="w-full text-left px-1 py-2.5 text-[14px] font-bold text-[#131313] hover:bg-black/[0.03] transition-colors truncate">
                 {sg}
               </button>
             ))}
           </div>
         ) : (
-          <div className="px-4 py-4 text-[13px] text-[#a3a3a3]">추천할 단어가 없습니다.</div>
+          <div className="px-1 py-4 text-[13px] text-[#a3a3a3]">추천할 단어가 없습니다.</div>
         )
       ) : recentOn ? (
         <>
-          <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-1.5">
+          <div className="flex items-center justify-between gap-3 px-1 pt-3 pb-1.5">
             <span className="text-[12px] font-black text-[#131313]">최근 검색어</span>
             <span className="flex items-center gap-3">
               {recents.length > 0 && (
@@ -658,11 +659,11 @@ export default function ArcticShopBody({
             </span>
           </div>
           {recents.length === 0 ? (
-            <div className="px-4 pb-4 pt-1 text-[13px] text-[#a3a3a3]">최근 검색어가 없습니다.</div>
+            <div className="px-1 pb-4 pt-1 text-[13px] text-[#a3a3a3]">최근 검색어가 없습니다.</div>
           ) : (
             <div className="pb-2">
               {recents.map((r) => (
-                <div key={r} className="group/rc flex items-center gap-2 px-4 py-2 hover:bg-black/[0.03] transition-colors">
+                <div key={r} className="group/rc flex items-center gap-2 px-1 py-2 hover:bg-black/[0.03] transition-colors">
                   <button onMouseDown={(e) => { e.preventDefault(); submitSearch(r); }}
                     className="flex-1 min-w-0 text-left text-[14px] font-bold text-[#5a5a5a] hover:text-[#131313] truncate transition-colors">{r}</button>
                   <button onMouseDown={(e) => { e.preventDefault(); setRecents((prev) => prev.filter((x) => x !== r)); }}
@@ -675,7 +676,7 @@ export default function ArcticShopBody({
           )}
         </>
       ) : (
-        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+        <div className="flex items-center justify-between gap-3 px-1 py-3.5">
           <span className="text-[13px] text-[#8a8a8a]">최근 검색어 저장이 꺼져 있습니다.</span>
           <button onMouseDown={(e) => { e.preventDefault(); toggleRecent(); }}
             className="shrink-0 text-[11px] font-bold text-[#e91e3f] hover:text-[#d01634] transition-colors">켜기</button>
@@ -1095,9 +1096,9 @@ export default function ArcticShopBody({
               </div>
               <button onClick={() => setShowMobileSearch(false)} className="px-4 py-3 text-[13px] font-bold text-[#131313]">닫기</button>
             </div>
-            <div className="relative mt-3">{searchPanel}</div>
+            <div className="mt-4 pt-1 border-t border-[#ededed]">{searchPanel}</div>
             {query && (
-              <button onClick={clearSearch} className="mt-3 text-[12px] font-bold text-[#e91e3f]">검색어 지우기</button>
+              <button onClick={clearSearch} className="mt-3 ml-1 text-[12px] font-bold text-[#e91e3f]">검색어 지우기</button>
             )}
           </div>
         </div>
