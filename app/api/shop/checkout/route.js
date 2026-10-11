@@ -24,6 +24,8 @@ import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf } from "../_lib/renewal";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import mongoose from "mongoose";
+import { isDraftMode, draftBlockedProducts } from "@/lib/catalogDraft";
+import { saleEnded, SALE_ENDED_MSG } from "@/lib/saleWindow";
 
 // 결제 화면이 만든 주문 id — crypto.randomUUID() 또는 그 대체값(영문 · 숫자 · - _ 8~64자)
 const ORDER_ID_RE = /^[\w-]{8,64}$/;
@@ -91,6 +93,11 @@ export async function POST(request) {
       wanted.set(id, (wanted.get(id) || 0) + qty);
       if (row.days != null) pickedDays.set(id, Math.floor(Number(row.days) || 0));
     }
+    // 📌 상품 초안(lib/catalogDraft.js) — 초안 모드(localhost)에서 담긴 상품 · 연결 아이템에 초안이 하나라도 있으면 결제하지 않는다.
+    //    결제는 실사이트 값으로 하므로 초안 값이 구매 · 지갑 · 봇 지급으로 새지 않게. 실사이트 모드는 읽기 없이 지나간다
+    if (isDraftMode() && (await draftBlockedProducts([...wanted.keys()]))) {
+      return NextResponse.json({ success: false, code: "DRAFT", message: "실사이트 반영 전인 상품입니다." }, { status: 409 });
+    }
     const docs = await ShopItem.find({ _id: { $in: [...wanted.keys()] }, active: true });
     // 📌 세트 상품(lib/bundle.js)은 바로 구매만 — 구성마다 가진 것 · 깎은 값을 따로 정해야 해서 장바구니 결제에는 넣지 않는다
     if (docs.some((d) => d.type === "bundle")) {
@@ -98,6 +105,10 @@ export async function POST(request) {
     }
     if (docs.length !== wanted.size) {
       return NextResponse.json({ success: false, message: "판매 중이 아닌 상품이 포함되어 있습니다." }, { status: 409 });
+    }
+    // 📌 판매 종료(lib/saleWindow) — 장바구니에 담아 둔 사이 끝난 상품이 있으면 결제하지 않는다
+    if (docs.some((d) => saleEnded(d))) {
+      return NextResponse.json({ success: false, code: "SALE_ENDED", message: `판매가 끝난 상품이 포함되어 있습니다: ${docs.filter((d) => saleEnded(d)).map((d) => d.name).join(", ")}` }, { status: 409 });
     }
 
     // 📌 기간제 상품은 파는 기간 중 하나를 반드시 골라야 한다

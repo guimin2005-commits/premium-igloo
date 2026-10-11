@@ -6,15 +6,23 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { normalizeColor } from "@/lib/items";
 import Item from "@/models/Item";
 import InventoryRole from "@/models/InventoryRole";
+import { isDraftMode, catalogWriteBlocked, liveLockedResponse, catalogCreate } from "@/lib/catalogDraft";
 
 // 📌 예전 '인벤토리 표기 역할'(InventoryRole)을 아이템으로 가져온다.
 //    roleId 기준 idempotent — 이미 같은 roleId 의 Item 이 있으면 건너뛴다.
 //    category perk → type "perk", 그 외(title/notify/etc) → type "item".
 //    가져온 InventoryRole 은 지우지 않고 visible=false 로만 내린다 (my-items 의 호환 fallback 이 더는 잡지 않게).
+//    📌 상품 초안(lib/catalogDraft.js) — InventoryRole 을 실사이트에 바로 고치는 옛 이관이라 초안 모드에서는 쓰지 않는다(409).
+//       실사이트(Vercel) 관리 화면은 아이템 쓰기가 막혀 있다(liveLockedResponse 403)
 export async function POST() {
   try {
     const deny = await denyIfNotAdmin();
     if (deny) return deny;
+    if (catalogWriteBlocked()) return liveLockedResponse();
+    if (isDraftMode()) {
+      const message = "초안 모드에서는 가져오기를 쓸 수 없습니다.";
+      return NextResponse.json({ success: false, code: "DRAFT", message, error: message }, { status: 409 });
+    }
     await connectToDatabase();
 
     const [rows, existing] = await Promise.all([
@@ -29,7 +37,7 @@ export async function POST() {
     for (const r of rows) {
       if (!r.roleId || have.has(r.roleId)) { skipped++; continue; }
       const name = (r.label || r.roleName || "역할").trim().slice(0, 40) || "역할";
-      await Item.create({
+      await catalogCreate(Item, {
         name,
         description: String(r.description || "").slice(0, 120),
         icon: "",

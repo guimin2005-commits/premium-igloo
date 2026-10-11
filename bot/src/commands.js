@@ -15,6 +15,7 @@ import { buildMessage, buildMessageWithCard, cardAvatar, commonVars, progressBar
 import { questView, questCardData } from "./views/quests.js";
 import { inventoryView, inventoryCardData } from "./views/inventory.js";
 import { passView, passCardData } from "./views/pass.js";
+import { perksOf, pickAvatarFrame, withSeasonFrame } from "./itemEffects.js";
 
 const MAX_LEVEL = 1000; // leveling.js getLevelByXp 의 끝
 
@@ -160,7 +161,7 @@ async function handleLevel(interaction, r) {
       tier: tierOf(level).name,
     },
     async () => ({ avatar: await avatarOf(interaction), name: base.name, level, xp, need, progress, rank, total }),
-    `Lv.${level} · 누적 ${xp.toLocaleString("ko-KR")} XP · Lv.${nextLevel}까지 ${need.toLocaleString("ko-KR")} XP`
+    `Lv.${level} · 현재 ${xp.toLocaleString("ko-KR")} XP · Lv.${nextLevel}까지 ${need.toLocaleString("ko-KR")} XP`
   );
   return r.send({ ...payload, components: [linkRow("대시보드", "/level?tab=my")] });
 }
@@ -168,13 +169,15 @@ async function handleLevel(interaction, r) {
 // 📌 /랭크 = 서버 순위표 — 1~10위 + 맨 아래 내 줄(카드). 글(임베드)은 템플릿 그대로({rank} · {total} 등 내 순위)
 const RANK_TOP = 10;
 async function handleRank(interaction, r) {
-  const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1 }).lean();
+  const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
   const xp = doc?.xp || 0;
   const [above, total, topDocs] = await Promise.all([
     UserXp.countDocuments(rankAbove(interaction.user.id, xp)),
     UserXp.countDocuments(),
-    UserXp.find({}, { userId: 1, xp: 1, username: 1, displayName: 1 }).sort({ xp: -1, userId: 1 }).limit(RANK_TOP).lean(),
+    UserXp.find({}, { userId: 1, xp: 1, username: 1, displayName: 1, avatarFramePick: 1, seasonFrame: 1 }).sort({ xp: -1, userId: 1 }).limit(RANK_TOP).lean(),
   ]);
+  // 📌 낀 아바타 테두리 — 가진 테두리(아이템 perksOf + 시즌 티어 테두리) 중 고른 것. 서버에 없는 사람은 시즌 테두리만(아이템 보유를 못 본다)
+  const frameOf = (m, d) => pickAvatarFrame(withSeasonFrame(m ? perksOf(m).avatarFrames : [], d), d?.avatarFramePick || "");
   const level = getLevelByXp(xp);
   const rank = above + 1;
   const base = commonVars(interaction.member, interaction.guild);
@@ -205,6 +208,7 @@ async function handleRank(interaction, r) {
             avatar: m ? await cardAvatar(m) : null,
             level: getLevelByXp(d.xp || 0),
             xp: d.xp || 0,
+            frame: frameOf(m, d) || undefined,
           };
         })
       );
@@ -213,10 +217,10 @@ async function handleRank(interaction, r) {
         seasonName: season.name,
         total,
         top,
-        me: { rank, name: base.name, avatar: await avatarOf(interaction), level, xp },
+        me: { rank, name: base.name, avatar: await avatarOf(interaction), level, xp, frame: frameOf(interaction.member, doc) || undefined },
       };
     },
-    `#${rank} / ${total.toLocaleString("ko-KR")} · Lv.${level} · 누적 ${xp.toLocaleString("ko-KR")} XP`
+    `#${rank} / ${total.toLocaleString("ko-KR")} · Lv.${level} · 현재 ${xp.toLocaleString("ko-KR")} XP`
   );
   return r.send({ ...payload, components: [linkRow("랭킹", "/level?tab=rank")] });
 }

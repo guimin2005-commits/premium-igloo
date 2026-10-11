@@ -49,12 +49,17 @@ export type ProductForm = {
   detachOnSeason: boolean;
   // 📌 빙옥 전용 결제 — 켜면 가격 칸(price · price7 · price30 · priceInf)은 빙옥 단위다. 저장할 때 ×10,000 해 XP 로 보낸다(toPayload)
   pointOnly: boolean;
-  // 📌 이벤트 테마 — "halloween" 이면 ARCTIC 할로윈 탭에 모인다. "" = 없음
+  // 📌 이벤트 테마 키(lib/shopThemes.js — "halloween" · 관리자가 만든 테마) — 그 테마 탭에 모인다. "" = 없음.
+  //    저장된 값을 그대로 든다(지운 테마 키여도 — 고르기 칸이 「지운 테마」로 보이고, 저장하면 서버가 "" 로 정리한다)
   theme: string;
+  // 📌 세트 카드 그림 모양(세트만) — "" 겹친 카드 · "combo" 구성 합치기(app/arctic/CardArt BundleArt)
+  setArt: string;
   price: string;
   discountPct: string;
   // 할인 종료 — datetime-local 값(KST "YYYY-MM-DDTHH:mm"). 비우면 기한 없음
   discountUntil: string;
+  // 📌 판매 종료 — 할인 종료와 같은 모양(KST). 지나면 상점에서 빠지고 구매가 막힌다(lib/saleWindow). 비우면 끝 없음
+  saleUntil: string;
   stock: string;
   // 편집을 시작할 때의 재고(-1 = 무제한) — 서버가 그 사이 팔린 수량을 되살리지 않게 바꾼 폭만 반영한다
   stockBase: string;
@@ -92,9 +97,11 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   detachOnSeason: false,
   pointOnly: false,
   theme: "",
+  setArt: "",
   price: "",
   discountPct: "",
   discountUntil: "",
+  saleUntil: "",
   stock: "",
   stockBase: "",
   sortOrder: "",
@@ -196,10 +203,12 @@ export const formFromShopItem = (it: any): ProductForm => ({
   roleName: it.roleName || "",
   detachOnSeason: !!it.detachOnSeason,
   pointOnly: !!it.pointOnly,
-  theme: it.theme === "halloween" ? "halloween" : "",
+  theme: typeof it.theme === "string" ? it.theme : "",
+  setArt: it.setArt === "combo" ? "combo" : "",
   price: toField(it.price, !!it.pointOnly),
   discountPct: it.discountPct ? String(it.discountPct) : "",
   discountUntil: toKstInput(it.discountUntil),
+  saleUntil: toKstInput(it.saleUntil),
   stock: it.stock < 0 || it.stock == null ? "" : String(it.stock),
   stockBase: String(it.stock ?? -1),
   sortOrder: String(it.sortOrder || 0),
@@ -388,8 +397,44 @@ export const applyItem = (f: ProductForm, item: any): ProductForm => {
   };
 };
 
-// 직접 설정으로 되돌린다 — 값은 남겨 두어 그 자리에서 고쳐 쓸 수 있게 한다 (아이템 이미지 스냅샷만 비운다)
-export const unlinkItem = (f: ProductForm): ProductForm => ({ ...f, itemId: "", itemImageUrl: "" });
+// 📌 직접 설정 → 등록된 아이템 → 직접 설정(2026-10-11 운영자 "직접 설정 가면 상품명 · 설명 자동으로 적히는 거 수정 · 미리 안 골라지게"):
+//    「등록된 아이템」을 눌러도 아이템을 저절로 고르지 않는다(화면이 고르기 칸만 연다). 아이템을 고르기 직전의 직접 설정 값을 customSnapOf 로 잡아 두고,
+//    직접 설정으로 돌아가면 그 값(표기 · 판매 방식 · 빙옥 전용)으로 되돌린다. 잡아 둔 값이 없으면(처음부터 연결된 상품을 연 것) 아이템 값을 남겨 그 자리에서 고쳐 쓴다
+const SNAP_KEYS = ["name", "description", "icon", "color", "type", "roleId", "roleName", "detachOnSeason", "timed", "withInf", "unitSale"] as const;
+// 📌 가격 칸(정가 · 7일 · 30일 · 무제한)도 잡아 둔다(2026-10-11) — 기프트카드 아이템을 고르면 빙옥 전용이 켜지며(autoPointOnly) 가격이 빙옥으로 올림되고,
+//    돌아올 때 ×10,000 으로 되돌리면 친 값이 바뀌었다(12,345 XP → 2 빙옥 → 20,000 XP). 이제 친 값 그대로 되돌린다
+export type CustomSnap = Pick<ProductForm, (typeof SNAP_KEYS)[number] | (typeof PRICE_KEYS)[number] | "pointOnly">;
+export const customSnapOf = (f: ProductForm): CustomSnap => ({
+  ...(Object.fromEntries([...SNAP_KEYS, ...PRICE_KEYS].map((k) => [k, f[k]])) as Omit<CustomSnap, "pointOnly">),
+  pointOnly: f.pointOnly,
+});
+// 가격 칸 값을 XP 로(빈 칸 = null)
+const worthXp = (v: unknown, pointOnly: boolean) => {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = Math.max(0, Math.floor(Number(s) || 0));
+  return pointOnly ? pointToXp(n) : n;
+};
+// 지금 가격 칸이 잡아 둔 값 그대로이거나 빙옥 전용 자동 전환(올림 · ×10,000 — 몇 번을 오가도 같은 값)으로 바뀐 것뿐인가 — 연결 중에 고쳐 친 값이면 아니다
+const autoPriceOf = (now: unknown, nowPoint: boolean, was: unknown, wasPoint: boolean) => {
+  const a = worthXp(now, nowPoint);
+  const b = worthXp(was, wasPoint);
+  if (a == null || b == null) return a == null && b == null;
+  return a === b || a === pointToXp(xpToPoint(b));
+};
+// 직접 설정으로 되돌린다 — snap 이 있으면 그 값으로, 없으면 값은 남긴다(아이템 이미지 스냅샷만 비운다).
+//    가격 칸: 연결 중에 고쳐 치지 않았으면 잡아 둔 값 그대로, 고쳐 쳤으면 그 값을 잡아 둔 단위로(빙옥 전용이 달라졌으면 setPointOnly 와 같은 셈)
+export const unlinkItem = (f: ProductForm, snap?: CustomSnap | null): ProductForm => {
+  const base: ProductForm = { ...f, itemId: "", itemImageUrl: "" };
+  if (!snap) return base;
+  const { pointOnly, ...rest } = snap;
+  const keep = Object.fromEntries(Object.entries(rest).filter(([k]) => !(PRICE_KEYS as readonly string[]).includes(k)));
+  const restored: ProductForm = setPointOnly({ ...base, ...keep }, !!pointOnly);
+  for (const k of PRICE_KEYS) {
+    if (snap[k] !== undefined && autoPriceOf(f[k], !!f.pointOnly, snap[k], !!pointOnly)) restored[k] = snap[k];
+  }
+  return restored;
+};
 
 // 서버로 보낼 본문 — 등록된 아이템이면 서버가 표기를 다시 복사하므로 여기 값은 참고용이다 (imageUrl 은 항상 이 값이 저장된다)
 //    📌 가격은 늘 XP 로 보낸다 — 빙옥 전용이면 입력칸(빙옥) × 10,000. 서버도 10,000 의 배수로 한 번 더 맞춘다
@@ -407,6 +452,7 @@ export const toPayload = (f: ProductForm, roleName: string) => ({
   // 입력칸 값은 KST 벽시계 — 서버가 헷갈리지 않게 시간대를 붙여 보낸다
   //    "23:59까지" 가 그 1분이 끝날 때까지 되도록 59초로 보낸다
   discountUntil: f.discountUntil ? `${f.discountUntil}:59+09:00` : "",
+  saleUntil: f.saleUntil ? `${f.saleUntil}:59+09:00` : "",
   // 📌 세트 구성 — 세트일 때만 배열, 아니면 [](서버는 세트가 아니면 이 값을 보지 않는다)
   bundle: bundlePayload(f),
 });

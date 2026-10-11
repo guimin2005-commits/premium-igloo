@@ -3,10 +3,11 @@
 //    순위 기준은 사이트 랭킹 누적 탭(app/api/xp/leaderboard period=all)과 같다 — xp 내림차순 · userId 오름차순 (0 XP 는 순위 아님)
 //  · RANKER 역할(BotSetting.rankerRoleId)이 있으면 지난 보유자에게서 떼고 3인에게 붙인 뒤 레벨업 채널에 발표
 //  · 관리자가 나중에 요청한 지급(roleGrantRequested)도 같은 방식으로 처리한다. 명예의 전당 등재는 관리자가 수기로
+//  · 시즌 티어 테두리(settleFrames) — 결산된 시즌마다 한 번, 모두의 「시즌 끝 순간 등급」을 UserXp.seasonFrame 에 적는다
 import { UserXp, BotSetting, SeasonResult, isDuplicateKeyError } from "../db.js";
 import { SEASONS, seasonEndMs, getLevelByXp } from "../leveling.js";
 import { config } from "../config.js";
-import { buildMessageWithCard, cardAvatar, SITE_URL } from "../botMessages.js";
+import { buildMessageWithCard, cardAvatar, SITE_URL, tierOf } from "../botMessages.js";
 
 const TICK_MS = 5 * 60 * 1000;
 const NO_NAME = "이름 없음";
@@ -73,6 +74,48 @@ async function settleEnded(guild) {
       if (isDuplicateKeyError(e)) continue; // 다른 쪽이 먼저 만들었다 (season unique)
       throw e;
     }
+  }
+}
+
+// ── 시즌 티어 테두리 ──────────────────────────
+//    📌 2026-10-10 운영자: 시즌이 끝나면 티어 테두리를 주고 다음 시즌이 되면 회수 — 아이템을 사람마다 만들지 않고 기록 한 칸으로.
+//    결산된 시즌(FRAME_FROM_SEASON 부터 · framesAt 없음)마다 한 번: 모든 UserXp 에 seasonFrame { season, frame: 등급 키(아이언은 ""), at } 를 적는다.
+//    사이트 · 봇은 이 칸을 가진 테두리로 친다(lib/itemEffects withSeasonFrame). 다음 시즌 결산이 전원을 덮어쓰므로 회수는 따로 없다
+//    등급은 결산하는 순간의 레벨(UserXp.level — 사이트 · /레벨이 보이는 값) 기준. 5분 주기라 끝난 직후 몇 분 안에 찍힌다.
+//    📌 XP 는 강화 · 상점에서 쓰이면 기록 없이 줄어 「지금 XP − 끝난 뒤 번 XP」로 되짚을 수 없다(10/10 읽기 시험에서 음수가 나옴) — 그래서 그 순간 값으로 찍는다
+//    시즌 1 은 레벨 비공개 기간이라 건너뛴다(운영자 결정 — 시즌 2 끝, 2026-12-31 결산부터)
+//    📌 지난 시즌 기록(UserXp.seasonHistory)도 같은 차례에 — { season, name, level, tier(아이언은 "iron"), rank, total, at } 를 한 줄 붙인다.
+//       순위는 그 순간 xp 내림차순 · userId 오름차순(사이트 랭킹 · /api/xp/me 와 같은 규칙), total 은 전체 문서 수(/api/xp/me 의 total 과 같다).
+//       같은 시즌이 이미 있으면 붙이지 않는다(필터 — framesAt 을 적기 전에 멈췄다 다시 돌아도 두 번 안 들어간다) · 최근 20개만
+const FRAME_FROM_SEASON = 2;
+const HISTORY_KEEP = 20;
+async function settleFrames() {
+  const rows = await SeasonResult.find({ framesAt: null, season: { $gte: FRAME_FROM_SEASON } }).sort({ season: 1 }).lean();
+  for (const r of rows) {
+    const s = SEASONS.find((x) => x.number === r.season);
+    if (!s) continue;
+    const docs = await UserXp.find({}, { userId: 1, level: 1, xp: 1 }).sort({ xp: -1, userId: 1 }).lean();
+    const at = new Date();
+    const total = docs.length;
+    let count = 0;
+    const ops = [];
+    docs.forEach((d, i) => {
+      const level = Number(d.level) || getLevelByXp(Number(d.xp) || 0);
+      const key = tierOf(level).key;
+      const frame = key === "iron" ? "" : key;
+      if (frame) count++;
+      ops.push({ updateOne: { filter: { _id: d._id }, update: { $set: { seasonFrame: { season: r.season, frame, at } } } } });
+      const entry = { season: r.season, name: r.name || s.name, level, tier: key, rank: i + 1, total, at };
+      ops.push({
+        updateOne: {
+          filter: { _id: d._id, "seasonHistory.season": { $ne: r.season } },
+          update: { $push: { seasonHistory: { $each: [entry], $slice: -HISTORY_KEEP } } },
+        },
+      });
+    });
+    for (let i = 0; i < ops.length; i += 1000) await UserXp.bulkWrite(ops.slice(i, i + 1000), { ordered: false });
+    const done = await SeasonResult.updateOne({ _id: r._id, framesAt: null }, { $set: { framesAt: at, frameCount: count } });
+    if (done.modifiedCount) console.log(`🏆 시즌 ${r.season} 티어 테두리: ${count}명 (전체 ${docs.length})`);
   }
 }
 
@@ -210,6 +253,8 @@ async function run(client) {
     const guild = client.guilds.cache.get(config.guildId);
     if (!guild) return;
     await settleEnded(guild);
+    // 테두리 기록은 따로 — 실패해도(다음 주기에 framesAt 없는 시즌을 다시 한다) RANKER 지급 · 발표를 막지 않게
+    await settleFrames().catch((e) => console.error("시즌 티어 테두리 오류:", e.message));
     await processGrants(guild);
   } catch (e) {
     console.error("시즌 결산 오류:", e.message);

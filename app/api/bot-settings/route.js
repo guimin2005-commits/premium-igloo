@@ -105,6 +105,13 @@ export async function POST(request) {
         questPickDaily: num(b.questPickDaily, 0, { min: 0, max: 20 }),
         questPickWeekly: num(b.questPickWeekly, 0, { min: 0, max: 20 }),
         questPickMonthly: num(b.questPickMonthly, 0, { min: 0, max: 20 }),
+        // 퀘스트 바꾸기 무료 횟수(0~5) · 유료 바꾸기 값(빙옥 0~100, 0 = 유료 끔) — 본문에 없으면(이 칸을 모르는 옛 화면) 저장값 유지
+        ...Object.fromEntries(["questRerollDaily", "questRerollWeekly", "questRerollMonthly"].map((k) => [
+          k, b[k] !== undefined && b[k] !== null && b[k] !== "" ? num(b[k], 3, { min: 0, max: 5 }) : cur?.[k] ?? 3,
+        ])),
+        ...Object.fromEntries([["questRerollPriceDaily", 1], ["questRerollPriceWeekly", 2], ["questRerollPriceMonthly", 3]].map(([k, def]) => [
+          k, b[k] !== undefined && b[k] !== null && b[k] !== "" ? num(b[k], def, { min: 0, max: 100 }) : cur?.[k] ?? def,
+        ])),
         shopPublic: !!b.shopPublic,
         levelPublic: !!b.levelPublic,
         // 시즌 전환 보호 역할 — 화이트리스트에 없으면 조용히 무시되어 detach 쪽 안전장치가 항상 빈 배열이 된다.

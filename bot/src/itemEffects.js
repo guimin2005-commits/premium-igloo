@@ -8,12 +8,12 @@
 //    (역할 버프 RoleConfig.buffXp · attendBuffXp 는 roleConfigs.js 가 따로, 역할 기준으로 그대로 더한다)
 //
 //    효과 하나: { id, on, mode: "add" | "percent", amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds?,
-//                chance?, minMembers?, seconds?, skin? }
+//                chance?, minMembers?, seconds?, skin?, frame? }
 //      · days      : KST 요일(0=일 … 6=토). 비면 매일
 //      · hourFrom/hourTo : KST 시각. from <= 지금 < to, from > to 면 자정을 넘는 구간(22~2)
 //      · channelIds : 채팅 · 음성에서만 — 그 채널(또는 그 카테고리 안)에서만
 //      · percent   : 그 1회 지급의 기본 XP(다른 효과 · 버프를 더하기 전 값)의 N%
-//      · chance(1~100 %) · minMembers(2~99) · seconds(1~3600) · skin(카드 스킨 키)
+//      · chance(1~100 %) · minMembers(2~99) · seconds(1~3600) · skin(카드 스킨 키) · frame(아바타 테두리 키)
 //    기본 효과 세 칸은 같은 목록에 합쳐 둔다 —
 //      chatBuffXp → "채팅 1회당 +N"(basic-chat), voiceBuffXp → "음성 1회당 +N"(basic-voice), attendBuffXp → "출석 시 +N"(basic-attend)
 //
@@ -23,7 +23,7 @@
 //      상시형  — 들고 있는 동안. 조건 없음, 같은 효과는 합산 후 상한 — perksOf
 //               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · questBonus
 //      소모형  — streakShield(attend.js) — 구매 하나를 consumeStreakShield 로 소모(Purchase.consumedAt)
-//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) / 사이트만: profileBadge
+//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) / 사이트만: profileBadge · avatarFrame(perksOf().avatarFrames, pickAvatarFrame)
 //
 //    📌 보유 판정 (사이트 lib/ownedItems.js · app/api/shop/my-items (A)/(B) 와 같은 규칙)
 //      (A) 구매 건 — status pending(결제 끝, 지급 대기) · completed 이고 기간이 안 지났고 소모되지 않은 것(consumedAt 없음)
@@ -69,9 +69,17 @@ const EFFECT_TRIGGERS = {
   streakShield: { kind: "consumable", modes: ["add"], noAmount: true },          // 연속 출석 보호막 1회
   cardSkin: { kind: "cosmetic", modes: ["add"], needs: "skin", noAmount: true }, // 이미지 카드 스킨
   profileBadge: { kind: "cosmetic", modes: ["add"], noAmount: true },            // 사이트 — 프로필 배지
+  avatarFrame: { kind: "cosmetic", modes: ["add"], needs: "frame", noAmount: true }, // 사이트 — 아바타 테두리
 };
 // 📌 카드 스킨 키 — 사이트 lib/itemEffects.js SKINS · botCards.js CARD_SKINS 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
-const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship"]);
+//    등급 카드 스킨 「랭크 깃발」 rank_<등급>(2026-10-10 — 시즌 티어 보상) · rank_all(9종 전부, 관리자 테스트 아이템 — 사이트 SKIN_RANK_ALL)
+const RANK_SKIN_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"].map((k) => `rank_${k}`);
+const SKIN_RANK_ALL = "rank_all";
+//    할로윈 시즌 카드 스킨 hw_<짧은 영문>(2026-10 — 사이트 SKINS 와 같은 키, 그림 cardSkins/hw_*.js)
+const HW_SKIN_KEYS = ["hw_pumpkin", "hw_ghost", "hw_witch", "hw_candy", "hw_grave", "hw_blackcat"];
+const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship", ...RANK_SKIN_KEYS, SKIN_RANK_ALL, ...HW_SKIN_KEYS]);
+// 효과의 skin 값 → 가진 것으로 치는 스킨 키들 — 사이트 skinsOf 와 같다
+export const skinsOf = (skin) => (skin === SKIN_RANK_ALL ? RANK_SKIN_KEYS : SKIN_KEYS.has(skin) ? [skin] : []);
 // 📌 유저가 고른 스킨 적용 — 사이트 lib/itemEffects.js pickCardSkin 과 같은 규칙
 //    pick: "" 안 고름 · "none" 끔 · 스킨 키(더 이상 없으면 기본 카드)
 //    📌 2026-10-04 "굳이임 이것도" — 자동 착용 없음: 직접 고른 스킨만 입힌다. 안 골랐거나 끔이면 기본 카드("")
@@ -80,6 +88,21 @@ export function pickCardSkin(skins, pick) {
   if (!pick || pick === "none") return "";
   return list.includes(pick) ? pick : "";
 }
+// 📌 아바타 테두리 키(등급 키) — 사이트 lib/itemEffects.js FRAMES 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
+//    앞 9개는 등급 키(시즌 티어 보상), 뒤는 꾸미기 테두리(할로윈 hwf_* · A New World nwf_*)
+const TIER_FRAME_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
+const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship"]);
+// 📌 유저가 고른 테두리(UserXp.avatarFramePick) — 사이트 pickAvatarFrame 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
+export const pickAvatarFrame = (frames, pick) => pickCardSkin(frames, pick);
+// 📌 "all" — 테두리 9종 전부(관리자 테스트 아이템, 사이트 FRAME_ALL 과 같다). 효과의 frame 값 → 가진 것으로 치는 키들
+export const FRAME_ALL = "all";
+export const framesOf = (frame) => (frame === FRAME_ALL ? [...TIER_FRAME_KEYS] : FRAME_KEYS.has(frame) ? [frame] : []);
+// 📌 시즌 티어 테두리(UserXp.seasonFrame) — 아이템 없이 가진 것으로 친다(사이트 lib/itemEffects seasonFrameOf · withSeasonFrame 과 같다)
+export const seasonFrameOf = (doc) => { const f = doc?.seasonFrame?.frame; return f && TIER_FRAME_KEYS.includes(f) ? f : ""; };
+export const withSeasonFrame = (frames, doc) => { const list = Array.isArray(frames) ? frames : []; const f = seasonFrameOf(doc); return f && !list.includes(f) ? [...list, f] : list; };
+// 📌 시즌 등급 카드 스킨 — 같은 seasonFrame 등급의 rank_<등급> 스킨을 아이템 없이 가진 것으로 친다(사이트 seasonSkinOf · withSeasonSkin 과 같다)
+export const seasonSkinOf = (doc) => { const f = seasonFrameOf(doc); return f ? `rank_${f}` : ""; };
+export const withSeasonSkin = (skins, doc) => { const list = Array.isArray(skins) ? skins : []; const s = seasonSkinOf(doc); return s && !list.includes(s) ? [...list, s] : list; };
 const MAX_EFFECTS = 20;
 const LIMIT = { add: 1_000_000, percent: 500, minutes: 1440, everyN: 365 };
 // 새 칸의 범위 — 사이트 FIELD_RANGE 와 같다
@@ -144,6 +167,12 @@ function cleanEffects(list) {
       if (!SKIN_KEYS.has(s)) return;
       if (out.some((x) => x.skin)) return; // 카드 스킨은 아이템 하나에 하나 — 사이트 normalizeEffects 와 같다
       e.skin = s;
+    }
+    if (t.needs === "frame") {
+      const fr = String(raw?.frame || "");
+      if (!FRAME_KEYS.has(fr) && fr !== FRAME_ALL) return;
+      if (out.some((x) => x.frame)) return; // 테두리 효과는 아이템 하나에 하나(여러 개는 "all") — 사이트 normalizeEffects 와 같다
+      e.frame = fr;
     }
     // 요일 · 시간대는 발동형에만 — 상시 · 소모 · 꾸미기는 가지고 있는 동안 늘 붙는다
     if (t.kind === "trigger") {
@@ -510,11 +539,12 @@ export function attendPointOf(member, kst = kstNow()) {
  *    같은 효과는 합산 후 상한: cooldownCut ≤ 채팅 쿨타임의 절반(초), muteRelief ≤ 음소거 감소율(%p), passBoost ≤ 50(%)
  *    cardSkin: "" — 자동으로 입히는 스킨 없음(2026-10-04, 사이트 perksOfItems 와 같다)
  *    cardSkins: 가진 스킨 전부(관리자 순서 — 아이템 sortOrder · createdAt) — 유저가 고른 스킨은 pickCardSkin 으로 (botMessages withSkin)
+ *    avatarFrames: 가진 아바타 테두리 전부(관리자 순서 · 중복 없음) — 고른 것은 pickAvatarFrame (사이트 perksOfItems 와 같다)
  *    오류가 나도 0 · "" 을 돌려준다.
- * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[] }}
+ * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[], avatarFrames: string[] }}
  */
 export function perksOf(member) {
-  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [] };
+  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [], avatarFrames: [] };
   try {
     if (!state.effectsById.size) return out;
     const owned = ownedItemIds(member);
@@ -523,13 +553,15 @@ export function perksOf(member) {
     let relief = 0;
     let boost = 0;
     const skins = [];
+    const frames = [];
     for (const [itemId, list] of state.effectsById) {
       if (!owned.has(itemId)) continue;
       for (const e of list) {
         if (e.on === "cooldownCut") cut += e.seconds || e.amount;
         else if (e.on === "muteRelief") relief += e.amount;
         else if (e.on === "passBoost") boost += e.amount;
-        else if (e.on === "cardSkin" && !skins.includes(e.skin)) skins.push(e.skin);
+        else if (e.on === "cardSkin") for (const sk of skinsOf(e.skin)) { if (!skins.includes(sk)) skins.push(sk); }
+        else if (e.on === "avatarFrame") for (const fk of framesOf(e.frame)) { if (!frames.includes(fk)) frames.push(fk); }
       }
     }
     const s = getSettings();
@@ -538,6 +570,7 @@ export function perksOf(member) {
     out.passBoost = Math.min(boost, EFFECT_TRIGGERS.passBoost.cap);
     out.cardSkin = pickCardSkin(skins, "");
     out.cardSkins = skins;
+    out.avatarFrames = frames;
   } catch (e) {
     console.error("아이템 효과 계산 오류 (perks):", e.message);
   }

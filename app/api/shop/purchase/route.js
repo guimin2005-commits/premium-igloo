@@ -24,6 +24,8 @@ import { REFUND_MARK_RE, CLEANUP_MARK_RE } from "@/lib/roleMigrationTerms";
 import mongoose from "mongoose";
 import { isBundle, bundleUnits, splitAmount } from "@/lib/bundle";
 import { bundleStateFor } from "@/lib/bundleServer";
+import { isDraftMode, draftBlockedProducts } from "@/lib/catalogDraft";
+import { saleEnded, SALE_ENDED_MSG } from "@/lib/saleWindow";
 
 // 캐시백 % · 설정 · XP 획득 중단 — 이번 결제 전에 가진 것으로 정한다(아래 POST 와 같은 규칙). 읽지 못하면 캐시백 없이
 async function cashbackPlan(userId) {
@@ -242,11 +244,18 @@ export async function POST(request) {
     if (!itemId) {
       return NextResponse.json({ success: false, message: "상품이 지정되지 않았습니다." }, { status: 400 });
     }
+    // 📌 상품 초안(lib/catalogDraft.js) — 초안 모드(localhost)에서 그 상품 · 연결 아이템 · 세트 구성에 초안이 있으면 결제하지 않는다.
+    //    결제는 실사이트 값으로 하므로(아래 읽기 · 재고 · 세트 판정 모두 실사이트) 초안 값이 구매 · 지갑 · 봇 지급으로 새지 않게. 실사이트 모드는 읽기 없이 지나간다
+    if (isDraftMode() && (await draftBlockedProducts([String(itemId)]))) {
+      return NextResponse.json({ success: false, code: "DRAFT", message: "실사이트 반영 전인 상품입니다." }, { status: 409 });
+    }
 
     const item = await ShopItem.findById(itemId);
     if (!item || !item.active) {
       return NextResponse.json({ success: false, message: "판매 중인 상품이 아닙니다." }, { status: 404 });
     }
+    // 📌 판매 종료(lib/saleWindow) — 상세 화면이 잠가도 열어 둔 창 · 바로 부른 요청은 여기서 막는다(세트 포함)
+    if (saleEnded(item)) return NextResponse.json({ success: false, code: "SALE_ENDED", message: SALE_ENDED_MSG }, { status: 409 });
     // 📌 세트 상품 — 구성 아이템마다 한 건씩(lib/bundle.js). 자물쇠 · 결제 · 기록을 따로 처리한다
     if (isBundle(item)) return await buyBundle({ session, userId, item, body });
     if (item.type === "physical" && !contact?.trim()) {

@@ -69,6 +69,20 @@ const UserXpSchema = new mongoose.Schema({
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
   // 고른 카드 스킨 — "" 안 고름 · "none" 끔 · 스킨 키 (models/UserXp.js 와 같은 칸). 이미지 카드 그릴 때 읽는다(botMessages withSkin)
   cardSkinPick: { type: String, default: "" },
+  // 고른 아바타 테두리 — "" 안 고름 · "none" 끔 · 테두리 키(등급 키) (models/UserXp.js 와 같은 칸). /인벤토리 '착용' 표시에 읽는다
+  avatarFramePick: { type: String, default: "" },
+  // 시즌 티어 테두리 — 시즌 결산(features/seasonSettle.js settleFrames)이 「시즌 끝 순간 등급」을 적는다(아이언은 ""). 다음 결산이 덮어쓴다 (models/UserXp.js 와 같은 칸)
+  //    default: undefined — upsert 가 빈 값을 만들지 않게
+  seasonFrame: { type: new mongoose.Schema({ season: Number, frame: String, at: Date }, { _id: false }), default: undefined },
+  // 지난 시즌 기록 — 시즌 결산(features/seasonSettle.js settleFrames)이 seasonFrame 과 같은 차례에 한 줄씩 붙인다(같은 시즌은 한 번 · 최근 20개).
+  //    { season, name, level, tier(등급 키 — 아이언은 "iron"), rank, total, at } (models/UserXp.js 와 같은 칸)
+  //    default: undefined — upsert 가 빈 배열을 만들지 않게
+  seasonHistory: {
+    type: [new mongoose.Schema({ season: Number, name: String, level: Number, tier: String, rank: Number, total: Number, at: Date }, { _id: false })],
+    default: undefined,
+  },
+  // 승급 화면을 본 가장 높은 등급 인덱스 (models/UserXp.js 와 같은 칸 — 사이트만 쓴다, 봇은 읽지도 쓰지도 않는다)
+  promoSeen: { type: Number, default: undefined },
   // 단 프로필 배지 — 아이템 id 배열, 칸 없음 = 안 고름(배지 없음 — 2026-10-04 자동 착용 없음) · [] = 전부 뗌 (models/UserXp.js 와 같은 칸).
   //    봇은 /인벤토리 '착용' 표시에만 읽는다(views/inventory.js)
   //    📌 default: undefined — 배열 칸 기본값([])이 봇 upsert 로 들어가면 기존 유저가 "전부 뗌"이 된다
@@ -192,6 +206,13 @@ const BotSettingSchema = new mongoose.Schema({
   questPickDaily: { type: Number, default: 0 },
   questPickWeekly: { type: Number, default: 0 },
   questPickMonthly: { type: Number, default: 0 },
+  // 사이트 전용 — 주기별 퀘스트 바꾸기 무료 횟수(0 = 무료 없음) · 유료 바꾸기 값(빙옥, 0 = 유료 끔). /퀘스트 카드는 바뀐 목록을 그대로 읽는다
+  questRerollDaily: { type: Number, default: 3 },
+  questRerollWeekly: { type: Number, default: 3 },
+  questRerollMonthly: { type: Number, default: 3 },
+  questRerollPriceDaily: { type: Number, default: 1 },
+  questRerollPriceWeekly: { type: Number, default: 2 },
+  questRerollPriceMonthly: { type: Number, default: 3 },
   levelupChannelId: { type: String, default: "" },
   levelupMessage: { type: String, default: "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!" },
   roleGrantChannelId: { type: String, default: "" },
@@ -294,6 +315,9 @@ const PurchaseSchema = new mongoose.Schema({
   // 📌 주문 묶음 — 한 결제(장바구니 · 수동 지급 한 사람분)의 건들이 같은 값. 1개 단위 상품은 1개가 한 건이라
   //    지급 큐(features/grantQueue.js)가 이 값 + 상품으로 한 번에 완료하고 DM 을 한 통만 보낸다. "" 이면 옛 건. models/Purchase.js 와 같아야 한다
   orderId: { type: String, default: "" },
+  // 세트 상품(사이트 lib/bundle.js) 구성 건 — 세트 이름 스냅샷 · 첫 건 표시. 봇은 지급 · 환불 묶음(grantQueue)에 읽기만 한다
+  bundleName: { type: String, default: "" },
+  bundleHead: { type: Boolean, default: false },
   // 📌 주문 쿠폰 — 장바구니 결제에 쓴 쿠폰 id(건마다 같은 값, "" 이면 안 씀 · 옛 주문) · 주문 전체를 취소 · 환불해 그 쿠폰을 돌려준 시각(한 번만).
   //    사이트가 쓴다(app/api/shop/checkout · lib/orderRefund). 봇은 읽지 않지만 스키마에 없으면 같은 모델로 저장할 때 버려지므로 models/Purchase.js 와 맞춰 둔다
   couponId: { type: String, default: "" },
@@ -358,7 +382,7 @@ const WalletLogSchema = new mongoose.Schema({
   userId: { type: String, required: true },   // (userId, createdAt) 인덱스의 앞머리로 조회된다
   currency: { type: String, default: "xp" },   // "xp" | "point"(빙옥)
   amount: { type: Number, default: 0 },        // + 들어옴 / - 나감
-  // enhance | pass-unlock | pass-point | tier-point | attend-point | streak | quest-point | admin | etc
+  // enhance | pass-unlock | pass-point | tier-point | attend-point | streak | quest-point | quest-reroll | admin | etc
   kind: { type: String, default: "etc" },
   label: { type: String, default: "" },
   refId: { type: String, default: "" },
@@ -406,6 +430,9 @@ const QuestPickSchema = new mongoose.Schema(
     u: { type: String, required: true },
     per: { type: String, required: true },
     ids: { type: [String], default: [] },
+    // 바꾸기(리롤 — 사이트에서만 한다): rr = 이 주기에 바꾼 횟수 · out = 바꿔 버린 퀘스트 id
+    rr: { type: Number, default: 0 },
+    out: { type: [String], default: [] },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }
@@ -445,6 +472,8 @@ const SeasonResultSchema = new mongoose.Schema({
   roleGrantRequested: { type: Boolean, default: false },
   roleGrantedAt: { type: Date, default: null },
   announcedAt: { type: Date, default: null },
+  framesAt: { type: Date, default: null }, // 시즌 티어 테두리를 적은 시각 (models/SeasonResult.js 와 같은 칸)
+  frameCount: { type: Number, default: 0 }, // 받은 사람 수(아이언 제외)
   error: { type: String, default: "" },
 });
 export const SeasonResult = mongoose.models.SeasonResult || mongoose.model("SeasonResult", SeasonResultSchema);

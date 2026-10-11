@@ -4,12 +4,13 @@ import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react
 import Link from "next/link";
 import { siteHref } from "@/lib/siteLink";
 
-// 📌 ARCTIC 상단 이미지 배너 — 홈 맨 위와 스토어 시즌 탭 맨 위가 이 한 벌을 같이 쓴다.
-//    배너는 관리자가 노출 위치(홈 · 시즌 탭)를 골라 등록한다 (관리자 → 상점 관리 → 배너, app/api/shop/banners).
+// 📌 ARCTIC 상단 이미지 배너 — 홈 맨 위 · 스토어 시즌 탭 맨 위 · 테마 탭 맨 위가 이 한 벌을 같이 쓴다.
+//    배너는 관리자가 노출 위치(홈 · 시즌 탭 · 테마 탭)를 골라 등록한다 (관리자 → 상점 관리 → 배너, app/api/shop/banners).
 //    상태(목록 · 지금 장 · 틀 비율)는 useBanners 로 ArcticShopBody 가 위치마다 한 벌씩 들고 있다 —
 //    홈 ↔ 상품 화면을 오가도 보던 장 · 비율이 그대로 남게. 여기는 그리기만.
 
-export type BannerPlacement = "home" | "season";
+// 📌 "home" · "season" · 테마 키(lib/shopThemes.js — ARCTIC 그 테마 탭 맨 위, "halloween" 등). 테마는 관리자가 만들어 문자열이다
+export type BannerPlacement = string;
 
 // 📌 768px 미만(모바일)인가 — 배너는 클라이언트에서 받아 오므로 첫 화면(SSR)과 어긋나 번쩍일 일이 없다.
 //    컨테이너 단위 · round() 는 일부 브라우저에서 안 먹었다 — 폭 판정은 matchMedia 로만 한다.
@@ -31,7 +32,7 @@ const PC_RATIO = 4;
 const M_RATIO_DEFAULT = 1.5;
 const hasMobileArt = (b: any) => typeof b?.mobileImageUrl === "string" && b.mobileImageUrl.trim() !== "";
 // 위치마다 지난번에 받은 배너 수 — 모듈에 둔다(화면을 떠났다 돌아와도 남는다). 클라이언트에서 받은 뒤에만 채워진다
-const lastCount: Partial<Record<BannerPlacement, number>> = {};
+const lastCount: Record<BannerPlacement, number> = {};
 // 바탕 · 바깥 여백은 배너와 자리(불러오는 중)가 한 벌 — 둘의 높이가 어긋나지 않게
 const BOX = "max-w-7xl mx-auto px-5 md:px-8 pt-5 md:pt-6";
 const FRAME = "relative overflow-hidden bg-[#f2f2f2]";
@@ -40,11 +41,20 @@ const FRAME = "relative overflow-hidden bg-[#f2f2f2]";
 //    status 는 next-auth 세션 상태 — 세션이 정해진 뒤에 받는다(관리자는 숨김 배너까지 ?all=1).
 //    홈은 주소에 위치를 붙이지 않는다(서버 기본 = 홈) — 예전과 같은 요청 그대로.
 //    playing 이 false 면 자동 넘김을 멈춘다(시즌 탭이 안 보일 때 뒤에서 넘기며 다시 그리지 않게)
-export function useBanners(placement: BannerPlacement, status: string, isAdmin: boolean, playing = true) {
-  const [banners, setBanners] = useState<any[]>([]);
+//    📌 위치가 바뀔 수 있다(테마 탭 자리 — 테마 목록을 받은 뒤 정해진다). 받은 목록은 그 위치 것일 때만 쓴다 —
+//       다른 위치로 바뀐 순간 옛 위치 배너가 한 번 비치지 않게(그 사이는 '받는 중' — 지난번 0개였던 위치면 자리 없음)
+const NO_BANNERS: never[] = [];
+//    withDefaults — 받은 목록에 기본 배너를 얹는 함수(할로윈 탭 — 켜진 배너가 없으면 기본 두 장). 모듈 바깥에 둔 한 함수를 넘긴다(매번 새 함수면 다시 계산).
+//       📌 자동 넘김 · 점은 얹은 뒤 목록 기준 — 예전엔 받은 목록(0장)만 세서 기본 배너 둘째 장(검은 고양이)이 영영 안 넘어왔다(2026-10-11 "적용한 거 맞아?")
+export function useBanners(placement: BannerPlacement, status: string, isAdmin: boolean, playing = true, withDefaults?: (list: any[]) => any[]) {
+  // 받은 목록 — 어느 위치 것인지 함께(받기 실패도 그 위치는 받음으로 친다 — 빈 목록)
+  const [got, setGot] = useState<{ place: BannerPlacement; list: any[] } | null>(null);
+  const mine = got?.place === placement;
+  const fetched = mine ? got.list : NO_BANNERS;
   // 📌 목록을 받기 전에는 배너 자리를 미리 잡아 둔다(BannerSlider) — 받은 뒤 배너가 생기며 아래 내용이 밀리지 않게.
-  //    지난번에 받아 보니 0개였던 자리는 처음부터 '받음'으로 쳐 자리를 잡지 않는다(잡았다 없애면 한 번 줄어든다)
-  const [loaded, setLoaded] = useState(() => lastCount[placement] === 0);
+  //    지난번에 받아 보니 0개였던 자리는 처음부터 '받음'으로 쳐 자리를 잡지 않는다(잡았다 없애면 한 번 줄어든다) — 기본 배너가 있으면 그때도 기본 배너를 바로 보인다
+  const loaded = mine || lastCount[placement] === 0;
+  const banners = useMemo(() => (withDefaults && loaded ? withDefaults(fetched) : fetched), [withDefaults, loaded, fetched]);
   const [idx, setIdx] = useState(0);
   /* 📌 배너 틀 비율 — 이미지가 실제로 가진 비율에 맞춘다.
      틀을 3/1(모바일)·4/1(PC) 로 고정해 두면 object-cover 가 남는 쪽을 잘라내
@@ -58,20 +68,24 @@ export function useBanners(placement: BannerPlacement, status: string, isAdmin: 
   };
 
   useEffect(() => {
-    if (status === "loading") return;
-    const qs = [isAdmin ? "all=1" : "", placement !== "home" ? `placement=${placement}` : ""].filter(Boolean).join("&");
+    // status "loading" — 세션을 기다리는 중 · 아직 부를 위치가 아님(테마 탭이 숨어 있으면 부르지 않는다)
+    if (status === "loading" || !placement) return;
+    let live = true;
+    const qs = [isAdmin ? "all=1" : "", placement !== "home" ? `placement=${encodeURIComponent(placement)}` : ""].filter(Boolean).join("&");
     fetch(`/api/shop/banners${qs ? `?${qs}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
+        if (!live) return;
         const list = Array.isArray(d?.data) ? d.data : [];
         lastCount[placement] = list.length;
         setRatio(PC_RATIO);
-        setBanners(list);
+        setGot({ place: placement, list });
         // 📌 다시 받아 장 수가 줄면(관리자 '유저 화면' 미리보기 → 숨김 배너 빠짐) 보던 장 번호가 목록 밖이라 틀이 회색으로 비었다 — 첫 장으로
         setIdx((i) => (i < list.length ? i : 0));
       })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+      // 실패 — 그 위치는 받음으로(자리를 영영 잡고 있지 않게). 같은 위치에서 받아 둔 목록이 있으면 그대로
+      .catch(() => { if (live) setGot((g) => (g?.place === placement ? g : { place: placement, list: [] })); });
+    return () => { live = false; };
   }, [status, isAdmin, placement]);
 
   // 📌 배너 자동 넘김 — 한 장에 7초(2026-10-01 "교체 시간이 짧다": 5초 → 8초, 2026-10-03 8초 → 7초).

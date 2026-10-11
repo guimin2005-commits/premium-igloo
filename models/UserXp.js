@@ -62,6 +62,13 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 시즌 티어 테두리 — 시즌이 끝나면 봇(seasonSettle settleFrames)이 「시즌 끝 순간 등급」을 적는다(아이언은 ""). 다음 결산이 덮어쓴다 = 회수.
   //    가진 테두리로 친다(lib/itemEffects withSeasonFrame). 봇(bot/src/db.js)도 같은 칸 · default: undefined — 봇 upsert 가 빈 값을 만들지 않게
   seasonFrame: { type: new mongoose.Schema({ season: Number, frame: String, at: Date }, { _id: false }), default: undefined },
+  // 📌 지난 시즌 기록 — 시즌 결산(봇 seasonSettle settleFrames)이 seasonFrame 과 같은 차례에 한 줄씩 붙인다(같은 시즌은 한 번 · 최근 20개).
+  //    { season, name, level(그 순간 레벨), tier(등급 키 — 아이언은 "iron"), rank(xp 내림차순 · userId 오름차순, 1부터), total(전체 문서 수), at }.
+  //    레벨 페이지 등급 창 「지난 시즌」 탭이 읽는다(app/api/xp/me). 봇(bot/src/db.js)도 같은 칸 · default: undefined — 봇 upsert 가 빈 배열을 만들지 않게
+  seasonHistory: {
+    type: [new mongoose.Schema({ season: Number, name: String, level: Number, tier: String, rank: Number, total: Number, at: Date }, { _id: false })],
+    default: undefined,
+  },
   // 📌 승급 화면을 마지막으로 본 등급(lib/voiceTiers 인덱스) — LEVEL 에 들어왔을 때 지금 등급이 이보다 높으면 승급 화면을 한 번 띄운다(app/level/PromoOverlay). 등급이 내려가면 같이 내려 적어 다시 올라갈 때 또 뜬다.
   //    칸이 없으면 아직 안 봄 → 그때의 등급을 조용히 적는다(기능을 넣기 전부터 그 등급이던 사람에게는 띄우지 않는다). 쓰기는 app/api/xp/promo-seen 만
   promoSeen: { type: Number, default: undefined },

@@ -15,7 +15,7 @@ import { itemEffectLines } from "@/lib/itemEffects";
 import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
-  buildDurations, pickType as pickProductType, applyItem, unlinkItem, toPayload,
+  buildDurations, pickType as pickProductType, applyItem, unlinkItem, customSnapOf, type CustomSnap, toPayload,
   setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
   SALE_MODES, saleModeOf, setSaleMode, saleModeError, basePriceOf, unitSaleOk, pickRole,
 } from "./productForm";
@@ -24,6 +24,7 @@ import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
 import BannerSlider, { useBanners } from "./BannerSlider";
+import { BUILTIN_BANNER_THEME, DEFAULT_THEMES, isThemeKey, onThemes, themeNameOf, themePickOptions } from "@/lib/shopThemes";
 import { SeasonHead, SeasonPicks, seasonPicks } from "./ArcticSeason";
 import CardArt from "./CardArt";
 import ProductCard, { typeLabelOf } from "./ProductCard";
@@ -37,6 +38,8 @@ import { ownedIdsOf, bundlePickOf } from "./owned";
 import { InventoryPopup } from "../components/Inventory";
 import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
 import { CART_KEY, WISH_KEY, readShopList, writeShopList, useShopUid } from "./shopStore";
+import { onCartChange } from "./cardCart";
+import { saleEnded, saleUntilLabel } from "@/lib/saleWindow";
 
 import { ADMIN_USERS } from "@/lib/admins";
 
@@ -64,15 +67,35 @@ const TYPES = [
   { v: "cosmetic", l: "꾸미기" },
   { v: "physical", l: "기프트카드" },
   { v: "timed", l: "기간제" },
-  // 📌 시즌 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤 맨 끝
+  // 📌 시즌 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤
   { v: "season", l: "시즌" },
-  // 📌 할로윈 — 이벤트 테마(관리자가 상품 폼에서 켠 상품, ShopItem.theme "halloween"). 시즌 옆. 테마 상품이 하나도 없으면 탭을 숨긴다(잠깐 운용 — 2026-10-11 운영자)
-  { v: "halloween", l: "할로윈" },
 ];
-const THEME_TABS = ["halloween"];
+// 유형 탭 값 — 이 밖의 탭 값은 이벤트 테마 키다(lib/shopThemes.js — 키는 이 값들과 겹치지 않는다 RESERVED_THEME_KEYS)
+const TYPE_VALUES = new Set(TYPES.map((t) => t.v));
 // 📌 모바일 유형 줄은 홈 · 전체 · 시즌(· 이벤트 테마)만 두고 나머지는 "카테고리 ▾" 칩 패널로 접는다
-const MOBILE_TABS = [{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v === "all" || t.v === "season" || THEME_TABS.includes(t.v))];
-const PANEL_TYPES = TYPES.filter((t) => t.v !== "all" && t.v !== "season" && !THEME_TABS.includes(t.v));
+const MOBILE_TABS = [{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v === "all" || t.v === "season")];
+const PANEL_TYPES = TYPES.filter((t) => t.v !== "all" && t.v !== "season");
+
+// 📌 이벤트 테마(2026-10-11 할로윈 하나 → 관리자가 만드는 테마 — lib/shopThemes.js · app/api/shop/themes) — 켜진 테마마다 탭 하나(시즌 바로 뒤 · 테마 차례 · 이름 그대로).
+//    손님에게는 그 테마 상품이 하나라도 있을 때만, 관리자에게는 비어 있어도(탭이 어디 생기는지 보고 상품에 테마를 고르도록). ?type=<테마 키>
+//    지난번에 받은 목록 — 모듈에 둔다(화면을 떠났다 돌아와도 탭이 늦게 붙지 않게). 클라이언트에서 받은 뒤에만 채워진다
+type ShopTheme = { key: string; name: string; on: boolean };
+let themeCache: ShopTheme[] | null = null;
+// 📌 할로윈 탭 맨 위 기본 배너 — 노출 위치 「할로윈 탭」(관리자 → 상점 관리 → 배너)에 켜진 배너가 하나도 없으면 이것(PC · 모바일 그림 한 벌, 링크 없음).
+//    기본 배너는 할로윈(BUILTIN_BANNER_THEME)만 — 다른 테마는 배너가 없으면 배너 자리 자체가 없다
+//    📌 두 장(2026-10-11 운영자 "세트 상품 다 65% 할인 · 그걸로 할로윈 배너 좀 더") — HALLOWEEN · 검은 고양이 세트 68%(scripts/gen-halloween-banner.mjs, BANNER=cat — 운영자 "한 상품을 테마 잡아서 · 고양이 테마 상품을 주로")가 넘어간다
+const HW_BANNERS = [
+  { _id: "builtin-halloween", imageUrl: "/banners/halloween-pc.png", mobileImageUrl: "/banners/halloween-mobile.png", title: "", subtitle: "", link: "" },
+  { _id: "builtin-halloween-cat", imageUrl: "/banners/halloween-cat-pc.png", mobileImageUrl: "/banners/halloween-cat-mobile.png", title: "", subtitle: "", link: "" },
+];
+// 📌 기본 배너 중 아직 「등록」 안 된 것(같은 그림인 배너가 없는 것)은 등록된 켜진 배너 뒤에 같이 돈다 — 관리자는 숨김 배너가 맨 뒤에(점으로 넘겨 본다).
+//    예전엔 켜진 배너가 하나라도 있으면 기본 배너를 통째로 뺐다 → HALLOWEEN 을 등록해 둔 탓에 검은 고양이 배너가 안 보였다(2026-10-11 "적용한 거 맞아?").
+//    useBanners withDefaults 로 넘긴다(자동 넘김 · 점이 얹은 목록을 센다)
+const withHwDefaults = (list: any[]) => {
+  const taken = new Set(list.map((b) => String(b?.imageUrl || "")));
+  const on = list.filter((b) => b.active !== false);
+  return [...on, ...HW_BANNERS.filter((d) => !taken.has(d.imageUrl)), ...list.filter((b) => b.active === false)];
+};
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
 //    label — 이름 머리말에서 뗀 분류(「카드 스킨」 …, lib/itemName). 없으면 유형 이름
@@ -272,6 +295,9 @@ export default function ArcticShopBody({
     if (shopOwner === null || shopOwner !== shopUid) return;
     writeShopList(CART_KEY, shopUid, cart);
   }, [cart, shopOwner, shopUid]);
+  // 📌 상품 카드의 장바구니 단추(./cardCart)가 담고 빼면 다시 읽는다 — 머리 · 아래 칸 장바구니 수가 바로 맞게(다른 탭도 같은 이벤트).
+  //    다시 읽은 목록을 위 저장이 한 번 더 쓰지만 같은 값이라 알림은 다시 안 난다(돌지 않는다)
+  useEffect(() => (shopReady ? onCartChange(shopUid, () => setCart(readShopList(CART_KEY, shopUid))) : undefined), [shopUid, shopReady]);
 
   // 📌 상품은 1인 1개 — 이미 구매한 상품은 다시 담거나 살 수 없다 (만료 · 환불 건은 보유가 아니다 — owned.ts)
   const ownedItemIds = useMemo(
@@ -342,8 +368,9 @@ export default function ArcticShopBody({
       window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     }
     // 상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)에서 유형 · 검색어를 들고 온다
+    //    테마 탭(?type=<테마 키>)은 모양만 보고 연다 — 테마 목록 · 상품을 받은 뒤 없는 탭이면 전체로(아래 themeTabs)
     const type = searchParams.get("type");
-    if (type && TYPES.some((t) => t.v === type)) goProducts(type);
+    if (type && (TYPE_VALUES.has(type) || isThemeKey(type))) goProducts(type);
     const q = searchParams.get("q");
     if (q) submitSearch(q);
   }, [searchParams, status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -370,9 +397,50 @@ export default function ArcticShopBody({
   const seasonTop = showing === "products" && typeFilter === "season" && !submitted.trim();
   // 시즌 배너는 처음부터 같이 받아 둔다(탭을 열 때 늦게 떠 아래가 밀리지 않게). 넘김은 시즌 탭이 보일 때만
   const seasonBanner = useBanners("season", status, isAdmin, seasonTop);
+  // ── 이벤트 테마 탭 ──
+  //    관리자는 꺼진 테마까지(인라인 상품 폼 고르기 칸) — 탭은 켜진 것만. 못 받으면 지난 목록.
+  //    📌 처음(지난 목록 없음)은 기본 목록(설정이 없을 때와 같은 할로윈 하나 — 관리 화면과 같다) — 받기 전 할로윈 탭 · 검색 · 폼 고르기 칸이 예전처럼 바로 서게(늦게 붙어 카테고리가 밀리지 않게)
+  const [themes, setThemes] = useState<ShopTheme[]>(() => themeCache ?? DEFAULT_THEMES.map((t) => ({ ...t })));
+  // 이번에 받았는가 — 지난 목록(themeCache)으로 그리는 동안엔 없는 탭이라고 전체로 돌리지 않는다(그 사이 새로 켠 테마일 수 있다)
+  const [themesReady, setThemesReady] = useState(false);
+  useEffect(() => {
+    if (status === "loading") return;
+    let live = true;
+    fetch(`/api/shop/themes${realAdmin ? "?all=1" : ""}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!live || !d?.success || !Array.isArray(d.data)) return;
+        themeCache = d.data;
+        setThemes(d.data);
+      })
+      .catch(() => {})
+      .finally(() => { if (live) setThemesReady(true); });
+    return () => { live = false; };
+  }, [status, realAdmin]);
+  // 켜진 테마(차례대로 · 최대 2개 — lib/shopThemes THEME_ON_MAX) — 배너 자리 두 벌이 이 차례를 따른다
+  const onList = useMemo(() => onThemes(themes), [themes]);
+  // 그 테마 탭이 보이는가 — 손님은 그 테마 상품이 하나라도 있을 때(관리자는 숨김 상품까지 — 목록에 실린 상품 기준), 관리자는 비어 있어도
+  const themeShown = useCallback((key: string) => isAdmin || items.some((it) => it.theme === key), [isAdmin, items]);
+  const themeTabs = useMemo(() => onList.filter((t) => themeShown(t.key)).map((t) => ({ v: t.key, l: t.name })), [onList, themeShown]);
+  // 📌 없는 테마 탭(지운 · 꺼진 · 상품 없는 테마 — ?type= 로 들어왔거나 보던 중 바뀜)이면 전체로. 테마 목록 · 상품을 다 받은 뒤에만
+  const isThemeTab = !TYPE_VALUES.has(typeFilter);
+  if (isThemeTab && themesReady && !isLoading && !themeTabs.some((t) => t.v === typeFilter)) setTypeFilter("all");
+  // 📌 테마 탭 첫 화면 — 맨 위 그 테마 배너(노출 위치 = 테마 키 · 시즌 탭과 같은 자리 · 같은 한 벌). 켜진 테마는 둘까지라 두 벌을 처음부터 받아 둔다
+  //    (탭을 열 때 늦게 떠 아래가 밀리지 않게). 탭이 숨어 있으면 부르지 않는다. 넘김은 그 탭이 보일 때만
+  const themeTop = isThemeTab && showing === "products" && !submitted.trim();
+  const slot0 = onList[0]?.key || "";
+  const slot1 = onList[1]?.key || "";
+  const themeBanner0 = useBanners(slot0, slot0 && themeShown(slot0) ? status : "loading", isAdmin, themeTop && typeFilter === slot0, slot0 === BUILTIN_BANNER_THEME ? withHwDefaults : undefined);
+  const themeBanner1 = useBanners(slot1, slot1 && themeShown(slot1) ? status : "loading", isAdmin, themeTop && typeFilter === slot1, slot1 === BUILTIN_BANNER_THEME ? withHwDefaults : undefined);
+  const themeBanner = !themeTop ? null : typeFilter === slot0 ? themeBanner0 : typeFilter === slot1 ? themeBanner1 : null;
+  // 할로윈만 — 켜진 배너가 없으면 기본 배너 두 장(useBanners withDefaults — 자동 넘김도 두 장을 센다)
+  const themeBannerList = themeBanner?.banners || [];
 
   // 관리자 — 상점 안에서 바로 상품 추가·수정 (폼 상태·기간·유형·아이템 적용 규칙은 ./productForm 공용)
   const [editForm, setEditForm] = useState<any>(null);
+  // 📌 「등록된 아이템」 고르는 중(저절로 고르지 않는다) · 고르기 직전의 직접 설정 값 — 관리 화면 상품 폼과 같다(productForm customSnapOf · unlinkItem)
+  const [efLinkPick, setEfLinkPick] = useState<string | null>(null);
+  const efSnap = useRef<{ key: string; snap: CustomSnap } | null>(null);
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
   // 등록된 아이템(/api/admin/items) — 상품 폼에서 "등록된 아이템" 으로 고른다
   const [regItems, setRegItems] = useState<any[]>([]);
@@ -403,12 +471,17 @@ export default function ArcticShopBody({
     if (it && isBundle(it)) return router.push(`/admin/shop?edit=${it._id}`);
     setEditError("");
     setOpenGroups({ basic: true, price: false, stock: false, season: false });
+    // 폼을 열 때마다 아이템 고르는 중 · 잡아 둔 직접 설정 값을 푼다(저장 · 취소 · 바깥 눌러 닫기 뒤 다음 폼에 옛 상태가 남지 않게)
+    setEfLinkPick(null);
+    efSnap.current = null;
     setEditForm(it ? formFromShopItem(it) : { ...EMPTY_PRODUCT_FORM });
   };
 
   const saveItem = async () => {
     if (!editForm || isSavingItem) return;
     // 📌 판매 방식마다 꼭 필요한 가격 — 관리자 상품 관리와 같은 문구(productForm saleModeError)
+    // 「등록된 아이템」을 골랐는데 아이템을 아직 안 골랐다 — 직접 설정 상품으로 저장되지 않게
+    if (efPicking && !efLinked) { setEditError("아이템을 선택해 주세요."); return; }
     const bad = saleModeError(editForm);
     if (bad) {
       setEditError(bad);
@@ -502,6 +575,18 @@ export default function ArcticShopBody({
       return next.length === prev.length ? prev : next;
     });
   }, [cartLoaded, cartValidIds]);
+  // 📌 판매가 끝났거나 목록에서 빠진 상품을 위 정리가 뺐으면 한 번 알린다(불러올 때 한 번 · 뺀 것이 있을 때만 — 장바구니 페이지와 같은 문구).
+  //    정리 전 장바구니(이 그림의 cart)에서 목록에 없는 상품 수 — 중복 줄 · 담을 수 없는 세트(목록엔 있다)는 세지 않는다
+  const goneNoted = useRef(false);
+  useEffect(() => {
+    if (!cartLoaded || !cartValidIds || goneNoted.current) return;
+    goneNoted.current = true;
+    const listed = new Set(items.map((i) => String(i._id)));
+    const gone = new Set(cart.filter((c) => c && !listed.has(String(c.itemId))).map((c) => String(c.itemId))).size;
+    if (!gone) return;
+    setCartToast(`판매가 끝난 상품 ${gone}개를 뺐습니다`);
+    setTimeout(() => setCartToast(""), 1800);
+  }, [cartLoaded, cartValidIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadMine(); }, [loadMine]);
 
@@ -510,14 +595,17 @@ export default function ArcticShopBody({
   const scoped = useMemo(() => {
     const q = submitted.trim().toLowerCase();
     return items.filter((it) => {
-      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : typeFilter === "halloween" ? it.theme !== "halloween" : it.type !== typeFilter)) return false;
+      // 유형 탭이 아닌 값은 이벤트 테마 키 — 그 테마 상품만(지운 테마 키를 가리키는 상품은 어느 테마 탭에도 없다)
+      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : TYPE_VALUES.has(typeFilter) ? it.type !== typeFilter : it.theme !== typeFilter)) return false;
       if (wishOnly && !wish.includes(it._id)) return false;
       // 세트는 "세트"와 구성 아이템 이름으로도 찾는다
       const setText = isBundle(it) ? (Array.isArray(it.bundleItems) ? it.bundleItems.map((c: { name?: string }) => ` ${c?.name || ""}`).join("") : "") : "";
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${it.theme === "halloween" ? " 할로윈" : ""}${setText}`.toLowerCase().includes(q)) return false;
+      // 테마 상품은 테마 이름으로도 찾는다(받은 목록에 있는 테마만 — 손님은 켜진 테마)
+      const themeName = themeNameOf(themes, it.theme);
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${themeName ? ` ${themeName}` : ""}${setText}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [items, typeFilter, wishOnly, wish, submitted]);
+  }, [items, typeFilter, wishOnly, wish, submitted, themes]);
   const buckets = useMemo(() => priceBuckets(scoped), [scoped]);
   // 고른 구간 — 탭 · 검색이 바뀌어 지금 구간 목록에 없으면 풀린다.
   //    effect 를 기다리지 않고 그리는 중에 바로 '전체'로 되돌린다(React 의 '이전 값에 맞춰 상태 고치기' 방식) —
@@ -627,30 +715,35 @@ export default function ArcticShopBody({
     const out: string[] = [];
     const push = (v?: string) => { const t = (v || "").trim(); if (t && t.toLowerCase().includes(q) && !out.includes(t)) out.push(t); };
     for (const t of TYPES) if (t.v !== "all") push(t.l);
+    for (const t of themeTabs) push(t.l);
     for (const it of items) { push(it.name); push(it.roleName); }
     return out.slice(0, 7);
-  }, [items, query]);
+  }, [items, query, themeTabs]);
 
   // 검색창 아래 패널 — 입력 중이면 추천 단어, 비어 있으면 최근 검색어
-  const searchPanel = (
-    // 📌 모바일 검색 시트 안 · 검색칸 바로 아래에 붙는 목록(2026-10-11 운영자 "모바일 이거 좀 수정해") — 전엔 떠 있는 카드(absolute)라 흰 시트 밖으로 반쯤 삐져나왔다
-    <div className="overflow-hidden">
+  //    📌 floating — PC 상단 검색칸 아래에 뜨는 카드(absolute · 테두리 · 그림자, 줄 여백 px-4).
+  //       아니면 모바일 검색 시트 안 · 검색칸 바로 아래에 붙는 목록(2026-10-11 운영자 "모바일 이거 좀 수정해" — 떠 있는 카드가 흰 시트 밖으로 반쯤 삐져나왔다, 줄 여백 px-1).
+  //       한 벌을 같이 쓰다 PC 도 카드 없이 펼쳐져 상단 줄이 깨졌다(운영자 "pc 검색창 버그") — 자리마다 모양을 고른다
+  const searchPanelOf = (floating: boolean) => {
+    const px = floating ? "px-4" : "px-1";
+    return (
+    <div className={floating ? "absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl border border-[#ededed] bg-white shadow-[0_24px_48px_-24px_rgba(0,0,0,0.22)] overflow-hidden" : "overflow-hidden"}>
       {query.trim() ? (
         suggestions.length > 0 ? (
           <div className="py-2">
             {suggestions.map((sg) => (
               <button key={sg} onMouseDown={(e) => { e.preventDefault(); submitSearch(sg); }}
-                className="w-full text-left px-1 py-2.5 text-[14px] font-bold text-[#131313] hover:bg-black/[0.03] transition-colors truncate">
+                className={`w-full text-left ${px} py-2.5 text-[14px] font-bold text-[#131313] hover:bg-black/[0.03] transition-colors truncate`}>
                 {sg}
               </button>
             ))}
           </div>
         ) : (
-          <div className="px-1 py-4 text-[13px] text-[#a3a3a3]">추천할 단어가 없습니다.</div>
+          <div className={`${px} py-4 text-[13px] text-[#a3a3a3]`}>추천할 단어가 없습니다.</div>
         )
       ) : recentOn ? (
         <>
-          <div className="flex items-center justify-between gap-3 px-1 pt-3 pb-1.5">
+          <div className={`flex items-center justify-between gap-3 ${px} pt-3 pb-1.5`}>
             <span className="text-[12px] font-black text-[#131313]">최근 검색어</span>
             <span className="flex items-center gap-3">
               {recents.length > 0 && (
@@ -662,11 +755,11 @@ export default function ArcticShopBody({
             </span>
           </div>
           {recents.length === 0 ? (
-            <div className="px-1 pb-4 pt-1 text-[13px] text-[#a3a3a3]">최근 검색어가 없습니다.</div>
+            <div className={`${px} pb-4 pt-1 text-[13px] text-[#a3a3a3]`}>최근 검색어가 없습니다.</div>
           ) : (
             <div className="pb-2">
               {recents.map((r) => (
-                <div key={r} className="group/rc flex items-center gap-2 px-1 py-2 hover:bg-black/[0.03] transition-colors">
+                <div key={r} className={`group/rc flex items-center gap-2 ${px} py-2 hover:bg-black/[0.03] transition-colors`}>
                   <button onMouseDown={(e) => { e.preventDefault(); submitSearch(r); }}
                     className="flex-1 min-w-0 text-left text-[14px] font-bold text-[#5a5a5a] hover:text-[#131313] truncate transition-colors">{r}</button>
                   <button onMouseDown={(e) => { e.preventDefault(); setRecents((prev) => prev.filter((x) => x !== r)); }}
@@ -679,14 +772,15 @@ export default function ArcticShopBody({
           )}
         </>
       ) : (
-        <div className="flex items-center justify-between gap-3 px-1 py-3.5">
+        <div className={`flex items-center justify-between gap-3 ${px} py-3.5`}>
           <span className="text-[13px] text-[#8a8a8a]">최근 검색어 저장이 꺼져 있습니다.</span>
           <button onMouseDown={(e) => { e.preventDefault(); toggleRecent(); }}
             className="shrink-0 text-[11px] font-bold text-[#e91e3f] hover:text-[#d01634] transition-colors">켜기</button>
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   // 공개 전 · 비관리자 → 준비 중 안내
   if (status === "loading" || shopPublic === null) {
@@ -718,8 +812,9 @@ export default function ArcticShopBody({
     const href = `/arctic/item/${it._id}${isTimed(it) && it._pick && it._pick.days != null && it._pick.days !== cardPick(it)?.days ? `?days=${it._pick.days}` : ""}`;
     return (
       <ProductCard key={it._id} it={it} href={href} pick={isBundle(it) ? bundlePickOf(orders, it, items) : it._pick} wished={wish.includes(it._id)} onWish={() => toggleWish(it)}
-        overlay={isAdmin && !it.active ? (
-          <span className="absolute top-2 left-2 @min-[180px]:top-2.5 @min-[180px]:left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span>
+        overlay={isAdmin && (!it.active || saleEnded(it)) ? (
+          // 📌 판매 종료(lib/saleWindow) — 관리자 목록(?all=1)에만 실린다. 숨김과 같은 자리 · 같은 모양(숨김이 먼저)
+          <span className="absolute top-2 left-2 @min-[180px]:top-2.5 @min-[180px]:left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">{!it.active ? "숨김" : "판매 종료"}</span>
         ) : null}>
         {isAdmin && (
           <div className="mt-2 flex gap-2 text-[11px] font-bold">
@@ -740,6 +835,10 @@ export default function ArcticShopBody({
   // 할인 종료 시각이 이미 지났으면 저장해도 할인이 붙지 않는다 — 요약 · 판매가 미리보기도 할인 없이
   const efUntilPast = !!editForm?.discountUntil && new Date(`${editForm.discountUntil}:00+09:00`).getTime() <= Date.now();
   const efDiscount = efUntilPast ? 0 : Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
+  // 📌 판매 종료 시각(KST 입력값) — 지났으면 저장해도 상점에서 빠진다(lib/saleWindow). 요약 · 미리보기 딱지가 같이 본다
+  const efSaleAt = editForm?.saleUntil ? `${editForm.saleUntil}:00+09:00` : "";
+  const efSaleEnded = saleEnded({ saleUntil: efSaleAt });
+  const efSaleLabel = saleUntilLabel({ saleUntil: efSaleAt });
   // 입력칸 단위 그대로(빙옥 전용이면 빙옥)
   //    기간제는 정가 칸이 없다 — 저장될 기준가(무제한, 없으면 가장 긴 기간)로 요약 · 미리보기를 그린다
   const efBase = editForm ? basePriceOf(editForm) : "";
@@ -749,11 +848,13 @@ export default function ArcticShopBody({
   const efMode = saleModeOf(editForm);
   const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
   const efLinked = isLinked(editForm);
+  const efKey = editForm?.id || "new";
+  const efPicking = efLinked || efLinkPick === efKey;
   const efBasicSummary = [efLinked ? "등록된 아이템" : "", editForm?.name || "이름 없음", itemTypeLabel(editForm?.type), efRoleName].filter(Boolean).join(" · ");
   const efPriceSummary = Number(efBase) > 0
-    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${efMode === "both" ? ` · 기간제 + 무제한 ${efDurations.length}종` : efMode === "timed" ? ` · 기간제 ${efDurations.length}종` : ""}${editForm?.unitSale ? " · 1개 단위" : ""}`
+    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${efMode === "both" ? ` · 기간제 + 무제한 ${efDurations.length}종` : efMode === "timed" ? ` · 기간제 ${efDurations.length}종` : ""}${editForm?.unitSale ? " · 1개 단위" : ""}${efSaleEnded ? " · 판매 종료" : efSaleLabel ? ` · ~${efSaleLabel}` : ""}`
     : "가격 미입력";
-  const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`}${editForm?.unitSale ? ` · 1회 최대 ${clampPerOrder(editForm?.maxPerOrder)}` : ""} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? "판매 중" : "숨김"}`;
+  const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`}${editForm?.unitSale ? ` · 1회 최대 ${clampPerOrder(editForm?.maxPerOrder)}` : ""} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? (efSaleEnded ? "판매 종료" : "판매 중") : "숨김"}${editForm?.theme ? ` · ${themeNameOf(themes, editForm.theme) || "지운 테마"}` : ""}`;
   const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
 
   // ── 스토어 줄 부품 (PC 두 줄 · 모바일 한 줄이 같이 쓴다) ──
@@ -775,8 +876,7 @@ export default function ArcticShopBody({
   };
   // 모바일 카테고리 단추에 걸 이름 — 패널 쪽 유형을 보고 있을 때만
   const catType = PANEL_TYPES.find((t) => tabOn(t.v));
-  // 이벤트 테마 탭은 그 테마 상품이 하나라도 있을 때만(관리자에게는 숨김 상품까지 — 목록에 실린 상품 기준)
-  const hasTheme = (v: string) => items.some((it) => it.theme === v);
+  // 이벤트 테마 탭(themeTabs — 위 「이벤트 테마 탭」)은 시즌 바로 뒤에 테마 차례로 선다(PC · 모바일 같다)
   // 인벤토리 — 산 것 · 받은 것을 그 자리에서 팝업으로. PC 도구 칸 · 모바일 줄 끝 두 곳에 건다 (하단바 다섯 칸은 찼다)
   const invButton = (
     <button type="button" onClick={() => setInvOpen(true)} aria-label="인벤토리" title="인벤토리"
@@ -823,7 +923,7 @@ export default function ArcticShopBody({
                 </svg>
               )}
             </div>
-            {searchOpen && searchPanel}
+            {searchOpen && searchPanelOf(true)}
           </div>
 
           <div className={`flex-1 basis-0 ${storeSide} flex items-center justify-end`}>
@@ -874,7 +974,7 @@ export default function ArcticShopBody({
         <div className="hidden md:block max-w-7xl mx-auto px-6">
           <div className="overflow-x-auto overflow-y-hidden no-bar">
             <nav className="w-max mx-auto flex items-center gap-7 h-[46px]">
-              {[{ v: "home", l: "홈" }, ...TYPES].filter((t) => !THEME_TABS.includes(t.v) || hasTheme(t.v)).map((t) => (
+              {[{ v: "home", l: "홈" }, ...TYPES, ...themeTabs].map((t) => (
                 <React.Fragment key={t.v}>
                   {/* 시즌 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
                   {t.v === "season" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
@@ -899,7 +999,8 @@ export default function ArcticShopBody({
                 <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
               </>
             )}
-            {MOBILE_TABS.filter((t) => !THEME_TABS.includes(t.v) || hasTheme(t.v)).map((t) => tabButton(t))}
+            {/* 📌 테마 탭은 시즌 뒤에 붙는다(켜진 테마 둘까지). 320 폭에서 넘치면 이 칸만 가로로 민다 — 카테고리 · 인벤토리는 밖이라 자리가 그대로 */}
+            {[...MOBILE_TABS, ...themeTabs].map((t) => tabButton(t))}
           </nav>
           <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />
           {/* 📌 카테고리 — 패널의 유형을 고르면 그 이름 + 밑줄. 폭은 가장 긴 "기프트카드" + ▾ (실측 약 81px) 로 고정 → 이름이 바뀌어도 줄이 안 움직인다.
@@ -980,6 +1081,11 @@ export default function ArcticShopBody({
       {seasonTop && (
         <BannerSlider banners={seasonBanner.banners} bannerIdx={seasonBanner.idx} setBannerIdx={seasonBanner.setIdx}
           bannerRatio={seasonBanner.ratio} fitRatio={seasonBanner.fitRatio} isAdmin={isAdmin} loaded={seasonBanner.loaded} />
+      )}
+      {/* 테마 탭 — 맨 위 그 테마 배너(노출 위치 = 테마 키). 할로윈만 켜진 배너가 없으면 기본 배너(HW_BANNER), 다른 테마는 없으면 이 자리 없음 */}
+      {themeBanner && (
+        <BannerSlider banners={themeBannerList} bannerIdx={themeBanner.idx} setBannerIdx={themeBanner.setIdx}
+          bannerRatio={themeBanner.ratio} fitRatio={themeBanner.fitRatio} isAdmin={isAdmin} loaded={themeBanner.loaded} />
       )}
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-8">
         {/* 시즌 탭 — 시즌 번호 · 이름 · D-day 머리줄. 필터 줄은 그 아래 (큐레이션이 빠져도 필터 줄이 안 움직이게) */}
@@ -1101,7 +1207,7 @@ export default function ArcticShopBody({
               </div>
               <button onClick={() => setShowMobileSearch(false)} className="px-4 py-3 text-[13px] font-bold text-[#131313]">닫기</button>
             </div>
-            <div className="mt-4 pt-1 border-t border-[#ededed]">{searchPanel}</div>
+            <div className="mt-4 pt-1 border-t border-[#ededed]">{searchPanelOf(false)}</div>
             {query && (
               <button onClick={clearSearch} className="mt-3 ml-1 text-[12px] font-bold text-[#e91e3f]">검색어 지우기</button>
             )}
@@ -1319,13 +1425,20 @@ export default function ArcticShopBody({
                     <div>
                       <div className="grid grid-cols-2 gap-2">
                         {SOURCE_OPTIONS.map((o) => {
-                          const on = sourceOf(editForm) === o.v;
+                          const on = (efPicking ? "item" : sourceOf(editForm)) === o.v;
                           return (
                             <button key={o.v} type="button"
                               onClick={() => {
-                                if (on) return; // 이미 그 상태 — 연결 아이템이 첫 항목으로 바뀌지 않게
-                                if (o.v === "custom") setEditForm(unlinkItem(editForm));
-                                else if (regItems[0]) setEditForm(applyItem(editForm, regItems[0]));
+                                if (on) return; // 이미 그 상태
+                                if (o.v === "custom") {
+                                  setEfLinkPick(null);
+                                  const sn = efSnap.current;
+                                  if (efLinked) setEditForm(unlinkItem(editForm, sn && sn.key === efKey ? sn.snap : null));
+                                  efSnap.current = null;
+                                  return;
+                                }
+                                // 아이템은 저절로 고르지 않는다 — 고르기 칸만 연다(이름 · 설명이 미리 채워지지 않게)
+                                if (regItems.length) setEfLinkPick(efKey);
                                 else setEditError("등록된 아이템이 없습니다. 아이템 등록에서 먼저 만들어 주세요.");
                               }}
                               className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"}`}>
@@ -1334,12 +1447,17 @@ export default function ArcticShopBody({
                           );
                         })}
                       </div>
-                      {efLinked && (
+                      {efPicking && (
                         <div className="mt-3">
                           <Dropdown
                             theme="light"
                             value={editForm.itemId}
-                            onChange={(v) => { const it = regItems.find((x) => x._id === v); if (it) setEditForm(applyItem(editForm, it)); }}
+                            onChange={(v) => {
+                              const it = regItems.find((x) => x._id === v);
+                              if (!it) return;
+                              if (!efLinked && efSnap.current?.key !== efKey) efSnap.current = { key: efKey, snap: customSnapOf(editForm) };
+                              setEditForm(applyItem(editForm, it));
+                            }}
                             placeholder="아이템을 선택하세요"
                             options={regItems.map((x) => ({
                               value: x._id, label: x.name, hint: (() => { const ls = itemEffectLines(x); return ls.length ? `${itemTypeLabel(x.type)} · ${ls[0]}${ls.length > 1 ? ` 외 ${ls.length - 1}` : ""}` : itemTypeLabel(x.type); })(),
@@ -1541,6 +1659,17 @@ export default function ArcticShopBody({
                         <p className={efUntilPast ? "text-[11px] font-bold text-[#d01634]" : F_NOTE}>{efUntilPast ? "이미 지난 시각입니다" : "비우면 계속"}</p>
                       </div>
                     )}
+                    {/* 📌 판매 종료 — 관리자 상점 관리와 같은 칸(할인 종료 옆). 그 시각(KST)이 지나면 상점에서 빠지고 구매가 막힌다(lib/saleWindow). 할인과 상관없이 늘 보인다 */}
+                    <div>
+                      <label className={F_LABEL}>판매 종료</label>
+                      <div className="flex items-center gap-2">
+                        <input type="datetime-local" value={editForm.saleUntil || ""} onChange={(e) => setEditForm({ ...editForm, saleUntil: e.target.value })} className={F_INPUT_SM} />
+                        {editForm.saleUntil && (
+                          <button type="button" onClick={() => setEditForm({ ...editForm, saleUntil: "" })} className="shrink-0 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313]">지우기</button>
+                        )}
+                      </div>
+                      <p className={efSaleEnded ? "text-[11px] font-bold text-[#d01634]" : F_NOTE}>{efSaleEnded ? "이미 지난 시각입니다" : "비우면 계속"}</p>
+                    </div>
 
                   </FormGroup>
 
@@ -1575,11 +1704,11 @@ export default function ArcticShopBody({
                       <FormToggle on={!!editForm.active} onClick={() => setEditForm({ ...editForm, active: !editForm.active })}
                         onLabel="판매 중" offLabel="숨김" />
                     </div>
-                    {/* 이벤트 테마 — 켜면 ARCTIC 「할로윈」 탭에 모인다(테마 상품이 하나도 없으면 탭은 숨는다) */}
+                    {/* 이벤트 테마 — 고른 테마의 탭에 모인다(관리 상품 폼과 같은 보기 — lib/shopThemes themePickOptions · 꺼진 테마도 고를 수 있다 「꺼짐」) */}
                     <div>
                       <label className={F_LABEL}>이벤트 테마</label>
-                      <FormToggle on={editForm.theme === "halloween"} onClick={() => setEditForm({ ...editForm, theme: editForm.theme === "halloween" ? "" : "halloween" })}
-                        onLabel="할로윈 탭에 보이기" offLabel="테마 없음" />
+                      <Dropdown theme="light" value={editForm.theme || ""} options={themePickOptions(themes, editForm.theme || "")}
+                        onChange={(v) => setEditForm({ ...editForm, theme: v })} maxHeight={240} />
                     </div>
                   </FormGroup>
 
@@ -1604,8 +1733,8 @@ export default function ArcticShopBody({
                   <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
                     <CardArt it={editForm} stage />
                     <TypeBadge type={editForm.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
-                    {!editForm.active && (
-                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#ededed]">숨김</span>
+                    {(!editForm.active || efSaleEnded) && (
+                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#ededed]">{!editForm.active ? "숨김" : "판매 종료"}</span>
                     )}
                     {editForm.stock === "0" && (
                       <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">

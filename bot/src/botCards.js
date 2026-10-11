@@ -11,7 +11,11 @@ import { renderAsync } from "@resvg/resvg-js";
 import { itemArtSvg } from "./itemArt.js";
 
 // 시즌 2 카드 스킨 그림(문자열 함수) — 사이트 lib/cardSkins 의 사본
-import { STRING_SKINS } from "./cardSkins/index.js";
+import { STRING_SKINS, RANK_SKIN_KEYS } from "./cardSkins/index.js";
+// 아바타 테두리 정지 그림 — 사이트 lib/avatarFrameArt.js · 봇 bot/src/avatarFrameArt.js(같은 파일, 생성기가 만든다)
+import { FRAME_ART, FRAME_REACH } from "./avatarFrameArt.js";
+// 등급 엠블럼 도트 그림 — 사이트 lib/tierEmblemArt.js 의 사본(scripts/gen-tier-emblems.mjs 가 두 곳에 같이 만든다)
+import { EMBLEM_ART } from "./tierEmblemArt.js";
 
 // ═══ 공용 블록 시작 — lib/botCards.js 와 bot/src/botCards.js 의 이 구간은 글자 하나까지 같아야 한다 ═══
 
@@ -45,12 +49,15 @@ export const isCardKind = (k) => Object.prototype.hasOwnProperty.call(CARD_SIZE,
 //    progress: 다음 레벨까지 진행률 0~1 · need: 다음 레벨까지 남은 XP · 등급은 level 로 정한다(CARD_TIERS)
 //    skin: 카드 스킨 키(CARD_SKINS) — 아이템 효과 cardSkin. 없거나 모르는 키면 기본 카드
 export const CARD_FIELDS = {
-  levelUp: ["avatar", "name", "level", "prevLevel", "xp", "need", "progress", "skin?"],
+  //  frame: 아바타 테두리 키(등급 키 — FRAME_ART) — 끼면 등급 색 링 · 엠블럼 배지 대신 테두리(사진을 줄여 테두리 자리를 낸다)
+  levelUp: ["avatar", "name", "level", "prevLevel", "xp", "need", "progress", "skin?", "frame?"],
   //  roleColor: 디스코드 역할 색 "#rrggbb"(role.hexColor — "#000000" 은 색 없음 = 흰색) · level: 그 역할의 지급 레벨
   //  tier: 등급 키 · 번호(CARD_TIERS) — 없으면 역할 이름이 등급 이름일 때 그 등급. 등급 역할이면 역할 색 대신 등급 색 · 엠블럼
   roleGrant: ["avatar", "name", "role", "roleColor?", "level?", "tier?", "skin?"],
-  cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?"],
-  cmdRank: ["season", "seasonName", "total", "top: [{ rank, name, avatar, level, xp }] — 1위부터 최대 10명", "me?: { rank, name, avatar, level, xp }", "skin?"],
+  //  frame: 아바타 테두리 키(등급 키 — FRAME_ART) — 끼면 진행 링 · 엠블럼 배지 대신 테두리(진행도는 아래 막대)
+  cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?", "frame?"],
+  //  top · me 의 frame: 아바타 테두리 키 — 낀 사람 줄만 사진에 테두리(테두리가 줄 밖으로 나가는 만큼 그 줄 위 · 아래를 띄우고 카드가 그만큼 길어진다 — cardSizeOf)
+  cmdRank: ["season", "seasonName", "total", "top: [{ rank, name, avatar, level, xp, frame? }] — 1위부터 최대 10명", "me?: { rank, name, avatar, level, xp, frame? }", "skin?"],
   cmdAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   autoAttend: ["avatar", "name", "amount", "streak", "bestStreak", "attendCount", "streakBonus?", "skin?"],
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
@@ -73,6 +80,15 @@ export const CARD_SKINS = {
   newworld: { label: "새로운 세계", grid: "line", tint: "#ffe3c4", gridOp: 0.045 },
   chart: { label: "항해도", grid: "line", tint: "#e9d6ae", gridOp: 0.05 },
   airship: { label: "비공정", grid: "line", tint: "#b9c8ce", gridOp: 0.045 },
+  // 등급 카드 스킨 「랭크 깃발」(rank_<등급>) — 시즌 티어 보상. 무늬는 기본 카드 그대로, 그림은 cardSkins/rank.js
+  ...Object.fromEntries(RANK_SKIN_KEYS.map((k) => [k, { label: STRING_SKINS[k].meta.label, grid: "line", tint: "#ffffff", gridOp: 0.05 }])),
+  // 📌 할로윈 시즌 카드 스킨(2026-10) — 그림은 cardSkins/hw_*.js(사이트 프로필 카드와 같은 그림 함수). 무늬는 옅은 도트(바탕 보라 · 달빛 · 사탕 빛)
+  hw_pumpkin: { label: "호박 밭", grid: "dot", tint: "#b48cff", gridOp: 0.07 },
+  hw_ghost: { label: "유령 파티", grid: "dot", tint: "#cfc4f0", gridOp: 0.08 },
+  hw_witch: { label: "마녀의 밤", grid: "dot", tint: "#ffe9a0", gridOp: 0.07 },
+  hw_candy: { label: "사탕 가게", grid: "dot", tint: "#ffc4dc", gridOp: 0.07 },
+  hw_grave: { label: "달빛 묘지", grid: "dot", tint: "#cdbcff", gridOp: 0.08 },
+  hw_blackcat: { label: "검은 고양이", grid: "dot", tint: "#8f88c8", gridOp: 0.07 },
 };
 export const CARD_SKIN_KEYS = Object.keys(CARD_SKINS);
 export const SKIN_CARD_KINDS = ["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "autoAttend", "cmdQuest", "cmdInventory", "cmdPass"];
@@ -88,11 +104,11 @@ export const CARD_TIERS = [
   { key: "silver", name: "실버", en: "SILVER", min: 160, c: "#8d99a6" },
   { key: "gold", name: "골드", en: "GOLD", min: 240, c: "#c39220" },
   { key: "platinum", name: "플래티넘", en: "PLATINUM", min: 330, c: "#3f9e93" },
-  { key: "diamond", name: "다이아몬드", en: "DIAMOND", min: 430, c: "#3f7fc4" },
+  { key: "diamond", name: "다이아몬드", en: "DIAMOND", min: 430, c: "#5a6ad8" },
   { key: "master", name: "마스터", en: "MASTER", min: 540, c: "#8557b0" },
-  { key: "grandmaster", name: "그랜드마스터", en: "GRANDMASTER", min: 650, c: "#a03a6b" },
-  { key: "challenger", name: "챌린저", en: "CHALLENGER", min: 760, c: "#c2452f" },
-  { key: "igloo", name: "이글루", en: "IGLOO", min: 880, c: "#e91e3f" },
+  { key: "grandmaster", name: "그랜드마스터", en: "GRANDMASTER", min: 650, c: "#d8352a" },
+  { key: "challenger", name: "챌린저", en: "CHALLENGER", min: 760, c: "#2f9cf0" },
+  { key: "igloo", name: "이글루", en: "IGLOO", min: 880, c: "#e0609e" },
 ];
 
 // 만렙 — lib/leveling.js getLevelByXp 의 상한과 같다. 여기서는 "다음 레벨까지" 대신 MAX 를 쓴다
@@ -257,59 +273,30 @@ export async function fetchAvatarDataUri(url, timeoutMs = 2000) {
 
 // ── 그림 조각(SVG) ──
 
-// 등급 엠블럼 — app/components/TierEmblem.js 를 SVG 문자열로 옮긴 것(같은 도형 · 색). 날개 · 머리 보석이 닿지 않게 1px 여백
-const HEX = (r) =>
-  [-90, -30, 30, 90, 150, 210]
-    .map((a) => {
-      const rad = (a * Math.PI) / 180;
-      return `${(24 + r * Math.cos(rad)).toFixed(2)},${(25 + r * Math.sin(rad)).toFixed(2)}`;
-    })
-    .join(" ");
-const E_BODY = HEX(19);
-const E_RIM = HEX(18.2);
-const E_FIELD = HEX(14.6);
-const E_OUTER = HEX(22.2);
-const E_STAR = "M24 13.6l2.7 8.7 8.7 2.7-8.7 2.7L24 36.4l-2.7-8.7-8.7-2.7 8.7-2.7z";
-const E_CROWN = "M15.2 31.4V19.8l4.9 4.5 3.9-7 3.9 7 4.9-4.5v11.6z";
-function emblemGlyph(key, ink, accent) {
-  const line = `fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round"`;
-  switch (key) {
-    case "iron": return `<path d="M17.6 25h12.8" ${line} stroke-width="2.8"/>`;
-    case "bronze": return `<path d="M17.2 28.2 24 21.4l6.8 6.8" ${line} stroke-width="2.8"/>`;
-    case "silver": return `<path d="M17.6 24.6 24 18.2l6.4 6.4M17.6 31 24 24.6l6.4 6.4" ${line} stroke-width="2.7"/>`;
-    case "gold": return `<path d="M18.6 21.6 24 16.2l5.4 5.4M18.6 27.4 24 22l5.4 5.4M18.6 33.2 24 27.8l5.4 5.4" ${line} stroke-width="2.4"/>`;
-    case "platinum": return `<path d="M24 16 32.2 25 24 34 15.8 25z" ${line} stroke-width="2.5"/>`;
-    case "diamond": return `<path d="M24 15.2 33 25 24 34.8 15 25z" fill="${ink}"/>` + (accent ? `<path d="M15 25h18M24 15.2 20.9 25 24 34.8 27.1 25z" fill="none" stroke="${accent}" stroke-width="1" opacity="0.5"/>` : "");
-    case "master": return `<path d="${E_STAR}" fill="${ink}"/>`;
-    case "grandmaster": return `<path d="${E_STAR}" fill="${ink}"/>` + (accent ? `<circle cx="24" cy="25" r="2.1" fill="${accent}"/>` : "");
-    case "challenger": return `<path d="${E_CROWN}" fill="${ink}"/>`;
-    case "igloo": return `<path d="${E_CROWN}" fill="${ink}"/>` + (accent ? `<path d="M24 23.2l2.1 2.3-2.1 2.3-2.1-2.3z" fill="${accent}"/>` : "");
-  }
-  return "";
-}
+// 등급 엠블럼 — 사이트 app/components/TierEmblem.js 와 같은 날개 도트(scripts/gen-tier-emblems.mjs 가 만든 EMBLEM_ART — 32 · 48칸 판).
+//   2026-10-10 운영자 "CMDRANK 에도 도트 엠블럼" — 예전 육각 각인(금속 그라데이션 판)을 걷고 사이트와 같은 그림으로.
+//   size × size 칸 안에 그림 영역만 잘라 맞춘다(가로도 size 안). 📌 판은 늘 48칸 하나 — 32칸 판은 같은 그림을 줄여 다시 찍은 것이라 고티어(챌린저 · 이글루)는
+//   모양이 꽤 달라 카드마다 엠블럼이 달라 보였다(2026-10-10 "다른 거랑 계속 디자인이 달라지네"). 칸은 늘 또렷하게(crispEdges — 어떤 배율이든)
+//   카드 바탕이 어두워 뒤에 은은한 등급색 빛(사이트 onDark 와 같은 색 · 진하기)
 export function emblemSvg(tierIndex, size = 96) {
   const r = Math.min(CARD_TIERS.length - 1, Math.max(0, int(tierIndex)));
   const { key, c } = CARD_TIERS[r];
-  const hi = mix(c, 0.5, true);
-  const light = mix(c, 0.62, true);
-  const lo = mix(c, 0.32, false);
-  const deep = mix(c, 0.55, false);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 50 50" width="${size}" height="${size}">
-<defs>
-<linearGradient id="metal" x1="0.15" y1="0" x2="0.55" y2="1"><stop offset="0%" stop-color="${hi}"/><stop offset="48%" stop-color="${c}"/><stop offset="100%" stop-color="${lo}"/></linearGradient>
-<linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${light}"/><stop offset="55%" stop-color="${mix(c, 0.15, true)}"/><stop offset="100%" stop-color="${deep}"/></linearGradient>
-<linearGradient id="field" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${mix(c, 0.22, false)}"/><stop offset="100%" stop-color="${mix(c, 0.06, true)}"/></linearGradient>
-<radialGradient id="shine" cx="0.32" cy="0.18" r="0.72"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.42"/><stop offset="55%" stop-color="#ffffff" stop-opacity="0.08"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
-</defs>
-${r >= 7 ? `<path d="M7.4 16.4 0.9 25l6.5 8.6-1.9-8.6z" fill="url(#rim)"/><path d="M40.6 16.4 47.1 25l-6.5 8.6 1.9-8.6z" fill="url(#rim)"/>` : ""}
-${r >= 6 ? `<polygon points="${E_OUTER}" fill="none" stroke="url(#rim)" stroke-width="1.3" stroke-linejoin="round"/>` : ""}
-<polygon points="${E_BODY}" fill="url(#metal)" stroke-linejoin="round"/>
-<polygon points="${E_RIM}" fill="none" stroke="url(#rim)" stroke-width="1.4" stroke-linejoin="round"/>
-<polygon points="${E_FIELD}" fill="url(#field)" stroke="${deep}" stroke-opacity="0.55" stroke-width="0.9" stroke-linejoin="round"/>
-<polygon points="${E_BODY}" fill="url(#shine)"/>
-${r >= 8 ? `<path d="M24 0.6 27.4 3.9 24 7.4 20.6 3.9z" fill="url(#rim)"/><path d="M20.6 3.9h6.8M24 0.6v6.8" stroke="#ffffff" stroke-opacity="0.35" stroke-width="0.7"/>` : ""}
-<g transform="translate(0 0.9)" opacity="0.55">${emblemGlyph(key, deep, null)}</g>
-${emblemGlyph(key, "#ffffff", c)}
+  const E = EMBLEM_ART[key];
+  if (!E) return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"/>`;
+  // 📌 등급마다 자기 그림이 자리에 꽉 차는 배율 그대로(사이트 TierEmblem 과 같다 — 반 칸 단위로 끊으면 등급마다 크기가 들쭉날쭉, 모든 등급 같은 배율이면 낮은 등급이 너무 작았다).
+  //    아이언만 브론즈 배율(꽉 채우면 칸이 뚱뚱해진다)
+  const n = 48, [bx, by, bw, bh] = E.box[n], [, , fw, fh] = (key === "iron" && EMBLEM_ART.bronze ? EMBLEM_ART.bronze : E).box[n];
+  const s = Math.min(size / fw, size / fh);
+  // 📌 눈으로 보이는 가운데(EMBLEM_ART mid — 밝은 칸 무게중심)를 자리 가운데에 — 그림 상자 가운데로 맞추면 아래가 짙은 그림(이글루 등)이 위로 떠 보였다.
+  //    가로는 좌우 대칭이라 상자 가운데, 세로만 옮기고 그림이 자리 밖으로 나가지 않게 막는다
+  const side = size / s, cx = bx + bw / 2, room = Math.max(0, (side - bh) / 2);
+  const cy = Math.min(by + bh / 2 + room, Math.max(by + bh / 2 - room, E.mid?.[n]?.[1] ?? by + bh / 2));
+  const vb = `${+(cx - side / 2).toFixed(3)} ${+(cy - side / 2).toFixed(3)} ${+side.toFixed(3)} ${+side.toFixed(3)}`;
+  const gw = Math.min(Math.max(bw, bh) * 0.75, side * 0.5), gh = Math.min(Math.max(bw, bh) * 0.625, side * 0.5);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${size}" height="${size}">
+<defs><radialGradient id="eg" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="${mix(c, 0.55, true)}" stop-opacity="0.36"/><stop offset="0.55" stop-color="${mix(c, 0.15, true)}" stop-opacity="0.15"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs>
+<ellipse cx="${cx}" cy="${cy}" rx="${+gw.toFixed(3)}" ry="${+gh.toFixed(3)}" fill="url(#eg)"/>
+<g shape-rendering="crispEdges">${E.art[n]}</g>
 </svg>`;
 }
 
@@ -328,7 +315,7 @@ function ringSvg(size, stroke, pct, color) {
 
 // 바탕 — 잉크 + 등급 빛(오른쪽 위) + 왼쪽 위에서 번지는 옅은 격자. 레벨 대시보드 프로필 카드와 같은 문법
 //   skin(cardSkinOf) 이 있으면 무늬를 바꾸고 스킨 장식(SKIN_DECO — 테두리 등)을 얹는다(바탕 톤은 그대로)
-function bgSvg(w, h, glow, skin) {
+function bgSvg(w, h, glow, skin, kind = "") {
   const grid = skin ? skin.grid : "line";
   let d = "";
   if (grid === "dot") {
@@ -344,7 +331,7 @@ function bgSvg(w, h, glow, skin) {
   }
   const tint = skin ? skin.tint : "#ffffff";
   const op = skin ? skin.gridOp : 0.05;
-  const deco = skin && SKIN_DECO[skin.key] ? SKIN_DECO[skin.key](w, h) : null;
+  const deco = skin && SKIN_DECO[skin.key] ? SKIN_DECO[skin.key](w, h, kind) : null;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <defs>
 <linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c1c"/><stop offset="0.6" stop-color="${INK}"/></linearGradient>
@@ -379,6 +366,7 @@ function seeded(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+const RANK_FLAG_KINDS = ["levelUp", "roleGrant"];
 const SKIN_DECO = {
   // 골드 — 금빛 이중 테 + 모서리 마름모 · 둥근 L 장식, 위아래 문장, 아래 두 모서리 부챗살, 반짝임
   gold: (w, h) => {
@@ -447,6 +435,12 @@ ${corners}<path d="${[[i, i], [w - i, i], [i, h - i], [w - i, h - i]].map(([x, y
   newworld: (w, h) => STRING_SKINS.newworld.deco(w, h, SK, false),
   chart: (w, h) => STRING_SKINS.chart.deco(w, h, SK, false),
   airship: (w, h) => STRING_SKINS.airship.deco(w, h, SK, false),
+  // 등급 카드 스킨 — 사이트 프로필 카드와 같은 그림 함수(그림 한 장 — 펄럭임 없음). 테는 모든 카드에, 깃발은 옆이 비는 가운데 정렬 카드(레벨업 · 역할 지급)에만 —
+  //   다른 카드는 오른쪽 위까지 글 · 칸이 차서 깃발이 레벨 숫자 · 인벤토리 칸 · 퀘스트 칸을 덮었다
+  ...Object.fromEntries(RANK_SKIN_KEYS.map((k) => [k, (w, h, kind) => STRING_SKINS[k].deco(w, h, SK, false, { flag: RANK_FLAG_KINDS.includes(kind) })])),
+  // 할로윈 시즌 — 사이트 프로필 카드와 같은 그림 함수(S=SK 배율 · 그림 한 장 — 움직임은 사이트에서만).
+  //   카드 종류(kind)를 넘긴다 — 오른쪽 위 달 · 빼꼼은 레벨업 · 역할 지급, 바닥 큰 무리(솥 · 큰 유령)는 역할 지급 카드에만(cardSkins/hwFloor.js botTopOpen · botFloorOpen)
+  ...Object.fromEntries(["hw_pumpkin", "hw_ghost", "hw_witch", "hw_candy", "hw_grave", "hw_blackcat"].map((k) => [k, (w, h, kind) => STRING_SKINS[k].deco(w, h, SK, false, { kind })])),
 };
 
 const checkSvg = (color, sw = 3.2) =>
@@ -506,21 +500,51 @@ function avatarEl(k, src, size, name) {
 }
 
 // 사진 + 진행 링 + (아래 가운데) 배지
+// 📌 아바타 테두리 — 키가 맞으면 정지 그림 SVG, 아니면 ""(테두리 없음)
+const frameArtOf = (key) => (typeof key === "string" && Object.prototype.hasOwnProperty.call(FRAME_ART, key) ? FRAME_ART[key] : "");
+// 📌 테두리 낀 사진의 크기 · 자리 — 그림이 사진 가운데에서 뻗는 거리(FRAME_REACH, 128칸 · 구멍 48칸 → 한 칸 = 사진 지름 × 0.92/48)를 사진 지름 배수로 바꿔 맞춘다.
+//    사진은 maxD(링 자리를 채우는 크기 — 테두리를 끼면 링이 빠지므로)까지 키우되, 테두리 위 · 아래 끝이 [top, bottom] 안에 들게 줄인다.
+//    가운데는 cy(링이 있을 때의 가운데)에 두고, 위 · 아래로 넘치면 그만큼 옮긴다. 반환: { D: 사진 지름, y: 사진 가운데, up · down · side: 가운데에서 끝까지(px) }
+//    2026-10-10 운영자 "레벨업 카드 테두리와 랭크에 적용되는 건 이번에 바뀐 걸로" — 새 테두리(엠블럼 받침 + 겹선 테)는 예전보다 작아 사진을 키웠다
+const FRAME_CELL = 0.92 / 48;
+function frameFit(key, { maxD, top, bottom, cy }) {
+  const r = Object.prototype.hasOwnProperty.call(FRAME_REACH, key) ? FRAME_REACH[key] : [0, 0, 0];
+  const up = Math.max(0.5, r[0] * FRAME_CELL), down = Math.max(0.5, r[1] * FRAME_CELL), side = Math.max(0.5, r[2] * FRAME_CELL);
+  const D = Math.floor(Math.min(maxD, (bottom - top) / (up + down)));
+  const y = Math.round(Math.min(Math.max(cy, top + up * D), bottom - down * D));
+  return { D, y, up: Math.ceil(up * D), down: Math.ceil(down * D), side: Math.ceil(side * D) };
+}
+// 작은 사진(순위표 줄) + 테두리 — 사진 칸 크기는 그대로, 테두리는 밖으로 겹친다
+function framedSmallAvatar(k, avatar, size, name, art) {
+  const F = Math.round((size * 0.92 * 128) / 48);
+  return k.box(
+    { position: "relative", width: size, height: size, flexShrink: 0 },
+    avatarEl(k, avatar, size, name),
+    k.img(svgUri(art), F, F, { position: "absolute", left: (size - F) / 2, top: (size - F) / 2 })
+  );
+}
+
 function ringAvatar(k, o) {
-  const inset = o.stroke + o.gap;
+  // o.frame(테두리 그림)을 끼면 진행 링 · 배지 없이 사진을 꽉 채우고 테두리가 사진을 감싼다 — 링 자리를 테두리가 대신(사이트 대시보드와 같은 규칙)
+  //   테두리 그림은 128칸 · 구멍 48칸 → 사진 지름 × 0.92 × 128/48 (app/components/AvatarFrame 과 같은 비율)
+  const inset = o.frame ? 0 : o.stroke + o.gap;
   const inner = o.size - inset * 2;
+  const F = o.frame ? Math.round((inner * 0.92 * 128) / 48) : 0;
   return k.box(
     { position: "relative", width: o.size, height: o.size, flexShrink: 0 },
-    k.img(svgUri(ringSvg(o.size, o.stroke, o.pct, o.color)), o.size, o.size, { position: "absolute", left: 0, top: 0 }),
+    o.frame ? null : k.img(svgUri(ringSvg(o.size, o.stroke, o.pct, o.color)), o.size, o.size, { position: "absolute", left: 0, top: 0 }),
     k.box({ position: "absolute", left: inset, top: inset }, avatarEl(k, o.avatar, inner, o.name)),
-    o.badge || null
+    o.frame ? k.img(svgUri(o.frame), F, F, { position: "absolute", left: (o.size - F) / 2, top: (o.size - F) / 2 }) : o.badge || null
   );
 }
 
 // 링 아래에 걸치는 등급 엠블럼 — 잉크 원(스킨이면 스킨 바탕색)을 깔아 링을 끊는다. icon 을 주면 엠블럼 대신 그것(역할 지급 — 등급이 아닌 역할의 방패)
+//   📌 2026-10-10 등급 엠블럼이 날개 도트로 바뀌며(브론즈 · 아이언은 그림이 가늘어) 잉크 원 안이 비어 보였다("전에는 색깔이 꽉 차니") —
+//      등급 엠블럼이면 원을 짙은 등급색으로 채우고 밝은 등급색 테 한 줄(운영자 고른 A). 역할 지급의 역할 아이콘(icon)은 잉크 원 그대로
 function emblemBadge(k, ringSize, ti, size, icon) {
   const pad = Math.round(size * 0.16);
   const outer = size + pad * 2;
+  const c = icon ? "" : CARD_TIERS[Math.min(CARD_TIERS.length - 1, Math.max(0, int(ti)))].c;
   return k.box(
     {
       position: "absolute",
@@ -529,7 +553,8 @@ function emblemBadge(k, ringSize, ti, size, icon) {
       width: outer,
       height: outer,
       borderRadius: outer / 2,
-      backgroundColor: INK,
+      backgroundColor: c ? mix(c, 0.62, false) : INK,
+      ...(c ? { border: `3px solid ${mix(c, 0.12, true)}` } : {}),
       alignItems: "center",
       justifyContent: "center",
     },
@@ -549,7 +574,7 @@ function frame(k, kind, glow, ...children) {
   const { width, height } = k.size || CARD_SIZE[kind];
   return k.box(
     { width, height, position: "relative", backgroundColor: INK, color: "#ffffff", fontFamily: CARD_FONT, overflow: "hidden" },
-    k.img(svgUri(bgSvg(width, height, glow, k.skin)), width, height, { position: "absolute", left: 0, top: 0 }),
+    k.img(svgUri(bgSvg(width, height, glow, k.skin, kind)), width, height, { position: "absolute", left: 0, top: 0 }),
     children
   );
 }
@@ -592,7 +617,7 @@ const fitSize = (text, width, max, ls = 0, min = 26) => {
 // ── 카드 ──
 
 // 레벨업 — 가운데 배치(2026-09 사용자 확정). 가운데 사진(등급 색 테두리 + 엠블럼), 그 아래 LEVEL UP(승급이면 옆에 알약) ·
-//   Lv.이전 → Lv.새 레벨, 맨 아래 막대. 진행은 막대가 맡으므로 사진 테두리는 가득 채운 등급 색. 브랜드 줄 · 누적 XP 는 넣지 않는다("난잡하다")
+//   Lv.이전 → Lv.새 레벨, 맨 아래 막대. 진행은 막대가 맡으므로 사진 테두리는 가득 채운 등급 색. 브랜드 줄 · 현재 XP 는 넣지 않는다("난잡하다")
 function levelUpCard(k, kind, d, text) {
   const level = Math.max(1, int(d.level));
   const prev = d.prevLevel == null || d.prevLevel === "" ? level - 1 : int(d.prevLevel);
@@ -603,13 +628,18 @@ function levelUpCard(k, kind, d, text) {
   const pct = maxed ? 1 : d.progress;
   const raw = text(d.name);
   const R = 250;
+  // 테두리를 끼면 링 · 배지 없이 사진이 링 자리를 채운다(frameFit — 최대 236). 테두리 위 끝은 카드 위 18 아래, 아래 끝은 LEVEL UP 줄(374부터) 위 352 까지
+  const avFrame = frameArtOf(d.frame); // (frame 은 카드 바탕 함수 이름이라 avFrame)
+  const fit = avFrame ? frameFit(d.frame, { maxD: 236, top: 18, bottom: 352, cy: 46 + R / 2 }) : null;
   return frame(
     k,
     kind,
     t.c,
     k.box(
-      { position: "absolute", left: 0, right: 0, top: 46, justifyContent: "center" },
-      ringAvatar(k, { size: R, stroke: 12, gap: 14, pct: 1, color: t.c, avatar: d.avatar, name: raw, badge: emblemBadge(k, R, ti, 72) })
+      { position: "absolute", left: 0, right: 0, top: fit ? fit.y - fit.D / 2 : 46, justifyContent: "center" },
+      fit
+        ? ringAvatar(k, { size: fit.D, stroke: 12, gap: 14, pct: 1, color: t.c, avatar: d.avatar, name: raw, frame: avFrame })
+        : ringAvatar(k, { size: R, stroke: 12, gap: 14, pct: 1, color: t.c, avatar: d.avatar, name: raw, badge: emblemBadge(k, R, ti, 72) })
     ),
     k.box(
       { position: "absolute", left: 88, right: 88, bottom: 100, flexDirection: "column", alignItems: "center" },
@@ -761,7 +791,7 @@ function roleGrantCard(k, kind, d, text) {
 }
 
 // 프로필(/레벨) — 내 정보의 잉크 헤더 게임 프로필. 사진 링 + 엠블럼 · 이름 · 등급, 오른쪽 큰 LEVEL,
-//   아래 칸: 서버 순위(있을 때만 — #n 옆에 '상위 n%') · 누적 XP · 다음 레벨까지, 맨 아래 막대(Lv.n → Lv.n+1)
+//   아래 칸: 서버 순위(있을 때만 — #n 옆에 '상위 n%') · 현재 XP · 다음 레벨까지, 맨 아래 막대(Lv.n → Lv.n+1)
 function profileCard(k, kind, d, text) {
   const level = Math.max(1, int(d.level));
   const ti = cardTierIndex(level);
@@ -772,11 +802,18 @@ function profileCard(k, kind, d, text) {
   const maxed = level >= CARD_MAX_LEVEL;
   const pct = maxed ? 1 : d.progress;
   const RING = 236;
+  // 테두리를 끼면 링 · 배지 없이 사진이 링 자리를 채운다(frameFit — 최대 220). 테두리 위 끝은 카드 위 14 아래, 아래 끝은 구분선(350) 위 342 까지.
+  //   옆은 카드 왼쪽 16 까지 넘쳐도 되고(사진 가운데를 그만큼 안쪽으로), 이름은 테두리 오른쪽 끝에서 32 떨어진다 — 이름 칸 폭(nameW)도 그만큼
+  const avFrame = frameArtOf(d.frame); // (frame 은 카드 바탕 함수 이름이라 avFrame)
+  const fit = avFrame ? frameFit(d.frame, { maxD: 220, top: 14, bottom: 342, cy: 58 + RING / 2 }) : null;
+  const fcx = fit ? Math.max(fit.D / 2, fit.side - 56) : 0; // 사진 가운데(칸 왼쪽 기준)
+  const fW = fit ? Math.ceil(fcx + Math.max(fit.D / 2, fit.side)) : 0; // 사진 칸 폭 = 테두리 오른쪽 끝까지
+  const avW = fit ? fW + 32 : RING + 48;
   const INNER = 1200 - 144;
   const cells = [
     // 상위 % — 레벨 페이지 프로필과 같은 식(올림, 최소 1%)
     hasRank ? { l: "서버 순위", v: `#${num(d.rank)}`, sub: int(d.total) > 0 ? `상위 ${Math.max(1, Math.ceil((int(d.rank) / int(d.total)) * 100))}%` : "" } : null,
-    { l: "누적 XP", v: num(d.xp), sub: "" },
+    { l: "현재 XP", v: num(d.xp), sub: "" },
     maxed ? { l: "다음 레벨까지", v: "MAX", sub: "" } : { l: "다음 레벨까지", v: num(d.need), sub: "XP" },
   ].filter(Boolean);
   const cellW = Math.floor(INNER / cells.length);
@@ -785,21 +822,37 @@ function profileCard(k, kind, d, text) {
   const LV = 150;
   const lvSize = fitSize(num(level), 330, LV, -5);
   // 이름 칸 폭 — 사진 · 오른쪽 LEVEL 숫자(또는 LEVEL 글자)를 뺀 나머지. 이름은 58 → 40 까지 줄여 보고 그래도 길면 말줄임
-  const nameW = INNER - RING - 48 - 32 - Math.max(150, Math.ceil(lvSize * emWidth(num(level)) - 5 * num(level).length));
+  const nameW = INNER - avW - 32 - Math.max(150, Math.ceil(lvSize * emWidth(num(level)) - 5 * num(level).length));
+  // 📌 등급 줄 — 그랜드마스터처럼 긴 등급은 세 자리 레벨 숫자에 닿는다(2026-10-11 운영자 "Lv 705"). 이름 칸 폭(nameW — 숫자와 32 띄운 자리)에 안 들어가면
+  //    등급 · 영문 · 사이를 같은 비율로 줄인다(0.8 배까지). 그래도 넘치면(넓은 테두리) 영문을 빼고 한글만 맞춘다. 들어가는 등급은 그대로(42 · 26)
+  const tierFull = 42 * emWidth(t.name) + 14 + 26 * emWidth(t.en) + 5 * Array.from(t.en).length;
+  const tierS = Math.min(1, nameW / tierFull);
+  const tierEn = tierS >= 0.8;
+  const tS = tierEn ? tierS : Math.min(1, nameW / (42 * emWidth(t.name)));
   return frame(
     k,
     kind,
     t.c,
     k.box(
       { position: "absolute", left: 72, right: 72, top: 58, alignItems: "center" },
-      ringAvatar(k, { size: RING, stroke: 13, gap: 13, pct, color: t.c, avatar: d.avatar, name: raw, badge: emblemBadge(k, RING, ti, 68) }),
+      fit
+        ? k.box(
+            { position: "relative", width: fW, height: RING, flexShrink: 0 },
+            k.box(
+              { position: "absolute", left: Math.round(fcx - fit.D / 2), top: Math.round(RING / 2 - fit.D / 2 + (fit.y - (58 + RING / 2))) },
+              ringAvatar(k, { size: fit.D, stroke: 13, gap: 13, pct, color: t.c, avatar: d.avatar, name: raw, frame: avFrame })
+            )
+          )
+        : ringAvatar(k, { size: RING, stroke: 13, gap: 13, pct, color: t.c, avatar: d.avatar, name: raw, badge: emblemBadge(k, RING, ti, 68) }),
       k.box(
-        { flexDirection: "column", marginLeft: 48, flexGrow: 1, flexShrink: 1, minWidth: 0 },
+        { flexDirection: "column", marginLeft: avFrame ? 32 : 48, flexGrow: 1, flexShrink: 1, minWidth: 0 },
         k.line(raw || "이름 없음", { fontSize: fitSize(raw || "이름 없음", nameW, 58, -1, 40), fontWeight: 900, letterSpacing: -1, color: "#ffffff" }),
         k.box(
           { alignItems: "center", marginTop: 16 },
-          k.box({ fontSize: 42, fontWeight: 900, color: tc, whiteSpace: "nowrap" }, t.name),
-          k.box({ fontSize: 26, fontWeight: 700, color: W(0.5), letterSpacing: 5, marginLeft: 14, marginTop: 4, whiteSpace: "nowrap" }, t.en)
+          k.box({ fontSize: Math.floor(42 * tS), fontWeight: 900, color: tc, whiteSpace: "nowrap" }, t.name),
+          tierEn
+            ? k.box({ fontSize: Math.floor(26 * tS), fontWeight: 700, color: W(0.5), letterSpacing: Math.round(5 * tS), marginLeft: Math.round(14 * tS), marginTop: Math.round(4 * tS), whiteSpace: "nowrap" }, t.en)
+            : null
         )
       ),
       k.box(
@@ -1005,8 +1058,25 @@ function rankerCard(k, kind, d, text) {
   );
 }
 
-// /랭크 — 서버 순위표. 머리(SEASON n · 이름 / 순위 / 전체 인원) → 1~10위 줄(순위 · 사진 · 이름 · 등급 문장 + Lv · 누적 XP)
+// /랭크 — 서버 순위표. 머리(SEASON n · 이름 / 순위 / 전체 인원) → 1~10위 줄(순위 · 사진 · 이름 · 등급 문장 + Lv · 현재 XP)
 //   → 구분선 → 맨 아래 '나' 줄(10위 안이면 위 목록의 내 줄도 옅게 칠한다). 1~3위 순위 숫자는 RANKER 메달 색
+// 📌 순위표 줄의 테두리 여백 — 사진(줄 40 · 내 줄 48) 가운데에서 테두리 위 · 아래 끝이 줄 밖으로 나가는 만큼 { t, b } (테두리 없으면 0)
+function rankFrameGap(p, big) {
+  const key = p && typeof p.frame === "string" ? p.frame : "";
+  if (!frameArtOf(key)) return { t: 0, b: 0 };
+  const size = big ? 48 : 40, h = big ? 72 : 56;
+  const r = FRAME_REACH[key];
+  return { t: Math.max(0, Math.ceil(r[0] * FRAME_CELL * size - h / 2)), b: Math.max(0, Math.ceil(r[1] * FRAME_CELL * size - h / 2)) };
+}
+// 테두리 낀 줄이 늘린 카드 높이(cardSizeOf)
+function rankExtra(d) {
+  const top = Array.isArray(d?.top) ? d.top.slice(0, 10) : [];
+  const me = d?.me && int(d.me.rank) > 0 ? d.me : null;
+  let add = 0;
+  for (const p of top) { const g = rankFrameGap(p, false); add += g.t + g.b; }
+  if (me) { const g = rankFrameGap(me, true); add += g.t + g.b; }
+  return add;
+}
 function rankBoardCard(k, kind, d, text) {
   const top = Array.isArray(d.top) ? d.top.slice(0, 10) : [];
   const me = d.me && int(d.me.rank) > 0 ? d.me : null;
@@ -1029,7 +1099,12 @@ function rankBoardCard(k, kind, d, text) {
     const h = big ? 72 : ROW;
     // '나' 줄은 앞에 알약(약 90px)이 붙어 그만큼 좁다 — 이름 칸에서 뺀다
     const rowW = big ? INNER - 90 : INNER + 32;
-    const nW = big ? nameW - 90 - 32 + 16 : nameW;
+    // 테두리 — 낀 사람 줄만: 위 · 아래로 넘치는 만큼 줄을 띄우고, 옆으로 넘치는 만큼 이름을 민다
+    const art = frameArtOf(typeof p.frame === "string" ? p.frame : "");
+    const gap = rankFrameGap(p, big);
+    const avSize = big ? 48 : AV;
+    const push = art ? Math.max(0, Math.ceil(FRAME_REACH[p.frame][2] * FRAME_CELL * avSize - avSize / 2) - 14) : 0;
+    const nW = (big ? nameW - 90 - 32 + 16 : nameW) - push;
     return k.box(
       {
         width: rowW,
@@ -1038,6 +1113,8 @@ function rankBoardCard(k, kind, d, text) {
         paddingLeft: big ? 0 : 16,
         paddingRight: big ? 0 : 16,
         marginLeft: big ? 0 : -16,
+        marginTop: gap.t,
+        marginBottom: gap.b,
         borderRadius: 14,
         backgroundColor: mine && !big ? W(0.06) : "transparent",
       },
@@ -1045,8 +1122,8 @@ function rankBoardCard(k, kind, d, text) {
         { width: NUM_W, fontSize: big ? 34 : 30, fontWeight: 900, color: medal || (mine ? "#ffffff" : W(0.5)), letterSpacing: -1 },
         big ? `#${num(rank)}` : String(rank)
       ),
-      avatarEl(k, p.avatar, big ? 48 : AV, raw),
-      k.line(label, { width: nW, marginLeft: 20, fontSize: fitSize(label, nW, big ? 34 : 30, 0, 24), fontWeight: mine ? 900 : 700, color: mine ? "#ffffff" : W(0.85) }),
+      art ? framedSmallAvatar(k, p.avatar, avSize, raw, art) : avatarEl(k, p.avatar, avSize, raw),
+      k.line(label, { width: nW, marginLeft: 20 + push, fontSize: fitSize(label, nW, big ? 34 : 30, 0, 24), fontWeight: mine ? 900 : 700, color: mine ? "#ffffff" : W(0.85) }),
       k.box(
         { width: LV_W, alignItems: "center", justifyContent: "flex-end" },
         k.img(svgUri(emblemSvg(ti, 30)), 30, 30),
@@ -1697,6 +1774,7 @@ export function cardSizeOf(kind, data) {
   const base = CARD_SIZE[kind];
   if (kind === "cmdQuest" && base) return { width: base.width, height: Math.min(base.height, questHeight(data)) };
   if (kind === "cmdPass" && base) return { width: base.width, height: Math.min(base.height, passHeight(data)) };
+  if (kind === "cmdRank" && base) return { width: base.width, height: base.height + rankExtra(data) }; // 테두리 낀 줄만큼 길게
   return base;
 }
 

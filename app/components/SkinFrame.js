@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { STRING_SKINS } from "@/lib/cardSkins";
 
 // 📌 카드 스킨 장식 — 레벨 페이지 프로필 카드(잉크 판)에 착용한 카드 스킨을 얹는다.
@@ -39,7 +39,9 @@ export function deco(skin, w, h, ctx = {}) {
   const s2 = Object.prototype.hasOwnProperty.call(STRING_SKINS, skin) ? STRING_SKINS[skin] : null;
   if (s2) {
     const d = s2.deco(w, h, 1, true, ctx);
-    return <g dangerouslySetInnerHTML={{ __html: (d.defs ? `<defs>${d.defs}</defs>` : "") + (d.under || "") + (d.over || "") }} />;
+    const base = <g dangerouslySetInnerHTML={{ __html: (d.defs ? `<defs>${d.defs}</defs>` : "") + (d.under || "") + (d.over || "") }} />;
+    // 📌 top — 카드 글자보다 위 겹에 그릴 것(등급 카드 스킨 깃발 — 레벨 칸 구분선이 깃발 위를 가로지르지 않게, 2026-10-11)
+    return d.top ? { base, top: <g dangerouslySetInnerHTML={{ __html: d.top }} /> } : base;
   }
   const o = 12; // 바깥 테 여백 — 카드 모서리(24px 둥근 모서리) 안쪽
 
@@ -188,13 +190,24 @@ export default function SkinFrame({ skin }) {
   }, []);
   // 📌 그림은 스킨 · 카드 크기 · 자리가 바뀔 때만 다시 만든다 — 등급 카드 스킨(랭크 깃발)은 한 번에 수십 ms 라 부모가 다시 그릴 때마다 만들면 화면이 버벅인다
   const body = useMemo(() => (box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h, box) : null), [skin, box]);
+  const split = body && !React.isValidElement(body) && body.base ? body : null;
   return (
-    <div ref={ref} aria-hidden className="absolute inset-0 pointer-events-none">
-      {body && (
-        <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} className="absolute inset-0 block">
-          {body}
-        </svg>
+    <>
+      <div ref={ref} aria-hidden className="absolute inset-0 pointer-events-none">
+        {body && (
+          <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} className="absolute inset-0 block">
+            {split ? split.base : body}
+          </svg>
+        )}
+      </div>
+      {/* 글자 겹(relative z-10) 위 · 로그인 전 덮개(z-20) 아래 */}
+      {split && (
+        <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ zIndex: 15 }}>
+          <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} className="absolute inset-0 block">
+            {split.top}
+          </svg>
+        </div>
       )}
-    </div>
+    </>
   );
 }

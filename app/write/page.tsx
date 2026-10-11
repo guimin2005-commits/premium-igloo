@@ -11,6 +11,8 @@ import { BracketView } from "../components/BracketView";
 import { DiscordIdInput } from "../components/DiscordIds";
 import { findTableAt, spliceBlock, type Grid } from "../components/mdTable";
 import PostPreview from "./PostPreview";
+import RichEditor, { applyEdit } from "./RichEditor";
+import { insertBlockAt } from "./mdEdit";
 import TableDialog from "./TableDialog";
 import {
   AdminPage,
@@ -584,42 +586,16 @@ export default function AdminWritePage() {
     if (dcToastTimer.current) clearTimeout(dcToastTimer.current);
   }, []);
 
-  const insertWrap = (symbol: string, placeholder = "텍스트") => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const scrollY = window.scrollY;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentText = textarea.value;
-    const selectedText = currentText.substring(start, end);
-    const inner = selectedText || placeholder;
-    const newContent = currentText.substring(0, start) + symbol + inner + symbol + currentText.substring(end);
-    setContent(newContent);
-    setTimeout(() => {
-      textarea.focus({ preventScroll: true });
-      textarea.setSelectionRange(start + symbol.length, start + symbol.length + inner.length);
-      window.scrollTo({ top: scrollY });
-    }, 0);
-  };
-
   // 📌 본문 이미지 — 주소와 설명을 받아 커서 자리에 ![설명](주소) 로 넣는다
+  //    이미지는 한 줄을 통째로 차지해야 크게 나온다(insertBlockAt — 앞뒤 줄바꿈). 되돌리기(Ctrl+Z)가 되게 편집기와 같은 applyEdit 로
   const insertImage = (url: string, caption: string) => {
     const textarea = textareaRef.current;
     const src = url.trim();
     if (!textarea || !src) return;
     const scrollY = window.scrollY;
     const start = textarea.selectionStart;
-    const cur = textarea.value;
-    const md = `![${caption.trim()}](${src})`;
-    const before = cur.substring(0, start);
-    const after = cur.substring(start);
-    // 이미지는 한 줄을 통째로 차지해야 크게 나온다
-    const next = before + (before && !before.endsWith("\n") ? "\n" : "") + md + (after && !after.startsWith("\n") ? "\n" : "") + after;
-    setContent(next);
-    setTimeout(() => {
-      textarea.focus({ preventScroll: true });
-      window.scrollTo({ top: scrollY });
-    }, 0);
+    applyEdit(textarea, insertBlockAt(textarea.value, start, start, `![${caption.trim()}](${src})`));
+    window.scrollTo({ top: scrollY });
   };
 
   // 📌 [표] — 커서가 표 안이면 그 표를 불러와 고치고(바꾸기), 아니면 커서 자리에 새 표(넣기).
@@ -639,12 +615,13 @@ export default function AdminWritePage() {
     if (!textarea || !tableDlg) return;
     const scrollY = window.scrollY;
     const { start, end } = tableDlg.range || { start: tableDlg.at, end: tableDlg.at };
-    const r = spliceBlock(textarea.value, start, end, md);
-    setContent(r.text);
+    const cur = textarea.value;
+    const r = spliceBlock(cur, start, end, md);
     setTableDlg(null);
+    // spliceBlock 은 글 전체를 돌려준다 — 바뀐 구간(start ~ end 자리)만 넣어 되돌리기가 되게
+    const text = r.text.slice(start, r.text.length - (cur.length - end));
     setTimeout(() => {
-      textarea.focus({ preventScroll: true });
-      textarea.setSelectionRange(r.selEnd, r.selEnd);
+      applyEdit(textarea, { start, end, text, selStart: r.selEnd, selEnd: r.selEnd });
       window.scrollTo({ top: scrollY });
     }, 0);
   };
@@ -774,8 +751,6 @@ export default function AdminWritePage() {
     finally { setIsSubmitting(false); }
   };
 
-  // 본문 편집기 — 패널 안에서 테두리 없이 제목 아래로 이어진다
-  const textareaClass = "w-full bg-transparent border-0 text-[15px] text-[#131313] outline-none resize-none leading-[1.9] placeholder:text-[#a3a3a3] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]";
   // 구인 세 칸 · 설문 긴 입력 — 공용 입력칸 모양에 줄 수만 늘린다
   const areaClass = `${inputClass} resize-y leading-relaxed`;
   const usesEditor = category === "공지사항" || category === "이벤트" || category === "대회" || category === "서포터즈";
@@ -885,28 +860,20 @@ export default function AdminWritePage() {
               className="block w-full px-5 py-4 bg-transparent border-b border-[#ededed] text-[20px] md:text-[22px] font-black tracking-tight text-[#131313] placeholder:text-[#a3a3a3] outline-none" />
 
             {usesEditor && (
-              <>
-                {/* 📌 도구 줄 — 미리보기 중에는 서식 단추를 흐리게만(자리 그대로라 [작성 · 미리보기] 가 움직이지 않는다) */}
-                <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-[#ededed]">
-                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("**")}><span className="text-[14px] font-black">B</span>굵게</Btn>
-                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("__")}><span className="text-[14px] underline">U</span>밑줄</Btn>
-                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("~~")}><span className="text-[14px] line-through">S</span>취소선</Btn>
-                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => insertWrap("==")}><span className="text-[14px] font-black text-[#e91e3f]">A</span>강조</Btn>
-                  <span aria-hidden className="w-px h-4 mx-1 bg-[#ededed]" />
-                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={openTable}><span className="text-[14px]">⊞</span>표</Btn>
-                  <Btn variant="ghost" size="sm" disabled={previewing} onClick={() => setImageOpen(true)} title="본문에 넣은 이미지는 글 너비에 맞춰 크게 나옵니다."><span className="text-[14px]">🖼</span>이미지</Btn>
-                  <Segmented className="ml-auto" options={[{ v: "write", l: "작성" }, { v: "preview", l: "미리보기" }]} value={editorView} onChange={switchView} />
-                </div>
-                {/* 📌 미리보기는 편집 칸 상자를 그대로 덮는다(absolute inset-0) — 편집 칸은 숨기기만 해서 높이 · 스크롤 · 커서가 그대로 남는다.
-                       안쪽은 실제 글 폭으로 짜고 상자가 좁으면 줄인다(PostPreview useRealWidth). 글 칸보다 넓은 표는 상자 끝에서 잘리되 옆으로 밀어 볼 수 있다
-                       (글 보기 화면은 같은 표가 오른쪽 여백 · 화면 끝까지 보이고 거기서 잘린다) */}
-                <div className="relative">
-                  <textarea ref={textareaRef} placeholder="내용을 입력하세요..." value={content} onChange={(e) => setContent(e.target.value)} aria-hidden={previewing || undefined} className={`block min-h-[400px] px-5 py-4 ${textareaClass} ${previewing ? "invisible" : ""}`} />
-                  {previewing && (
-                    <PostPreview post={previewPost} boxRef={previewRef} className="absolute inset-0 overflow-auto no-bar rounded-b-[15px]" />
-                  )}
-                </div>
-              </>
+              // 📌 본문 편집기(./RichEditor) — 도구 줄(화면 위에 붙음) · 글 길이만큼 커지는 입력칸 · 단축키 · 글자 수.
+              //    미리보기 중에는 서식 단추를 흐리게만(자리 그대로라 [작성 · 미리보기] 가 움직이지 않는다).
+              //    미리보기는 편집 칸 상자를 그대로 덮는다(absolute inset-0) — 편집 칸은 숨기기만 해서 높이 · 커서가 그대로 남는다.
+              //    안쪽은 실제 글 폭으로 짜고 상자가 좁으면 줄인다(PostPreview useRealWidth). 글 칸보다 넓은 표는 상자 끝에서 잘리되 옆으로 밀어 볼 수 있다
+              <RichEditor
+                value={content}
+                onChange={setContent}
+                taRef={textareaRef}
+                previewing={previewing}
+                onTable={openTable}
+                onImage={() => setImageOpen(true)}
+                viewToggle={<Segmented options={[{ v: "write", l: "작성" }, { v: "preview", l: "미리보기" }]} value={editorView} onChange={switchView} />}
+                overlay={<PostPreview post={previewPost} boxRef={previewRef} className="absolute inset-0 overflow-auto no-bar" />}
+              />
             )}
 
             {category === "구인" && (

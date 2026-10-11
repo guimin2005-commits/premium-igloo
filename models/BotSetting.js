@@ -59,6 +59,15 @@ const BotSettingSchema = new mongoose.Schema({
   questPickDaily: { type: Number, default: 0 },
   questPickWeekly: { type: Number, default: 0 },
   questPickMonthly: { type: Number, default: 0 },
+  // 📌 주기별 퀘스트 바꾸기(리롤) 무료 횟수 — 유저마다 그 주기에 아직 달성하지 않은 퀘스트를 이만큼 무료로 다른 퀘스트로 바꿀 수 있다(0 = 무료 없음 · 최대 5).
+  //    규칙은 lib/questKinds.js "바꾸기" (2026-10-11)
+  questRerollDaily: { type: Number, default: 3 },
+  questRerollWeekly: { type: Number, default: 3 },
+  questRerollMonthly: { type: Number, default: 3 },
+  // 📌 유료 바꾸기 값(빙옥) — 무료를 다 쓴 뒤 회차마다 이 값을 내고 바꾼다(횟수 제한 없음 · 0 = 유료 끔 · 0~100). 2026-10-11
+  questRerollPriceDaily: { type: Number, default: 1 },
+  questRerollPriceWeekly: { type: Number, default: 2 },
+  questRerollPriceMonthly: { type: Number, default: 3 },
 
   // ARCTIC 공개 여부 — false면 관리자만 접근 가능 (준비 중 상태)
   shopPublic: { type: Boolean, default: false },

@@ -375,7 +375,10 @@ function shopTimes(rows) {
 //    M: { DailyQuest, QuestClaim, XpLog, UserXp, BotSetting, Purchase, WalletLog, Payout, ActivityStat, QuestPick }
 //    📌 쓰기는 QuestPick(유저별 노출 목록, 주기마다 처음 열 때 한 번 · 끄거나 지운 퀘스트 자리를 채울 때) 하나뿐 — 나머지는 읽기만
 //    읽기: 1차(퀘스트 · 수령 · 유저 · 설정) → 뽑기 → 2차(뽑힌 퀘스트가 필요로 하는 기록만 — 채널 · 음성 조건이 있으면 그 칸까지 묶는다)
-export async function computeQuestState(M, userId) {
+//    📌 opt.reroll(퀘스트 id) — 퀘스트 바꾸기(2026-10-11). 그 퀘스트 자리를 남은 후보로 바꿔 저장하고 바뀐 상태를 돌려준다(아래 "바꾸기").
+//       opt.paid — 유료 회차에 부르는 쪽이 이미 뺀 빙옥(그 주기 값과 같아야 진행). opt.dry — 저장하지 않고 바뀐 모습만(테스트 사이트).
+//       opt.over — 내부용(dry 결과를 저장 없이 다시 셀 때 그 주기 목록 대신 쓴다)
+export async function computeQuestState(M, userId, opt = {}) {
   const PERIODS = QUEST_PERIODS;
   const dayStart = kstDayStart();
   const weekStart = kstWeekStart();
@@ -393,14 +396,18 @@ export async function computeQuestState(M, userId) {
     M.UserXp.findOne({ userId }, { lastAttendDate: 1, attendCount: 1, attendStreak: 1, voiceCycle: 1 }).lean(),
     M.BotSetting.findOne(
       { key: "main" },
-      { attendXp: 1, attendVoiceMin: 1, voiceIntervalSec: 1, questPickDaily: 1, questPickWeekly: 1, questPickMonthly: 1 }
+      {
+        attendXp: 1, attendVoiceMin: 1, voiceIntervalSec: 1, questPickDaily: 1, questPickWeekly: 1, questPickMonthly: 1,
+        questRerollDaily: 1, questRerollWeekly: 1, questRerollMonthly: 1,
+        questRerollPriceDaily: 1, questRerollPriceWeekly: 1, questRerollPriceMonthly: 1,
+      }
     ).lean(),
     // 주기마다 이번 주기 내 목록 + 직전 2번(겹치지 않게 고르는 데 쓴다) — 최근 것부터
     //    📌 2026-10-04 일일 · 주간 · 월간 기록을 따로 읽는다 — 셋을 합쳐 최근 12개만 읽던 때는 매일 여는 유저의 일일 기록이 자리를 다 차지해
     //       지난달 월간 · 지지난 주 주간 목록을 못 보고 그대로 또 뽑을 수 있었다
     Promise.all(
       PERIODS.map((per) =>
-        M.QuestPick ? M.QuestPick.find({ u: userId, per }, { _id: 0, key: 1, per: 1, ids: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(3).lean() : []
+        M.QuestPick ? M.QuestPick.find({ u: userId, per }, { _id: 0, key: 1, per: 1, ids: 1, rr: 1, out: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(3).lean() : []
       )
     ),
     // 📌 바꾸기 전(모두 같은 목록) 방식으로 이미 보여 주던 주기 — 배포 때 그 목록을 u "*" 로 고정해 뒀다. 그 주기가 끝날 때까지 그대로 이어 쓴다
@@ -428,6 +435,19 @@ export async function computeQuestState(M, userId) {
     const hex = String(q?._id || "").slice(0, 8);
     return /^[0-9a-f]{8}$/i.test(hex) ? parseInt(hex, 16) * 1000 : 0;
   };
+  // 📌 바꾸기(리롤) 무료 횟수 — 주기마다 유저마다(BotSetting questRerollDaily · Weekly · Monthly, 0 = 무료 없음 · 칸이 없으면 3번 · 최대 5). 2026-10-11 "퀘스트 리롤" · 같은 날 운영자 "무료 새로고침 주기 3회"
+  const rerollMax = (v) => (v == null ? 3 : Math.max(0, Math.min(5, Math.floor(Number(v) || 0))));
+  const rrMax = { daily: rerollMax(setting?.questRerollDaily), weekly: rerollMax(setting?.questRerollWeekly), monthly: rerollMax(setting?.questRerollMonthly) };
+  // 📌 유료 바꾸기 값(빙옥) — 무료를 다 쓴 뒤 회차마다 같은 값 · 횟수 제한 없음(후보가 남아 있는 한). BotSetting questRerollPriceDaily · Weekly · Monthly
+  //    (0 = 유료 끔 · 칸이 없으면 일일 1 · 주간 2 · 월간 3 · 최대 100). 2026-10-11 운영자 "무료 다 쓰면 그다음부터 유료"
+  const rerollPrice = (v, def) => (v == null ? def : Math.max(0, Math.min(100, Math.floor(Number(v) || 0))));
+  const rrPrice = {
+    daily: rerollPrice(setting?.questRerollPriceDaily, 1),
+    weekly: rerollPrice(setting?.questRerollPriceWeekly, 2),
+    monthly: rerollPrice(setting?.questRerollPriceMonthly, 3),
+  };
+  const cur = {}; // 주기마다 지금 목록 · 바꾼 횟수(rr) · 바꿔 버린 퀘스트(out) — 바꾸기 저장 조건에 쓴다
+  const spare = {}; // 주기마다 바꿔 줄 후보 id(뽑기와 같은 순서) — 지금 목록 · 이번 주기에 받은 것 · 바꿔 버린 것은 빼고
   const pool = {};
   const selected = [];
   for (const per of PERIODS) {
@@ -435,7 +455,11 @@ export async function computeQuestState(M, userId) {
     const all = grouped[per];
     const live = new Set(all.map((q) => String(q._id)));
     const mine = snaps[per];
-    const own = mine.find((s) => s.key === key);
+    // opt.over — 저장하지 않은 바꾸기 결과(테스트 사이트)를 이 주기 목록 대신 쓴다. 이때는 이 주기에 아무것도 쓰지 않는다
+    const over = opt.over?.[per] || null;
+    const own = over ? { key, ...over } : mine.find((s) => s.key === key);
+    const rr = Math.max(0, Math.floor(Number(own?.rr) || 0));
+    const out = new Set((Array.isArray(own?.out) ? own.out : []).map(String));
     // 후보 순서 — 처음 뽑을 때와 빈자리를 채울 때 같은 순서(필요할 때 한 번만 만든다)
     let order = null;
     const ranked = () => {
@@ -485,11 +509,12 @@ export async function computeQuestState(M, userId) {
     const holes = ids.filter(isHole).length;
     if (holes > 0) {
       const taken = new Set(ids);
-      const fill = ranked().map((q) => String(q._id)).filter((id) => !taken.has(id) && !claimedNow(id)).slice(0, holes);
+      // 바꿔 버린 퀘스트(out)도 채우는 후보로 쓰지 않는다 — 바꾼 퀘스트가 빈자리로 되돌아오지 않게
+      const fill = ranked().map((q) => String(q._id)).filter((id) => !taken.has(id) && !claimedNow(id) && !out.has(id)).slice(0, holes);
       if (fill.length) {
         let k = 0;
         const next = ids.map((id) => (!isHole(id) || k >= fill.length ? id : fill[k++]));
-        if (M.QuestPick) {
+        if (M.QuestPick && !over) {
           try {
             // 읽은 목록 그대로일 때만 바꾼다 — 사이트 · 봇이 동시에 채워도 한 번만, 저장된 목록을 다시 읽어 쓴다
             await M.QuestPick.updateOne({ key, ids }, { $set: { ids: next } });
@@ -505,7 +530,18 @@ export async function computeQuestState(M, userId) {
     const chosen = all.filter((q) => idSet.has(String(q._id)));
     // 표시 순서는 관리자가 정한 order 그대로
     chosen.sort((a, b) => (a.order || 0) - (b.order || 0) || (String(a._id) < String(b._id) ? -1 : 1));
-    pool[per] = { total: all.length, shown: chosen.length, pick: picks[per] };
+    cur[per] = { key, ids, rr, out };
+    spare[per] = ranked().map((q) => String(q._id)).filter((id) => !idSet.has(id) && !claimedNow(id) && !out.has(id));
+    // reroll — max: 이 주기 무료 횟수 · used: 바꾼 횟수(무료 · 유료 합) · left: 남은 무료 횟수 ·
+    //    price: 다음 바꾸기 값(남은 무료가 있으면 0, 없으면 그 주기 값 — 값이 0 이면 유료 끔) ·
+    //    can: 지금 바꿀 수 있는지(후보가 있고, 남은 무료가 있거나 유료가 켜져 있어야 — 잔액은 보지 않는다)
+    const left = Math.max(0, rrMax[per] - rr);
+    pool[per] = {
+      total: all.length,
+      shown: chosen.length,
+      pick: picks[per],
+      reroll: { max: rrMax[per], used: rr, left, price: left > 0 ? 0 : rrPrice[per], can: spare[per].length > 0 && (left > 0 || rrPrice[per] > 0) },
+    };
     selected.push(...chosen);
   }
 
@@ -644,10 +680,12 @@ export async function computeQuestState(M, userId) {
       claimed: isClaimed,
       // 보상이 0인 퀘스트는 '목표'일 뿐이라 수령 버튼을 띄우지 않는다. XP 든 POINT 든 하나라도 있으면 받을 수 있어야 한다
       claimable: done && (rewardXp > 0 || rewardPoint > 0) && !isClaimed,
+      // 바꾸기 — 아직 달성하지 않은 퀘스트만(달성 · 수령한 자리를 바꿔 보상을 날리지 않게)
+      rerollable: !!pool[per]?.reroll?.can && !done && !isClaimed,
     };
   });
 
-  return {
+  const base = {
     date: kstToday(),
     keys,
     voiceMin, // 오늘 음성 접속 누적 분 (UI 안내용)
@@ -657,6 +695,51 @@ export async function computeQuestState(M, userId) {
     pool,
     quests: rows,
   };
+
+  // ── 바꾸기(리롤 — 2026-10-11) ──
+  //    · 아직 달성하지 않은 퀘스트 한 자리를 그 주기 후보 중 다음 순서(spare 첫째 — 뽑기와 같은 순서라 직전 주기에 받은 것은 뒤)로 바꾼다
+  //    · 주기마다 rrMax 번은 무료, 다 쓰면 그다음부터 회차마다 rrPrice 빙옥(0 = 유료 끔) · 유료 횟수 제한 없음(후보가 남아 있는 한)
+  //    · 빙옥은 여기서 빼지 않는다 — 부르는 쪽(사이트 app/api/xp/quests)이 먼저 그 주기 값만큼 빼고 opt.paid 로 알린다.
+  //      남은 무료가 없는데 opt.paid 가 그 주기 값과 다르면(안 뺐거나 그사이 값 · 횟수가 바뀜) 402 로 거절한다(부르는 쪽이 되돌린다)
+  //    · rr 은 무료 · 유료 모두 1 오른다(used). 바꿔 버린 퀘스트는 이번 주기에 다시 오지 않는다(out) · 이번 주기에 받은 퀘스트도 오지 않는다
+  //    · 새 퀘스트 진행도는 다른 퀘스트처럼 주기 시작부터 센다(기록으로 세는 방식이라)
+  //    · 저장은 읽은 목록 · 횟수 그대로일 때만(동시에 두 번 눌러도 한 번) — 실패하면 409
+  //    반환: 바뀐 상태 + rerolled { period, from, to, dry, cost(0 = 무료 · 값 = 유료) } · 거절이면 지금 상태 + rerollError { status, error }
+  if (opt.reroll) {
+    const fail = (status, error) => ({ ...base, rerollError: { status, error } });
+    const row = rows.find((q) => q.id === String(opt.reroll));
+    if (!row) return fail(404, "지금 목록에 없는 퀘스트입니다.");
+    if (row.done || row.claimed) return fail(400, "달성한 퀘스트는 바꿀 수 없습니다.");
+    const per = row.period;
+    const c = cur[per];
+    const free = rrMax[per] - c.rr > 0;
+    if (!free && !(rrPrice[per] > 0)) return fail(409, "이번 주기 바꾸기를 다 썼습니다.");
+    const to = spare[per][0];
+    if (!to) return fail(409, "바꿀 수 있는 퀘스트가 없습니다.");
+    const cost = free ? 0 : rrPrice[per];
+    if (cost > 0 && Number(opt.paid) !== cost) return fail(402, `빙옥 ${fmt(cost)}개가 필요합니다.`);
+    const next = c.ids.map((id) => (id === row.id ? to : id));
+    if (!opt.dry) {
+      if (!M.QuestPick) return fail(500, "저장할 수 없습니다.");
+      const res = await M.QuestPick.updateOne(
+        { key: c.key, ids: c.ids, ...(c.rr > 0 ? { rr: c.rr } : { rr: { $in: [null, 0] } }) },
+        { $set: { ids: next, rr: c.rr + 1 }, $addToSet: { out: row.id } }
+      );
+      if (!(res?.modifiedCount > 0)) return fail(409, "목록이 방금 바뀌었습니다. 다시 시도해 주세요.");
+    }
+    const toName = grouped[per].find((q) => String(q._id) === to)?.name || "";
+    const over = opt.dry ? { [per]: { ids: next, rr: c.rr + 1, out: [...c.out, row.id] } } : undefined;
+    // 📌 저장한 뒤에는 다시 세다 실패해도 던지지 않는다 — 던지면 부르는 쪽이 뺀 빙옥을 되돌려 바뀐 채로 공짜가 된다.
+    //    그때는 읽어 둔 상태(바꾸기 전 목록)에 결과만 붙인다(다음 조회가 바뀐 목록)
+    let state = base;
+    try {
+      state = await computeQuestState(M, userId, over ? { over } : {});
+    } catch (e) {
+      console.error("퀘스트 바꾸기 뒤 다시 세기 실패:", e?.message || e);
+    }
+    return { ...state, rerolled: { period: per, from: { id: row.id, name: row.name }, to: { id: to, name: toName }, dry: !!opt.dry, cost } };
+  }
+  return base;
 }
 
 // ═══ 공용 블록 끝 ═══

@@ -11,6 +11,7 @@ import mongoose from "mongoose";
 import { unitThingSet, MAX_PER_ORDER } from "@/lib/unitSale";
 import { revokeFreeRows } from "@/lib/itemRevoke";
 import { parseTargetKeys, resolveTargets, unresolvedMessage, MAX_TARGETS } from "@/lib/adminTargets";
+import { isDraftMode, catalogFindById } from "@/lib/catalogDraft";
 
 // 📌 아이템 수동 지급 — 관리자가 등록된 아이템을 유저에게 바로 준다.
 //    상점 구매와 같은 Purchase 행(itemId "grant")을 만들어 인벤토리·봇 지급 큐가 그대로 처리한다.
@@ -79,8 +80,15 @@ export async function POST(request) {
 
     const b = await request.json().catch(() => ({}));
     const itemId = String(b?.itemId || "").trim();
+    // 📌 지급은 늘 실사이트 아이템으로 — 봇 · 인벤토리가 draft_* 를 모른다(lib/catalogDraft.js). 초안 모드에서 고른 아이템이
+    //    초안에만 있으면(새로 만들고 아직 반영 전) 따로 알린다. 나머지(연결 상품 판정 · Purchase 스냅샷)도 실사이트 값 그대로
     const item = itemId ? await Item.findById(itemId).lean().catch(() => null) : null;
-    if (!item) return NextResponse.json({ success: false, message: "지급할 아이템을 선택해 주세요." }, { status: 400 });
+    if (!item) {
+      if (itemId && isDraftMode() && (await catalogFindById(Item, itemId, { select: { _id: 1 } }))) {
+        return NextResponse.json({ success: false, code: "DRAFT", message: "실사이트 반영 전인 아이템은 지급할 수 없습니다." }, { status: 409 });
+      }
+      return NextResponse.json({ success: false, message: "지급할 아이템을 선택해 주세요." }, { status: 400 });
+    }
     if (item.type === "physical") {
       return NextResponse.json({ success: false, message: "기프트카드는 수동 지급할 수 없습니다." }, { status: 400 });
     }

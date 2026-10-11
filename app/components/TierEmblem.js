@@ -28,7 +28,7 @@ const N = 48;
 const scaleOf = (key, size) => { const [, , w, h] = EMBLEM_BOX[key === "iron" ? "bronze" : key][N]; return Math.min((size * 1.3) / w, size / h); };
 
 /** 등급 엠블럼 · tier = VOICE_TIERS 항목 · onDark: 어두운 바탕(뒤에 은은한 빛) */
-export default function TierEmblem({ tier, size = 24, className = "", muted = false, onDark = true }) {
+export default function TierEmblem({ tier, size = 24, className = "", muted = false, onDark = true, shine = false }) {
   const key = RANK.includes(tier?.key) ? tier.key : "iron";
   const sc = scaleOf(key, size), [bx, by, bw, bh] = EMBLEM_BOX[key][N];
   const W = Math.round(bw * sc), H = Math.round(bh * sc);
@@ -53,6 +53,12 @@ export default function TierEmblem({ tier, size = 24, className = "", muted = fa
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/tier-emblems/${key}-48.png`} alt="" draggable={false}
           style={{ position: "absolute", left: -bx * sc, top: -by * sc, width: N * sc, height: N * sc, maxWidth: "none", imageRendering: "pixelated" }} />
+        {/* 📌 shine — 빛 훑기(2026-10-11): 부모 .tier-emblem 에 마우스를 올리면 빛 줄기가 그림 모양(같은 PNG 를 가림판으로) 안에서만 한 번 지나간다(app/globals.css) */}
+        {shine && (
+          <span className="te-shine" style={{ position: "absolute", left: -bx * sc, top: -by * sc, width: N * sc, height: N * sc, WebkitMaskImage: `url(/tier-emblems/${key}-48.png)`, maskImage: `url(/tier-emblems/${key}-48.png)`, WebkitMaskSize: "100% 100%", maskSize: "100% 100%", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat" }}>
+            <i />
+          </span>
+        )}
       </span>
     </span>
   );

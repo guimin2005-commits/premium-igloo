@@ -269,7 +269,7 @@ function TournamentArticle({ p }: { p: PreviewPost }) {
                   <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/30 to-transparent" />
                 </div>
                 <div className={TOUR_BODY}>
-                  <RenderFormattedText text={p.content} />
+                  <RenderFormattedText text={p.content} dark />
                 </div>
               </section>
             ) : (

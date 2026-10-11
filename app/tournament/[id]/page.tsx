@@ -176,7 +176,7 @@ export default function TournamentDetailPage() {
                   <span className="h-px flex-1 bg-gradient-to-r from-[#00e07b]/30 to-transparent" />
                 </div>
                 <div className="text-gray-300 text-[15px] leading-[1.9] break-keep">
-                  <RenderFormattedText text={post.content} />
+                  <RenderFormattedText text={post.content} dark />
                 </div>
               </section>
             )}

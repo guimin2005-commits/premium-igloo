@@ -1,5 +1,6 @@
 // 📌 티어 아바타 테두리 그림 생성 — public/avatar-borders/<등급 키>.svg(움직임 있음) · lib/avatarFrameArt.js · bot/src/avatarFrameArt.js(정지 그림, 두 파일 같음)
 //    실행: node scripts/gen-avatar-frames.mjs   (그림을 고치면 다시 돌려 결과를 커밋한다. 끝에 찍히는 FRAME_REACH 를 app/components/AvatarFrame.js 에 옮긴다)
+//    할로윈 · A New World 꾸미기 테두리(hwf_* · nwf_*)는 scripts/gen-deco-frames.mjs — 이 파일은 정지 그림 모듈에 그쪽 결과(avatarDecoArt.js)를 합치기만 한다
 //
 //    2026-10-10 운영자 지정 짜임: 지금 티어 엠블럼(scripts/gen-tier-emblems.mjs)을 사진 아래 받침으로 — 가로는 사진 너비 정도, 두께는 세로로만 얇게(세부 그대로).
 //    옆: 마스터부터 「겹선 테」(운영자가 8안 중 고름) — 뿔 · 날개 · 떠다니는 보석 · 위 문장 · 닫힌 고리 · 빛줄기는 반려되어 없음. 마스터부터 받침에서 사진 양옆을 감싸 오르는 빛줄기 + 타고 오르는 빛,
@@ -444,11 +445,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     console.log(T.key.padEnd(12), "크기", g.S.toFixed(2), "SVG", svg.length);
   }
   // 📌 lib/avatarFrameArt.js · bot/src/avatarFrameArt.js — 디스코드 /레벨 · 레벨업 카드(lib/botCards 공용 블록)가 쓰는 정지 그림. 두 파일은 같아야 한다(여기서만 만든다)
+  //    2026-10-10 할로윈 · A New World 꾸미기 테두리(hwf_* · nwf_*)는 scripts/gen-deco-frames.mjs 가 ./avatarDecoArt.js 로 따로 만들고, 여기서 뒤에 합쳐 내보낸다(등급 그림은 그대로)
   const mod = `// 📌 아바타 테두리 정지 그림 — scripts/gen-avatar-frames.mjs 가 만든다(손으로 고치지 말 것). lib/avatarFrameArt.js 와 bot/src/avatarFrameArt.js 는 같은 파일이다
 //    디스코드 이미지 카드(botCards 공용 블록 profileCard)가 쓴다 — 사이트 화면은 public/avatar-borders/<키>.svg(움직임 있음)
-export const FRAME_ART = ${JSON.stringify(art)};
+//    꾸미기 테두리(할로윈 hwf_* · A New World nwf_*)는 ./avatarDecoArt.js(scripts/gen-deco-frames.mjs 가 만듦)를 받아 등급 테두리 뒤에 합친다
+import { DECO_FRAME_ART, DECO_FRAME_REACH } from "./avatarDecoArt.js";
+const TIER_FRAME_ART = ${JSON.stringify(art)};
+export const FRAME_ART = { ...TIER_FRAME_ART, ...DECO_FRAME_ART };
 // 그림이 사진 가운데에서 뻗는 거리(칸, 128칸 · 구멍 48칸) [위, 아래, 옆] — 카드가 사진 크기 · 자리를 맞출 때 쓴다(app/components/AvatarFrame FRAME_REACH 와 같은 값)
-export const FRAME_REACH = ${JSON.stringify(reach)};
+const TIER_FRAME_REACH = ${JSON.stringify(reach)};
+export const FRAME_REACH = { ...TIER_FRAME_REACH, ...DECO_FRAME_REACH };
 `;
   writeFileSync(join(root, "lib", "avatarFrameArt.js"), mod);
   writeFileSync(join(root, "bot", "src", "avatarFrameArt.js"), mod);

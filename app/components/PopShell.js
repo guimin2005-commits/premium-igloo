@@ -18,6 +18,8 @@ export const POP_THEME = {
   ink: { bg: "#131313", glow: "rgba(233,30,63,0.2)", grid: true },
   // 무늬 · 번짐 없는 잉크 — 강화 창(2026-10-11 "AI 같아서 별로" 뒤 단색으로)
   plain: { bg: "#131313" },
+  // 격자만(번짐은 창이 glow 로 정한다) — 인벤토리(2026-10-11 "격자는 필요할 듯" · 번짐은 고른 아이템 색)
+  inkGrid: { bg: "#131313", grid: true },
   pass: {
     bg: "linear-gradient(160deg, #2a1a4d 0%, #1a1233 42%, #120d22 100%)",
     glow: "rgba(155,107,255,0.4)",
@@ -53,8 +55,10 @@ export const POP_THEME = {
     ].join(","),
   },
 };
+// glow: 번짐 색을 창이 정할 때(테마 번짐 대신) — 예: 인벤토리의 고른 아이템 색. "" 이면 번짐 없음
+// corner: "2xl" 이면 창 모서리 16px(다른 패널과 같은 값 — 인벤토리 2026-10-11 「다듬은 잉크 판」). 기본은 예전 그대로 24px
 // compact: 왼쪽 요약 판 없이 한 칸짜리 창(PC 최대 680px · 높이는 내용만큼, 모바일은 바텀시트 최대 88dvh) — 강화 창
-export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink", compact = false }) => {
+export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink", compact = false, corner = "3xl", glow }) => {
   const closeRef = useRef(null);
   // 열리면 닫기 버튼에 포커스 — 키보드로도 바로 닫고, 탭 순서가 팝업 안에서 시작한다
   useEffect(() => { if (open) closeRef.current?.focus({ preventScroll: true }); }, [open]);
@@ -78,13 +82,14 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] rounded-t-3xl sm:rounded-3xl"}`}
+        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : `sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] ${corner === "2xl" ? "rounded-t-2xl sm:rounded-2xl" : "rounded-t-3xl sm:rounded-3xl"}`}`}
         style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <style>{POP_CSS}</style>
         {t.grid && <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>}
         {t.dots && <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: t.dots }}></div>}
-        {t.glow && <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: t.glow }}></div>}
+        {/* 번짐 — glow 를 주면 테마 색 대신 그 색(인벤토리는 고른 아이템 색, 바뀔 때 부드럽게 넘어간다). glow "" 은 번짐 없음 */}
+        {(glow != null ? glow : t.glow) && <div aria-hidden className="absolute -top-28 -right-16 w-80 h-80 blur-[100px] rounded-full pointer-events-none" style={{ background: glow != null ? glow : t.glow, transition: "background-color .5s ease" }}></div>}
         {t.glow2 && <div aria-hidden className="absolute -bottom-32 -left-20 w-80 h-80 blur-[110px] rounded-full pointer-events-none" style={{ background: t.glow2 }}></div>}
 
         {/* 모바일 바텀시트 손잡이 */}

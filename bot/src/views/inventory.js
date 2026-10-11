@@ -2,8 +2,12 @@
 //    보유 판정은 itemEffects.js 의 ownedItemList(사이트 lib/ownedItems.js 와 같은 규칙)를 그대로 쓴다.
 //    봇은 읽기만 한다 — 절대 저장하지 않는다.
 import { Item, ShopItem, Purchase, UserXp } from "../db.js";
-import { ownedItemList, pickCardSkin } from "../itemEffects.js";
+import { ownedItemList, pickCardSkin, pickAvatarFrame, framesOf, withSeasonFrame, seasonFrameOf, skinsOf, seasonSkinOf, withSeasonSkin } from "../itemEffects.js";
 import { formatUntil } from "../botMessages.js";
+import { SEASONS, seasonEndMs } from "../leveling.js";
+
+// 시즌 티어 테두리 이름 · 색 — 사이트 lib/itemEffects.js FRAMES · lib/voiceTiers.js 색과 같다
+const FRAME_LABEL = { bronze: ["브론즈", "#a06a3c"], silver: ["실버", "#8d99a6"], gold: ["골드", "#c39220"], platinum: ["플래티넘", "#3f9e93"], diamond: ["다이아몬드", "#5a6ad8"], master: ["마스터", "#8557b0"], grandmaster: ["그랜드마스터", "#d8352a"], challenger: ["챌린저", "#2f9cf0"], igloo: ["이글루", "#e0609e"] };
 
 const MAX_LINES = 25; // 설명 한도(4,096자) 안에 넉넉히 — 넘으면 "외 N개"
 const MAX_BADGES = 3; // 사이트 lib/itemEffects.js MAX_BADGES 와 같다
@@ -11,26 +15,47 @@ const MAX_BADGES = 3; // 사이트 lib/itemEffects.js MAX_BADGES 와 같다
 // 이름에 섞인 마크다운 기호가 굵게 · 기울임을 깨지 않게
 const esc = (s) => String(s || "").replace(/([\\*_~|`>])/g, "\\$1");
 
-// 📌 착용 중 — 사이트 app/api/shop/my-items 와 같은 규칙(lib/itemEffects.js perksOfItems · pickCardSkin · pickBadges).
+// 📌 착용 중 — 사이트 app/api/shop/my-items 와 같은 규칙(lib/itemEffects.js perksOfItems · pickCardSkin · pickAvatarFrame · pickBadges).
 //    카드 스킨: 가진 스킨(관리자 순서 · 기프트카드 제외) 중 UserXp.cardSkinPick 으로 직접 고른 것("" 안 고름 · "none" 끔 → 착용 없음). 같은 스킨 키 아이템은 모두 착용
-//    배지: 배지 효과 아이템(관리자 순서) 중 UserXp.badgePick 으로 직접 단 것만(최대 3). 배열이 아니면(안 고름) · [] 는 착용 없음
+//    아바타 테두리: 카드 스킨과 같은 규칙 — UserXp.avatarFramePick
+//    배지: UserXp.badgePick 으로 직접 단 것 중 지금 가진 배지 효과 아이템만(유저가 정한 순서 · 중복 없이 · 최대 3). 배열이 아니면(안 고름) · [] 는 착용 없음
 //    📌 2026-10-04 "3개까지만 달 수 있고, 직접 안 고른 유저는 자동으로도 달리지 않게" — 산 배지도 직접 달기 전에는 착용으로 치지 않는다
 const effectsOf = (item) => (Array.isArray(item?.effects) ? item.effects : []);
 const skinOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "cardSkin" && e.skin)?.skin || ""));
+const frameOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "avatarFrame" && e.frame)?.frame || ""));
 const isBadge = (item) => item?.type !== "physical" && effectsOf(item).some((e) => e?.on === "profileBadge");
+// 📌 단 배지 id — 사이트 lib/itemEffects.js pickBadges 와 같은 규칙. owned: 가진 배지 아이템 id, pick: UserXp.badgePick
+export function pickBadgeIds(owned, pick) {
+  if (!Array.isArray(pick)) return [];
+  const have = new Set(owned);
+  const out = [];
+  for (const raw of pick) {
+    const id = String(raw);
+    if (have.has(id) && !out.includes(id)) out.push(id);
+    if (out.length >= MAX_BADGES) break;
+  }
+  return out;
+}
 async function wornOf(userId, owned) {
   const skins = [];
+  const frames = [];
   for (const { item } of owned) {
-    const s = skinOf(item);
-    if (s && !skins.includes(s)) skins.push(s);
+    for (const s of skinsOf(skinOf(item))) if (!skins.includes(s)) skins.push(s); // 등급 전체(rank_all) 아이템은 9종
+    for (const f of framesOf(frameOf(item))) if (!frames.includes(f)) frames.push(f); // 전체(all) 아이템은 9종
   }
   const badges = owned.filter(({ item }) => isBadge(item)).map(({ item }) => String(item._id));
-  if (!skins.length && !badges.length) return { skin: "", badges: new Set() };
-  const pick = await UserXp.findOne({ userId }, { cardSkinPick: 1, badgePick: 1 }).lean();
-  const skin = pickCardSkin(skins, pick?.cardSkinPick || "");
-  // 직접 단 배지만 — 안 골랐으면 자동으로 달지 않는다(사이트 lib/itemEffects pickBadges 와 같다)
-  const on = Array.isArray(pick?.badgePick) ? new Set(pick.badgePick.map(String)) : null;
-  return { skin, badges: new Set((on ? badges.filter((id) => on.has(id)) : []).slice(0, MAX_BADGES)) };
+  // 📌 시즌 티어 테두리(seasonFrame)는 아이템이 없어도 있을 수 있어 늘 읽는다
+  const pick = await UserXp.findOne({ userId }, { cardSkinPick: 1, avatarFramePick: 1, badgePick: 1, seasonFrame: 1 }).lean();
+  const skin = pickCardSkin(withSeasonSkin(skins, pick), pick?.cardSkinPick || ""); // 시즌 등급 카드 스킨(seasonFrame 등급)도 가진 것
+  const frame = pickAvatarFrame(withSeasonFrame(frames, pick), pick?.avatarFramePick || "");
+  // 직접 단 배지만 — 안 골랐으면 자동으로 달지 않는다(사이트 lib/itemEffects pickBadges 와 같다 — badgePick 순서대로 가진 것만 · 중복 없이 · 최대 3)
+  // 시즌 티어 테두리 — 같은 테두리를 아이템으로도 가졌으면 따로 줄을 만들지 않는다(사이트와 같다)
+  const sk = seasonFrameOf(pick);
+  const season = sk && !frames.includes(sk) ? { key: sk, n: Number(pick.seasonFrame.season) || 0 } : null;
+  // 시즌 등급 카드 스킨 — 같은 스킨을 아이템으로도 가졌으면 따로 줄을 만들지 않는다(사이트와 같다)
+  const ss = seasonSkinOf(pick);
+  const seasonSkin = ss && !skins.includes(ss) ? { key: ss, tier: sk, n: Number(pick.seasonFrame.season) || 0 } : null;
+  return { skin, frame, badges: new Set(pickBadgeIds(badges, pick?.badgePick)), season, seasonSkin };
 }
 
 /**
@@ -55,32 +80,72 @@ export async function inventoryView(member) {
   const roles = member?.roles?.cache;
   const heldRoles = roles ? [...roles.keys()] : Array.isArray(member?.roles) ? member.roles.map(String) : null;
   const owned = ownedItemList({ purchases, items, shopItems, heldRoles });
+  const worn = await wornOf(userId, owned).catch(() => ({ skin: "", frame: "", badges: new Set(), season: null, seasonSkin: null }));
+  // 📌 시즌 티어 테두리(UserXp.seasonFrame) — 아이템이 아니어도 가진 것으로 한 줄(사이트 인벤토리의 꾸미기 카드와 같다). 다음 시즌 끝(그 결산이 덮어쓴다)
+  if (worn.season) {
+    const [label, color] = FRAME_LABEL[worn.season.key];
+    const next = SEASONS.find((x) => x.number === worn.season.n + 1);
+    owned.push({
+      item: { _id: `season-frame:${worn.season.n}`, name: `아바타 테두리 · ${label}`, type: "cosmetic", icon: `art:tier-frame-${worn.season.key}`, imageUrl: "", color, effects: [{ on: "avatarFrame", frame: worn.season.key }] },
+      expiresAt: next ? new Date(seasonEndMs(next)) : null,
+      pending: false,
+      count: 1,
+      season: true,
+    });
+  }
+  // 📌 시즌 등급 카드 스킨 — 시즌 티어 테두리와 같은 보상(사이트 인벤토리의 꾸미기 카드와 같다)
+  if (worn.seasonSkin) {
+    const [label, color] = FRAME_LABEL[worn.seasonSkin.tier];
+    const next = SEASONS.find((x) => x.number === worn.seasonSkin.n + 1);
+    owned.push({
+      item: { _id: `season-skin:${worn.seasonSkin.n}`, name: `카드 스킨 · ${label} 등급`, type: "cosmetic", icon: `art:tier-skin-${worn.seasonSkin.tier}`, imageUrl: "", color, effects: [{ on: "cardSkin", skin: worn.seasonSkin.key }] },
+      expiresAt: next ? new Date(seasonEndMs(next)) : null,
+      pending: false,
+      count: 1,
+      season: true,
+    });
+  }
 
   // 📌 여러 개 가진 것(1개 단위 상품 · 소모품 — count)은 "**이름** ×N" — 쓰면 줄어드는 것이라 "영구"는 붙이지 않는다(사이트 인벤토리와 같은 표기).
   //    모두 기간제면 가장 빠른 만료(먼저 쓰이는 것)를 붙인다
   //    📌 2026-10-04 #127 — 역할 기간제는 역할을 준 시각부터 센다(features/grantQueue.js grantedEnd). 지급 대기인 기간제 한 건은 만료가 아직 임시라 날짜 대신 "지급 대기"만
-  const lines = owned.slice(0, MAX_LINES).map(({ item, expiresAt, pending, count }) => {
+  const lines = owned.slice(0, MAX_LINES).map(({ item, expiresAt, pending, count, season }) => {
     const name = `**${esc(item.name) || "아이템"}**`;
     if (count > 1) return `${name} ×${count}${expiresAt ? ` · ${formatUntil(expiresAt).slice(0, 10)} 까지` : ""}${pending ? " · 지급 대기" : ""}`;
     if (pending && expiresAt) return `${name} · 지급 대기`;
-    const until = expiresAt ? `${formatUntil(expiresAt).slice(0, 10)} 까지` : "영구";
+    const until = expiresAt ? `${formatUntil(expiresAt).slice(0, 10)} 까지` : season ? "다음 시즌까지" : "영구";
     return `${name} · ${until}${pending ? " · 지급 대기" : ""}`;
   });
   if (owned.length > MAX_LINES) lines.push(`외 ${(owned.length - MAX_LINES).toLocaleString("ko-KR")}개`);
 
-  const worn = await wornOf(userId, owned).catch(() => ({ skin: "", badges: new Set() }));
+  // 📌 2026-10-11 옛 테두리 그림(/avatar-borders/<키>.svg — 예전 추천 아이템이 이미지 칸에 넣었다)은 그 테두리 도트 아이콘으로(사이트 lib/cosmeticArt legacyFrameArtOf 와 같은 규칙 · DB 는 그대로)
+  const TIER_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
+  const DECO_ART = {
+    hwf_pumpkin: "deco-pumpkin-mouth", hwf_crystal: "deco-crystal-ball", hwf_ghost: "deco-ghost-sheet", hwf_candy: "deco-wrapped-candy",
+    hwf_mummy: "deco-mummy", hwf_window: "deco-haunted-window", hwf_blackcat: "deco-black-cat", hwf_patch: "deco-pumpkin-patch", hwf_party: "deco-ghost-party", hwf_witch: "deco-witch-night", hwf_shop: "deco-candy-shop", hwf_grave: "deco-moon-grave", nwf_world: "deco-new-world", nwf_chart: "deco-sea-chart", nwf_airship: "deco-airship",
+  };
+  const legacyFrameArt = (url) => {
+    const m = /^\/avatar-borders\/([a-z0-9_]+)\.svg$/i.exec(String(url || "").trim());
+    if (!m) return "";
+    const k = m[1].toLowerCase();
+    return TIER_KEYS.includes(k) ? `tier-frame-${k}` : DECO_ART[k] || "avatar-frame";
+  };
   const bag = owned.map(({ item, expiresAt, pending, count }) => {
     const skin = skinOf(item);
+    const frame = frameOf(item);
+    // 옛 그림만 뗀다 — 운영자가 고른 아이콘이 있으면 그 아이콘, 비었거나 공용 아이콘이면 테두리 도트 아이콘(사이트 cosmeticIconOf 와 같은 순서)
+    const legacy = legacyFrameArt(item.imageUrl);
+    const generic = ["", "art:card-skin", "art:promo-badge", "art:profile-badge", "art:avatar-frame"].includes(String(item.icon || ""));
     return {
       name: item.name || "",
       type: item.type || "item",
-      icon: item.icon || "",
-      imageUrl: item.imageUrl || "",
+      icon: legacy && generic ? `art:${legacy}` : item.icon || "",
+      imageUrl: legacy ? "" : item.imageUrl || "",
       color: item.color || "",
       count,
       expiresAt,
       pending: !!pending,
-      worn: (!!skin && skin === worn.skin) || worn.badges.has(String(item._id)),
+      worn: (!!worn.skin && skinsOf(skin).includes(worn.skin)) || (!!worn.frame && framesOf(frame).includes(worn.frame)) || worn.badges.has(String(item._id)),
     };
   });
 

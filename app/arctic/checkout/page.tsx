@@ -414,11 +414,13 @@ export default function CheckoutPage() {
                             const st = String(setView.states[i]?.state || "new");
                             return (
                               <li key={c.itemId} className="flex items-baseline justify-between gap-3 text-[12px]">
+                                {/* 분류 · 짧은 이름 — 이름이 같은 구성도 갈리게(상세 구성 칸과 같은 문법) */}
                                 <span className={`min-w-0 truncate font-bold ${st === "owned" ? "text-[#a3a3a3]" : "text-[#5a5a5a]"}`}>
+                                  {splitItemName(info.get(c.itemId)?.name).kind && <span className="text-[#a3a3a3]">{splitItemName(info.get(c.itemId)?.name).kind} · </span>}
                                   {splitItemName(info.get(c.itemId)?.name).short || "아이템"}{c.qty > 1 ? ` ×${c.qty}` : ""}
                                 </span>
                                 <span className={`shrink-0 text-[11px] font-bold tabular-nums ${st === "renew" || st === "upgrade" ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
-                                  {st === "owned" ? "보유 중 · 빠짐" : st === "renew" ? `${durationLabel(c.days)} 연장` : st === "upgrade" ? "무제한 전환" : durationLabel(c.days)}
+                                  {st === "owned" ? "보유 중 · 빠짐" : st === "renew" ? `기간제 보유 · ${durationLabel(c.days)} 연장` : st === "upgrade" ? "기간제 보유 · 무제한으로" : durationLabel(c.days)}
                                 </span>
                               </li>
                             );

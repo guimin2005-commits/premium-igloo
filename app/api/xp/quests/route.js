@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
-import { getQuestState, ATTEND_QUEST_ID, PERIOD_LABEL } from "@/lib/quests";
+import { getQuestState, rerollQuestPaid, ATTEND_QUEST_ID, PERIOD_LABEL } from "@/lib/quests";
 import { periodKey } from "@/lib/kst";
 import QuestClaim from "@/models/QuestClaim";
 import Payout from "@/models/Payout";
@@ -134,6 +134,24 @@ export async function POST(request) {
     if (maint) return maint;
 
     const body = await request.json().catch(() => ({}));
+
+    // ── [바꾸기] body { reroll: questId } — 아직 달성하지 않은 퀘스트 한 자리를 다른 퀘스트로 ──
+    //    주기마다 정한 횟수는 무료, 다 쓰면 그다음부터 회차마다 그 주기 값(빙옥 — BotSetting questRerollPrice*, 0 = 유료 끔).
+    //    차감 → 바꾸기 → 실패 시 환불 · 원장은 lib/quests.js rerollQuestPaid 한 곳에서. 잔액이 모자라면 409 "빙옥이 부족합니다."
+    //    📌 테스트 사이트(localhost — VERCEL 없음)는 실사이트와 같은 DB 라 빼지도 저장하지도 않고 바뀐 모습만 돌려준다(dry — 새로 고치면 원래대로)
+    //    XP 획득 중단 중에도 바꿀 수는 있다(보상을 주는 일이 아니라서)
+    //    📌 body.expectedPoint — 화면이 보여 준 이번 값(pool[주기].reroll.price). 유료 회차는 이 값이 맞을 때만 뺀다(없으면 402 PRICE_REQUIRED · 다르면 409 PRICE_CHANGED)
+    //    응답 data — 퀘스트 상태 + rerolled { period, from, to, dry, cost } + balance { point }(바꾼 뒤 잔액)
+    if (body?.reroll) {
+      await connectToDatabase();
+      const closedR = await denyIfLevelClosed(session);
+      if (closedR) return closedR;
+      const dry = !process.env.VERCEL;
+      const r = await rerollQuestPaid(session.user.id, body.reroll, { dry, expectedPoint: body.expectedPoint });
+      if (!r.ok) return NextResponse.json({ success: false, error: r.error, ...(r.code ? { code: r.code } : {}), data: r.data }, { status: r.status });
+      return NextResponse.json({ success: true, data: r.data });
+    }
+
     const all = body?.all === true;
     const questId = String(body?.questId || "").trim();
     if (!all && !questId) {

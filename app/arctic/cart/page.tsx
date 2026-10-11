@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ArcticStoreBar from "../ArcticStoreBar";
@@ -17,6 +17,7 @@ import { isBundle } from "@/lib/bundle";
 import { splitItemName } from "@/lib/itemName";
 import { CART_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
+import { saleEnded } from "@/lib/saleWindow";
 
 import { ADMIN_USERS } from "@/lib/admins";
 
@@ -100,6 +101,16 @@ export default function CartPage() {
 
   const [toast, setToast] = useState("");
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast((cur) => (cur === t ? "" : cur)), 1800); };
+  // 📌 판매가 끝났거나 목록에서 빠진 상품은 위 정리가 장바구니에서 뺀다 — 말없이 사라지지 않게 한 번 알린다(불러올 때 한 번 · 뺀 것이 있을 때만).
+  //    정리 전 장바구니(이 그림의 cart)에서 목록에 없는 상품 수를 센다 — 중복 줄 · 담을 수 없는 세트(목록엔 있다)는 세지 않는다
+  const goneNoted = useRef(false);
+  useEffect(() => {
+    if (!cartLoaded || !validIds || goneNoted.current) return;
+    goneNoted.current = true;
+    const listed = new Set(items.map((i) => String(i._id)));
+    const gone = new Set(cart.filter((c) => c && !listed.has(String(c.itemId))).map((c) => String(c.itemId))).size;
+    if (gone > 0) flash(`판매가 끝난 상품 ${gone}개를 뺐습니다`);
+  }, [cartLoaded, validIds]); // eslint-disable-line react-hooks/exhaustive-deps
   // 1개 단위 수량 조절 — 끝에 닿으면 알린다(1회 최대 · 재고)
   const stepQty = (item: any, cur: number, d: number) => {
     const next = cur + d;
@@ -114,15 +125,19 @@ export default function CartPage() {
     [cart, items]
   );
 
-  // 📌 결제할 상품만 골라서 진행 — 기본은 전체 선택
-  const [selected, setSelected] = useState<string[]>([]);
-  useEffect(() => { setSelected(rows.map((r) => r.itemId)); }, [rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 📌 판매 종료 줄 — 관리자만 보인다(관리자는 ?all=1 로 받아 끝난 상품도 목록에 있다). 결제 화면은 판매 중 목록으로 받아 이 줄을 뺀다 —
+  //    여기서도 고르기 · 합계에서 빼고 「판매 종료」 딱지만 단다(삭제는 그대로)
+  const buyable = rows.filter((r) => !saleEnded(r.item));
 
-  const picked = rows.filter((r) => selected.includes(r.itemId));
-  const allChecked = rows.length > 0 && picked.length === rows.length;
+  // 📌 결제할 상품만 골라서 진행 — 기본은 전체 선택(판매 종료 줄은 빼고)
+  const [selected, setSelected] = useState<string[]>([]);
+  useEffect(() => { setSelected(buyable.map((r) => r.itemId)); }, [rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const picked = buyable.filter((r) => selected.includes(r.itemId));
+  const allChecked = buyable.length > 0 && picked.length === buyable.length;
   const toggleOne = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  const toggleAll = () => setSelected(allChecked ? [] : rows.map((r) => r.itemId));
+  const toggleAll = () => setSelected(allChecked ? [] : buyable.map((r) => r.itemId));
 
   // 정가 합 — 줄마다 고른 기간의 정가(무제한이면 무제한 옵션 값). 결제 화면과 같은 basePrice
   //    📌 빙옥 전용 줄은 따로 — 일반 줄은 XP 로, 빙옥 전용 줄은 빙옥으로 합친다(lib/shopPay planPayment — 결제 화면 · 서버와 같은 계산)
@@ -195,13 +210,13 @@ export default function CartPage() {
                   }`}>
                     {allChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </span>
-                  전체 선택 <span className="text-[#8a8a8a] font-medium">({picked.length}/{rows.length})</span>
+                  전체 선택 <span className="text-[#8a8a8a] font-medium">({picked.length}/{buyable.length})</span>
                 </button>
                 <div className="flex items-center gap-3">
-                  {picked.length > 0 && picked.length < rows.length && (
+                  {picked.length > 0 && picked.length < buyable.length && (
                     <span className="hidden sm:inline text-[11px] font-bold text-[#e91e3f]">선택한 {picked.reduce((n, r) => n + (r.qty || 1), 0)}개만 결제</span>
                   )}
-                  {picked.length > 0 && picked.length < rows.length && (
+                  {picked.length > 0 && picked.length < buyable.length && (
                     <button onClick={() => setCart((prev) => prev.filter((c) => !selected.includes(c.itemId)))}
                       className="text-[12px] font-bold text-[#8a8a8a] hover:text-[#d01634] transition-colors">선택 삭제</button>
                   )}
@@ -212,7 +227,8 @@ export default function CartPage() {
               <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden divide-y divide-[#ededed]">
                 {rows.map((r) => {
                   const sp = salePrice(r.item, r.days);
-                  const on = selected.includes(r.itemId);
+                  const ended = saleEnded(r.item); // 관리자만 — 고를 수 없고 합계에서 빠진다
+                  const on = !ended && selected.includes(r.itemId);
                   const list = basePrice(r.item, r.days);
                   const discounted = sp < list;
                   const renew = isRenewal(orders, r.item, r.days);
@@ -252,7 +268,7 @@ export default function CartPage() {
                     // 📌 flex-wrap(폰만) — 1개 단위 줄은 합계 · 수량 조절을 아래 한 줄(basis-full)로 내린다. 오른쪽 칸에 두면 1회 최대 폭을
                     //    잡은 합계 칸이 375px 에서 이름을 두세 글자로 줄인다. PC(sm~)는 한 줄 그대로
                     <div key={r.itemId} className={`p-5 flex flex-wrap sm:flex-nowrap gap-4 items-center transition-colors ${on ? "" : "bg-[#f2f2f2]"}`}>
-                      <button onClick={() => toggleOne(r.itemId)} aria-label="선택" className="shrink-0">
+                      <button onClick={() => toggleOne(r.itemId)} disabled={ended} aria-label="선택" className="shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
                         <span className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center transition-colors ${
                           on ? "bg-[#e91e3f] border-[#e91e3f]" : "bg-white border-[#ededed]"
                         }`}>
@@ -271,6 +287,7 @@ export default function CartPage() {
                         <Link href={itemHref} className="truncate hover:underline underline-offset-4">{splitItemName(r.item.name).short}</Link>
                         {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
+                        {ended && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#a3a3a3] text-white text-[10px] font-black">판매 종료</span>}
                       </h3>
                         {r.item.description && (
                           <p className="text-[11px] text-[#8a8a8a] truncate mt-0.5">{r.item.description}</p>

@@ -17,6 +17,31 @@ import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
 import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
+import { VOICE_TIERS, getTier } from "@/lib/voiceTiers";
+
+// 📌 지난 시즌 기록(UserXp.seasonHistory — 봇 시즌 결산이 붙인다) — 최근 시즌부터, 시즌마다 한 줄. 등급 키가 낯설면 그때 레벨로 다시 고른다
+const TIER_KEYS = new Set(VOICE_TIERS.map((t) => t.key));
+const toInt = (v) => Math.max(0, Math.floor(Number(v) || 0));
+const seasonHistoryOf = (doc) => {
+  const seen = new Set();
+  return (Array.isArray(doc?.seasonHistory) ? doc.seasonHistory : [])
+    .map((h) => {
+      const level = toInt(h?.level);
+      const at = h?.at ? new Date(h.at) : null;
+      return {
+        season: toInt(h?.season),
+        name: String(h?.name || ""),
+        level,
+        tier: TIER_KEYS.has(h?.tier) ? h.tier : getTier(level).key,
+        rank: toInt(h?.rank),
+        total: toInt(h?.total),
+        at: at && !Number.isNaN(at.getTime()) ? at.toISOString() : null,
+      };
+    })
+    .filter((h) => h.season > 0 && !seen.has(h.season) && seen.add(h.season))
+    .sort((a, b) => b.season - a.season)
+    .slice(0, 20);
+};
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
 export async function GET() {
@@ -136,6 +161,8 @@ export async function GET() {
         avatarFrame,
         // 승급 화면을 마지막으로 본 등급 인덱스(null = 아직 안 적음) — app/level/PromoOverlay
         promoSeen: Number.isInteger(doc?.promoSeen) ? doc.promoSeen : null,
+        // 지난 시즌 기록 — 최근 시즌부터 [{ season, name, level, tier, rank, total, at }] (등급 창 「지난 시즌」 탭)
+        seasonHistory: seasonHistoryOf(doc),
         rolesSynced: heldRoles !== null,
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {

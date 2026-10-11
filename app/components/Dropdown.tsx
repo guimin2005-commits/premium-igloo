@@ -23,6 +23,7 @@ export default function Dropdown({
   className = "",
   buttonClassName = "",
   maxHeight = 260,
+  up = false,
 }: {
   value: string;
   options: DropdownOption[];
@@ -32,9 +33,35 @@ export default function Dropdown({
   className?: string;
   buttonClassName?: string;
   maxHeight?: number;
+  up?: boolean; // 목록을 위로 연다(화면 아래에 붙은 띠 안 등)
 }) {
   const [open, setOpen] = useState(false);
+  // 📌 아래가 모자라면 위로 연다(2026-10-11 검토 — 스크롤 틀 안 아래쪽 줄의 목록이 틀에 잘렸다). 열 때 한 번 잰다: 가장 가까운 스크롤 틀(없으면 창) 안에서
+  //    아래 남은 높이가 목록 높이보다 작고 위가 더 넓으면 위로. up 을 준 곳은 늘 위로
+  const [flip, setFlip] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const toggle = () => {
+    if (!open && !up && ref.current) {
+      const btn = ref.current.getBoundingClientRect();
+      let top = 0;
+      let bottom = window.innerHeight;
+      for (let el = ref.current.parentElement; el; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY;
+        if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+          const r = el.getBoundingClientRect();
+          top = Math.max(top, r.top);
+          bottom = Math.min(bottom, r.bottom);
+          break;
+        }
+      }
+      const need = Math.min(maxHeight, options.length * 42 + 12);
+      const below = bottom - btn.bottom;
+      const above = btn.top - top;
+      setFlip(below < need && above > below);
+    }
+    setOpen(!open);
+  };
+  const upward = up || flip;
   const selected = options.find((o) => o.value === value && !o.group);
 
   // 바깥 클릭 · Esc 로 닫기
@@ -74,7 +101,7 @@ export default function Dropdown({
     <div ref={ref} className={`relative ${open ? "z-50" : ""} ${className}`}>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={`${button} ${buttonClassName} flex items-center justify-between gap-3 text-left outline-none transition-colors`}
@@ -100,7 +127,7 @@ export default function Dropdown({
         <div
           role="listbox"
           style={{ maxHeight }}
-          className={`absolute top-full left-0 w-full mt-1.5 rounded-xl overflow-y-auto overflow-x-hidden z-50 ${panel} ${scrollbar}`}
+          className={`absolute ${upward ? "bottom-full mb-1.5" : "top-full mt-1.5"} left-0 w-full rounded-xl overflow-y-auto overflow-x-hidden z-50 ${panel} ${scrollbar}`}
         >
           {options.map((o, i) =>
             o.group ? (

@@ -39,11 +39,14 @@ const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
 
 // 같은 물건을 가리키는 조건 — 이 구매를 이은 연장분 · 같은 역할 · 같은 아이템(itemRef) · 같은 상품(itemId)
 //   itemId 는 ShopItem id 일 때만 — "grant"(운영진 지급) · "season-pass" 는 표시 값이라 서로 다른 물건이다
+//   📌 세트 구성 건(사이트 lib/bundle.js — itemId = 세트 상품 id, itemRef = 구성 아이템, bundleName = 세트 이름)은 같은 세트의 다른 구성과
+//      itemId 가 같다 — itemRef 가 있으면 같은 itemId 중 세트 구성 건은 빼고(itemRef 가 같은 건은 위 itemRef 조건으로 잡힌다), 낱개 건은 그대로
 export function sameThing(p) {
   const or = [{ renewOf: String(p._id) }];
   if (p.roleId) or.push({ roleId: p.roleId });
   if (p.itemRef) or.push({ itemRef: p.itemRef });
-  if (OBJECT_ID_RE.test(String(p.itemId || ""))) or.push({ itemId: String(p.itemId) });
+  const itemId = String(p.itemId || "");
+  if (OBJECT_ID_RE.test(itemId)) or.push(p.itemRef ? { itemId, bundleName: { $in: ["", null] } } : { itemId });
   return or;
 }
 
@@ -141,10 +144,11 @@ async function processPurchases(guild) {
   for (const p of rows) {
     const bundle = !p.roleId && !!p.orderId;
     const bundleFilter = bundle
-      ? { userId: p.userId, orderId: p.orderId, itemId: p.itemId, roleId: { $in: ["", null] }, status: "pending" }
+      ? { userId: p.userId, orderId: p.orderId, itemId: p.itemId, itemRef: p.itemRef || { $in: ["", null] }, roleId: { $in: ["", null] }, status: "pending" }
       : null;
     if (bundle) {
-      const key = `${p.userId}|${p.orderId}|${p.itemId}`;
+      // 📌 세트 상품(사이트 lib/bundle.js)은 구성마다 itemId 가 세트 상품 id 로 같다 — itemRef(구성 아이템)까지 키에 넣어 아이템마다 따로 지급 · DM
+      const key = `${p.userId}|${p.orderId}|${p.itemId}|${p.itemRef || ""}`;
       if (handled.has(key)) continue;
       handled.add(key);
     }
@@ -511,7 +515,7 @@ async function processRefunds(guild) {
   for (const p of rows) {
     const bundle = !p.roleId && !!p.orderId && !!p.revokedAt;
     if (bundle) {
-      const key = `${p.userId}|${p.orderId}|${p.itemId}|${new Date(p.revokedAt).getTime()}`;
+      const key = `${p.userId}|${p.orderId}|${p.itemId}|${p.itemRef || ""}|${new Date(p.revokedAt).getTime()}`; // 세트 구성은 아이템마다(itemRef)
       if (handled.has(key)) continue;
       handled.add(key);
     }
@@ -542,7 +546,7 @@ async function processRefunds(guild) {
       const set = { $set: { roleDetached: true, error: "" } };
       const done = bundle
         ? await Purchase.updateMany(
-            { userId: p.userId, orderId: p.orderId, itemId: p.itemId, revokedAt: p.revokedAt, roleId: { $in: ["", null] }, status: "refunded", roleDetached: { $ne: true } },
+            { userId: p.userId, orderId: p.orderId, itemId: p.itemId, itemRef: p.itemRef || { $in: ["", null] }, revokedAt: p.revokedAt, roleId: { $in: ["", null] }, status: "refunded", roleDetached: { $ne: true } },
             set
           )
         : await Purchase.updateOne({ _id: p._id, status: "refunded", roleDetached: { $ne: true } }, set);

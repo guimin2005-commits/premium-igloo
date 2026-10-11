@@ -8,10 +8,9 @@ import ItemIcon from "../components/ItemIcon";
 import { RingGauge } from "../components/Hud";
 import { VOICE_TIERS, getTierIndex, tierPaint } from "@/lib/voiceTiers";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
-import { currentSeason } from "@/lib/season";
 import { itemTypeColor } from "@/lib/items";
-import { MAX_BADGES } from "@/lib/itemEffects";
 import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
+import { MAX_BADGES } from "@/lib/itemEffects";
 
 // 📌 꾸미기 상품의 '적용 모습' 부품 — 상품 상세 '적용 미리보기'(AppliedPreview, 효과 아래)가 쓴다.
 //    레벨 페이지 프로필 카드 · 프로필 헤더 · 랭킹 줄과 같은 모양을 가볍게 다시 그린 것(그 화면들을 통째로 옮기지 않는다 — 고칠 때 모양만 맞춘다).
@@ -22,6 +21,8 @@ export type Badge = { itemId: string; name: string; icon: string; imageUrl: stri
 export type Who = {
   name: string; image: string; level: number; rank: number; total: number; xp: number;
   cur: number; req: number; need: number; attendCount: number; voiceSeconds: number; badges: Badge[];
+  // 오늘 획득 XP — 로그인했으면 내 기록(/api/xp/my-logs today.total — 부르는 쪽이 넘긴다), 아니면 예시 값. 모르면 null(「—」)
+  today: number | null;
 };
 
 // /api/xp/me 의 data 중 미리보기가 쓰는 칸
@@ -31,7 +32,22 @@ type MeData = {
 };
 export type ShopItemLike = { _id?: unknown; itemId?: string; name?: string; icon?: string; itemImageUrl?: string; color?: string; type?: string };
 
-export function whoOf(user: { name?: string | null; image?: string | null } | null | undefined, meRaw: unknown): Who {
+// 오늘 획득 XP — 로그인했으면 내 기록(/api/xp/my-logs 의 today.total) 한 번 읽는다. 로그인 안 했거나 아직 못 읽었으면 null(예시 사람은 whoOf 가 예시 값)
+export function useTodayXp(on: boolean): number | null {
+  const [v, setV] = useState<number | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    fetch("/api/xp/my-logs", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (live && d?.success) setV(Math.max(0, Number(d?.data?.today?.total) || 0)); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [on]);
+  return on ? v : null;
+}
+
+export function whoOf(user: { name?: string | null; image?: string | null } | null | undefined, meRaw: unknown, today: number | null = null): Who {
   const me = meRaw && typeof meRaw === "object" ? (meRaw as MeData) : null;
   if (user && me) {
     const lp = me.levelProgress || {};
@@ -42,6 +58,7 @@ export function whoOf(user: { name?: string | null; image?: string | null } | nu
       cur: Number(lp.current) || 0, req: Math.max(1, Number(lp.required) || 1), need: Number(lp.needToNext) || 0,
       attendCount: Number(me.attendCount) || 0, voiceSeconds: Number(me.voiceSeconds) || 0,
       badges: Array.isArray(me.badges) ? me.badges : [],
+      today,
     };
   }
   const s = COSMETIC_SAMPLE;
@@ -50,7 +67,7 @@ export function whoOf(user: { name?: string | null; image?: string | null } | nu
   const cur = Math.floor(req * s.progress);
   return {
     name: s.name, image: "/logo.png", level: s.level, rank: s.rank, total: s.total, xp: base + cur,
-    cur, req, need: req - cur, attendCount: s.attendCount, voiceSeconds: s.voiceSeconds, badges: [],
+    cur, req, need: req - cur, attendCount: s.attendCount, voiceSeconds: s.voiceSeconds, badges: [], today: s.today,
   };
 }
 
@@ -119,7 +136,7 @@ const GRID_DARK: React.CSSProperties = {
   maskImage: "radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%)",
 };
 
-function Avatar({ who, px, text }: { who: Who; px: number; text: string }) {
+export function Avatar({ who, px, text }: { who: Who; px: number; text: string }) {
   return who.image ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={who.image} alt="" draggable={false} className="rounded-full object-cover bg-white/10" style={{ width: px, height: px }} />
@@ -139,11 +156,12 @@ export function ProfileCardPreview({ who, skin, frame }: { who: Who; skin: strin
   const pct = Math.min(100, Math.floor((who.cur / Math.max(1, who.req)) * 100));
   const topPct = who.total ? Math.max(1, Math.ceil((who.rank / who.total) * 100)) : null;
   const max = who.level >= 1000;
+  // 📌 레벨 페이지 프로필 카드와 같은 네 칸 · 같은 차례(2026-10-11 운영자 "적용 미리보기에서 시즌으로 표기되는 것" — 실제 카드엔 「시즌」 칸이 없고 「오늘 획득」이 있다)
   const stats = [
-    { l: "누적 XP", v: who.xp.toLocaleString() },
+    { l: "현재 XP", v: who.xp.toLocaleString() },
+    { l: "오늘 획득", v: who.today == null ? "—" : `+${who.today.toLocaleString()}`, hot: (who.today || 0) > 0 },
     { l: "누적 출석", v: `${who.attendCount.toLocaleString()}일` },
     { l: "누적 음성 시간", v: fmtVoiceTime(who.voiceSeconds) },
-    { l: "시즌", v: `S${currentSeason().number}` },
   ];
   return (
     <div
@@ -220,7 +238,7 @@ export function ProfileCardPreview({ who, skin, frame }: { who: Who; skin: strin
           {stats.map((st, i) => (
             <div key={st.l} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
               <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
-              <p className="text-lg font-black text-white tabular-nums tracking-tight leading-none truncate">{st.v}</p>
+              <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : "text-white"}`}>{st.v}</p>
             </div>
           ))}
         </div>
@@ -239,10 +257,11 @@ const BadgeIcons = ({ list, size, gap }: { list: Badge[]; size: number; gap: str
   </span>
 );
 
-// ── 프로필 배지 — 프로필 헤더(이름 옆 28px)와 랭킹 한 줄(이름 옆 16px). 이 상품의 배지가 맨 앞, 내가 단 배지는 그 뒤(최대 MAX_BADGES) ──
-export function BadgePreview({ who, badge }: { who: Who; badge: Badge }) {
+// ── 프로필 배지 — 프로필 헤더(이름 옆 28px)와 랭킹 한 줄(이름 옆 16px). 이 상품의 배지만(2026-10-11 운영자 "배지 미리보기에서 이미 장착 되어 있는 건 좀 빼" — 내가 단 배지는 안 보인다) ──
+//    📌 badges — 상품(세트면 구성)의 배지들. 이름 옆 자리 수(MAX_BADGES = 3)까지 앞에서부터 — 산 뒤 다 달았을 때 모습. 넷 이상이면 어떤 셋을 앞에 둘지는 부르는 쪽이 정한다
+export function BadgePreview({ who, badges }: { who: Who; badges: Badge[] }) {
   const tier = VOICE_TIERS[getTierIndex(who.level)];
-  const list = [badge, ...who.badges.filter((b) => b && b.itemId !== badge.itemId)].slice(0, MAX_BADGES);
+  const list = (Array.isArray(badges) ? badges : []).slice(0, MAX_BADGES);
   const pct = Math.min(1, Math.max(0, who.cur / Math.max(1, who.req)));
   const C = 2 * Math.PI * 46; // 링 둘레 (viewBox 100, r 46) — 프로필 헤더와 같다
   const medal = who.rank > 0 && who.rank <= 3;

@@ -46,11 +46,23 @@ const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", 
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 
 // 📌 주기별 무작위 노출 개수 — 등록된 퀘스트 중 매 주기마다 이 개수만큼 뽑아 보여준다 (0이면 전부)
+//    rr: 주기별 퀘스트 바꾸기(리롤) 무료 횟수 — 유저마다 그 주기에 아직 달성하지 않은 퀘스트를 이만큼 무료로 다른 퀘스트로(0 = 무료 없음 · 최대 5, lib/questKinds.js "바꾸기")
+//    price: 무료를 다 쓴 뒤 1회마다 내는 빙옥(0 = 유료 끔 · 0~100 · 횟수 제한 없음) · priceDef: 칸이 없을 때 값(2026-10-11)
 const QUEST_PICK_FIELDS = [
-  { period: "daily", key: "questPickDaily", every: "매일 자정" },
-  { period: "weekly", key: "questPickWeekly", every: "매주 월요일" },
-  { period: "monthly", key: "questPickMonthly", every: "매월 1일" },
+  { period: "daily", key: "questPickDaily", rr: "questRerollDaily", price: "questRerollPriceDaily", priceDef: 1, every: "매일 자정" },
+  { period: "weekly", key: "questPickWeekly", rr: "questRerollWeekly", price: "questRerollPriceWeekly", priceDef: 2, every: "매주 월요일" },
+  { period: "monthly", key: "questPickMonthly", rr: "questRerollMonthly", price: "questRerollPriceMonthly", priceDef: 3, every: "매월 1일" },
 ];
+const PICK_KEYS = QUEST_PICK_FIELDS.flatMap((f) => [f.key, f.rr, f.price]);
+// 📌 무료 바꾸기 칸이 없을 때 값 — 3회(아래 SETTING_DEFAULT questReroll* 와 같은 값. 예전 1 이 칸 · 요약 · 되돌리기 바탕에 남아 있었다)
+const REROLL_FREE_DEF = 3;
+const pickDefault = (k: string) => QUEST_PICK_FIELDS.find((f) => f.price === k)?.priceDef ?? (k.startsWith("questReroll") ? REROLL_FREE_DEF : 0);
+// 주기 요약의 바꾸기 꼬리 — "· 바꾸기 무료 1 · 그다음 빙옥 1" · 무료만 "· 바꾸기 무료 1" · 유료만 "· 바꾸기 빙옥 1" · 둘 다 0 이면 없음
+const rerollSummary = (free: number, price: number) =>
+  free > 0 && price > 0 ? ` · 바꾸기 무료 ${free} · 그다음 빙옥 ${price}`
+  : free > 0 ? ` · 바꾸기 무료 ${free}`
+  : price > 0 ? ` · 바꾸기 빙옥 ${price}`
+  : "";
 
 // 📌 강화 정책 — 채팅(구간 상승)·음성(가산) 각각 단계당 효과·최대 단계·비용 곡선 (lib/enhance.js 와 같은 키)
 const ENHANCE_FIELDS: {
@@ -313,6 +325,12 @@ const SETTING_LABEL: Record<string, string> = {
   questPickDaily: "일일 노출 개수",
   questPickWeekly: "주간 노출 개수",
   questPickMonthly: "월간 노출 개수",
+  questRerollDaily: "일일 무료 바꾸기",
+  questRerollWeekly: "주간 무료 바꾸기",
+  questRerollMonthly: "월간 무료 바꾸기",
+  questRerollPriceDaily: "일일 유료 바꾸기 값",
+  questRerollPriceWeekly: "주간 유료 바꾸기 값",
+  questRerollPriceMonthly: "월간 유료 바꾸기 값",
 };
 // 화면이 비어 있을 때 대신 보여 주던 값 — 비교 · 변경 목록에서도 같은 값으로 친다
 const SETTING_DEFAULT: Record<string, number> = {
@@ -325,6 +343,12 @@ const SETTING_DEFAULT: Record<string, number> = {
   questPickDaily: 0,
   questPickWeekly: 0,
   questPickMonthly: 0,
+  questRerollDaily: 3,
+  questRerollWeekly: 3,
+  questRerollMonthly: 3,
+  questRerollPriceDaily: 1,
+  questRerollPriceWeekly: 2,
+  questRerollPriceMonthly: 3,
   expiryReminderHours: 24,
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, f.def]))),
 };
@@ -841,8 +865,8 @@ export default function AdminBotPage() {
   //    보이지 않은 채 함께 저장됐다 → 불러온 값(스냅샷) 위에 노출 개수만 얹어 보낸다
   const savePicks = async () => {
     if (!settings || !settingsSnap) { notify("설정을 아직 불러오지 못했습니다.", true); return; }
-    const pickKeys = new Set(QUEST_PICK_FIELDS.map((f) => f.key));
-    const picks = Object.fromEntries(QUEST_PICK_FIELDS.map((f) => [f.key, settings[f.key]]));
+    const pickKeys = new Set(PICK_KEYS);
+    const picks = Object.fromEntries(PICK_KEYS.map((k) => [k, settings[k]]));
     const res = await fetch("/api/bot-settings", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...settingsSnap, ...picks }),
     }).catch(() => null);
@@ -861,7 +885,7 @@ export default function AdminBotPage() {
   // 노출 방식 칸 열기/취소 — 취소는 연 시점의 값으로 되돌린다
   const openPicks = () => {
     // 아직 설정을 못 불러왔으면 붙잡을 값이 없다 — 0 으로 채워 두면 취소가 오히려 값을 0 으로 만든다
-    setPickSnapshot(settings ? Object.fromEntries(QUEST_PICK_FIELDS.map((f) => [f.key, settings[f.key] ?? 0])) : null);
+    setPickSnapshot(settings ? Object.fromEntries(PICK_KEYS.map((k) => [k, settings[k] ?? pickDefault(k)])) : null);
     openFormAt("questPick");
   };
   const cancelPicks = () => {
@@ -2223,7 +2247,7 @@ export default function AdminBotPage() {
                       {rows.length === 0
                         ? f.every + " 초기화"
                         : pick > 0
-                        ? `${f.every}마다 유저마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위`
+                        ? `${f.every}마다 유저마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위${on > pick ? rerollSummary(Number(settings?.[f.rr] ?? REROLL_FREE_DEF), Number(settings?.[f.price] ?? f.priceDef)) : ""}`
                         : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
                     </p>
                   </div>
@@ -2855,18 +2879,44 @@ export default function AdminBotPage() {
         {!settings ? loadingRow : QUEST_PICK_FIELDS.map((f) => {
           const total = quests.filter((q) => (q.period || "daily") === f.period && q.enabled).length;
           const pick = Number(settings?.[f.key] ?? 0);
+          const rr = Number(settings?.[f.rr] ?? REROLL_FREE_DEF);
+          const price = Number(settings?.[f.price] ?? f.priceDef);
+          const canSwap = pick > 0 && total > pick;
           return (
-            <Field
-              key={f.key}
-              label={`${PERIOD_LABEL[f.period]} 노출 개수`}
-              hint={pick > 0 ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 유저마다 새로 뽑습니다` : `활성 ${total}개를 전부 보여줍니다`}
-            >
-              <Inline>
-                <input type="number" min={0} max={20} value={settings?.[f.key] ?? 0}
-                  onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={numClass} />
-                개
-              </Inline>
-            </Field>
+            <React.Fragment key={f.key}>
+              <Field
+                label={`${PERIOD_LABEL[f.period]} 노출 개수`}
+                hint={pick > 0 ? `활성 ${total}개 중 ${Math.min(pick, total)}개를 ${f.every}마다 유저마다 새로 뽑습니다` : `활성 ${total}개를 전부 보여줍니다`}
+              >
+                <Inline>
+                  <input type="number" min={0} max={20} value={settings?.[f.key] ?? 0}
+                    onChange={(e) => setSettings({ ...settings, [f.key]: e.target.value })} className={numClass} />
+                  개
+                </Inline>
+              </Field>
+              {/* 📌 무료 바꾸기(리롤) 횟수 — 유저마다 그 주기에 아직 달성하지 않은 퀘스트를 다른 퀘스트로(0 = 무료 없음 · 최대 5). 바꿀 후보가 없으면(전부 노출) 단추가 뜨지 않는다 */}
+              <Field
+                label={`${PERIOD_LABEL[f.period]} 무료 바꾸기`}
+                hint={!canSwap ? "노출 개수가 활성 퀘스트 수보다 적을 때만 바꿀 수 있습니다" : rr > 0 ? `유저마다 ${f.every} 전까지 ${rr}회 무료로 바꿀 수 있습니다` : "무료 바꾸기가 없습니다"}
+              >
+                <Inline>
+                  <input type="number" min={0} max={5} value={settings?.[f.rr] ?? REROLL_FREE_DEF}
+                    onChange={(e) => setSettings({ ...settings, [f.rr]: e.target.value })} className={numClass} />
+                  회
+                </Inline>
+              </Field>
+              {/* 📌 유료 바꾸기 값 — 무료를 다 쓴 뒤 1회마다 빙옥(회차마다 같은 값 · 횟수 제한 없음 · 0 = 유료 끔 · 0~100) */}
+              <Field
+                label={`${PERIOD_LABEL[f.period]} 유료 바꾸기 값`}
+                hint={price > 0 ? `무료 바꾸기를 다 쓴 뒤 1회마다 빙옥 ${price}개 · 횟수 제한 없음` : "유료 바꾸기를 쓰지 않습니다"}
+              >
+                <Inline>
+                  <input type="number" min={0} max={100} value={settings?.[f.price] ?? f.priceDef}
+                    onChange={(e) => setSettings({ ...settings, [f.price]: e.target.value })} className={numClass} />
+                  빙옥
+                </Inline>
+              </Field>
+            </React.Fragment>
           );
         })}
       </EditPane>

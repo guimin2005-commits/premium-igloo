@@ -1,10 +1,20 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
-import { normalizeTiers, DEFAULT_UNLOCK_PRICE, MAX_REWARD_DAYS } from "@/lib/seasonPass";
+import { normalizeTiers, rewardsOf, DEFAULT_UNLOCK_PRICE, MAX_REWARD_DAYS } from "@/lib/seasonPass";
 import SeasonPass from "@/models/SeasonPass";
+import Item from "@/models/Item";
+
+// 📌 아이템 보상은 실사이트 Item 기준(상품 초안 lib/catalogDraft.js — 시즌 패스는 초안 밖이라 저장이 바로 실사이트에 뜬다).
+//    새로 넣은 보상의 아이템이 실사이트에 없으면(초안에만 있는 새 아이템 등) 저장하지 않는다 — 반영 전 아이템을 받으면
+//    수령(grantReward)이 "보상을 찾을 수 없습니다"로 실패한다. itemName 은 서버가 실사이트 이름으로 채운다(초안 이름이 새지 않게).
+//    이미 저장된 티어에 있던 아이템은 그대로 둔다(이름도 찾을 때만 바꾼다)
+const NOT_LIVE_ITEM = "실사이트 반영 전인 아이템은 보상으로 저장할 수 없습니다.";
+const itemRewardsOf = (tiers) =>
+  (Array.isArray(tiers) ? tiers : []).flatMap((t) => [...rewardsOf(t?.free), ...rewardsOf(t?.paid)]).filter((r) => r.kind === "item");
 
 // 저장한 문서를 화면이 그대로 다시 그릴 수 있는 모양으로 (계약: { enabled, unlockPrice, tiers })
 // 각 티어에는 tid 가 실려 나간다 — 화면은 편집·정렬·삭제 뒤에도 이 값을 그대로 되돌려 보내야 한다
@@ -63,6 +73,19 @@ export async function PUT(request) {
         return NextResponse.json({ success: false, message: `아이템 기간은 ${MAX_REWARD_DAYS.toLocaleString()}일 이하로 입력해 주세요.` }, { status: 400 });
       }
       const n = normalizeTiers(b.tiers, cur?.nextTid);
+      // 아이템 보상 — 실사이트 Item 으로 확인하고 이름을 실사이트 값으로(위 NOT_LIVE_ITEM 설명)
+      const rewards = n.tiers.flatMap((t) => [...t.free, ...t.paid]).filter((r) => r.kind === "item");
+      if (rewards.length) {
+        const ids = [...new Set(rewards.map((r) => r.itemId))];
+        const valid = ids.filter((v) => mongoose.isValidObjectId(v));
+        const live = valid.length ? await Item.find({ _id: { $in: valid } }, { name: 1 }).lean() : [];
+        const nameOf = new Map(live.map((i) => [String(i._id), i.name]));
+        const had = new Set(itemRewardsOf(cur?.tiers).map((r) => r.itemId));
+        if (ids.some((id) => !nameOf.has(id) && !had.has(id))) {
+          return NextResponse.json({ success: false, message: NOT_LIVE_ITEM }, { status: 400 });
+        }
+        for (const r of rewards) if (nameOf.has(r.itemId)) r.itemName = String(nameOf.get(r.itemId) || "").trim();
+      }
       $set.tiers = n.tiers;
       // 발급된 번호를 함께 저장해야 다음 저장 때 같은 tid 를 다시 내주지 않는다
       $set.nextTid = n.nextTid;

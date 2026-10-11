@@ -2,7 +2,8 @@
 
 import { FRAME_OF } from "@/lib/itemEffects";
 
-// 📌 아바타 테두리 — 사진 위에 겹쳐 그리는 티어 테두리(public/avatar-borders/<키>.svg, scripts/gen-avatar-frames.mjs 가 그림).
+// 📌 아바타 테두리 — 사진 위에 겹쳐 그리는 티어 테두리(public/avatar-borders/<키>.svg, scripts/gen-avatar-frames.mjs 가 그림)
+//    · 할로윈 · A New World 꾸미기 테두리(hwf_* · nwf_*, scripts/gen-deco-frames.mjs — 같은 자리 규칙, 사진 뒤 층은 그림 안에서 사진 원 밖으로만 잘라 둠).
 //    그림은 128칸 정사각형, 가운데 구멍 지름 48칸 → 사진 지름(px)의 128/48 배로 사진 가운데에 둔다.
 //    overlap: 구멍을 사진보다 살짝 작게(기본 0.92) — 테두리 안쪽 외곽선이 사진 가장자리에 걸쳐 틈이 보이지 않게.
 //    부모는 position: relative(사진과 같은 가운데)여야 한다. 누르기 · 스크린리더에는 없는 장식
@@ -11,9 +12,15 @@ export const FRAME_HOLE = 48;
 export const frameSizeOf = (px, overlap = 0.92) => Math.round((px * overlap * FRAME_GRID) / FRAME_HOLE);
 
 // 📌 그림이 가운데에서 뻗는 거리(칸, 128칸 기준) [위, 아래, 옆, 옆(테두리 몸만 — 반짝이 · 빛무리 빼고)]. 그림(scripts/gen-avatar-frames.mjs)을 고치면 다시 잰다(실행하면 끝에 찍힌다)
+//    할로윈(hwf_*) · A New World(nwf_*) 꾸미기 테두리는 scripts/gen-deco-frames.mjs 가 찍는 DECO_FRAME_REACH(같은 128칸 판 단위 — 그림 칸은 시안 그대로라 판 칸과 크기가 다르지만 잴 때 바꿔 둔다)
 export const FRAME_REACH = {
   bronze: [0, 34, 30, 30], silver: [0, 35, 31, 31], gold: [0, 35, 32, 32], platinum: [0, 37, 32, 32], diamond: [0, 37, 33, 33],
   master: [36, 37, 47, 34], grandmaster: [47, 39, 35, 34], challenger: [41, 42, 49, 35], igloo: [46, 40, 52, 38],
+  hwf_pumpkin: [46, 32, 37, 37], hwf_crystal: [36, 41, 29, 29], hwf_ghost: [50, 42, 38, 38], hwf_candy: [46, 43, 41, 41], hwf_mummy: [34, 40, 38, 38],
+  hwf_window: [49, 32, 36, 36], hwf_blackcat: [35, 33, 24, 24],
+  // 2026-10-11 카드 짝 테두리 6종(운영자 "다 넣어") — scripts/gen-deco-frames.mjs 가 잰 값(DECO_FRAME_REACH)
+  hwf_patch: [29, 34, 31, 31], hwf_party: [26, 32, 29, 29], hwf_witch: [37, 31, 37, 37], hwf_shop: [26, 29, 31, 31], hwf_grave: [28, 30, 35, 35], nwf_world: [21, 28, 34, 34],
+  nwf_chart: [31, 30, 34, 34], nwf_airship: [31, 30, 32, 32],
 };
 
 // 📌 테두리를 낀 사람만 사진 칸에 더할 여백(px) — 카드 모서리에 잘리거나 옆 이름 · 칩에 닿지 않게(2026-10-06 "닉네임이나 표기 되는 걸 조금 수정").

@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { presetKeyOf, isPresetKey, itemTypeColor, artKeyOf } from "@/lib/items";
 import { itemArtBody, artGridOf, ART_GRID } from "@/lib/itemArt";
 import { ICON_PATHS } from "./Icons";
+import { legacyFrameArtOf, isGenericCosmeticIcon } from "@/lib/cosmeticArt";
 
 // 📌 아이템 아이콘 한 곳 — 인벤토리 슬롯·상점 카드·상품 상세·관리자 목록이 전부 이걸로 그린다.
 //    우선순위: 이미지(둥근 사각) > 일러스트("art:<key>") > 프리셋 SVG("svg:<key>") > 이모지·텍스트 > 유형 기본 SVG.
@@ -165,7 +166,12 @@ export default function ItemIcon({
   const c = color || (type === "level" ? "#ff5c77" : type ? itemTypeColor(type) : "currentColor");
   const opacity = dim ? 0.35 : 1;
 
-  if (imageUrl) {
+  // 📌 옛 테두리 그림(/avatar-borders/<키>.svg — 예전 추천 아이템이 이미지 칸에 넣었다)은 그림으로 그리지 않는다(lib/cosmeticArt legacyFrameArtOf — DB 는 그대로).
+  //    운영자가 고른 아이콘이 있으면 그 아이콘(아래 순서 그대로), 아이콘이 비었거나 공용이면 그 테두리 도트 아이콘
+  const legacyFrame = legacyFrameArtOf(imageUrl);
+  if (legacyFrame && isGenericCosmeticIcon(icon)) return <ArtIcon k={legacyFrame} size={size} className={`shrink-0 ${className}`} style={{ opacity, ...style }} />;
+
+  if (imageUrl && !legacyFrame) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img

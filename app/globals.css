@@ -126,3 +126,21 @@ input[type="number"] {
 .no-bar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-bar::-webkit-scrollbar { display: none; }
 
+
+/* 📌 등급 엠블럼 빛 훑기(2026-10-11 운영자 "싹 하고 지나가는 반짝 효과") — 레벨 카드 등급 줄(.tier-emblem)에 마우스를 올릴 때마다 한 번.
+      빛 줄기는 엠블럼 그림 모양 안에서만 보인다(TierEmblem shine — 같은 PNG 를 가림판으로). 띠는 단색 세 겹(옅게 · 진하게 · 옅게)이라 번진 광택이 아니다 */
+.te-shine { pointer-events: none; }
+.te-shine > i {
+  position: absolute; top: -50%; left: -80%; width: 46%; height: 200%; opacity: 0;
+  transform: rotate(20deg);
+  background: linear-gradient(90deg, transparent 0 18%, rgba(255,255,255,.38) 18% 36%, rgba(255,255,255,.9) 36% 64%, rgba(255,255,255,.38) 64% 82%, transparent 82% 100%);
+}
+.tier-emblem:hover .te-shine > i { animation: teSweep .7s cubic-bezier(.3,.6,.35,1) forwards; }
+@keyframes teSweep { 0% { left: -80%; opacity: 1; } 99% { opacity: 1; } 100% { left: 135%; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tier-emblem:hover .te-shine > i { animation: none; } }
+
+/* 📌 상품 카드 그림 확대(마우스 올림) — transform: scale 은 도트 아이콘을 비트맵으로 늘려 흐려졌다(2026-10-11 운영자 "흐릿해지는 거 없애").
+   등록한 변수 --pz 를 넘기면 매 프레임 크기 자체가 바뀌어(app/arctic/CardArt — 폭 · inset 계산) 도트가 또렷하다 */
+@property --pz { syntax: "<number>"; inherits: true; initial-value: 1; }
+.pz-zoom { transition: --pz 500ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+@media (hover: hover) { .group:hover .pz-zoom { --pz: 1.03; } }

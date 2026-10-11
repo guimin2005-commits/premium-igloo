@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { playTone } from "@/lib/sfx";
@@ -8,7 +8,7 @@ import ItemIcon from "./ItemIcon";
 import TierEmblem from "./TierEmblem";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { ICON_PATHS } from "./Icons";
-import { PopShell, PopTab, AdminReset } from "./PopShell";
+import { PopShell, AdminReset } from "./PopShell";
 import {
   SKIN_OF, SKIN_NONE, FRAME_OF,
   MAX_BADGES, badgeSlotsOf, badgeOrderOf, firstEmptySlot, pickSlot, nextEmptySlot, putBadgeAt, takeBadgeAt,
@@ -129,6 +129,66 @@ const untilOf = (it) =>
 //    📌 ×N — 1개 단위 상품 · 소모품 묶음(서버 my-items 의 count). 모서리 배지 대신 이 줄 맨 앞에 글자로
 const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt || it.count > 1;
 
+// 📌 2026-10-11 「다듬은 잉크 판」(운영자 "다듬으니까 좋네") — 칸 · 상세 이름은 유형 머리말(카드 스킨 · 배지 …)을 뗀 이름.
+//    유형은 탭 · 상세의 유형 글자(invKindOf)가 알려 준다. 떼고 남는 글자가 없으면 원래 이름 그대로. title(마우스 올림)은 원래 이름
+const NAME_HEAD_RE = /^(카드\s*스킨|아바타\s*테두리|프로필\s*배지|배지|테두리)\s*·\s*/;
+export const invShortName = (it) => {
+  const n = String(it?.name || "");
+  const s = n.replace(NAME_HEAD_RE, "");
+  return s.trim() ? s : n;
+};
+// 📌 「꾸미기」 안 고르기(위 탭은 지금 개수로 고정 — 2026-10-11 "고정 시키고 그 내부에서 고르는 게 나아") — 가진 종류만 칩으로
+export const COSMETIC_KINDS = [
+  { id: "skin", label: "카드 스킨" },
+  { id: "frame", label: "테두리" },
+  { id: "badge", label: "배지" },
+  { id: "etc", label: "기타" },
+];
+export const cosmeticKindOf = (it) =>
+  it.skinKey || it.skinKeys?.length ? "skin" : it.frameKey || it.frameKeys?.length ? "frame" : it.badgeId ? "badge" : "etc";
+// 상세 이름 위 유형 글자
+//    📌 효과 키가 없는 꾸미기(관리자 미리보기 — 효과 없이 이름 · 아이콘만 온다)는 뗀 머리말로 — 머리말을 떼고 「꾸미기」만 남아 무엇인지 모르게 되지 않게
+const HEAD_KIND = { 카드스킨: "카드 스킨", 아바타테두리: "아바타 테두리", 테두리: "아바타 테두리", 프로필배지: "프로필 배지", 배지: "프로필 배지" };
+export const invKindOf = (it) => {
+  if (it.source === "level") return invTierOf(it) ? "등급 보상" : "레벨 보상";
+  if (it.skinKey || it.skinKeys?.length) return "카드 스킨";
+  if (it.frameKey || it.frameKeys?.length) return "아바타 테두리";
+  if (it.badgeId) return "프로필 배지";
+  const head = (it.type || it.kind) === "cosmetic" ? NAME_HEAD_RE.exec(String(it.name || ""))?.[1].replace(/\s+/g, "") : "";
+  if (head && HEAD_KIND[head] && invShortName(it) !== String(it.name || "")) return HEAD_KIND[head];
+  return itemTypeLabel(it.type || it.kind);
+};
+
+// 📌 인벤토리 탭 — 밑줄 탭(2026-10-11 운영자 "밑줄로 기~": 알약 대신 글자만, 고른 탭에 흰 밑줄 · 번호 없음). 다른 창(시즌 패스 …)은 PopTab 알약 그대로.
+//    밑줄은 탭 줄 아래 선(PopShell 탭 줄 border-b)에 닿게 — 탭 줄 위아래 여백(py-4)만큼 늘려 둔다(-my-4 · h-16). 고른 탭도 굵기가 같아 글자 폭이 안 바뀐다
+//    📌 탭 줄(PopShell)에 tablist 가 없어 role="tab" 대신 눌림 단추(aria-pressed — 정렬 · 칩과 같은 결). 키보드 포커스는 글자 둘레 테(밑줄 그림자를 안 덮게)
+const InvTab = ({ on, onClick, label }) => (
+  <button
+    type="button"
+    aria-pressed={on}
+    onClick={onClick}
+    className={`group shrink-0 -my-4 mr-3.5 h-16 inline-flex items-center text-[13px] font-extrabold whitespace-nowrap transition-colors outline-none focus-visible:text-white ${on ? "text-white" : "text-white/40 hover:text-white/75"}`}
+    style={{ boxShadow: on ? "inset 0 -2px 0 #ffffff" : "none" }}
+  >
+    <span className="rounded-sm group-focus-visible:outline-2 group-focus-visible:outline-offset-4 group-focus-visible:outline-white/60">{label}</span>
+  </button>
+);
+
+// 📌 칸 틀 「홈 칸」(2026-10-11 운영자가 시안 A 를 골랐다 — 둥근 회색 테 칸은 "싼티나"):
+//    각진 칸이 판에 파인 모양 — 판(#131313)보다 어두운 바닥 + 위 · 왼쪽 안쪽 그늘 + 아래 · 오른쪽 안쪽 밝은 선 + 바깥 1px 선.
+//    고른 칸은 바깥 선 대신 흰 2px. 빈 칸 · 상세 큰 칸도 같은 틀
+const SLOT_BG = "#0c0c0c";
+// 📌 창 번짐 — 고른 아이템 색(2026-10-11 "붉은 번짐 말고도 그냥 아이템 색상 따라서 나오게"). 고른 게 없으면 투명(번짐 자리는 남겨 색이 부드럽게 넘어가게)
+export const invGlowOf = (it) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(it ? invAccentOf(it) : "");
+  return m ? `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},0.24)` : "rgba(0,0,0,0)";
+};
+// ring: 바깥 테만 바꿀 때(배지 창 — 끌어다 놓는 중인 칸은 흐린 흰 2px). 문자열을 잘라 붙이지 않게 인자로 받는다
+const slotShadow = (on, empty = false, ring = "") =>
+  `${ring || (on ? "0 0 0 2px #ffffff" : `0 0 0 1px ${empty ? "#1f1f1f" : "#262626"}`)}, inset 2px 2px 0 rgba(0,0,0,0.55)${empty ? "" : ", inset -1px -1px 0 rgba(255,255,255,0.06)"}`;
+// 📌 키보드 포커스 테 — 칸은 그림자(box-shadow)로 테를 그려 ring 이 안 보이므로 outline. outline-none 이 테 모양(--tw-outline-style)까지 지우므로 solid 를 다시 준다
+const SLOT_FOCUS = "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70";
+
 // 📌 가방 칸 하나 — 가방 격자와 아이템 등록 미리보기가 같은 칸을 쓴다(onClick 이 없으면 누를 수 없는 칸)
 const InvSlot = ({ it, on, onClick }) => {
   const dead = it.status === "pending" || it.status === "missing";
@@ -139,15 +199,11 @@ const InvSlot = ({ it, on, onClick }) => {
     <Tag
       {...(onClick ? { type: "button", onClick } : {})}
       title={it.name}
-      className={`relative aspect-square rounded-xl flex flex-col items-center justify-center px-1.5 transition-all outline-none focus:outline-none ${
-        on ? "-translate-y-0.5" : onClick ? "hover:-translate-y-0.5" : ""
-      }`}
-      style={{
-        background: dead ? "rgba(255,255,255,0.03)" : `linear-gradient(160deg, ${accent}2e, ${accent}0d)`,
-        // 고른 칸은 흰 테두리 — ring 클래스는 이 인라인 그림자에 덮여 안 보였다
-        boxShadow: `${on ? "0 0 0 2px rgba(255,255,255,0.75), " : ""}${dead ? "inset 0 0 0 1px rgba(255,255,255,0.07)" : `inset 0 0 0 1px ${accent}44`}`,
-      }}
+      className={`relative aspect-square flex flex-col items-center justify-center px-1.5 transition-[filter] ${SLOT_FOCUS} ${onClick && !on ? "hover:brightness-125" : ""}`}
+      style={{ background: SLOT_BG, boxShadow: slotShadow(on) }}
     >
+      {/* 📌 유형 색은 칸 아래 얇은 띠로만(2026-10-11 「홈 칸」) — 지급 대기 · 확인 필요는 띠 없이 */}
+      {!dead && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] pointer-events-none" style={{ background: accent }}></span>}
       {/* 아이콘 자리는 늘 28px — 등급 문장(32)은 이 자리 가운데서 위아래로 2px 씩 넘친다(문장 그림에 여백이 있어 괜찮다).
           아이템 아이콘(28)과 칸마다 높이가 달라 아이콘이 오르내리지 않게 */}
       <span aria-hidden className="mb-1.5 h-7 flex items-center justify-center">
@@ -158,8 +214,9 @@ const InvSlot = ({ it, on, onClick }) => {
              늘어뜨리는 건 한 줄까지 — 상태 줄이 있으면 이름은 한 줄(말줄임), 좁은 폰 칸에서도 칸 밖으로 넘치지 않게 */}
       <span className="relative w-full h-[12.5px]">
         <span className="absolute inset-x-0 top-0 flex flex-col items-center">
-          <span className={`w-full text-[10px] font-black leading-tight text-center ${hasSlotStatus(it) ? "line-clamp-1" : "line-clamp-2"} ${dead ? "text-white/35" : "text-white/85"}`}>
-            {it.name}
+          {/* 이름은 낱말 단위로 줄바꿈(break-keep — "테/두리"처럼 끊기지 않게), 한 낱말이 칸보다 길 때만 그 안에서 */}
+          <span className={`w-full text-[10px] font-black leading-tight text-center break-keep [overflow-wrap:anywhere] ${hasSlotStatus(it) ? "line-clamp-1" : "line-clamp-2"} ${dead ? "text-white/35" : "text-white/85"}`}>
+            {invShortName(it)}
           </span>
           {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
           {hasSlotStatus(it) && (
@@ -186,30 +243,41 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, skinCur = "", on
   const lines = Array.isArray(it.effectLines) ? it.effectLines.filter(Boolean) : [];
   // 📌 스킨 · 배지 · 테두리 중 둘 이상인 아이템은 버튼이 여럿 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
   const both = [it.skinKey || it.skinKeys?.length, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
+  // 단추가 하나라도 있을 때만 단추 칸(빈 칸이 여백만 차지하지 않게) — 아래 단추들의 조건과 같다
+  const hasActions = !compact && !!((it.expiresAt && it.renewId) || it.skinKey || it.skinKeys?.length > 1 || it.badgeId || it.frameKey || it.frameKeys?.length > 1);
   const wearBtn = (on) =>
     `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
       on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
     }`;
   return (
     <div className="min-w-0">
-      <div
-        className={`${compact ? "w-16 h-16 rounded-xl mb-3.5" : "w-24 h-24 rounded-2xl mb-5"} flex items-center justify-center`}
-        style={{ background: `linear-gradient(160deg, ${accent}33, ${accent}0f)`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
-      >
-        <InvIcon it={it} size={compact ? 30 : 46} color={accent} dim={it.status !== "completed"} />
+      {/* 📌 2026-10-11 「다듬은 잉크 판」 — 이름 위 유형 글자(그 색) · 이름은 머리말을 뗀 것 · 칸과 같은 옅은 단색 바탕.
+             폰(가방)은 큰 아이콘 옆에 이름(위쪽이 덜 길게), PC · 미리보기(compact)는 위아래 */}
+      <div className={compact ? "" : "flex items-center gap-3.5 sm:block"}>
+        <div
+          className={`relative ${compact ? "w-16 h-16 mb-3.5" : "w-[72px] h-[72px] sm:w-24 sm:h-24 shrink-0 sm:mb-5"} flex items-center justify-center`}
+          style={{ background: SLOT_BG, boxShadow: slotShadow(false) }}
+        >
+          <InvIcon it={it} size={compact ? 30 : 46} color={accent} dim={it.status !== "completed"} />
+          {it.status === "completed" && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] pointer-events-none" style={{ background: accent }}></span>}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-black leading-none mb-1.5" style={{ color: accent }}>{invKindOf(it)}</p>
+          <p className={`${compact ? "text-[16px]" : "text-[17px] sm:text-[20px]"} font-black text-white leading-snug break-keep [overflow-wrap:anywhere]`}>{invShortName(it)}</p>
+          <p className="text-[12px] font-bold text-white/50 mt-1.5 leading-relaxed break-keep break-words whitespace-pre-line">{invSubLabel(it)}</p>
+        </div>
       </div>
-      <p className={`${compact ? "text-[16px]" : "text-[20px]"} font-black text-white leading-snug break-keep break-words`}>{it.name}</p>
-      <p className="text-[12px] font-bold text-white/50 mt-2 leading-relaxed break-keep break-words whitespace-pre-line">{invSubLabel(it)}</p>
 
-      <div className={`${compact ? "mt-4" : "mt-5"} space-y-3`}>
-        <div className="flex items-center justify-between gap-3">
+      {/* 상태 · 기간 · 만료 · 남은 기간 · 레벨 — 줄 사이 가는 선 */}
+      <div className={`${compact ? "mt-4" : "mt-5"} border-t border-white/[0.08]`}>
+        <div className="flex items-center justify-between gap-3 h-9 border-b border-white/[0.08]">
           <span className="text-[11px] font-bold text-white/45">상태</span>
           <span className={`text-[12px] font-black ${it.status === "missing" ? "text-[#ff5c77]" : it.status === "pending" ? "text-white/60" : "text-emerald-400"}`}>
             {it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "보유 중"}
           </span>
         </div>
         {/* 📌 여러 개 묶음(count — 1개 단위 · 소모품)은 기간 줄 자리에 수량 — 줄 수가 그대로라 상세가 늘지 않는다 */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 h-9 border-b border-white/[0.08]">
           <span className="text-[11px] font-bold text-white/45">{it.count != null ? "수량" : "기간"}</span>
           <span className="text-[12px] font-black text-white/80 tabular-nums">
             {it.count != null
@@ -219,11 +287,11 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, skinCur = "", on
         </div>
         {it.expiresAt && !it.provisional && (
           <>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 h-9 border-b border-white/[0.08]">
               <span className="text-[11px] font-bold text-white/45">만료</span>
               <span className="text-[12px] font-black text-white/70 tabular-nums">{untilOf(it)}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 h-9 border-b border-white/[0.08]">
               <span className="text-[11px] font-bold text-white/45">남은 기간</span>
               <span className={`text-[12px] font-black tabular-nums ${dday <= 3 ? "text-[#ff5c77]" : "text-white/70"}`}>
                 D-{dday}
@@ -231,6 +299,16 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, skinCur = "", on
             </div>
           </>
         )}
+        {it.rewardLevel != null && (
+          <div className="flex items-center justify-between gap-3 h-9 border-b border-white/[0.08]">
+            <span className="text-[11px] font-bold text-white/45">레벨</span>
+            <span className="text-[12px] font-black tabular-nums text-white/70">Lv.{it.rewardLevel}</span>
+          </div>
+        )}
+      </div>
+
+      {/* 연장 · 착용 · 배지 설정 — 줄 목록 아래 */}
+      <div className={hasActions ? "mt-3.5 space-y-3" : "hidden"}>
         {/* 📌 연장 — 상품 상세에서 기간을 이어 산다(지금 만료 뒤에 붙는다). 연장할 판매 상품이 있을 때만 서버(my-items)가 renewId 를 준다 */}
         {it.expiresAt && it.renewId && !compact && (
           <Link href={`/arctic/item/${it.renewId}`} onClick={onGo}
@@ -292,12 +370,6 @@ const InvDetail = ({ it, compact = false, onGo, skinOn = false, skinCur = "", on
             })}
           </div>
         )}
-        {it.rewardLevel != null && (
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] font-bold text-white/45">레벨</span>
-            <span className="text-[12px] font-black tabular-nums text-white/70">Lv.{it.rewardLevel}</span>
-          </div>
-        )}
       </div>
 
       {/* 📌 효과 — 서버(/api/shop/my-items)가 붙인 문장(effectLines: 아이템 자체 효과 + 지금 가진 역할의 역할 버프)을 한 줄씩 */}
@@ -327,7 +399,8 @@ export function InventoryItemPreview({ item, effectLines }) {
   const it = { status: "completed", ...item, effectLines: Array.isArray(effectLines) ? effectLines : [] };
   return (
     <div className="relative overflow-hidden rounded-2xl bg-[#131313] flex">
-      <div aria-hidden className="absolute -top-20 -right-12 w-52 h-52 blur-[80px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.2)" }}></div>
+      {/* 번짐은 가방과 같이 이 아이템 색(2026-10-11 — 예전 붉은 번짐 대신) */}
+      <div aria-hidden className="absolute -top-20 -right-12 w-52 h-52 blur-[80px] rounded-full pointer-events-none" style={{ background: invGlowOf(it), transition: "background-color .5s ease" }}></div>
       <div className="relative min-w-0 flex-1 px-4 py-4 border-r border-white/[0.08]">
         <InvDetail it={it} compact />
       </div>
@@ -360,7 +433,7 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
   // 칸 · 상자 그림 재료 — 가방 아이템 우선(가방과 같은 색 · 아이콘), 없으면 서버가 준 단 배지
   const info = new Map([...worn.map((b) => [b.itemId, b]), ...items.map((it) => [it.badgeId, it])]);
   const ownedIds = new Set(items.map((it) => it.badgeId));
-  const short = (n) => String(n || "").replace(/^배지\s*·\s*/, ""); // 창 안 이름은 "배지 · " 머리말 없이
+  const short = (n) => invShortName({ name: n }); // 창 안 이름도 가방 칸과 같이 머리말("배지 · " …) 없이
 
   const closeRef = useRef(null);
   // 열리면 닫기 버튼에 포커스, 닫히면 연 버튼(배지 설정)으로 돌려준다
@@ -430,8 +503,7 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
     commit(next, "take", firstEmptySlot(next));
   };
 
-  const cells = Math.max(8, Math.ceil(items.length / 4) * 4); // 4열 — 빈 자리는 점선 칸으로 채운다
-  const ring = "0 0 0 2px rgba(255,255,255,0.85), 0 0 22px -4px rgba(255,255,255,0.45)";
+  const cells = Math.max(8, Math.ceil(items.length / 4) * 4); // 4열 — 빈 자리는 빈 홈 칸으로 채운다
   return (
     <div
       className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-0 sm:p-6"
@@ -444,11 +516,12 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
         aria-label="배지"
         aria-busy={busy || undefined}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full sm:max-w-[440px] max-h-[86dvh] sm:max-h-[88vh] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)] flex flex-col"
+        className="relative w-full sm:max-w-[440px] max-h-[86dvh] sm:max-h-[88vh] overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)] flex flex-col"
         style={{ background: "#131313", animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
+        {/* 📌 2026-10-11 가방과 같은 판 — 격자 + 번짐은 고른 칸의 배지 색(빈 칸이면 번짐 없음) · 칸은 「홈 칸」 */}
         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
-        <div aria-hidden className="absolute -top-28 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: "rgba(233,30,63,0.2)" }}></div>
+        <div aria-hidden className="absolute -top-28 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none" style={{ background: invGlowOf(slots[sel] ? info.get(slots[sel]) : null), transition: "background-color .5s ease" }}></div>
 
         {/* 모바일 바텀시트 손잡이 */}
         <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
@@ -477,13 +550,13 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
           className="pop-scroll relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 sm:px-7 pt-6"
           style={{ paddingBottom: "max(24px, env(safe-area-inset-bottom))" }}
         >
-          {/* 단 배지 칸 — 1 · 2 · 3번(이름 옆 순서). 고른 칸은 흰 테 · 빛, 빈 칸은 점선 */}
+          {/* 단 배지 칸 — 1 · 2 · 3번(이름 옆 순서). 고른 칸은 흰 2px, 끌어다 놓는 중인 칸은 흐린 흰 테. 배지가 든 칸은 아래 유형색 띠 */}
           <div aria-label="배지 칸" className="flex justify-center gap-3 sm:gap-4">
             {slots.map((id, i) => {
               const b = id ? info.get(id) : null;
               const accent = b ? invAccentOf(b) : "";
               const on = sel === i;
-              const shadow = [on ? ring : "", over === i ? "0 0 0 2px rgba(255,255,255,0.45)" : "", b ? `inset 0 0 0 1px ${accent}55` : ""].filter(Boolean).join(", ");
+              const shadow = slotShadow(on, !b, over === i && !on ? "0 0 0 2px rgba(255,255,255,0.45)" : "");
               return (
                 <button
                   key={i}
@@ -498,13 +571,10 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
                   onDragLeave={() => setOver((v) => (v === i ? -1 : v))}
                   onDrop={dropOnSlot(i)}
                   onClick={() => tapSlot(i)}
-                  className="relative shrink-0 w-[84px] h-[84px] sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center transition-[box-shadow,transform] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-                  style={{
-                    background: b ? `linear-gradient(160deg, ${accent}33, ${accent}0f)` : "rgba(255,255,255,0.02)",
-                    boxShadow: shadow || undefined,
-                  }}
+                  className={`relative shrink-0 w-[84px] h-[84px] sm:w-24 sm:h-24 flex items-center justify-center transition-[box-shadow] duration-150 ${SLOT_FOCUS}`}
+                  style={{ background: SLOT_BG, boxShadow: shadow }}
                 >
-                  {!b && <span aria-hidden className="absolute inset-0 rounded-2xl border border-dashed border-white/20 pointer-events-none"></span>}
+                  {b && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] pointer-events-none" style={{ background: accent }}></span>}
                   <span aria-hidden className={`absolute top-1.5 left-2 text-[10px] font-black tabular-nums leading-none pointer-events-none ${on ? "text-white" : "text-white/40"}`}>{i + 1}</span>
                   {b && <span aria-hidden className="pointer-events-none flex items-center justify-center"><InvIcon it={b} size={46} color={accent} /></span>}
                 </button>
@@ -514,15 +584,14 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
 
           {/* 상자 — 가진 배지 전부. 단 배지는 칸 번호 표식 + 살짝 어둡게 */}
           <div
-            className="mt-6 rounded-2xl p-3 bg-black/25"
-            style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.07)" }}
+            className="mt-6"
             onDragOver={(e) => { if (dragRef.current?.from === "slot") e.preventDefault(); }}
             onDrop={dropOnBox}
           >
             <div className="grid grid-cols-4 gap-2">
               {Array.from({ length: cells }, (_, n) => {
                 const it = items[n];
-                if (!it) return <div key={`empty-${n}`} aria-hidden className="aspect-square rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02]"></div>;
+                if (!it) return <div key={`empty-${n}`} aria-hidden className="aspect-square" style={{ background: SLOT_BG, boxShadow: slotShadow(false, true) }}></div>;
                 const accent = invAccentOf(it);
                 const at = slots.indexOf(it.badgeId);
                 return (
@@ -535,9 +604,10 @@ const BadgeWindow = ({ onClose, items, badges, busy = false, onSave, onTone }) =
                     onDragStart={dragStart(it.badgeId, "box")}
                     onDragEnd={dragEnd}
                     onClick={() => tapBadge(it.badgeId)}
-                    className="relative aspect-square min-w-0 rounded-xl flex flex-col items-center justify-center px-1 transition-transform hover:-translate-y-0.5 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-                    style={{ background: `linear-gradient(160deg, ${accent}2e, ${accent}0d)`, boxShadow: `inset 0 0 0 1px ${accent}44` }}
+                    className={`relative aspect-square min-w-0 flex flex-col items-center justify-center px-1 transition-[filter] hover:brightness-125 ${SLOT_FOCUS}`}
+                    style={{ background: SLOT_BG, boxShadow: slotShadow(false) }}
                   >
+                    <span aria-hidden className={`absolute inset-x-0 bottom-0 h-[3px] pointer-events-none ${at >= 0 ? "opacity-40" : ""}`} style={{ background: accent }}></span>
                     <span className={`w-full flex flex-col items-center pointer-events-none ${at >= 0 ? "opacity-40" : ""}`}>
                       <span aria-hidden className="mb-1.5 h-7 flex items-center justify-center">
                         <InvIcon it={it} size={28} color={accent} />
@@ -676,6 +746,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   useEffect(() => {
     try { const v = localStorage.getItem(INV_SORT_KEY); if (INV_SORTS.some((o) => o.v === v)) setSort(v); } catch {}
   }, []);
+  const [sortOpen, setSortOpen] = useState(false); // 폰 정렬 단추의 목록
   const pickSort = (v) => {
     setSort(v);
     onTone();
@@ -683,18 +754,61 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
   };
 
   const active = groups.find((g) => g.id === tab) || groups[0];
-  const rows = useMemo(() => sortInvRows(active?.items || [], sort), [active, sort]);
+  // 📌 「꾸미기」 안 종류(카드 스킨 · 테두리 · 배지 · 기타) — 가진 종류만, 탭을 바꾸면 전체로(subOn 은 그 종류가 없어지면 전체)
+  const [sub, setSub] = useState("all");
+  const subKinds = useMemo(
+    () => (active?.id === "cosmetic" ? COSMETIC_KINDS.filter((k) => active.items.some((it) => cosmeticKindOf(it) === k.id)) : []),
+    [active]
+  );
+  const subOn = subKinds.length > 1 && subKinds.some((k) => k.id === sub) ? sub : "all";
+  const rows = useMemo(
+    () => sortInvRows(subOn === "all" ? active?.items || [] : (active?.items || []).filter((it) => cosmeticKindOf(it) === subOn), sort),
+    [active, sort, subOn]
+  );
+  // 📌 고른 칸이 목록에서 빠지면(꾸미기 칩으로 거름 · 폴링으로 사라짐) 그리는 자리에서 바로 첫 칸으로 — 상세 · 번짐이 빈 채로 남지 않게.
+  //    첫 칸이 그대로면 아래 효과가 다시 돌지 않아 빈 상세가 남았다. 일부러 비운 것(고른 칸을 다시 누름 · null)은 그대로
+  if (open && sel != null && !rows.some((r) => r.uid === sel)) setSel(rows[0]?.uid ?? null);
   // 열 때 · 탭을 바꿀 때 첫 아이템을 골라 둔다 — 왼쪽 칸이 비지 않게
   useEffect(() => {
     if (!open) { setSel(null); return; }
     setSel((cur) => (cur && rows.some((r) => r.uid === cur) ? cur : rows[0]?.uid ?? null));
   }, [open, tab, rows[0]?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 📌 폰 상세 칸 높이 고정(2026-10-11 운영자 "탭마다 상세 높이 그런 건 수정해야") — 폰은 상세가 칸 격자 위에 쌓여, 고른 아이템마다 상세 높이가 달라
+  //    탭 · 칸을 바꿀 때 격자가 오르내렸다. 가방 아이템 전부의 상세를 보이지 않게 한 번 그려(아래 재는 칸) 가장 긴 높이를 재고, 폰에서는 상세 칸을 그 높이로 잡는다.
+  //    PC 는 상세가 옆 칸이라 격자에 영향이 없어 잡지 않는다(0). 폭이 바뀌면(돌리기 · 창 크기) 다시 잰다.
+  //    📌 높이는 DETAIL_CAP(280px)까지만 — 가장 긴 상세에 다 맞추면 짧은 아이템 아래로 빈 공간이 크게 남았다(운영자 "그게 정상적인 표기야?").
+  //       그보다 긴 상세(9종 테두리 · 효과 줄이 많은 아이템)는 그 칸 안에서 스크롤
+  const measureRef = useRef(null);
+  const DETAIL_CAP = 280;
+  const [detailMin, setDetailMin] = useState(0);
+  const allItems = groups[0]?.items;
+  useLayoutEffect(() => {
+    if (!open) return;
+    const box = measureRef.current;
+    if (!box) return;
+    const measure = () => {
+      if (!window.matchMedia("(max-width: 639px)").matches) { setDetailMin(0); return; }
+      let max = 0;
+      for (const el of box.children) max = Math.max(max, el.offsetHeight);
+      setDetailMin(Math.min(max, DETAIL_CAP));
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(box);
+    window.addEventListener("resize", measure);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+  }, [open, allItems, curSkin, curFrame]);
+
   if (!open) return null;
 
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
-  const slots = Math.max(20, Math.ceil(rows.length / 5) * 5); // 5열 × 4줄 — 커진 창을 채운다
+  // 📌 빈 칸은 마지막 줄을 채우는 만큼만(2026-10-11 운영자 "인벤토리 칸이 너무 남잖아" — 예전엔 20칸까지 채워 몇 개 없는 탭은 빈 칸투성이).
+  //    폰은 4칸 · PC 는 5칸 줄이라 둘 중 큰 수만큼 그리고, 줄 밖 빈 칸은 그 폭에서 숨긴다(emptyOn). 아이템이 없으면 한 줄
+  const rowsM = Math.max(1, Math.ceil(rows.length / 4)) * 4, rowsP = Math.max(1, Math.ceil(rows.length / 5)) * 5;
+  const slots = Math.max(rowsM, rowsP);
+  const emptyOn = (i) => `${i < rowsM ? "block" : "hidden"} ${i < rowsP ? "sm:block" : "sm:hidden"}`;
 
   return (
     <>
@@ -704,26 +818,44 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
       title="인벤토리"
       count={groups[0]?.items.length ?? 0}
       icon="bag"
+      corner="2xl"
+      // 📌 2026-10-11 격자는 두고(운영자 "격자는 필요할 듯") 붉은 번짐 대신 고른 아이템 색 번짐
+      theme="inkGrid"
+      glow={invGlowOf(selItem)}
       // 📌 불러오는 동안은 탭 줄 높이만 잡아 둔다 — 목록이 오면서 탭 줄이 생겨 본문이 한 번 밀려 내려가지 않게
       tabs={groups.length > 1 ? groups.map((g) => (
-        <PopTab key={g.id} on={active?.id === g.id} onClick={() => { onTab(g.id); setSel(null); onTone(); }} label={g.label} n={g.items.length} />
+        // 📌 탭 옆 숫자는 뺀다(2026-10-11 "카테고리 옆에 숫자도 빼고") — 개수는 머리의 전체 수 하나
+        //    지금 탭을 다시 누르면 칩만 「전체」로(고른 칸은 그대로 — 예전엔 고른 칸이 비고 다시 안 골라져 상세가 빈 채로 남았다)
+        <InvTab key={g.id} on={active?.id === g.id} onClick={() => { if (active?.id !== g.id) { onTab(g.id); setSel(null); } setSub("all"); onTone(); }} label={g.label} />
       )) : loading ? <span aria-hidden className="h-8"></span> : null}
       left={
         <>
+        {/* 상세 칸 — 폰에서는 가방에서 가장 긴 상세 높이로 잡아 둔다(detailMin — 격자가 안 오르내리게) */}
+        <div className={`relative flex flex-col sm:flex-1 ${detailMin ? "overflow-y-auto overflow-x-hidden no-bar overscroll-contain" : ""}`} style={detailMin ? { height: detailMin } : undefined}>
         {selItem ? (
           <InvDetail it={selItem} onGo={onClose} skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} skinCur={curSkin} onSkin={saveSkin} skinBusy={skinBusy}
             badgeSlot={selItem.badgeId ? wornIds.indexOf(selItem.badgeId) : -1} onBadgeOpen={openBadges}
             frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} frameCur={curFrame} onFrame={saveFrame} frameBusy={frameBusy} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-0">
-            <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center mb-3">
+            {/* 고른 칸이 없을 때 — 빈 가방 표시만(안내 문장은 운영자 "개짜침"으로 뺐다) */}
+            <span aria-hidden className="w-14 h-14 rounded-2xl border border-dashed border-white/15 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.6">
                 <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <p className="text-[11px] font-bold text-white/30 break-keep">칸을 누르면 여기에 보입니다</p>
           </div>
         )}
+        {/* 재는 칸 — 가방 아이템 전부의 상세를 보이지 않게(높이 0 · 잘림 — 스크롤 길이도 안 늘린다). 폰에서만 쓴다 */}
+        <div ref={measureRef} aria-hidden className="sm:hidden absolute inset-x-0 top-0 h-0 overflow-hidden invisible pointer-events-none">
+          {(allItems || []).map((it) => (
+            <div key={it.uid}>
+              <InvDetail it={it} skinOn={!!it.skinKey && it.skinKey === curSkin} skinCur={curSkin} badgeSlot={it.badgeId ? wornIds.indexOf(it.badgeId) : -1}
+                frameOn={!!it.frameKey && it.frameKey === curFrame} frameCur={curFrame} />
+            </div>
+          ))}
+        </div>
+        </div>
         {onReset && <div className="mt-auto pt-5"><AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 상점 구매 초기화" /></div>}
         </>
       }
@@ -737,14 +869,53 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
     >
       {/* 정렬 — 탭 줄이 아니라 목록 머리에(탭이 밀리지 않게). 고른 것만 밝게, 굵기는 같게
           📌 한 개뿐인 탭에서도 자리는 남긴다(가린다) — 탭을 오갈 때 격자가 이 줄만큼 오르내리지 않게 */}
+      {/* 📌 「꾸미기」 안 고르기 — 같은 줄 왼쪽에 칩(가진 종류가 둘 이상일 때만 · 숫자 없이). 폰에서 넘치면 칩만 옆으로 밀어 본다(정렬은 제자리) */}
       {(groups[0]?.items.length ?? 0) > 1 && (
-        <div role="radiogroup" aria-label="정렬" aria-hidden={rows.length > 1 ? undefined : true} className={`flex justify-end items-center gap-0.5 mb-2.5 -mt-1 ${rows.length > 1 ? "" : "invisible"}`}>
-          {INV_SORTS.map((o) => (
-            <button key={o.v} type="button" role="radio" aria-checked={sort === o.v} onClick={() => pickSort(o.v)}
-              className={`h-7 px-2 rounded-md text-[11px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${sort === o.v ? "text-white" : "text-white/35 hover:text-white/70"}`}>
-              {o.l}
+        <div className="flex items-center gap-3 mb-2.5 -mt-1">
+          {/* 칩이 없는 탭에서는 빈 칸(자리만) — 빈 radiogroup 을 읽어 주지 않게 role 은 칩이 있을 때만 */}
+          <div role={subKinds.length > 1 ? "radiogroup" : undefined} aria-label={subKinds.length > 1 ? "꾸미기 종류" : undefined} className="min-w-0 flex-1 flex items-center gap-1.5 overflow-x-auto no-bar">
+            {subKinds.length > 1 && [{ id: "all", label: "전체" }, ...subKinds].map((k) => {
+              const on = subOn === k.id;
+              return (
+                <button key={k.id} type="button" role="radio" aria-checked={on} onClick={() => { setSub(k.id); onTone(); }}
+                  className={`shrink-0 h-7 px-2.5 rounded-full border text-[11px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${on ? "border-white/70 text-white" : "border-white/15 text-white/45 hover:text-white/75"}`}>
+                  {k.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* 📌 정렬 — 넓은 화면은 세 단추, 폰(640 미만)은 단추 하나 「기본 ▾」(2026-10-11 운영자 "너무 좁아지면 그냥 단추 표기로 해" — 꾸미기 칩과 한 줄에 다 들어가게).
+                 모든 탭에서 같은 모양(탭마다 다르지 않게) */}
+          <div aria-hidden={rows.length > 1 ? undefined : true} className={`shrink-0 relative ${rows.length > 1 ? "" : "invisible"}`}>
+            <div role="radiogroup" aria-label="정렬" className="hidden sm:flex items-center gap-0.5">
+              {INV_SORTS.map((o) => (
+                <button key={o.v} type="button" role="radio" aria-checked={sort === o.v} onClick={() => pickSort(o.v)}
+                  className={`h-7 px-2 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${sort === o.v ? "text-white" : "text-white/35 hover:text-white/70"}`}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
+            <button type="button" aria-haspopup="listbox" aria-expanded={sortOpen} aria-label={`정렬 · ${INV_SORTS.find((o) => o.v === sort)?.l || "기본"}`} onClick={() => { setSortOpen((v) => !v); onTone(); }}
+              className="sm:hidden h-7 pl-2.5 pr-2 rounded-full border border-white/15 text-[11px] font-bold text-white/80 inline-flex items-center gap-1 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+              {INV_SORTS.find((o) => o.v === sort)?.l || "기본"}
+              <svg aria-hidden viewBox="0 0 20 20" className={`w-3 h-3 transition-transform ${sortOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
-          ))}
+            {sortOpen && (
+              <>
+                {/* 바깥을 누르면 닫힘 */}
+                <button type="button" aria-hidden tabIndex={-1} className="sm:hidden fixed inset-0 z-20 cursor-default" onClick={() => setSortOpen(false)} />
+                <div role="listbox" aria-label="정렬" className="sm:hidden absolute right-0 top-full mt-1.5 z-30 min-w-[116px] rounded-2xl bg-[#1d1d1d] border border-white/10 p-1 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+                  {INV_SORTS.map((o) => (
+                    <button key={o.v} type="button" role="option" aria-selected={sort === o.v} onClick={() => { pickSort(o.v); setSortOpen(false); }}
+                      className={`w-full h-9 px-3 rounded-xl text-left text-[12px] font-bold whitespace-nowrap flex items-center justify-between gap-3 transition-colors outline-none focus-visible:bg-white/10 ${sort === o.v ? "text-white bg-white/[0.06]" : "text-white/60 hover:text-white hover:bg-white/[0.04]"}`}>
+                      {o.l}
+                      {sort === o.v && <svg aria-hidden viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
       <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
@@ -752,7 +923,7 @@ export const BagOverlay = ({ open, onClose, groups, tab, onTab, synced, onTone, 
           const it = rows[i];
           if (!it) {
             // 📌 빈 칸은 줄 높이에 맞춰 늘린다 — 좁은 폰에서 이름 두 줄 + 상태 줄 자리로 채운 칸이 정사각형보다 조금 길어져도 같은 줄 바닥이 맞게
-            return <div key={`empty-${i}`} className="aspect-square w-full self-stretch rounded-xl border border-dashed border-white/[0.10] bg-white/[0.02]"></div>;
+            return <div key={`empty-${i}`} className={`aspect-square w-full self-stretch ${emptyOn(i)}`} style={{ background: SLOT_BG, boxShadow: slotShadow(false, true) }}></div>;
           }
           const on = sel === it.uid;
           return <InvSlot key={it.uid || `i-${i}`} it={it} on={on} onClick={() => { setSel(on ? null : it.uid); onTone(); }} />;

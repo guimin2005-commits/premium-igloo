@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
@@ -83,8 +83,16 @@ export default function WishPage() {
 
   // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 안 그러면 개수 배지에 유령 "1" 이 남는다.
   //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
+  // 📌 판매가 끝났거나 목록에서 빠진 상품이 장바구니에서 빠지면 한 번 알린다(장바구니 · 상점 화면과 같은 문구 — 말없이 사라지지 않게)
+  const goneNoted = useRef(false);
   useEffect(() => {
     if (!ready || !validIds) return;
+    if (!goneNoted.current) {
+      goneNoted.current = true;
+      const listed = new Set(items.map((i) => String(i._id)));
+      const gone = new Set(cart.filter((c) => c && !listed.has(String(c.itemId))).map((c) => String(c.itemId))).size;
+      if (gone > 0) { const msg = `판매가 끝난 상품 ${gone}개를 뺐습니다`; setToast(msg); setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800); }
+    }
     setCart((prev) => {
       const seen = new Set<string>();
       const next = prev.filter((c) => {
@@ -94,7 +102,7 @@ export default function WishPage() {
       });
       return next.length === prev.length ? prev : next;
     });
-  }, [ready, validIds]);
+  }, [ready, validIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 서버와 같은 기준 — 만료 · 환불 건은 보유가 아니다 (owned.ts).
   //    기간제만 가진 상품은 다시 담을 수 있다(기간제는 연장 · 무제한은 업그레이드) — 막는 건 무제한 보유뿐

@@ -49,10 +49,15 @@ const ShopItemSchema = new mongoose.Schema({
   // 📌 빙옥 전용 결제 — 켜면 XP 로는 못 산다(기프트카드 같은 시즌 상품). 가격은 그대로 XP 로 저장하고(1 빙옥 = 1,000 XP 의 배수),
   //    화면은 "N 빙옥"으로만 보이며 결제 API 는 빙옥에서만 뺀다 (lib/shopPay.js). 관리자 폼은 빙옥으로 받아 ×1,000 해 저장한다
   pointOnly: { type: Boolean, default: false },
-  // 📌 이벤트 테마 — "halloween" 이면 ARCTIC 「할로윈」 탭에 모인다(2026-10-11 운영자 "이벤트 테마니까 잠깐 운용"). 관리자가 상품 폼에서 켠다. "" = 테마 없음
+  // 📌 이벤트 테마 — 테마 키(lib/shopThemes.js · Setting "shopThemes")면 ARCTIC 그 테마 탭에 모인다(2026-10-11 운영자 "이벤트 테마니까 잠깐 운용" → 만들 수 있는 테마).
+  //    관리자가 상품 폼에서 고른다. "" = 테마 없음. 지운 테마 키는 테마 없음으로 친다(한꺼번에 고쳐 쓰지 않는다 — 저장 API 가 다음 저장 때 "" 로)
   theme: { type: String, default: "" },
+  // 📌 세트 카드 그림 모양(세트만, 2026-10-11) — "" = 선물 상자(대표가 상자에서 고개) · "hero" = 대표 하나(+ 작은 구성 알약). app/arctic/CardArt BundleArt
+  setArt: { type: String, default: "" },
   discountPct: { type: Number, default: 0 },     // 할인율 % (0이면 할인 없음)
   discountUntil: { type: Date, default: null },  // 할인 종료 시각 — 지나면 할인이 저절로 끝난다(null 이면 기한 없음). lib/shopPricing discountActive
+  // 📌 판매 종료 시각 — 지나면 상점에서 빠지고 구매가 막힌다(null 이면 끝 없음). lib/saleWindow.js saleEnded (2026-10-11)
+  saleUntil: { type: Date, default: null },
   stock: { type: Number, default: -1 },          // -1 = 무제한
   soldCount: { type: Number, default: 0 },
   active: { type: Boolean, default: true },      // 판매 중 여부

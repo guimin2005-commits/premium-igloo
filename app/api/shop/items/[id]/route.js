@@ -11,6 +11,9 @@ import ShopItem from "@/models/ShopItem";
 import Item from "@/models/Item";
 import RoleConfig from "@/models/RoleConfig";
 import { withBundleItems } from "@/lib/bundleServer";
+import { cosmeticKeysOf } from "@/lib/cosmeticArt";
+import { catalogFindById } from "@/lib/catalogDraft";
+import { saleEnded } from "@/lib/saleWindow";
 
 // ── [조회] 상품 상세 — 공개 전에는 관리자만 ──
 //    📌 effects — 사면 붙는 효과 조각 [{ label, amount, unit, cond, once }] (인벤토리 문장과 같은 원천 — lib/itemEffects):
@@ -28,23 +31,27 @@ export async function GET(request, { params }) {
     }
 
     const { id } = await params;
-    const item = await ShopItem.findById(id).lean();
+    // 📌 표시용 읽기 — 초안 모드(localhost)는 초안을 덧씌운 상품 · 연결 아이템(lib/catalogDraft). 실사이트 모드는 지금과 같은 findById
+    const item = await catalogFindById(ShopItem, id);
     if (!item || (!item.active && !isAdmin)) {
       return NextResponse.json({ success: false, error: "상품을 찾을 수 없습니다." }, { status: 404 });
     }
 
     let effects = [];
     let cosmetic = null;
+    let cosmeticKeys = null;
     let consumable = isUnitSale(item);
     try {
       const [linked, cfg] = await Promise.all([
-        item.itemId ? Item.findById(item.itemId).lean().catch(() => null) : null,
+        item.itemId ? catalogFindById(Item, item.itemId).catch(() => null) : null,
         item.roleId && item.type !== "physical" ? RoleConfig.findOne({ roleId: item.roleId }, { buffXp: 1, attendBuffXp: 1 }).lean() : null,
       ]);
       const names = await channelNamesFor([linked?.effects]);
       effects = [...itemEffectPartsOf(linked, (cid) => names.get(cid)), ...roleBuffParts(cfg || {})];
       // 꾸미기 — 효과 문장과 같은 원천(연결된 등록 아이템). 시즌 패스 보상 칸과 같은 계산(lib/itemCosmetic)
       cosmetic = cosmeticOf(linked);
+      // 📌 상세 큰 그림도 목록 카드와 같은 아이콘 고르기(lib/cosmeticArt productIconOf — 공용 · 옛 테두리 아이콘이면 그 스킨 · 테두리 도트)
+      cosmeticKeys = cosmeticKeysOf(linked);
       if (linked && linked.type !== "physical" && hasConsumable(linked)) consumable = true;
     } catch (e) {
       // 효과 문장이 없다고 상품을 못 보면 안 된다
@@ -53,7 +60,8 @@ export async function GET(request, { params }) {
 
     // 📌 세트 상품(lib/bundle.js) — 구성 아이템마다 표기 · 효과 문장 · 꾸미기 미리보기(bundleItems)
     const withBundle = item.type === "bundle" ? (await withBundleItems([item], { detail: true }))[0] : item;
-    return NextResponse.json({ success: true, data: { ...withBundle, effects, ...(cosmetic ? { cosmetic } : {}), ...(consumable ? { consumable } : {}) } });
+    // 📌 판매 종료(lib/saleWindow) — 상세는 그대로 보이되 saleEnded 를 달아 화면이 「판매 종료」로 보이고 구매를 잠근다(결제 API 도 막는다)
+    return NextResponse.json({ success: true, data: { ...withBundle, effects, ...(cosmetic ? { cosmetic } : {}), ...(cosmeticKeys ? { cosmeticKeys } : {}), ...(consumable ? { consumable } : {}), ...(saleEnded(item) ? { saleEnded: true } : {}) } });
   } catch (e) {
     return NextResponse.json({ success: false, data: null }, { status: 500 });
   }

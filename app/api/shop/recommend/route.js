@@ -12,6 +12,8 @@ import ShopItem from "@/models/ShopItem";
 import UserXp from "@/models/UserXp";
 import { withBundleItems } from "@/lib/bundleServer";
 import XpLog from "@/models/XpLog";
+import { isDraftMode, catalogFind } from "@/lib/catalogDraft";
+import { saleEnded } from "@/lib/saleWindow";
 
 // 📌 ARCTIC 홈 추천 — '지금 잘 나가는' · '○○에게 맞는' · '이번 주' 의 상품 id 와 제목만 돌려준다 (계산은 lib/shopRecommend.js)
 //    구매 기록은 개인 데이터라 원자료는 내리지 않는다 — 결과 id 와 제목만.
@@ -24,8 +26,9 @@ const DAY = 86400000;
 let cache = { at: 0, stats: null, docs: null, promise: null };
 
 // 📌 아이템 효과 — 상품에 연결된 아이템(ShopItem.itemId)의 효과 칸만. 계열(부스트 · 성장 · 스킨 · 배지 …)과 활동 채널을 정한다
+//    표시용이라 초안 모드(localhost)는 초안을 덧씌운 보기(lib/catalogDraft) — 그때는 5분 캐시를 건너뛰고 요청마다 읽는다(아래 GET)
 async function loadDocs() {
-  const rows = await Item.find({}, { _id: 1, type: 1, chatBuffXp: 1, voiceBuffXp: 1, attendBuffXp: 1, effects: 1 }).lean();
+  const rows = await catalogFind(Item, {}, { select: { _id: 1, type: 1, chatBuffXp: 1, voiceBuffXp: 1, attendBuffXp: 1, effects: 1 } });
   return new Map(rows.map((r) => [String(r._id), r]));
 }
 
@@ -111,12 +114,14 @@ export async function GET(request) {
 
     const userId = session?.user?.id ? String(session.user.id) : "";
     const isHome = relatedTo == null;
-    const [{ stats, docs }, items, wallet, mine, actLog] = await Promise.all([
+    const [{ stats, docs: cachedDocs }, items, wallet, mine, actLog, draftDocs] = await Promise.all([
       loadStats(),
-      ShopItem.find(
+      // 판매 목록 — 상점 목록과 같은 보기(초안 모드는 초안 덧씌움)
+      catalogFind(
+        ShopItem,
         { active: true },
-        { _id: 1, type: 1, itemId: 1, roleId: 1, unitSale: 1, price: 1, durations: 1, discountPct: 1, discountUntil: 1, pointOnly: 1, stock: 1, sortOrder: 1, createdAt: 1, active: 1, bundle: 1 }
-      ).lean().then(withBundleItems), // 세트는 구성을 다 가졌을 때만 보유(lib/shopRecommend bundleAllOwned — bundleItems 의 쌓임 판정까지)
+        { select: { _id: 1, type: 1, itemId: 1, roleId: 1, unitSale: 1, price: 1, durations: 1, discountPct: 1, discountUntil: 1, saleUntil: 1, pointOnly: 1, stock: 1, sortOrder: 1, createdAt: 1, active: 1, bundle: 1 } }
+      ).then((list) => list.filter((s) => !saleEnded(s))).then(withBundleItems), // 판매 종료(lib/saleWindow)는 추천하지 않는다 // 세트는 구성을 다 가졌을 때만 보유(lib/shopRecommend bundleAllOwned — bundleItems 의 쌓임 판정까지)
       userId
         ? UserXp.findOne({ userId }, {
           _id: 0, level: 1, xp: 1, point: 1,
@@ -129,7 +134,10 @@ export async function GET(request) {
         : [],
       // 상품 상세(관련 상품)는 활동을 쓰지 않는다. 📌 활동을 못 읽어도 추천은 낸다(활동 근거만 빠진다)
       userId && isHome ? loadActivity(userId).catch((e) => { console.error("추천 활동 조회 오류:", e); return null; }) : null,
+      // 초안 모드 — 아이템 효과는 캐시 대신 요청마다(방금 고친 초안이 바로 보이게). 실사이트 모드는 읽지 않는다(캐시 그대로)
+      isDraftMode() ? loadDocs() : null,
     ]);
+    const docs = draftDocs || cachedDocs;
 
     const me = userId
       ? {

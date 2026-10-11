@@ -8,7 +8,7 @@ const WalletLogSchema = new mongoose.Schema({
   userId: { type: String, required: true },   // 디스코드 ID — 아래 (userId, createdAt) 인덱스의 앞머리로 조회된다
   currency: { type: String, default: "xp" },   // "xp" | "point"(빙옥)
   amount: { type: Number, default: 0 },        // + 들어옴 / - 나감
-  // enhance | pass-unlock | pass-point | tier-point | attend-point | streak | quest-point | admin | etc
+  // enhance | pass-unlock | pass-point | tier-point | attend-point | streak | quest-point | quest-reroll | admin | etc
   kind: { type: String, default: "etc" },
   label: { type: String, default: "" },        // 내역에 그대로 보이는 한 줄
   refId: { type: String, default: "" },        // 관련 문서 id (선택)

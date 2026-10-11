@@ -22,7 +22,10 @@ const ItemSchema = new mongoose.Schema({
   detachOnSeason: { type: Boolean, default: false }, // role 유형만 의미. perk 는 항상 false
   visible: { type: Boolean, default: true },         // 인벤토리에 표시
   sortOrder: { type: Number, default: 0 },
-  // 📌 아이템 효과 — 이 아이템을 인벤토리에 가진 사람에게 봇이 적용한다(디스코드 역할 연결과 무관). 기프트카드(physical)는 항상 0 / [].
+  // 📌 그룹 — 상점 관리 › 아이템 목록에서 묶어 보여 줄 이름("" = 묶지 않음). 관리 화면 정리용이라 인벤토리 · 상품 · 봇은 쓰지 않는다.
+  //    2026-10-10 운영자: "시즌 끝나면 등급별 지급되는 아이템들이 너무 많아져서 다 관리하기 힘드니까 그룹 시스템을 만들어 줘". 정리는 lib/items.js normalizeItemGroup
+  group: { type: String, default: "", maxlength: 30 },
+  // 📌 아이템 효과 —이 아이템을 인벤토리에 가진 사람에게 봇이 적용한다(디스코드 역할 연결과 무관). 기프트카드(physical)는 항상 0 / [].
   //    보유 판정은 lib/ownedItems.js, 정의 · 문구 · 정리는 lib/itemEffects.js. 봇 사본(bot/src/itemEffects.js)과 같은 키 — 바꾸면 함께 고칠 것.
   chatBuffXp: { type: Number, default: 0, min: 0, max: 1_000_000 },   // 채팅 1회당 +N XP
   voiceBuffXp: { type: Number, default: 0, min: 0, max: 1_000_000 },  // 음성 1회당 +N XP

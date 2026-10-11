@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ItemIcon from "../components/ItemIcon";
+import CardArt from "./CardArt";
 import BannerSlider from "./BannerSlider";
 import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice, priceText, salePrice, basePrice } from "@/lib/shopPricing";
 import { pointToXp } from "@/lib/pointRate";
@@ -12,8 +13,10 @@ import { splitItemName } from "@/lib/itemName";
 import { bundleCountOf } from "./ProductCard";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
+import { saleEnded, saleUntilMs, saleUntilLabel } from "@/lib/saleWindow";
+import { productIconOf } from "@/lib/cosmeticArt";
 
-// 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 이번 주.
+// 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 신상품 줄 → 이번 주.
 //    헤더·유형 줄·독·푸터는 ArcticShopBody 가 그린다. 여기는 홈 본문만.
 //    상품 카드는 부모의 renderCard 를 그대로 받아 쓴다 (찜·장바구니·구매가 한 벌).
 //    📌 무엇을 걸지 · 섹션 제목 · 부제(근거)는 서버 추천(/api/shop/recommend — lib/shopRecommend.js)이 정한다.
@@ -53,6 +56,15 @@ function weekRange() {
 }
 
 const created = (it: any) => new Date(it?.createdAt || 0).getTime();
+// 📌 작은 칸 아이콘 — 꾸미기는 상품 그림과 같은 고르기(productIconOf). 세트는 상품 아이콘이 비면 첫 구성 아이콘(2026-10-11 운영자 "이 상자에 아이템 상자로 나오는 버그")
+const iconOfProduct = (it: any): string => {
+  const own = productIconOf(it)?.icon ?? it?.icon;
+  if (own || !isBundle(it)) return String(own || "");
+  const first = Array.isArray(it?.bundleItems) ? it.bundleItems[0] : null;
+  return String((first && (productIconOf(first)?.icon ?? first.icon)) || "");
+};
+// 날짜 번호(KST) — 이번 주 둘째 칸을 날마다 돌린다
+const dayNo = () => Math.floor((Date.now() + 9 * 3600e3) / 86400e3);
 
 // 📌 섹션 머리 — 홈 큐레이션 · 시즌 탭(ArcticSeason)이 같은 모양을 쓴다
 export const secHead = "flex items-baseline justify-between gap-4 mb-5";
@@ -82,7 +94,8 @@ export default function ArcticHome({
 }: Props) {
   const dday = getSeasonDday();
 
-  const active = useMemo(() => items.filter((it) => it.active !== false), [items]);
+  // 홈 큐레이션은 유저가 보는 상품만 — 관리자 목록(?all=1)에 실린 숨김 · 판매 종료(lib/saleWindow) 상품은 빼고 고른다
+  const active = useMemo(() => items.filter((it) => it.active !== false && !saleEnded(it)), [items]);
   const byId = useMemo(() => new Map(active.map((it) => [String(it._id), it])), [active]);
 
   // ── 서버 추천 — 상품 목록과 나란히 받는다(대개 목록보다 먼저 와서 첫 카드부터 추천으로 그려진다) ──
@@ -190,6 +203,17 @@ export default function ArcticHome({
     return { picks: out.slice(0, 2), title: rec.forMe.title || title, sub: rec.forMe.sub ?? sub, basis: rec.forMe.basis || "" };
   }, [active, byId, rec, hot, ownedItemIds, isLoggedIn, myXp, myPoint, tier]);
 
+  // 📌 신상품(2026-10-11 운영자 "지금 잘나가는 · ~에게 맞는 그 아래에 신상품 해서 주르륵") — 등록이 늦은 차례로 10개, 가로로 밀어 본다
+  const fresh = useMemo(() => [...active].sort((a, b) => created(b) - created(a)).slice(0, 10), [active]);
+
+  // 📌 이번 주 칸 오른쪽 큰 상품 그림(2026-10-11 운영자 "감다뒤냐" — 작은 아이콘 상자가 밋밋했다) — 상점 카드와 같은 그림(CardArt stage)
+  const artTile = (it: any, cls = "") => (
+    <span className={`absolute block overflow-hidden rounded-xl bg-[#f2f2f2] ring-1 ring-white/20 shadow-[0_10px_24px_rgba(0,0,0,0.35)] ${cls}`}>
+      <CardArt it={it} imgClass="pz-zoom" stage />
+    </span>
+  );
+  const TILE = "w-[118px] h-[118px] md:w-[148px] md:h-[148px]";
+
   // 이번 주 — 할인 상품(없으면 최신) 한 장 + 시즌 한 장. 추천은 종료 임박 · 할인율 · 요즘 인기를 섞어 고른다
   const deal = useMemo(() => {
     if (!ready) return null; // 추천을 기다리는 동안은 두 갈래와 같이 비워 둔다 — 기본 규칙 카드가 잠깐 떴다 바뀌지 않게
@@ -210,6 +234,40 @@ export default function ArcticHome({
     const fresh = [...left].sort((a, b) => created(b) - created(a))[0];
     return fresh ? { it: fresh, kind: "new" as const } : null;
   }, [active, byId, rec, ready, hot, forMe]);
+
+  // 📌 이번 주 둘째 칸(2026-10-11 운영자 "좀 내용좀 바뀌게 해봐 하나는 맨날 시즌 패스 내용이고") — 날마다 돌린다:
+  //    시즌 패스 · 켜진 이벤트 테마(상품이 있을 때 — 그 탭으로) · 곧 판매가 끝나는 상품(14일 안 — 그 상품으로). 고르기는 날짜 번호(KST)로 — 같은 날엔 같은 칸
+  const [themes, setThemes] = useState<{ key: string; name: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/shop/themes", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && j?.success && Array.isArray(j.data)) setThemes(j.data.filter((t: any) => t && t.on !== false && t.key)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const [today] = useState(dayNo);
+  const [nowMs] = useState(() => Date.now());
+  type Side = { kind: "season" } | { kind: "theme"; key: string; name: string; count: number; until: string; icon: string; picks: any[] } | { kind: "ending"; it: any; until: string };
+  const side: Side = useMemo(() => {
+    const cands: Side[] = [{ kind: "season" }];
+    for (const t of themes) {
+      const list = active.filter((it) => it.theme === t.key);
+      if (!list.length) continue;
+      const ends = list.map((it) => saleUntilMs(it)).filter((v): v is number => v != null).sort((a, b) => a - b);
+      const until = ends.length ? saleUntilLabel({ saleUntil: new Date(ends[0]).toISOString() }) : "";
+      cands.push({ kind: "theme", key: t.key, name: t.name, count: list.length, until, icon: iconOfProduct(list[0]), picks: list.slice(0, 3) });
+    }
+    const shown = new Set([...hot.map((h) => h._id), ...forMe.picks.map((p) => p._id), ...(deal ? [deal.it._id] : [])]);
+    const ending = active
+      .filter((it) => !shown.has(it._id) && !it.theme)
+      .map((it) => ({ it, at: saleUntilMs(it) }))
+      .filter((x) => x.at != null && x.at > nowMs && x.at - nowMs < 14 * 86400e3)
+      .sort((a, b) => (a.at as number) - (b.at as number))[0];
+    if (ending) cands.push({ kind: "ending", it: ending.it, until: saleUntilLabel(ending.it) });
+    return cands[today % cands.length];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themes, active, hot, forMe, today, nowMs]);
+
 
   return (
     <>
@@ -256,6 +314,21 @@ export default function ArcticHome({
         )}
       </section>
 
+      {/* ── 신상품 — 가로로 밀어 본다(폰 두 장 반 · PC 다섯 장) ── */}
+      {ready && fresh.length > 0 && (
+        <section className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14">
+          <div className={secHead}>
+            <h2 className={secTitle}>신상품</h2>
+            <button onClick={() => goProducts("all")} className={secLink}>전체 ›</button>
+          </div>
+          <div className="-mx-5 px-5 md:mx-0 md:px-0 flex overflow-x-auto no-bar snap-x snap-mandatory pb-1">
+            {fresh.map((it, i) => (
+              <div key={it._id} className={`shrink-0 w-[42%] sm:w-[30%] md:w-[calc((100%-80px)/5)] snap-start ${i ? "ml-3 md:ml-5" : ""}`}>{renderCard(it)}</div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ── 이번 주 — 기간이 있는 것만 두 장 ── */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14 pb-14">
         <div className={secHead}>
@@ -267,40 +340,62 @@ export default function ArcticHome({
           {!deal && !ready && <div aria-hidden className="h-[180px] md:h-[200px]"></div>}
           {deal && (
             <Link href={`/arctic/item/${deal.it._id}`}
-              className="relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
+              className="group relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 pr-[150px] md:pr-[190px] text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>{deal.kind === "sale" ? "할인" : "새로 들어온"}</span>
-              <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">
-                {deal.kind === "sale" ? `${splitItemName(deal.it.name).short} ${deal.it.discountPct}% 할인` : splitItemName(deal.it.name).short}
+              <h3 className="mt-3 text-[20px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">
+                {deal.kind === "sale" ? <>{splitItemName(deal.it.name).short} <span className="text-[#ff5c77]">{deal.it.discountPct}%</span></> : splitItemName(deal.it.name).short}
               </h3>
-              <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">
+              <p className="mt-1.5 text-[12px] md:text-[13px] opacity-85 tabular-nums line-clamp-2">
                 {deal.kind === "sale"
                   // 카드와 같은 값(cardPick — 기본 무제한) — 한 상품이 곳마다 다른 값으로 보이지 않게
                   //    빙옥 전용 상품은 단위만 빙옥 (priceText — 올림)
-                  ? `${shownPrice(deal.it, cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${priceText(deal.it, cardPick(deal.it)?.price ?? 0)}${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""}${isBundle(deal.it) ? ` · 아이템 ${bundleCountOf(deal.it)}개` : isUnitSale(deal.it) ? ` · 1회 최대 ${maxPerOrderOf(deal.it)}개` : " · 1인 1개"}`
+                  //    폰은 오른쪽 큰 그림 때문에 글 칸이 좁다 — 구성 수 · 수량 줄은 PC 만(가격 줄이 두 줄로 내려와 아래 줄과 겹쳤다)
+                  ? <>{`${shownPrice(deal.it, cardPick(deal.it)?.list ?? 0).toLocaleString()} → ${priceText(deal.it, cardPick(deal.it)?.price ?? 0)}${isTimed(deal.it) ? ` / ${durationLabel(cardPick(deal.it)?.days ?? 0)}` : ""}`}
+                    <span className="hidden md:inline">{isBundle(deal.it) ? ` · 아이템 ${bundleCountOf(deal.it)}개` : isUnitSale(deal.it) ? ` · 1회 최대 ${maxPerOrderOf(deal.it)}개` : " · 1인 1개"}</span></>
                   : priceText(deal.it, cardPick(deal.it)?.price ?? 0)}
               </p>
-              <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
+              <span className="hidden md:block absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
                 {deal.it.stock === -1 || deal.it.stock == null ? "수량 무제한" : `남은 수량 ${deal.it.stock}`}
+              </span>
+              {artTile(deal.it, `right-5 md:right-7 top-1/2 -translate-y-1/2 rotate-[3deg] ${TILE}`)}
+            </Link>
+          )}
+          {side.kind === "theme" ? (
+            <Link href={`/arctic?type=${side.key}`}
+              className={`group relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 pr-[170px] md:pr-[220px] text-white block bg-gradient-to-br from-[#2a1640] to-[#6a2f9a] hover:to-[#7a3aac] transition-colors ${deal || !ready ? "" : "md:col-span-2"}`}>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>이벤트</span>
+              <h3 className="mt-3 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{side.name}</h3>
+              <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">상품 {side.count}개</p>
+              <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">{side.until ? `~ ${side.until}` : ""}</span>
+              {/* 부채꼴 — 뒤 둘은 양옆으로 기울이고 앞 하나가 가운데. 상품이 하나 · 둘이면 있는 만큼 */}
+              {side.picks[1] && artTile(side.picks[1], `right-[88px] md:right-[118px] top-1/2 -translate-y-1/2 -rotate-[9deg] scale-[0.86] ${TILE}`)}
+              {side.picks[2] && artTile(side.picks[2], `-right-3 md:right-0 top-1/2 -translate-y-1/2 rotate-[9deg] scale-[0.86] ${TILE}`)}
+              {side.picks[0] && artTile(side.picks[0], `right-[40px] md:right-[58px] top-1/2 -translate-y-1/2 ${TILE}`)}
+            </Link>
+          ) : side.kind === "ending" ? (
+            <Link href={`/arctic/item/${side.it._id}`}
+              className={`group relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 pr-[150px] md:pr-[190px] text-white block bg-gradient-to-br from-[#1d2b3a] to-[#3b5672] hover:to-[#46647f] transition-colors ${deal || !ready ? "" : "md:col-span-2"}`}>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>곧 판매 종료</span>
+              <h3 className="mt-3 text-[20px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">{splitItemName(side.it.name).short}</h3>
+              <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">{priceText(side.it, cardPick(side.it)?.price ?? 0)}</p>
+              <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">~ {side.until}</span>
+              {artTile(side.it, `right-5 md:right-7 top-1/2 -translate-y-1/2 rotate-[3deg] ${TILE}`)}
+            </Link>
+          ) : (
+            <Link href="/level?tab=pass"
+              className={`relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#e91e3f] to-[#ff5c77] hover:to-[#ff6f86] transition-colors ${deal || !ready ? "" : "md:col-span-2"}`}>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>시즌 {SEASON.number}</span>
+              <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{SEASON.name}</h3>
+              <p className="mt-1.5 text-[13px] opacity-85">시즌 패스 · 티어 보상</p>
+              <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
+                {dday.ended ? "시즌 종료" : `종료까지 D-${Math.max(0, dday.days)}`}
               </span>
               <span className="absolute right-6 md:right-7 bottom-6 w-9 h-9 rounded-full border border-white/50 grid place-items-center font-black">›</span>
               <span className="absolute right-6 md:right-7 top-6 w-12 h-12 rounded-2xl bg-white/15 grid place-items-center">
-                <ItemIcon type={deal.it.type} icon={deal.it.icon} size={24} color="#ffffff" />
+                <ItemIcon type="role" size={24} color="#ffffff" />
               </span>
             </Link>
           )}
-          <Link href="/level?tab=pass"
-            className={`relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#e91e3f] to-[#ff5c77] hover:to-[#ff6f86] transition-colors ${deal || !ready ? "" : "md:col-span-2"}`}>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>시즌 {SEASON.number}</span>
-            <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep">{SEASON.name}</h3>
-            <p className="mt-1.5 text-[13px] opacity-85">시즌 패스 · 티어 보상</p>
-            <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">
-              {dday.ended ? "시즌 종료" : `종료까지 D-${Math.max(0, dday.days)}`}
-            </span>
-            <span className="absolute right-6 md:right-7 bottom-6 w-9 h-9 rounded-full border border-white/50 grid place-items-center font-black">›</span>
-            <span className="absolute right-6 md:right-7 top-6 w-12 h-12 rounded-2xl bg-white/15 grid place-items-center">
-              <ItemIcon type="role" size={24} color="#ffffff" />
-            </span>
-          </Link>
         </div>
       </section>
 

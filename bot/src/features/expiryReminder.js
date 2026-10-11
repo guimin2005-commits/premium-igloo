@@ -34,6 +34,7 @@ const canRenew = (s) => Array.isArray(s?.durations) && s.durations.some((d) => d
 //   📌 판매 중(active)만 — 내린 상품의 상세는 유저에게 "상품을 찾을 수 없습니다" 로 뜬다 (api/shop/items/[id] 와 같은 기준).
 //      운영진 지급 · 패스 보상은 상품 id 가 없어 itemRef 로만 찾는다.
 //      active · sortOrder 는 봇 ShopItem 스키마(db.js)에 없는 칸이지만 조건 · 읽기 칸으로는 그대로 간다(strictQuery 꺼짐 · lean)
+//   📌 판매 종료(saleUntil — 사이트 lib/saleWindow)가 지난 상품도 뺀다 — 상세가 「판매 종료」로 잠겨 연장할 수 없다
 async function renewUrlOf(p) {
   const own = OBJECT_ID_RE.test(String(p.itemId || "")) ? String(p.itemId) : "";
   const ref = OBJECT_ID_RE.test(String(p.itemRef || "")) ? String(p.itemRef) : "";
@@ -41,8 +42,9 @@ async function renewUrlOf(p) {
   if (own) or.push({ _id: own });
   if (ref) or.push({ itemId: ref });
   if (!or.length) return "";
-  const rows = await ShopItem.find({ $or: or, active: true }, { _id: 1, itemId: 1, durations: 1, sortOrder: 1 }).lean().catch(() => []);
-  const ok = rows.filter(canRenew);
+  const rows = await ShopItem.find({ $or: or, active: true }, { _id: 1, itemId: 1, durations: 1, sortOrder: 1, saleUntil: 1 }).lean().catch(() => []);
+  const now = Date.now();
+  const ok = rows.filter((r) => canRenew(r) && !(r.saleUntil && new Date(r.saleUntil).getTime() <= now));
   const pick =
     ok.find((r) => String(r._id) === own) ||
     ok.filter((r) => ref && String(r.itemId || "") === ref).sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))[0];

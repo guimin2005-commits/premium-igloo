@@ -9,7 +9,7 @@
 import mongoose from "mongoose";
 import { EmbedBuilder } from "discord.js";
 import { getSettings } from "./botSettings.js";
-import { perksOf, pickCardSkin } from "./itemEffects.js";
+import { perksOf, pickCardSkin, pickAvatarFrame, withSeasonFrame, withSeasonSkin } from "./itemEffects.js";
 import { UserXp } from "./db.js";
 import { config } from "./config.js";
 
@@ -20,11 +20,11 @@ const TIERS = [
   { key: "silver",      name: "실버",         en: "SILVER",      min: 160, c: "#8d99a6" },
   { key: "gold",        name: "골드",         en: "GOLD",        min: 240, c: "#c39220" },
   { key: "platinum",    name: "플래티넘",     en: "PLATINUM",    min: 330, c: "#3f9e93" },
-  { key: "diamond",     name: "다이아몬드",   en: "DIAMOND",     min: 430, c: "#3f7fc4" },
+  { key: "diamond",     name: "다이아몬드",   en: "DIAMOND",     min: 430, c: "#5a6ad8" },
   { key: "master",      name: "마스터",       en: "MASTER",      min: 540, c: "#8557b0" },
-  { key: "grandmaster", name: "그랜드마스터", en: "GRANDMASTER", min: 650, c: "#a03a6b" },
-  { key: "challenger",  name: "챌린저",       en: "CHALLENGER",  min: 760, c: "#c2452f" },
-  { key: "igloo",       name: "이글루",       en: "IGLOO",       min: 880, c: "#e91e3f" },
+  { key: "grandmaster", name: "그랜드마스터", en: "GRANDMASTER", min: 650, c: "#d8352a" },
+  { key: "challenger",  name: "챌린저",       en: "CHALLENGER",  min: 760, c: "#2f9cf0" },
+  { key: "igloo",       name: "이글루",       en: "IGLOO",       min: 880, c: "#e0609e" },
 ];
 
 // 레벨 → 등급 { key, name, en, color }
@@ -150,7 +150,7 @@ export const MESSAGE_DEFS = {
     vars: [
       { name: "level", label: "새 레벨", sample: 128 },
       { name: "prevLevel", label: "이전 레벨", sample: 127 },
-      { name: "xp", label: "누적 XP", sample: 1079200 },
+      { name: "xp", label: "현재 XP", sample: 1079200 },
       { name: "nextXp", label: "다음 레벨까지 남은 XP", sample: 15561 },
       { name: "tier", label: "등급", sample: "브론즈" },
       { name: "progressBar", label: "진행 막대", sample: BAR_SAMPLE },
@@ -174,7 +174,7 @@ export const MESSAGE_DEFS = {
       fields: [
         f("레벨", "Lv.{prevLevel} → **Lv.{level}**"),
         f("등급", "{tier}"),
-        f("누적 XP", "{xp}"),
+        f("현재 XP", "{xp}"),
       ],
     }),
   },
@@ -489,7 +489,7 @@ export const MESSAGE_DEFS = {
     desc: "/레벨 응답",
     vars: [
       { name: "level", label: "레벨", sample: 128 },
-      { name: "xp", label: "누적 XP", sample: 1079200 },
+      { name: "xp", label: "현재 XP", sample: 1079200 },
       { name: "need", label: "다음 레벨까지 남은 XP", sample: 15561 },
       { name: "nextLevel", label: "다음 레벨", sample: 129 },
       { name: "progressBar", label: "진행 막대", sample: BAR_SAMPLE },
@@ -510,7 +510,7 @@ export const MESSAGE_DEFS = {
       authorIcon: "{avatar}",
       title: "Lv.{level}",
       description: "`{progressBar}`\nLv.{nextLevel} 까지 **{need} XP**",
-      fields: [f("등급", "{tier}"), f("누적 XP", "{xp}")],
+      fields: [f("등급", "{tier}"), f("현재 XP", "{xp}")],
     }),
   },
   cmdRank: {
@@ -521,7 +521,7 @@ export const MESSAGE_DEFS = {
       { name: "rank", label: "순위", sample: 12 },
       { name: "total", label: "전체 인원", sample: 1284 },
       { name: "level", label: "레벨", sample: 128 },
-      { name: "xp", label: "누적 XP", sample: 1079200 },
+      { name: "xp", label: "현재 XP", sample: 1079200 },
       { name: "tier", label: "등급", sample: "브론즈" },
     ],
     defaults: {
@@ -539,7 +539,7 @@ export const MESSAGE_DEFS = {
       authorIcon: "{avatar}",
       title: "#{rank}",
       description: "{total}명 중 **{rank}위**입니다.",
-      fields: [f("레벨", "Lv.{level}"), f("등급", "{tier}"), f("누적 XP", "{xp}")],
+      fields: [f("레벨", "Lv.{level}"), f("등급", "{tier}"), f("현재 XP", "{xp}")],
     }),
   },
   cmdAttend: {
@@ -1209,21 +1209,29 @@ function avatarOf(x) {
 //    (vars 를 { ...commonVars(member), … } 로 만들면 심볼 칸도 함께 복사된다 — 템플릿 치환 · JSON 에는 드러나지 않는다)
 const VARS_MEMBER = Symbol("member");
 const SKIN_KEYS = new Set(["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "autoAttend", "cmdQuest", "cmdInventory", "cmdPass"]);
+// 📌 아바타 테두리 — /레벨 · 레벨업 카드만(botCards profileCard · levelUpCard — 끼면 링 · 배지 대신 테두리). 유저가 인벤토리에서 고른 것(UserXp.avatarFramePick — pickAvatarFrame)만
+const FRAME_KEYS = new Set(["cmdLevel", "levelUp"]);
 function withSkin(key, vars, cardData) {
   const member = vars?.[VARS_MEMBER];
   if (!SKIN_KEYS.has(key) || !member) return cardData;
   return async (m) => {
     const data = typeof cardData === "function" ? await cardData(m) : cardData;
-    if (!data || data.skin !== undefined) return data;
-    const { cardSkins } = perksOf(member);
-    if (!cardSkins.length) return data;
-    let pick = "";
+    if (!data) return data;
+    const wantSkin = data.skin === undefined, wantFrame = FRAME_KEYS.has(key) && data.frame === undefined;
+    if (!wantSkin && !wantFrame) return data;
+    const { cardSkins, avatarFrames = [] } = perksOf(member);
+    // 📌 스킨 · 테두리는 아이템이 없어도 시즌 보상(UserXp.seasonFrame — 등급 카드 스킨 · 티어 테두리)이 있을 수 있어 고른 값과 함께 읽는다
+    const needSkin = wantSkin, needFrame = wantFrame;
+    if (!needSkin && !needFrame) return data;
+    let picks = null;
     try {
       const uid = member.id || member.user?.id;
-      if (uid) pick = (await UserXp.findOne({ userId: uid }, { cardSkinPick: 1 }).lean())?.cardSkinPick || "";
+      if (uid) picks = await UserXp.findOne({ userId: uid }, { cardSkinPick: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
     } catch {}
-    const skin = pickCardSkin(cardSkins, pick);
-    return skin ? { ...data, skin } : data;
+    const out = { ...data };
+    if (needSkin) { const skin = pickCardSkin(withSeasonSkin(cardSkins, picks), picks?.cardSkinPick || ""); if (skin) out.skin = skin; }
+    if (needFrame) { const frame = pickAvatarFrame(withSeasonFrame(avatarFrames, picks), picks?.avatarFramePick || ""); if (frame) out.frame = frame; }
+    return out;
   };
 }
 

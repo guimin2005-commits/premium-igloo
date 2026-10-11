@@ -9,6 +9,9 @@ const QuestPickSchema = new mongoose.Schema(
     u: { type: String, required: true },
     per: { type: String, required: true },
     ids: { type: [String], default: [] },
+    // 📌 바꾸기(리롤 — 2026-10-11): rr = 이 주기에 바꾼 횟수 · out = 바꿔 버린 퀘스트 id(이 주기에 다시 오지 않는다). 쓰는 곳은 lib/questKinds.js "바꾸기"
+    rr: { type: Number, default: 0 },
+    out: { type: [String], default: [] },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

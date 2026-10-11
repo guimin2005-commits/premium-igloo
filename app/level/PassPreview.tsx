@@ -6,7 +6,7 @@ import { ICON_PATHS } from "../components/Icons";
 import { POP_THEME } from "../components/PopShell";
 import { itemTypeColor, itemTypeLabel } from "@/lib/items";
 import { invShortName } from "../components/Inventory";
-import { FitBox, ProfileCardPreview, BadgePreview, whoOf, badgeOfItem } from "../arctic/CosmeticPreview";
+import { FitBox, ProfileCardPreview, BadgePreview, whoOf, badgeOfItem, useTodayXp } from "../arctic/CosmeticPreview";
 
 // 📌 시즌 패스 꾸미기 보상(카드 스킨 · 아바타 테두리 · 프로필 배지)의 적용 미리보기 — 상점 상품 상세 '적용 미리보기'(app/arctic/AppliedPreview)와 같은 그림.
 //    (2026-10-03 사용자: "시즌패스에 '꾸미기 - 카드' 가 들어갈 때가 있는데 상점과 달리 미리보기 시안이 없어서..")
@@ -59,6 +59,7 @@ export default function PassPreview({ r, user, me, onClose }: {
   const [discordFail, setDiscordFail] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { closeRef.current?.focus({ preventScroll: true }); }, []);
+  const today = useTodayXp(!!user && !!me);
   const cos = passCosmeticOf(r);
   if (!cos) return null;
 
@@ -66,7 +67,7 @@ export default function PassPreview({ r, user, me, onClose }: {
   const frame = typeof cos.frame === "string" ? cos.frame : "";
   // 프로필 카드는 스킨이나 테두리가 있으면 — 테두리는 디스코드 카드엔 없다(옆 칸을 만들지 않는다)
   const card = !!skin || !!frame;
-  const who = whoOf(user, me);
+  const who = whoOf(user, me, today);
   const showDiscord = !!skin && !!cos.botCard && !discordFail;
   // PC 는 프로필 카드 | (디스코드 · 배지) 두 칸 — 한 칸뿐이면 판을 좁게
   // 📌 폭은 '받을 칸이 있는지'로 정한다 — 디스코드 그림이 실패해도 판 · 프로필 카드 폭은 처음 그대로, 오른쪽 내용만 빠진다(상점 AppliedPreview 와 같다)
@@ -155,7 +156,7 @@ export default function PassPreview({ r, user, me, onClose }: {
                     <Label>프로필 배지</Label>
                     <div className="relative w-full h-[240px] rounded-2xl overflow-hidden" style={{ background: BOX_BG }}>
                       <FitBox pad={0.9} max={1.2}>
-                        <BadgePreview who={who} badge={badge} />
+                        <BadgePreview who={who} badges={[badge]} />
                       </FitBox>
                     </div>
                   </div>

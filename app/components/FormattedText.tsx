@@ -1,92 +1,15 @@
 "use client";
 
 import React from "react";
+import { renderMarkdownHtml } from "./mdRender";
 
-// 📌 마크다운 서식 렌더러 (공지/이벤트/대회 페이지와 동일한 규칙)
+// 📌 마크다운 서식 렌더러 (공지/이벤트/대회 페이지와 동일한 규칙) — 규칙은 ./mdRender.ts 한 곳
 //  · **굵게** __밑줄__ ~~취소선~~ ==강조== [링크](url) {복사코드} + 표
-export const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
+//  · 줄 앞: # 큰 제목 · ## 중간 제목 · ### 작은 제목 · -# 작은 글씨 · * / - 목록 · 1. 번호 · > 인용 · --- 구분선
+//  · dark — 어두운 바탕(대회 글): 제목 글자를 흰색으로
+export const RenderFormattedText = ({ text, onCopy, dark = false }: { text: string; onCopy?: () => void; dark?: boolean }) => {
   if (!text) return null;
-
-  // 본문이 그대로 HTML 로 들어가므로 주소는 http(s) 만 허용하고 따옴표·꺾쇠는 막는다
-  const safeUrl = (u: string) => (/^https?:\/\/[^"'<>\s]+$/i.test(String(u).trim()) ? String(u).trim() : "");
-  // 본문의 꺾쇠·따옴표를 먼저 글자로 바꿔 둔다 (a<b 가 태그로 먹히거나 속성이 깨지지 않게)
-  const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-  const formatInlineMarkdown = (t: string): string => {
-    return escapeHtml(t)
-      // 이미지 — 링크보다 먼저 걸러야 한다 (뒤에 두면 링크로 잡히고 ! 만 남는다)
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m: string, alt: string, url: string) => {
-        const src = safeUrl(url);
-        if (!src) return m;
-        const cap = String(alt || "").replace(/[<>"']/g, "");
-        return `<img src='${src}' alt='${cap}' loading='lazy' class='block w-full h-auto rounded-xl border border-[rgba(128,128,128,.35)] my-5' />`
-          + (cap ? `<span class='block text-center text-[12px] text-[#8a8a8a] -mt-3 mb-5'>${cap}</span>` : "");
-      })
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m: string, label: string, url: string) => {
-        const href = safeUrl(url);
-        if (!href) return label;
-        return `<a href='${href}' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>${label}</a>`;
-      })
-      // 복사 단추는 type='button' — 글쓰기 미리보기처럼 form 안에 그려져도 누를 때 글이 제출되지 않게
-      .replace(/\{([^}]+)\}/g, (match, code) => `<span class='inline-flex items-center gap-1.5 bg-[rgba(128,128,128,.16)] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button type='button' class='copy-btn text-[#e91e3f] hover:opacity-70 transition-opacity flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
-      .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
-      .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>")
-      .replace(/^(\s*)\*[ \t]+/, "$1<span class='text-[#e91e3f]'>·</span> ");
-  };
-
-  const parseMarkdownTable = (lines: string[]): string | null => {
-    if (lines.length < 2) return null;
-    const headerLine = lines[0].trim();
-    const separatorLine = lines[1].trim();
-    if (!/^\|.*\|$/.test(headerLine) || !/^\|[\s|-]+\|$/.test(separatorLine)) return null;
-
-    const parseRow = (line: string): string[] => line.split("|").slice(1, -1).map((cell) => cell.trim());
-    const headerCells = parseRow(headerLine);
-    const dataRows = lines.slice(2).map(parseRow);
-
-    let html = "<table class='w-full border-collapse border border-[rgba(128,128,128,.35)] my-4'>";
-    html += "<thead><tr>";
-    headerCells.forEach((cell) => {
-      html += `<th class='border border-[rgba(128,128,128,.35)] px-3 py-2 bg-[rgba(128,128,128,.12)] text-left font-bold'>${formatInlineMarkdown(cell)}</th>`;
-    });
-    html += "</tr></thead><tbody>";
-    dataRows.forEach((cells) => {
-      html += "<tr>";
-      cells.forEach((cell) => {
-        html += `<td class='border border-[rgba(128,128,128,.35)] px-3 py-2'>${formatInlineMarkdown(cell)}</td>`;
-      });
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-    return html;
-  };
-
-  const parseMarkdownWithTable = (input: string): string => {
-    const lines = input.split("\n");
-    const result: string[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (line.trim().startsWith("|")) {
-        const tableLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith("|")) {
-          tableLines.push(lines[i]);
-          i++;
-        }
-        const table = parseMarkdownTable(tableLines);
-        if (table) result.push(table);
-        else result.push(...tableLines.map((l) => formatInlineMarkdown(l)));
-      } else {
-        result.push(formatInlineMarkdown(line));
-        i++;
-      }
-    }
-    return result.join("\n");
-  };
-
-  const formatted = parseMarkdownWithTable(text);
+  const formatted = renderMarkdownHtml(text, { dark });
 
   return (
     <div

@@ -11,7 +11,9 @@ import {
   ACTIVITY_PERIODS,
   ACTIVITY_SORTS,
   ACTIVITY_LIMIT,
-  voicePipeline,
+  voiceScanPipeline,
+  fromVoiceScan,
+  voiceActivityRows,
   dailyPipeline,
   mergeActivity,
   sortActivity,
@@ -21,10 +23,30 @@ import {
 //    GET ?period=today|7d|30d&sort=score|voice|dayMax|streak|alone|muted|deaf|idle|live|chat|xp
 //      → { period, since, approx, rows: [상위 100명], total }
 //    approx: 기간 안에 ctx 없는 예전 음성 줄이 섞였다(혼자 · 음소거 근사치). 줄의 voiceOff: 음성 XP 정지 중(app/api/admin/users/voice-stop)
-//    셈의 정의는 lib/adminActivity.js. 큰 집계는 XpLog $group · $setWindowFields 로 서버(DB)에서 끝낸다.
+//    셈의 정의는 lib/adminActivity.js. 하루 최대 · 채팅 수는 XpLog $group(DB), 음성 셈(창 계산 다섯 번)은 줄을 읽어 와서 여기서(voiceActivityRows).
+//    📌 2026-10-11 DB 판(voicePipeline · $setWindowFields)이 정렬 한도 32MB 를 넘겨 "조회 중 오류" — 공유 등급은 allowDiskUse 를 안 받는다.
+//       줄은 createdAt 색인 순서로 읽어(hint — DB 가 따로 정렬하지 않는다) 필요한 칸만 받는다
 //    📌 기간마다 전체 결과를 60초 동안 들고 있는다 — 정렬만 바꾸면 다시 세지 않는다
 const CACHE_MS = 60_000;
 const cache = new Map(); // period → { at, data }
+
+// 음성 · 채팅 줄 — createdAt 색인 순서로 조금씩(batch) 받는다(lib/adminActivity voiceScanPipeline — 짧은 칸 이름 · 채팅 줄은 유저 · 시각만).
+//    색인 모양이 다른 DB 면 hint 가 거절된다 — 그때는 hint 없이(그래도 createdAt 색인을 고른다)
+async function readVoiceDocs(since) {
+  const run = async (hint) => {
+    const agg = XpLog.aggregate(voiceScanPipeline(since));
+    if (hint) agg.hint({ createdAt: 1 });
+    const docs = [];
+    for await (const x of agg.cursor({ batchSize: 5000 })) docs.push(fromVoiceScan(x));
+    return docs;
+  };
+  try {
+    return await run(true);
+  } catch (e) {
+    if (!/hint/i.test(String(e?.message || ""))) throw e;
+    return run(false);
+  }
+}
 
 async function compute(period) {
   const since = kstDaysStart(ACTIVITY_PERIODS[period]);
@@ -32,10 +54,11 @@ async function compute(period) {
   const s = await BotSetting.findOne({ key: "main" }, { voiceXp: 1 }).lean();
   const baseXp = Math.max(0, Math.floor(Number(s?.voiceXp) || 0));
 
-  const [voiceRows, dailyRows] = await Promise.all([
-    XpLog.aggregate(voicePipeline({ since, baseXp })).allowDiskUse(true),
+  const [voiceDocs, dailyRows] = await Promise.all([
+    readVoiceDocs(since),
     XpLog.aggregate(dailyPipeline({ since })).allowDiskUse(true),
   ]);
+  const voiceRows = voiceActivityRows(voiceDocs, { since, baseXp });
   const ids = [...new Set([...voiceRows, ...dailyRows].map((r) => r._id).filter(Boolean))];
   const users = ids.length ? await UserXp.find({ userId: { $in: ids } }, { userId: 1, displayName: 1, username: 1 }).lean() : [];
   const names = new Map(users.map((u) => [u.userId, u]));
