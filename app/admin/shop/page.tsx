@@ -3422,6 +3422,7 @@ export default function AdminShopPage() {
   const HW_DEFAULT_BANNERS = [
     { imageUrl: "/banners/halloween-pc.png", mobileImageUrl: "/banners/halloween-mobile.png", title: "", link: "" }, // 할로윈 탭 맨 위라 링크 없음
     { imageUrl: "/banners/halloween-cat-pc.png", mobileImageUrl: "/banners/halloween-cat-mobile.png", title: "", link: "" },
+    { imageUrl: "/banners/halloween-set-pc.png", mobileImageUrl: "/banners/halloween-set-mobile.png", title: "", link: "" }, // 할로윈 꾸미기 세트 65%(스토어 HW_BANNERS 세 번째)
   ];
   const hwPending = HW_DEFAULT_BANNERS.filter((d) => !placeBanners.some((b) => String(b.imageUrl || "") === d.imageUrl));
   const hwDefaultRow = (

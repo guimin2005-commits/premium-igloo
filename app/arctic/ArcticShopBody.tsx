@@ -87,6 +87,8 @@ let themeCache: ShopTheme[] | null = null;
 const HW_BANNERS = [
   { _id: "builtin-halloween", imageUrl: "/banners/halloween-pc.png", mobileImageUrl: "/banners/halloween-mobile.png", title: "", subtitle: "", link: "" },
   { _id: "builtin-halloween-cat", imageUrl: "/banners/halloween-cat-pc.png", mobileImageUrl: "/banners/halloween-cat-mobile.png", title: "", subtitle: "", link: "" },
+  // 세 번째(2026-10-11 운영자 "arctic 배너로 · 추가") — 할로윈 꾸미기 세트 최소 65% 할인 · ~ 11. 5. 23:59 + 부채꼴 카드(디스코드 홍보 이미지 윗부분)
+  { _id: "builtin-halloween-set", imageUrl: "/banners/halloween-set-pc.png", mobileImageUrl: "/banners/halloween-set-mobile.png", title: "", subtitle: "", link: "" },
 ];
 // 📌 기본 배너 중 아직 「등록」 안 된 것(같은 그림인 배너가 없는 것)은 등록된 켜진 배너 뒤에 같이 돈다 — 관리자는 숨김 배너가 맨 뒤에(점으로 넘겨 본다).
 //    예전엔 켜진 배너가 하나라도 있으면 기본 배너를 통째로 뺐다 → HALLOWEEN 을 등록해 둔 탓에 검은 고양이 배너가 안 보였다(2026-10-11 "적용한 거 맞아?").

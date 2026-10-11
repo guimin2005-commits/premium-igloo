@@ -1123,8 +1123,11 @@ if (process.env.TITLE_PREVIEW) {
   console.log(`title-${TITLE}`);
   process.exit(0);
 }
-await sharp(pcBuf).toFile(join(outDir, "halloween-pc.png"));
-await sharp(mBuf).toFile(join(outDir, "halloween-mobile.png"));
+// 📌 2026-10-11 public/banners/halloween-pc · mobile.png 은 다른 세션이 새 디자인(할로윈 꾸미기 세트 · 최소 65% 할인 · 부채꼴 카드)으로 바꿨다 —
+//    이 스크립트의 옛 HALLOWEEN 그림이 그걸 덮지 않게, 기본은 미리보기 폴더에만 쓴다. 정말 옛 그림으로 되돌릴 때만 OVERWRITE_MAIN=1
+const mainDir = process.env.OVERWRITE_MAIN === "1" ? outDir : prevDir;
+await sharp(pcBuf).toFile(join(mainDir, "halloween-pc.png"));
+await sharp(mBuf).toFile(join(mainDir, "halloween-mobile.png"));
 // 미리보기 — PC(절반) 옆에 폰(절반), 아래에 작게(PC 608 · 폰 350 — 작은 화면에서도 글자가 읽히는지)
 const pcHalf = await sharp(pcBuf).resize(1200, 300, { kernel: "nearest" }).toBuffer();
 const mHalf = await sharp(mBuf).resize(540, 360, { kernel: "nearest" }).toBuffer();
