@@ -441,8 +441,8 @@ const sfxEnhance = (kind) => {
   const t = ENH_KIND[kind] || ENH_KIND.chat;
   t.sfx.forEach((f, i) => setTimeout(() => playTone(f, 0.16, t.wave, 0.05), i * 110));
 };
-// 도트 아이콘 — 같은 색 가로 줄을 한 칸짜리 rect 로 합쳐 그린다(crispEdges · 정수 배율)
-const EnhPixelIcon = ({ k, scale = 4, className = "", style }) => {
+// 도트 아이콘 — 같은 색 가로 줄을 한 칸짜리 rect 로 합쳐 그린다(crispEdges · 정수 배율). fluid 면 크기는 .enh-ic 의 --px(폰 3배 · PC 4배)
+const EnhPixelIcon = ({ k, scale = 4, fluid = false, className = "", style }) => {
   const a = ENH_PIXEL[k];
   const W = a.rows[0].length, H = a.rows.length;
   const rects = [];
@@ -456,7 +456,8 @@ const EnhPixelIcon = ({ k, scale = 4, className = "", style }) => {
       x = e + 1;
     }
   });
-  return <svg aria-hidden viewBox={`0 0 ${W} ${H}`} width={W * scale} height={H * scale} shapeRendering="crispEdges" className={`shrink-0 ${className}`} style={style}>{rects}</svg>;
+  const size = fluid ? { width: `calc(${W}px * var(--px))`, height: `calc(${H}px * var(--px))` } : { width: W * scale, height: H * scale };
+  return <svg aria-hidden viewBox={`0 0 ${W} ${H}`} shapeRendering="crispEdges" className={`shrink-0 ${className}`} style={{ ...size, ...style }}>{rects}</svg>;
 };
 // 📌 채팅 · 음성 탭 — 각진 막대 하나를 반으로 나눠 고른 쪽만 그쪽 색으로 채운다(잉크 글자). 2026-10-11 운영자: 흰 알약 탭은 "밤티" → 3안 「한 줄 둘로 나눔」
 //    두 칸이 늘 반반이라 고르는 쪽을 바꿔도 탭 줄이 안 밀린다
@@ -489,14 +490,40 @@ const sparksOf = (n, r0) => Array.from({ length: n }, (_, i) => {
 const PASS_SPARKS = sparksOf(20, 110).map((p, i) => ({ ...p, c: ["#d9c6ff", "#ff9fd6", "#ffffff", "#b69cff"][i % 4] }));
 // 아이콘 칸 크기(칸) — 채팅 · 음성 그림 중 가장 넓고 높은 값. 탭을 바꿔도 칸이 그대로라 아래가 안 움직인다
 const ENH_ICON_BOX = [Math.max(...Object.values(ENH_PIXEL).map((a) => a.rows[0].length)), Math.max(...Object.values(ENH_PIXEL).map((a) => a.rows.length))];
-// 강화 도트 불티 — 아이콘 둘레 8방향 네모(흰 · 그쪽 색), 퍼지며 사라진다
-const ENH_SPARKS = [[-1, -1], [0, -1.3], [1, -1], [1.3, 0], [1, 1], [0, 1.3], [-1, 1], [-1.3, 0]];
+// 📌 강화 순간 도트 불티 — 아이콘 둘레 20개. 칸 크기 = 아이콘 한 칸(--px)이라 그림과 같은 격자. tw = 반짝이(십자 3칸), 아니면 네모 1 · 2칸.
+//    거리(dx · dy)는 아이콘 칸 수 — 배율을 곱해 px 로(폰 · PC 가 같은 모양). 흰빛 · 그쪽 색 · 금빛이 섞인다
+const ENH_BURST = Array.from({ length: 20 }, (_, i) => {
+  const a = (i / 20) * Math.PI * 2 + ((i * 7) % 5) * 0.05;
+  const r = [12, 17, 22][i % 3];
+  return { dx: +(Math.cos(a) * r).toFixed(1), dy: +(Math.sin(a) * r).toFixed(1), tw: i % 4 === 0, n: i % 3 === 2 ? 2 : 1, d: (i % 4) * 35, c: i % 3 === 0 ? "#ffffff" : i % 3 === 1 ? "kind" : ENH_GOLD };
+});
+// 도트 충격파 — 16칸 격자의 동그라미 테(두께 1칸). 아이콘 크기로 깔고 끊어지는 움직임(steps)으로 커지며 사라진다
+const ENH_RING = (() => {
+  const out = [];
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const d = Math.hypot(x + 0.5 - 8, y + 0.5 - 8);
+    if (d > 6.6 && d <= 7.7) out.push([x, y]);
+  }
+  return out;
+})();
+const EnhRing = ({ color, style }) => (
+  <svg aria-hidden viewBox="0 0 16 16" shapeRendering="crispEdges" className="enh-anim absolute left-1/2 top-1/2 pointer-events-none opacity-0" style={style}>
+    {ENH_RING.map(([x, y]) => <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={color} />)}
+  </svg>
+);
 const ENH_CSS = `
+.enh-ic { --px: 3; }
+@media (min-width: 640px) { .enh-ic { --px: 4; } }
 @keyframes enhSegIn { 0% { transform: scaleX(0); background: #fff; } 55% { transform: scaleX(1); background: #fff; } 100% { transform: scaleX(1); background: var(--kc); } }
 @keyframes enhGold { 0% { background: var(--kc); } 45% { background: #fff; } 100% { background: ${ENH_GOLD}; } }
-@keyframes enhRoll { 0% { transform: translateY(105%); } 70% { transform: translateY(-3%) scale(1.06); } 100% { transform: none; } }
-@keyframes enhHop { 0%, 100% { transform: none; } 35% { transform: translateY(-6px); } 70% { transform: translateY(1px); } }
-@keyframes enhSpark { 0% { transform: translate(calc(var(--dx) * 0.4), calc(var(--dy) * 0.4)); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+@keyframes enhIn { 0% { transform: translateY(100%); } 62% { transform: translateY(-4%) scale(1.1); } 100% { transform: none; } }
+@keyframes enhOut { 0% { transform: none; opacity: 1; } 100% { transform: translateY(-100%); opacity: 0; } }
+@keyframes enhHop { 0%, 100% { transform: none; } 30% { transform: translateY(-12px) scale(1.12); } 62% { transform: translateY(2px) scale(0.98); } }
+@keyframes enhSpark { 0% { transform: translate(0, 0); opacity: 1; } 65% { opacity: 1; } 100% { transform: translate(calc(var(--dx) * var(--px) * 1px), calc(var(--dy) * var(--px) * 1px)) scale(0.6); opacity: 0; } }
+@keyframes enhRing { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.55); opacity: 0; } }
+@keyframes enhFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes enhVal { 0%, 35% { color: #ffffff; } 100% { color: var(--kc); } }
+@keyframes enhRow { 0% { background: var(--kf); } 100% { background: transparent; } }
 `;
 const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin = 5, policy, onTone, onReset, resetBusy, discount = 0 }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
@@ -505,17 +532,18 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
 
   // 단계가 오르면 한 번 움직인다 (종류별로 따로 기억)
   const prevLv = useRef({ chat: enh.chat.level, voice: enh.voice.level });
-  const [pop, setPop] = useState("");
+  const [pop, setPop] = useState(null);
   useEffect(() => {
     const up = ["chat", "voice"].find((k) => enh[k].level > prevLv.current[k]);
+    const from = up ? prevLv.current[up] : 0;
     prevLv.current = { chat: enh.chat.level, voice: enh.voice.level };
     if (!up) return;
-    setPop(up);
+    setPop({ k: up, from });
     // 최종 단계에 닿으면 강화 성공음 뒤에 한 번 더 — 올라가는 팡파르
     if (enh[up].level >= enh[up].max) {
       [659.25, 783.99, 987.77, 1318.51].forEach((f, i) => setTimeout(() => playTone(f, 0.2, "triangle", 0.045), 420 + i * 120));
     }
-    const t = setTimeout(() => setPop(""), 1100);
+    const t = setTimeout(() => setPop(null), 1400);
     return () => clearTimeout(t);
   }, [enh.chat.level, enh.voice.level]);
 
@@ -526,7 +554,10 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
   const kt = ENH_KIND[kind];
   const perLabel = isChat ? "채팅 1회" : `음성 ${voiceMin}분`;
   const atMax = v.level >= v.max;
-  const popped = pop === kind;
+  const popped = pop?.k === kind;
+  const tick = `${kind}-${v.level}`; // 단계가 바뀔 때마다 움직이는 것들을 새로 그려 애니메이션을 다시 건다
+  const lvLabel = (n) => (n >= v.max ? "MAX" : `+${n}`);
+  const cc = atMax ? ENH_GOLD : kt.c;
   const cost = v.nextCost || 0;
   // 📌 빙옥으로 낼 때는 XP 비용이 아니라 환산값(÷10,000 올림)과 비교한다
   const pointCost = xpToPoint(cost);
@@ -561,32 +592,68 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
       left={
         <>
           <style>{ENH_CSS}</style>
-          {/* 지금 단계 — 도트 아이콘 · 영문 눈썹 · 큰 +N(칸 밖이 잘리는 상자 안에서 아래 → 위로 올라오며 바뀐다) · 단계 칸 게이지 · 지금 1회 획득 */}
-          <div className="flex sm:flex-col items-end sm:items-start justify-between gap-4 sm:gap-5">
-            <div className="min-w-0 order-1 sm:order-2">
-              <p className="text-[10px] font-black tracking-[0.35em] text-white/40">{kt.en}</p>
-              <div className="mt-3 h-[62px] overflow-hidden">
+          {/* 📌 지금 단계(2026-10-11 「무대」) — PC 는 위에 아이콘 무대(넓게) · 아래 눈썹 · 큰 +N, 폰은 왼쪽 큰 +N | 오른쪽 무대.
+                 무대 = 아이콘 크게 가운데 + 발밑 도트 그림자. 강화하면 무대가 그쪽 색으로 번쩍 → 도트 충격파 둘 · 반짝이가 끊어지는 움직임(steps)으로 터지고 아이콘이 들썩.
+                 큰 숫자는 옛 단계가 위로 빠지고 새 단계가 아래에서 올라온다(마지막 단계는 금빛 MAX). 탭 구조 · 다른 칸은 그대로(운영자 "탭으로 나눴으면 나눈 대로") */}
+          <div className="flex sm:flex-col items-end sm:items-stretch justify-between gap-4 sm:gap-0">
+            <div className="min-w-0 order-1 sm:order-2 sm:mt-5">
+              <p className="text-[10px] font-black tracking-[0.35em] leading-none" style={{ color: cc }}>{kt.en}</p>
+              <div className="relative mt-3 h-[62px] overflow-hidden">
+                {popped && (
+                  <p aria-hidden className="enh-anim absolute left-0 bottom-0 text-[72px] font-black leading-[0.86] tabular-nums tracking-[-0.04em] whitespace-nowrap text-white" style={{ animation: "enhOut .26s cubic-bezier(0.5,0,0.75,0) both" }}>
+                    {lvLabel(pop.from)}
+                  </p>
+                )}
                 <p
-                  key={`${kind}-${atMax ? "max" : v.level}`}
+                  key={`n-${tick}`}
                   className="enh-anim text-[72px] font-black leading-[0.86] tabular-nums tracking-[-0.04em] whitespace-nowrap origin-bottom-left"
-                  style={{ color: atMax ? ENH_GOLD : "#ffffff", ...(popped ? { animation: "enhRoll .5s .18s cubic-bezier(0.16,1,0.3,1) both" } : {}) }}
+                  style={{ color: atMax ? ENH_GOLD : "#ffffff", ...(popped ? { animation: "enhIn .55s .2s cubic-bezier(0.16,1,0.3,1) both" } : {}) }}
                 >
-                  {atMax ? "MAX" : `+${v.level}`}
+                  {lvLabel(v.level)}
                 </p>
               </div>
             </div>
-            {/* 📌 아이콘 칸은 두 그림 중 큰 쪽(가로 24 · 세로 25칸) 크기로 고정 — 말풍선(23칸)과 마이크(25칸) 높이가 달라 탭을 바꾸면 아래가 밀렸다 */}
-            <div className="relative shrink-0 order-2 sm:order-1">
-              {popped && ENH_SPARKS.map(([dx, dy], i) => (
-                <span
-                  key={i}
-                  aria-hidden
-                  className="enh-anim absolute left-1/2 top-1/2 pointer-events-none"
-                  style={{ width: i % 2 ? 6 : 8, height: i % 2 ? 6 : 8, marginLeft: i % 2 ? -3 : -4, marginTop: i % 2 ? -3 : -4, background: i % 3 === 0 ? "#ffffff" : atMax ? ENH_GOLD : kt.c, "--dx": `${dx * 60}px`, "--dy": `${dy * 60}px`, animation: "enhSpark .62s .3s cubic-bezier(0.16,1,0.3,1) both" }}
-                ></span>
-              ))}
-              <span className="flex items-end justify-center" style={{ width: ENH_ICON_BOX[0] * 3, height: ENH_ICON_BOX[1] * 3 }}>
-                <EnhPixelIcon key={`ic-${kind}-${v.level}`} k={kind} scale={3} className="enh-anim" style={popped ? { animation: "enhHop .5s .3s ease-out both" } : undefined} />
+            {/* 📌 무대 — 아이콘 칸은 두 그림 중 큰 쪽(가로 24 · 세로 25칸) 크기로 고정(탭을 바꿔도 아래가 안 밀린다) */}
+            <div className="enh-ic relative shrink-0 order-2 sm:order-1 w-[104px] h-[100px] sm:w-full sm:h-[150px] flex items-center justify-center bg-white/[0.03]">
+              {popped && (
+                <>
+                  <span key={`f-${tick}`} aria-hidden className="enh-anim absolute inset-0 pointer-events-none opacity-0" style={{ background: hexA(cc, 0.18), animation: "enhFlash .7s ease-out both" }}></span>
+                  {[0, 1].map((i) => (
+                    <EnhRing
+                      key={`r${i}-${tick}`}
+                      color={i ? "#ffffff" : cc}
+                      style={{ width: `calc(${ENH_ICON_BOX[1]}px * var(--px))`, height: `calc(${ENH_ICON_BOX[1]}px * var(--px))`, animation: `enhRing .62s ${0.28 + i * 0.12}s steps(6) both` }}
+                    />
+                  ))}
+                  {ENH_BURST.map((p, i) => {
+                    const col = p.c === "kind" ? cc : p.c;
+                    const u = (n) => `calc(var(--px) * ${n}px)`;
+                    return (
+                      <span
+                        key={`p${i}-${tick}`}
+                        aria-hidden
+                        className="enh-anim absolute left-1/2 top-1/2 pointer-events-none opacity-0"
+                        style={{
+                          width: u(p.n),
+                          height: u(p.n),
+                          marginLeft: u(-p.n / 2),
+                          marginTop: u(-p.n / 2),
+                          background: col,
+                          ...(p.tw ? { boxShadow: `${u(1)} 0 0 ${col}, ${u(-1)} 0 0 ${col}, 0 ${u(1)} 0 ${col}, 0 ${u(-1)} 0 ${col}` } : {}),
+                          "--dx": p.dx,
+                          "--dy": p.dy,
+                          animation: `enhSpark .78s ${0.3 + p.d / 1000}s steps(8) both`,
+                        }}
+                      ></span>
+                    );
+                  })}
+                </>
+              )}
+              <span className="relative flex flex-col items-center justify-end" style={{ width: `calc(${ENH_ICON_BOX[0]}px * var(--px))`, height: `calc(${ENH_ICON_BOX[1] + 3}px * var(--px))` }}>
+                <EnhPixelIcon key={`i-${tick}`} k={kind} fluid className="enh-anim relative" style={popped ? { animation: "enhHop .55s .3s ease-out both" } : undefined} />
+                {/* 발밑 도트 그림자 — 납작한 타원 두 줄(번짐 없이 칸으로) */}
+                <span aria-hidden className="block bg-black/45" style={{ marginTop: "calc(var(--px) * 1px)", width: "calc(var(--px) * 14px)", height: "calc(var(--px) * 1px)" }}></span>
+                <span aria-hidden className="block bg-black/30" style={{ width: "calc(var(--px) * 10px)", height: "calc(var(--px) * 1px)" }}></span>
               </span>
             </div>
           </div>
@@ -626,7 +693,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[11px] font-bold text-white/45">{atMax ? "최대 단계" : "다음 단계"}</p>
-          <p className="mt-2 text-[34px] font-black tabular-nums leading-none tracking-[-0.02em]" style={{ color: atMax ? ENH_GOLD : kt.c }}>{atMax ? "MAX" : `+${v.level + 1}`}</p>
+          <p key={`nx-${tick}`} className="enh-anim mt-2 text-[34px] font-black tabular-nums leading-none tracking-[-0.02em]" style={{ color: atMax ? ENH_GOLD : kt.c, "--kc": atMax ? ENH_GOLD : kt.c, ...(popped ? { animation: "enhVal .9s .3s ease-out both" } : {}) }}>{atMax ? "MAX" : `+${v.level + 1}`}</p>
         </div>
         <div className="min-w-0 text-right">
           <p className="text-[11px] font-bold text-white/45">{perLabel}</p>
@@ -687,9 +754,9 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
           const next = r.n === v.level + 1;
           return (
             <div
-              key={r.n}
-              className="relative grid items-center gap-x-3 h-10 px-3 border-b border-white/[0.06] tabular-nums"
-              style={next ? { ...COLS, background: hexA(kt.c, 0.1), boxShadow: `inset 3px 0 0 ${kt.c}` } : COLS}
+              key={popped && r.n === v.level ? `row-${r.n}-${tick}` : r.n}
+              className="enh-anim relative grid items-center gap-x-3 h-10 px-3 border-b border-white/[0.06] tabular-nums"
+              style={next ? { ...COLS, background: hexA(kt.c, 0.1), boxShadow: `inset 3px 0 0 ${kt.c}` } : popped && r.n === v.level ? { ...COLS, "--kf": hexA(cc, 0.28), animation: "enhRow 1s .25s ease-out both" } : COLS}
             >
               <span className={`text-[13px] font-black ${done ? "text-white/35" : next ? "text-white" : "text-white/70"}`}>+{r.n}</span>
               <span className={`text-[12px] font-bold truncate ${done ? "text-white/30" : next ? "text-white" : "text-white/60"}`}>{r.g}</span>
