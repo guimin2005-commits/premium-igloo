@@ -15,6 +15,7 @@ import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
 import { renewBaseOf, expiryLabel, bundleViewOf } from "../owned";
 import { isBundle } from "@/lib/bundle";
+import { splitItemName } from "@/lib/itemName";
 import { typeLabelOf } from "../ProductCard";
 import { isUnitSale, qtyCapOf } from "@/lib/unitSale";
 import { CART_KEY, CHECKOUT_KEY, readShopList, readShopRaw, writeShopList, removeShopKey, useShopUid } from "../shopStore";
@@ -414,7 +415,7 @@ export default function CheckoutPage() {
                             return (
                               <li key={c.itemId} className="flex items-baseline justify-between gap-3 text-[12px]">
                                 <span className={`min-w-0 truncate font-bold ${st === "owned" ? "text-[#a3a3a3]" : "text-[#5a5a5a]"}`}>
-                                  {info.get(c.itemId)?.name || "아이템"}{c.qty > 1 ? ` ×${c.qty}` : ""}
+                                  {splitItemName(info.get(c.itemId)?.name).short || "아이템"}{c.qty > 1 ? ` ×${c.qty}` : ""}
                                 </span>
                                 <span className={`shrink-0 text-[11px] font-bold tabular-nums ${st === "renew" || st === "upgrade" ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
                                   {st === "owned" ? "보유 중 · 빠짐" : st === "renew" ? `${durationLabel(c.days)} 연장` : st === "upgrade" ? "무제한 전환" : durationLabel(c.days)}
@@ -436,11 +437,11 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
-                        {r.item.name}
+                        {splitItemName(r.item.name).short}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${base != null ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{base != null ? " 연장" : ""}</span>}
                       </h3>
                       <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5 truncate">
-                        {itemTypeLabel(r.item.type)} · 수량 {r.qty}{base != null && <> · <span className="tabular-nums">{expiryLabel(base + (r.days ?? 0) * 86400000)}까지</span></>}
+                        {splitItemName(r.item.name).kind || itemTypeLabel(r.item.type)} · 수량 {r.qty}{base != null && <> · <span className="tabular-nums">{expiryLabel(base + (r.days ?? 0) * 86400000)}까지</span></>}
                       </p>
                     </div>
                     <div className="relative text-right shrink-0">

@@ -8,6 +8,7 @@ import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice
 import { pointToXp } from "@/lib/pointRate";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import { isBundle } from "@/lib/bundle";
+import { splitItemName } from "@/lib/itemName";
 import { bundleCountOf } from "./ProductCard";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
@@ -269,7 +270,7 @@ export default function ArcticHome({
               className="relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>{deal.kind === "sale" ? "할인" : "새로 들어온"}</span>
               <h3 className="mt-3 pr-16 text-[22px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">
-                {deal.kind === "sale" ? `${deal.it.name} ${deal.it.discountPct}% 할인` : deal.it.name}
+                {deal.kind === "sale" ? `${splitItemName(deal.it.name).short} ${deal.it.discountPct}% 할인` : splitItemName(deal.it.name).short}
               </h3>
               <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">
                 {deal.kind === "sale"

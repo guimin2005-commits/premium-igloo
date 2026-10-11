@@ -8,6 +8,7 @@ import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
+import { splitItemName } from "@/lib/itemName";
 import { useGuestShopLogin } from "../useGuestShopLogin";
 import { BUNDLE_LABEL } from "../ProductCard";
 
@@ -20,7 +21,7 @@ const bundleNamesOf = (rows: readonly OrderRow[]) => {
     const key = String(r.itemRef || r.itemName || "");
     const hit = out.find((x) => x.key === key);
     if (hit) hit.n += 1;
-    else out.push({ key, name: String(r.itemName || "아이템"), n: 1 });
+    else out.push({ key, name: splitItemName(r.itemName).short || "아이템", n: 1 });
   }
   return out.map((x) => (x.n > 1 ? `${x.name} ×${x.n}` : x.name)).join(" · ");
 };
@@ -149,9 +150,9 @@ export default function OrdersPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${meta.cls}`}>{meta.label}</span>
-                        <span className="text-[10px] font-bold text-[#8a8a8a]">{bundle ? BUNDLE_LABEL : TYPE_LABEL[o.itemType] || "상품"}</span>
+                        <span className="text-[10px] font-bold text-[#8a8a8a]">{bundle ? BUNDLE_LABEL : splitItemName(o.itemName).kind || TYPE_LABEL[o.itemType] || "상품"}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-[#131313] truncate">{bundle ? o.bundleName : o.itemName}</h3>
+                      <h3 className="text-sm font-bold text-[#131313] truncate">{bundle ? o.bundleName : splitItemName(o.itemName).short}</h3>
                       {/* 세트 — 구성 아이템 이름들 */}
                       {bundle && <p className="text-[12px] font-bold text-[#5a5a5a] mt-0.5 break-keep">{bundleNamesOf(o.rows || [])}</p>}
                       {/* 여러 개 산 줄 — 수량과 쓴 · 돌려받은 개수. 한 개짜리 소모권은 썼으면 "사용함" (세트는 위에 구성이 있어 수량을 적지 않는다) */}

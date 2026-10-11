@@ -16,14 +16,16 @@ import CardArt from "../../CardArt";
 import AppliedPreview from "../../AppliedPreview";
 import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf, bundleViewOf, bundlePickOf } from "../../owned";
 import { isBundle } from "@/lib/bundle";
+import { splitItemName } from "@/lib/itemName";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 import { openLogin, LOGIN_CTX } from "../../../components/LoginPrompt";
 import { CART_KEY, WISH_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../../shopStore";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천(세트만 ProductCard 의 typeLabelOf · typeColorOf)
-const TypeBadge = ({ type, className = "" }: { type: string; className?: string }) => (
+//    label — 이름 머리말에서 뗀 분류(「카드 스킨」 …, lib/itemName). 없으면 유형 이름
+const TypeBadge = ({ type, label = "", className = "" }: { type: string; label?: string; className?: string }) => (
   <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: typeColorOf(type) }}>
-    {typeLabelOf(type)}
+    {label || typeLabelOf(type)}
   </span>
 );
 
@@ -277,7 +279,7 @@ export default function ItemDetailPage() {
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
       <ArcticStoreBar
-        crumbs={[{ label: typeLabelOf(item.type), href: bundle ? "/arctic?type=all" : `/arctic?type=${item.type}` }, { label: item.name }]}
+        crumbs={[{ label: typeLabelOf(item.type), href: bundle ? "/arctic?type=all" : `/arctic?type=${item.type}` }, { label: splitItemName(item.name).short }]}
         cartCount={cartCount}
         wishCount={wish.length}
       />
@@ -296,9 +298,10 @@ export default function ItemDetailPage() {
 
           {/* 우 — 정보 */}
           <div className="flex flex-col">
-            <TypeBadge type={item.type} className="self-start px-2.5 py-1 text-[10px] mb-3" />
+            <TypeBadge type={item.type} label={splitItemName(item.name).kind} className="self-start px-2.5 py-1 text-[10px] mb-3" />
 
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{item.name}</h1>
+            {/* 이름은 머리말 뗀 짧은 이름 — 분류는 위 칩(「카드 스킨」 …)에 한 번만 */}
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{splitItemName(item.name).short}</h1>
 
             <div className="mb-6">
               {/* 정가 취소선은 가격 위에 — 상품 카드(ProductCard)와 같은 순서(사용자: 할인 전 가격이 밑으로 가면 어색) */}
@@ -488,11 +491,11 @@ export default function ItemDetailPage() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
-                        <span className="min-w-0 text-[14px] font-black text-[#131313] break-keep">{info.name || "아이템"}</span>
+                        <span className="min-w-0 text-[14px] font-black text-[#131313] break-keep">{splitItemName(info.name).short || "아이템"}</span>
                         {mark && <span className={`shrink-0 mt-0.5 text-[11px] font-black whitespace-nowrap ${st === "owned" ? "text-[#8a8a8a]" : "text-[#e91e3f]"}`}>{mark}</span>}
                       </div>
                       <span className="block mt-1 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
-                        {typeLabelOf(info.type || "item")} · {durationLabel(c.days)}{c.qty > 1 ? ` · ${c.qty.toLocaleString()}개` : ""}
+                        {splitItemName(info.name).kind || typeLabelOf(info.type || "item")} · {durationLabel(c.days)}{c.qty > 1 ? ` · ${c.qty.toLocaleString()}개` : ""}
                       </span>
                       {fx.length > 0 && (
                         <div className="mt-2.5 space-y-1">

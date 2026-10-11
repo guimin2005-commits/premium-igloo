@@ -14,6 +14,7 @@ import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { isRenewal } from "../owned";
 import { isBundle } from "@/lib/bundle";
+import { splitItemName } from "@/lib/itemName";
 import { CART_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
 
@@ -264,10 +265,10 @@ export default function CartPage() {
                       </Link>
                       <div className="flex-1 min-w-0">
                         <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black text-white mb-1.5" style={{ backgroundColor: itemTypeColor(r.item.type) }}>
-                          {TYPE_LABEL[r.item.type] || "상품"}
+                          {splitItemName(r.item.name).kind || TYPE_LABEL[r.item.type] || "상품"}
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
-                        <Link href={itemHref} className="truncate hover:underline underline-offset-4">{r.item.name}</Link>
+                        <Link href={itemHref} className="truncate hover:underline underline-offset-4">{splitItemName(r.item.name).short}</Link>
                         {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
                       </h3>

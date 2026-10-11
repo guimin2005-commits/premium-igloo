@@ -28,6 +28,7 @@ import { SeasonHead, SeasonPicks, seasonPicks } from "./ArcticSeason";
 import CardArt from "./CardArt";
 import ProductCard, { typeLabelOf } from "./ProductCard";
 import { isBundle } from "@/lib/bundle";
+import { splitItemName } from "@/lib/itemName";
 import ShopFilterBar from "./ShopFilterBar";
 import { priceBuckets, inBucket } from "./priceBuckets";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -71,10 +72,11 @@ const MOBILE_TABS = [{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v === "al
 const PANEL_TYPES = TYPES.filter((t) => t.v !== "all" && t.v !== "season");
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
-function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
+//    label — 이름 머리말에서 뗀 분류(「카드 스킨」 …, lib/itemName). 없으면 유형 이름
+function TypeBadge({ type, label = "", className = "" }: { type: string; label?: string; className?: string }) {
   return (
     <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
-      {itemTypeLabel(type)}
+      {label || itemTypeLabel(type)}
     </span>
   );
 }
@@ -1180,8 +1182,8 @@ export default function ArcticShopBody({
                     <CardArt it={buyTarget} iconSize={36} />
                   </div>
                   <div className="min-w-0">
-                    <TypeBadge type={buyTarget.type} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
-                    <h2 className="text-base font-black text-[#131313] truncate">{buyTarget.name}</h2>
+                    <TypeBadge type={buyTarget.type} label={splitItemName(buyTarget.name).kind} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
+                    <h2 className="text-base font-black text-[#131313] truncate">{splitItemName(buyTarget.name).short}</h2>
                     <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">
                       {priceText(buyTarget, salePrice(buyTarget, buyTarget._days))}
                       {isTimed(buyTarget) && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1.5">/ {durationLabel(buyTarget._days)}</span>}
