@@ -512,6 +512,9 @@ const EnhRing = ({ color, style }) => (
   </svg>
 );
 const ENH_CSS = `
+/* 📌 강화 창 스크롤바 숨김(2026-10-11 운영자 "스크롤 바좀 없애") — 단계표 · 폰 본문은 그대로 스크롤된다. 이 창(aria-label 강화)에만 */
+[role="dialog"][aria-label="강화"] [data-pop-list], [role="dialog"][aria-label="강화"] [data-pop-body] { scrollbar-width: none; scrollbar-gutter: auto; }
+[role="dialog"][aria-label="강화"] [data-pop-list]::-webkit-scrollbar, [role="dialog"][aria-label="강화"] [data-pop-body]::-webkit-scrollbar { display: none; }
 .enh-ic { --px: 3; }
 @media (min-width: 640px) { .enh-ic { --px: 4; } }
 @keyframes enhSegIn { 0% { transform: scaleX(0); background: #fff; } 55% { transform: scaleX(1); background: #fff; } 100% { transform: scaleX(1); background: var(--kc); } }
