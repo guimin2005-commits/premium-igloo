@@ -1168,11 +1168,11 @@ const PassPeek = ({ peek, boxW }) => {
 //    높이를 여기서 셈해 두면 탭(전체 / 받을 보상)을 바꿔도 트랙 높이가 그대로라 창이 출렁이지 않는다
 //    col 140 = 타일 128 — "1,000,000 빙옥" 이 잘리지 않는 폭
 //    bar = 트랙 아래 여백 — 스크롤바는 숨긴다(2026-10-11 운영자 "휠 바 안 보이게", 휠 · 끌기 · 트랙패드로 넘긴다)
-const PT = { col: 140, gap: 8, head: 40, line: 24, tile: 60, tileGap: 6, slot: 28, rowGap: 8, pad: 6, label: 22, bar: 6 };
+const PT = { col: 140, gap: 8, head: 40, line: 24, tile: 60, tileGap: 6, slot: 28, rowGap: 8, pad: 6, label: 28, bar: 6 };
 // 📌 마디 티어 — 5 · 10 · 15 … 와 마지막 티어. 칸 머리 번호를 금빛 알약으로(트랙에서 큰 고비가 한눈에, 2026-10-11 시안)
 const passMilestone = (t, tiers) => t.level % 5 === 0 || t === tiers[tiers.length - 1];
 const passRowH = (n) => n * PT.tile + (n - 1) * PT.tileGap + PT.tileGap + PT.slot;
-const PASS_VERTICAL = { writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: "0.14em" };
+const PASS_VERTICAL = { writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: "0.04em", lineHeight: 1 };
 
 // 📌 트랙 칸 — 한 티어의 무료(또는 프리미엄) 보상 전부를 위 → 아래로 쌓는다("+N" 으로 접지 않는다, 2026-10-01 "보상도 +1 표기 말고 다 보여주게").
 //    맨 아래는 받기 자리(고정 높이) — 받을 수 있으면 받기, 다 받았으면 받음. 받기는 칸 단위(그 칸 보상 전부)
@@ -1623,12 +1623,17 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
               <div aria-hidden className="shrink-0 mr-2 flex flex-col" style={{ width: PT.label }}>
                 <div className="shrink-0" style={{ height: PT.head + PT.line }}></div>
                 {/* 📌 줄 이름은 그 줄 첫 칸과 같은 높이 · 같은 자리(2026-10-11 운영자 "배열 안 맞는 거") — 줄 전체 높이(받기 자리 · 둘째 칸까지)에 걸쳐 가운데 두면 첫 칸과 어긋났다 */}
-                <div className="shrink-0 rounded-lg flex items-center justify-center bg-white/[0.05] text-[11px] font-black text-white/45" style={{ height: PT.tile }}>
-                  <span style={PASS_VERTICAL}>무료</span>
+                {/* 📌 두 줄 이름은 한 벌로 — 보상 칸과 같은 틀(테 1.5px 무료 은색 · 프리미엄 금보라, 모서리 14px, 안 판 같은 색), 같은 글자 크기 · 자간 · 위아래 여백.
+                       프리미엄 왕관은 뺐다(60px 칸에 왕관 + 네 글자가 꽉 차 위아래가 테에 붙었다 — 프리미엄 칸 모서리마다 왕관이 이미 있다) */}
+                <div className="shrink-0 rounded-[14px] p-[1.5px]" style={{ height: PT.tile, background: PASS_EDGE.free }}>
+                  <div className="h-full rounded-[12.5px] flex items-center justify-center text-[10px] font-black text-white/60" style={{ background: PASS_FILL.free }}>
+                    <span style={PASS_VERTICAL}>무료</span>
+                  </div>
                 </div>
-                <div className="shrink-0 rounded-lg flex flex-col items-center justify-center text-[10px] font-black text-[#d9c6ff]" style={{ height: PT.tile, marginTop: hFree - PT.tile + PT.rowGap, ...passChipBg(true) }}>
-                  <svg aria-hidden viewBox="0 0 24 24" className="w-2.5 h-2.5 mb-1 shrink-0" fill="currentColor"><path d={CROWN} /></svg>
-                  <span style={{ ...PASS_VERTICAL, letterSpacing: "0.02em", lineHeight: 1 }}>프리미엄</span>
+                <div className="shrink-0 rounded-[14px] p-[1.5px]" style={{ height: PT.tile, marginTop: hFree - PT.tile + PT.rowGap, background: PASS_EDGE.paid }}>
+                  <div className="h-full rounded-[12.5px] flex items-center justify-center text-[10px] font-black text-[#e3cfff]" style={{ background: PASS_FILL.paid }}>
+                    <span style={PASS_VERTICAL}>프리미엄</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -1636,7 +1641,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             <div
               ref={trackRef}
               className="no-bar min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
-              style={{ height: colH + PT.bar, overscrollBehaviorX: "contain" }}
+              style={{ height: colH + PT.bar, overscrollBehaviorX: "contain", maskImage: "linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)", WebkitMaskImage: "linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)" }}
             >
               {rows.length === 0 ? (
                 <div className="flex items-center justify-center text-[12px] font-bold text-white/35" style={{ height: colH }}>{tab === "claim" ? "지금 받을 보상이 없습니다" : "등록된 티어가 없습니다"}</div>
