@@ -158,6 +158,46 @@ t("인용 아님: >_< · 날짜처럼 보이는 4자리 숫자", () => {
 t("꺾쇠 · 따옴표는 글자로", () => assert.ok(html("<script>alert('x')</script>").includes("&lt;script&gt;")));
 t("제목 안 서식", () => assert.ok(html("# **굵은** 제목").includes("<strong>굵은</strong>")));
 
+// ── 검토에서 나온 것(2026-10-11)
+t("날짜 줄은 번호 목록이 아니다 · Enter 로 날짜를 다시 매기지 않는다", () => {
+  assert.ok(!html("10. 12.(일) 예선").includes("tabular-nums"), "10. 12.(일)");
+  assert.ok(!html("9. 30. 마감").includes("tabular-nums"), "9. 30.");
+  assert.ok(html("1. 2.5kg 받기").includes("tabular-nums"), "1. 2.5kg 는 번호");
+  assert.equal(enter("10. 12.(일) 예선|\n10. 13.(월) 본선"), null);
+});
+t("복사 칸 속 링크 · 서식이 속성을 깨지 않는다", () => {
+  for (const src of ["{[a](https://x.com/onmouseover=alert`1`//)}", "{==x==}", "{a'b\"c}"]) {
+    const h = html(src);
+    const attrs = h.match(/data-copy='[^']*'/g) || [];
+    assert.equal(attrs.length, 1, src + " → " + h);
+    // 따옴표로 묶인 속성 값을 걷어 낸 뒤에 이벤트 속성(on…=)이 남으면 속성 밖으로 새어 나간 것
+    const bare = h.replace(/='[^']*'/g, "=''");
+    assert.ok(!/\son[a-z]+\s*=/i.test(bare), src + " → " + h);
+    assert.ok(!bare.includes('"'), src + " → 큰따옴표가 속성 밖에");
+  }
+});
+t("두 덩어리를 고르면 벗기지 않고 하나로", () => {
+  assert.equal(wrap("[**공지** 확인 후 **신청**]"), "**[공지 확인 후 신청]**");
+  assert.equal(wrap("[**a**\n**b**]"), "[a\nb]");
+});
+t("서식 끝에서 다시 누르면 빠져나감 · 빈 짝은 취소", () => {
+  assert.equal(wrap("**안녕|** 끝"), "**안녕**| 끝");
+  assert.equal(wrap("**|**"), "|");
+});
+t("표 · 구분선 · 이미지 줄은 굵게 · 목록이 안 걸린다", () => {
+  // 표 · 이미지 글자에 「|」 「[」 가 있어 at() 표기를 못 쓴다 — 글 전체를 고른 것으로
+  const v = "소개\n| a | b |\n| --- | --- |\n---\n![설명](https://a.com/x.png)\n끝";
+  const w = E.applyToValue(v, E.toggleWrap(v, 0, v.length, "**"));
+  assert.equal(w, "**소개**\n| a | b |\n| --- | --- |\n---\n![설명](https://a.com/x.png)\n**끝**");
+  const b = E.applyToValue(v, E.setBlock(v, 0, v.length, "bullet"));
+  assert.equal(b, "* 소개\n| a | b |\n| --- | --- |\n---\n![설명](https://a.com/x.png)\n* 끝");
+  assert.ok(R.renderMarkdownHtml(w).includes("<table"), "표가 살아 있다");
+  assert.ok(R.renderMarkdownHtml(w).includes("border-t"), "구분선이 살아 있다");
+  // 표 줄 안 커서에서 굵게 → 아무것도 안 바뀐다
+  const ed = E.toggleWrap(v, 5, 5, "**");
+  assert.equal(E.applyToValue(v, ed), v);
+});
+
 // ── 디스코드 공지로 보낼 글(lib/noticeDiscord.js toDiscordText)
 t("디스코드 — 제목은 굵게 · 작은 글씨는 글자만 · 인용 · 목록 · 구분선 · 옛 막기", () => {
   const src = ["# 큰 제목", "## **중간**", "-# 작은 글", "> 인용", "* 점", "  - 들여쓴 점", "1. 번호", "---", ">_<", "==강조== {코드}"].join("\n");

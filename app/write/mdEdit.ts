@@ -35,10 +35,14 @@ export function activeAt(v: string, s: number): { marks: Record<WrapMark, boolea
   return { marks, block: lineKindOf(line)?.kind ?? null };
 }
 
+// 표 줄 · 구분선 · 이미지 한 줄 — 글자 서식 · 줄 서식을 받지 않는다(렌더러가 그 줄을 통째로 읽는다 — 기호가 붙으면 표 · 선 · 그림이 깨진다)
+const isAtomicLine = (ln: string) => ln.trim().startsWith("|") || lineKindOf(ln)?.kind === "hr" || /^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(ln);
+
 // 굵게 · 밑줄 · 취소선 · 강조 켜고 끄기
-//  · 고른 글이 이미 그 서식이면(안쪽이든 바깥쪽이든) 벗긴다
-//  · 여러 줄을 골랐으면 줄마다(서식은 줄을 넘지 못한다) — 줄 앞 기호(목록 · 제목)는 밖에 둔다
-//  · 고른 게 없으면: 그 서식 안이면 벗기고, 낱말 위면 그 낱말을, 아니면 빈 짝을 넣고 그 사이에 커서
+//  · 고른 글이 정확히 그 서식 한 덩어리면(안쪽이든 기호까지든) 벗긴다 — 「**a** 와 **b**」처럼 두 덩어리를 고르면 벗기지 않고 하나로 합쳐 씌운다
+//  · 여러 줄을 골랐으면 줄마다(서식은 줄을 넘지 못한다) — 줄 앞 기호(목록 · 제목)는 밖에, 표 · 구분선 · 이미지 줄은 그대로. 고른 줄이 전부 그 서식이면 전부 벗긴다
+//  · 고른 게 없으면: 서식 끝(닫는 기호 바로 앞)이면 닫는 기호 뒤로 빠져나가고(켜고 · 쓰고 · 끄기), 그 서식 안이면 벗기고,
+//    낱말 위면 그 낱말을, 아니면 빈 짝을 넣고 그 사이에 커서
 export function toggleWrap(v: string, s: number, e: number, mark: WrapMark): Edit {
   const m = mark.length;
   if (s === e) {
@@ -46,10 +50,15 @@ export function toggleWrap(v: string, s: number, e: number, mark: WrapMark): Edi
     const line = v.slice(ls, le), at = s - ls;
     const hit = runsIn(line, mark).find((r) => at >= r.open && at <= r.close + m);
     if (hit) {
+      if (at === hit.close && hit.close > hit.open + m) {
+        const p = ls + hit.close + m;
+        return { start: p, end: p, text: "", selStart: p, selEnd: p };
+      }
       const inner = line.slice(hit.open + m, hit.close);
       const cur = Math.min(Math.max(at - m, hit.open), hit.open + inner.length);
       return { start: ls + hit.open, end: ls + hit.close + m, text: inner, selStart: ls + cur, selEnd: ls + cur };
     }
+    if (isAtomicLine(line)) return { start: s, end: s, text: "", selStart: s, selEnd: s };
     let a = s, b = s;
     while (a > ls && WORD.test(v[a - 1])) a--;
     while (b < le && WORD.test(v[b])) b++;
@@ -60,31 +69,57 @@ export function toggleWrap(v: string, s: number, e: number, mark: WrapMark): Edi
     return { start: s, end: s, text: mark + mark, selStart: s + m, selEnd: s + m };
   }
   const sel = v.slice(s, e);
-  if (sel.length >= 2 * m && sel.startsWith(mark) && sel.endsWith(mark)) {
-    const inner = sel.slice(m, -m);
-    return { start: s, end: e, text: inner, selStart: s, selEnd: s + inner.length };
-  }
-  if (v.slice(s - m, s) === mark && v.slice(e, e + m) === mark) {
-    return { start: s - m, end: e + m, text: sel, selStart: s - m, selEnd: e - m };
+  const ls0 = lineStartAt(v, s);
+  if (!sel.includes("\n")) {
+    // 고른 글이 정확히 한 덩어리(기호까지)
+    const r0 = runsIn(sel, mark);
+    if (r0.length === 1 && r0[0].open === 0 && r0[0].close === sel.length - m) {
+      const inner = sel.slice(m, -m);
+      return { start: s, end: e, text: inner, selStart: s, selEnd: s + inner.length };
+    }
+    // 고른 글 바로 바깥 기호가 이 줄의 한 덩어리
+    if (runsIn(v.slice(ls0, lineEndAt(v, s)), mark).some((r) => r.open === s - m - ls0 && r.close === e - ls0)) {
+      return { start: s - m, end: e + m, text: sel, selStart: s - m, selEnd: e - m };
+    }
   }
   const lines = sel.split("\n");
   const parts = lines.map((ln, idx) => {
-    // 첫 줄은 고른 자리부터라 줄 앞 기호가 없을 수 있다 — 기호는 줄 전체에서 볼 때만 밖으로
-    const whole = idx === 0 ? lineStartAt(v, s) === s : true;
+    // 첫 줄은 고른 자리부터라 줄 앞 기호가 없을 수 있다 — 기호 · 통째 줄 판정은 줄 전체로
+    const whole = idx === 0 ? ls0 === s : true;
+    const full = idx === 0 ? v.slice(ls0, lineEndAt(v, s)) : ln;
+    if (isAtomicLine(full)) return { ln, atomic: true, pre: "", lead: "", tail: "", core: "" };
     const k = whole ? lineKindOf(ln) : null;
     const pre = k && k.kind !== "hr" ? k.prefix : "";
     const body = ln.slice(pre.length);
     const lead = body.match(/^\s*/)![0], tail = body.match(/\s*$/)![0];
     const core = body.slice(lead.length, body.length - tail.length);
-    return { out: core ? pre + lead + mark + core + mark + tail : ln, at: pre.length + lead.length, core };
+    return { ln, atomic: false, pre, lead, tail, core };
   });
-  const text = parts.map((p) => p.out).join("\n");
+  const filled = parts.filter((p) => !p.atomic && p.core);
+  // 고른 줄이 전부 그 서식 한 덩어리 → 전부 벗긴다
+  const isRun = (c: string) => { const r = runsIn(c, mark); return r.length === 1 && r[0].open === 0 && r[0].close === c.length - m && c.length > 2 * m; };
+  const unwrapAll = lines.length > 1 && filled.length > 0 && filled.every((p) => isRun(p.core));
+  const out = parts.map((p) => {
+    if (p.atomic || !p.core) return { out: p.ln, at: 0, len: 0 };
+    if (unwrapAll) { const inner = p.core.slice(m, -m); return { out: p.pre + p.lead + inner + p.tail, at: p.pre.length + p.lead.length, len: inner.length }; }
+    // 안에 같은 서식이 있으면 걷어 내고 하나로 씌운다(짝 없는 기호는 그대로)
+    const plain = runsIn(p.core, mark).length ? stripRuns(p.core, mark) : p.core;
+    return { out: p.pre + p.lead + mark + plain + mark + p.tail, at: p.pre.length + p.lead.length + m, len: plain.length };
+  });
+  const text = out.map((p) => p.out).join("\n");
   if (lines.length === 1) {
-    const p = parts[0];
-    if (!p.core) return { start: s, end: e, text, selStart: s, selEnd: e };
-    return { start: s, end: e, text, selStart: s + p.at + m, selEnd: s + p.at + m + p.core.length };
+    const p = out[0];
+    if (!p.len && text === sel) return { start: s, end: e, text, selStart: s, selEnd: e };
+    return { start: s, end: e, text, selStart: s + p.at, selEnd: s + p.at + p.len };
   }
   return { start: s, end: e, text, selStart: s, selEnd: s + text.length };
+}
+// 짝지은 서식 기호만 걷어 낸다
+function stripRuns(c: string, mark: WrapMark) {
+  const m = mark.length;
+  let out = "", i = 0;
+  for (const r of runsIn(c, mark)) { out += c.slice(i, r.open) + c.slice(r.open + m, r.close); i = r.close + m; }
+  return out + c.slice(i);
 }
 
 // 선택이 걸친 줄들 — 끝이 다음 줄 맨 앞이면 그 줄은 빼고
@@ -108,12 +143,13 @@ function stripBlock(line: string): { indent: string; body: string; kind: LineKin
 //  kind null = 본문(제목 · 작은 글씨를 뗀다). 이미 전부 그 서식이면 뗀다(목록 · 번호 · 인용 · 제목 단추를 다시 누르면 꺼짐)
 export function setBlock(v: string, s: number, e: number, kind: BlockKind | null): Edit {
   const { a, b, lines } = lineSpan(v, s, e);
-  const filled = lines.filter((l) => l.trim());
+  // 표 · 구분선 · 이미지 줄은 건너뛴다(기호가 붙으면 깨진다)
+  const filled = lines.filter((l) => l.trim() && !isAtomicLine(l));
   const all = filled.length > 0 && filled.every((l) => lineKindOf(l)?.kind === kind);
   const off = kind === null || all;
   let n = 0;
   const out = lines.map((ln) => {
-    if (!ln.trim() && lines.length > 1) return ln;
+    if ((!ln.trim() && lines.length > 1) || isAtomicLine(ln)) return ln;
     const st = stripBlock(ln);
     if (off) {
       if (kind === null) return isHeadingish(st.kind) ? st.body : ln; // 본문 — 크기만 되돌린다(목록 · 인용은 그대로)

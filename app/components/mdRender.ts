@@ -12,6 +12,10 @@ const safeUrl = (u: string) => (/^https?:\/\/[^"'<>\s]+$/i.test(String(u).trim()
 // 본문의 꺾쇠·따옴표를 먼저 글자로 바꿔 둔다 (a<b 가 태그로 먹히거나 속성이 깨지지 않게)
 const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+// 복사 단추 data-copy — 앞 단계(링크 · 이미지)가 만든 태그는 떼고, 따옴표 · 꺾쇠 · 서식 기호는 문자 참조로(속성을 깨고 나가거나 뒤 단계 **·__·~~·== 가 속성 안을 바꾸지 않게).
+//    이미 escapeHtml 이 만든 &#39; 같은 참조는 그대로 — getAttribute 가 원래 글자로 돌려준다
+const copyAttr = (code: string) => code.replace(/<[^>]*>/g, "").replace(/['"<>`*_~=\[\]()!]/g, (c) => `&#${c.charCodeAt(0)};`);
+
 // 줄 안 글자 서식 — cell: 표 칸(칸 머리 "* " 는 예전처럼 점 글자로)
 export function formatInline(t: string, cell = false): string {
   let s = escapeHtml(t)
@@ -29,7 +33,7 @@ export function formatInline(t: string, cell = false): string {
       return `<a href='${href}' target='_blank' rel='noopener noreferrer' class='text-[#e91e3f] hover:underline'>${label}</a>`;
     })
     // 복사 단추는 type='button' — 글쓰기 미리보기처럼 form 안에 그려져도 누를 때 글이 제출되지 않게
-    .replace(/\{([^}]+)\}/g, (_m, code) => `<span class='inline-flex items-center gap-1.5 bg-[rgba(128,128,128,.16)] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button type='button' class='copy-btn text-[#e91e3f] hover:opacity-70 transition-opacity flex-shrink-0' data-copy='${code}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
+    .replace(/\{([^}]+)\}/g, (_m, code) => `<span class='inline-flex items-center gap-1.5 bg-[rgba(128,128,128,.16)] px-2.5 py-1 rounded'><code class='text-[#e91e3f] font-mono text-sm'>${code}</code><button type='button' class='copy-btn text-[#e91e3f] hover:opacity-70 transition-opacity flex-shrink-0' data-copy='${copyAttr(code)}' title='복사'><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' class='w-3.5 h-3.5'><path strokeLinecap='round' strokeLinejoin='round' d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z' /></svg></button></span>`)
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/__(.*?)__/g, "<span class='underline'>$1</span>")
     .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
@@ -50,7 +54,8 @@ export function lineKindOf(line: string): { kind: LineKind; depth: number; n: nu
   if (m) return { kind: "quote", depth: 0, n: 0, body: m[1] ?? "", prefix: line.slice(0, line.length - (m[1] ?? "").length) };
   m = /^( *)([*-])[ \t]+(.*)$/.exec(line);
   if (m) return { kind: "bullet", depth: Math.min(4, Math.floor(m[1].length / 2)), n: 0, body: m[3], prefix: line.slice(0, line.length - m[3].length) };
-  m = /^( *)(\d{1,3})[.)][ \t]+(.*)$/.exec(line);
+  // 「10. 12.(일) 예선」 같은 날짜 줄은 번호가 아니다 — 글이 또 「숫자.」로 시작하면 빼고(「1. 2.5kg」 은 번호)
+  m = /^( *)(\d{1,3})[.)][ \t]+(?!\d{1,2}[.)](?:[ \t(]|$))(.*)$/.exec(line);
   if (m) return { kind: "number", depth: Math.min(4, Math.floor(m[1].length / 2)), n: Number(m[2]), body: m[3], prefix: line.slice(0, line.length - m[3].length) };
   return null;
 }

@@ -626,13 +626,16 @@ export default function AdminWritePage() {
     }, 0);
   };
 
-  // 편집 칸 스크롤 비율을 미리보기로 넘긴다 — 보고 있던 부분 근처에서 열린다. 돌아오면 편집 칸은 원래 자리(숨기기만 해서 그대로)
+  // 📌 보고 있던 부분 근처에서 미리보기가 열린다. 편집 칸은 글 길이만큼 커져(RichEditor) 안쪽 스크롤이 없으므로
+  //    화면 위(사이트 머리 + 도구 줄 아래)가 편집 칸의 몇 % 자리인지를 넘긴다(2026-10-11 검토 — 긴 글은 미리보기가 빈 아래쪽에서 열렸다).
+  //    미리보기 글이 상자보다 짧으면(줄인 글) 창을 그 자리로, 길면 상자 안을 스크롤. 돌아오면 편집 칸은 원래 자리(숨기기만 해서 그대로)
+  const stickyTop = () => (window.innerWidth >= 768 ? 60 : 56) + 48;
   const switchView = (v: string) => {
     if (v === editorView) return;
     const textarea = textareaRef.current;
     if (v === "preview") {
-      const max = textarea ? textarea.scrollHeight - textarea.clientHeight : 0;
-      previewRatio.current = textarea && max > 0 ? textarea.scrollTop / max : 0;
+      const r = textarea?.getBoundingClientRect();
+      previewRatio.current = r && r.height > 0 ? Math.min(1, Math.max(0, (stickyTop() - r.top) / r.height)) : 0;
       setPreviewAt(new Date().toISOString());
     }
     setEditorView(v);
@@ -640,7 +643,18 @@ export default function AdminWritePage() {
   useLayoutEffect(() => {
     const el = previewRef.current;
     if (editorView !== "preview" || !el) return;
-    el.scrollTop = Math.round(previewRatio.current * Math.max(0, el.scrollHeight - el.clientHeight));
+    const ratio = previewRatio.current;
+    if (el.scrollHeight > el.clientHeight + 1) {
+      el.scrollTop = Math.round(ratio * (el.scrollHeight - el.clientHeight));
+      return;
+    }
+    if (ratio <= 0) return;
+    const inner = el.firstElementChild as HTMLElement | null;
+    const h = inner ? inner.getBoundingClientRect().height : el.scrollHeight;
+    const boxTop = el.getBoundingClientRect().top + window.scrollY;
+    const want = boxTop + ratio * h - stickyTop();
+    const last = boxTop + h - window.innerHeight + 80;
+    window.scrollTo({ top: Math.max(boxTop - stickyTop(), Math.min(want, last)) });
   }, [editorView]);
 
   const handleModalClose = () => {

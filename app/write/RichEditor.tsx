@@ -16,6 +16,12 @@ import {
 
 // 값 바꾸기 — 되돌리기 기록에 남게. execCommand 가 안 먹는 브라우저는 값을 직접 넣고 input 이벤트(React onChange)
 export function applyEdit(ta: HTMLTextAreaElement, ed: Edit) {
+  // 커서만 옮기는 것(서식 끝에서 빠져나가기 등) — 값은 그대로, 되돌리기 기록도 안 남긴다
+  if (!ed.text && ed.start === ed.end) {
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(ed.selStart, ed.selEnd);
+    return;
+  }
   const want = applyToValue(ta.value, ed);
   ta.focus({ preventScroll: true });
   ta.setSelectionRange(ed.start, ed.end);
