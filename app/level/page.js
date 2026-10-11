@@ -497,20 +497,16 @@ const ENH_BURST = Array.from({ length: 20 }, (_, i) => {
   const r = [12, 17, 22][i % 3];
   return { dx: +(Math.cos(a) * r).toFixed(1), dy: +(Math.sin(a) * r).toFixed(1), tw: i % 4 === 0, n: i % 3 === 2 ? 2 : 1, d: (i % 4) * 35, c: i % 3 === 0 ? "#ffffff" : i % 3 === 1 ? "kind" : ENH_GOLD };
 });
-// 도트 충격파 — 16칸 격자의 동그라미 테(두께 1칸). 아이콘 크기로 깔고 끊어지는 움직임(steps)으로 커지며 사라진다
-const ENH_RING = (() => {
-  const out = [];
-  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-    const d = Math.hypot(x + 0.5 - 8, y + 0.5 - 8);
-    if (d > 6.6 && d <= 7.7) out.push([x, y]);
-  }
-  return out;
-})();
-const EnhRing = ({ color, style }) => (
-  <svg aria-hidden viewBox="0 0 16 16" shapeRendering="crispEdges" className="enh-anim absolute left-1/2 top-1/2 pointer-events-none opacity-0" style={style}>
-    {ENH_RING.map(([x, y]) => <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={color} />)}
-  </svg>
-);
+// 📌 모으기 — 무대 가장자리에서 아이콘으로 빨려 드는 불티 14개(칸 격자 · 끊어지는 움직임, 서버 답을 기다리는 동안 되풀이)
+const ENH_GATHER = Array.from({ length: 14 }, (_, i) => {
+  const a = (i / 14) * Math.PI * 2 + (i % 2 ? 0.25 : 0);
+  const r = i % 2 ? 19 : 25;
+  return { dx: +(Math.cos(a) * r).toFixed(1), dy: +(Math.sin(a) * r).toFixed(1), n: i % 3 === 0 ? 2 : 1, d: (i * 47) % 560 };
+});
+// 📌 터짐 — 빛줄기 8개(가운데에서 뻗는 칸 막대, 대각선은 짧게)
+const ENH_RAYS = Array.from({ length: 8 }, (_, i) => ({ deg: i * 45, len: i % 2 ? 9 : 14 }));
+// 📌 여운 — 아이콘 둘레에서 위로 떠오르며 사라지는 반짝이
+const ENH_DRIFT = Array.from({ length: 10 }, (_, i) => ({ x: [-11, -6, -2, 3, 8, 12, -9, 5, -4, 10][i], y: [2, -3, 4, -1, 3, -2, -6, -5, 6, 0][i], tw: i % 3 === 0, d: i * 70 }));
 const ENH_CSS = `
 /* 📌 강화 창 스크롤바 숨김(2026-10-11 운영자 "스크롤 바좀 없애") — 단계표 · 폰 본문은 그대로 스크롤된다. 이 창(aria-label 강화)에만 */
 [role="dialog"][aria-label="강화"] [data-pop-list], [role="dialog"][aria-label="강화"] [data-pop-body] { scrollbar-width: none; scrollbar-gutter: auto; }
@@ -523,7 +519,16 @@ const ENH_CSS = `
 @keyframes enhOut { 0% { transform: none; opacity: 1; } 100% { transform: translateY(-100%); opacity: 0; } }
 @keyframes enhHop { 0%, 100% { transform: none; } 30% { transform: translateY(-12px) scale(1.12); } 62% { transform: translateY(2px) scale(0.98); } }
 @keyframes enhSpark { 0% { transform: translate(0, 0); opacity: 1; } 65% { opacity: 1; } 100% { transform: translate(calc(var(--dx) * var(--px) * 1px), calc(var(--dy) * var(--px) * 1px)) scale(0.6); opacity: 0; } }
-@keyframes enhRing { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.55); opacity: 0; } }
+@keyframes enhGather { 0% { transform: translate(calc(var(--dx) * var(--px) * 1px), calc(var(--dy) * var(--px) * 1px)); opacity: 0; } 20% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(0, 0); opacity: 0; } }
+@keyframes enhTremble { 0% { transform: translate(calc(var(--px) * 0.5px), 0); } 50% { transform: translate(calc(var(--px) * -0.5px), 0); } 100% { transform: translate(calc(var(--px) * 0.5px), calc(var(--px) * -0.5px)); } }
+@keyframes enhCharge { 0% { filter: brightness(1); } 100% { filter: brightness(1.9) saturate(1.2); } }
+@keyframes enhEdge { 0%, 100% { box-shadow: inset 0 0 0 1px transparent; } 50% { box-shadow: inset 0 0 0 2px var(--kc); } }
+@keyframes enhScreen { 0% { opacity: 0.5; } 100% { opacity: 0; } }
+@keyframes enhShake { 0%, 100% { transform: none; } 15% { transform: translate(-4px, 2px); } 30% { transform: translate(4px, -2px); } 45% { transform: translate(-3px, -1px); } 60% { transform: translate(3px, 1px); } 80% { transform: translate(-1px, 0); } }
+@keyframes enhRay { 0% { transform: rotate(var(--deg)) scaleY(0); opacity: 1; } 35% { transform: rotate(var(--deg)) scaleY(1); opacity: 1; } 100% { transform: rotate(var(--deg)) scaleY(1.25); opacity: 0; } }
+@keyframes enhStamp { 0% { transform: scale(2.4); opacity: 0; } 18% { transform: scale(0.9); opacity: 1; } 30% { transform: scale(1.06); } 42% { transform: scale(1); } 78% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.04); opacity: 0; } }
+@keyframes enhPop { 0% { transform: scale(1.35); filter: brightness(3); } 45% { transform: scale(0.94); filter: brightness(1.4); } 100% { transform: none; filter: none; } }
+@keyframes enhRise { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(0, calc(var(--px) * -16px)); opacity: 0; } }
 @keyframes enhFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes enhVal { 0%, 35% { color: #ffffff; } 100% { color: var(--kc); } }
 @keyframes enhRow { 0% { background: var(--kf); } 100% { background: transparent; } }
@@ -533,22 +538,48 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
   const [pick, setPick] = useState("chat");
   const kind = kinds.includes(pick) ? pick : kinds[0];
 
-  // 단계가 오르면 한 번 움직인다 (종류별로 따로 기억)
+  // 📌 강화 연출 3박자(2026-10-11 운영자 "강화는 연출이 생명") —
+  //    ① 모으기: 강화를 누른 순간부터 서버 답이 올 때까지 — 불티가 아이콘으로 빨려 들고, 아이콘이 떨며 밝아지고, 무대 테가 그쪽 색으로 깜빡
+  //    ② 터짐: 단계가 오르면(모으기가 짧았으면 0.48초를 채우고) — 화면 번쩍 · 본문 흔들림 · 빛줄기 8개 · 도트 불티 · 아이콘 튀어 오름 · 무대 가운데 큰 「+4」 도장
+  //    ③ 여운: 반짝이가 위로 떠오르고 · 큰 숫자 넘어감 · 새 칸 차오름 · 다음 단계 숫자 · 마친 줄 번쩍. 마지막 단계는 모두 금빛 + 팡파르
+  //    실패(단계 그대로)면 모으기만 멈춘다
   const prevLv = useRef({ chat: enh.chat.level, voice: enh.voice.level });
   const [pop, setPop] = useState(null);
+  const [charge, setCharge] = useState(null);
+  const chargeRef = useRef(null);
+  const boomRef = useRef(false);
   useEffect(() => {
     const up = ["chat", "voice"].find((k) => enh[k].level > prevLv.current[k]);
     const from = up ? prevLv.current[up] : 0;
     prevLv.current = { chat: enh.chat.level, voice: enh.voice.level };
     if (!up) return;
-    setPop({ k: up, from });
-    // 최종 단계에 닿으면 강화 성공음 뒤에 한 번 더 — 올라가는 팡파르
-    if (enh[up].level >= enh[up].max) {
-      [659.25, 783.99, 987.77, 1318.51].forEach((f, i) => setTimeout(() => playTone(f, 0.2, "triangle", 0.045), 420 + i * 120));
-    }
-    const t = setTimeout(() => setPop(null), 1400);
-    return () => clearTimeout(t);
+    const c = chargeRef.current;
+    const wait = c && c.k === up ? Math.max(0, 480 - (performance.now() - c.t0)) : 0;
+    boomRef.current = true;
+    const ts = [];
+    ts.push(setTimeout(() => {
+      chargeRef.current = null;
+      setCharge(null);
+      setPop({ k: up, from });
+      // 최종 단계에 닿으면 강화 성공음 뒤에 한 번 더 — 올라가는 팡파르
+      if (enh[up].level >= enh[up].max) {
+        [659.25, 783.99, 987.77, 1318.51].forEach((f, i) => ts.push(setTimeout(() => playTone(f, 0.2, "triangle", 0.045), 420 + i * 120)));
+      }
+    }, wait));
+    ts.push(setTimeout(() => { setPop(null); boomRef.current = false; }, wait + 1800));
+    return () => ts.forEach(clearTimeout);
   }, [enh.chat.level, enh.voice.level]);
+  // 강화 누름 — 모으기를 걸고 서버로. 답이 왔는데 단계가 안 올랐으면(실패) 모으기를 거둔다
+  const doEnhance = (k, how, cost) => {
+    const c = { k, t0: performance.now() };
+    chargeRef.current = c;
+    setCharge(c);
+    Promise.resolve(onEnhance(k, how, cost)).finally(() => {
+      setTimeout(() => {
+        if (chargeRef.current === c && !boomRef.current) { chargeRef.current = null; setCharge(null); }
+      }, 80);
+    });
+  };
 
   if (!kind) return null;
 
@@ -558,6 +589,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
   const perLabel = isChat ? "채팅 1회" : `음성 ${voiceMin}분`;
   const atMax = v.level >= v.max;
   const popped = pop?.k === kind;
+  const charging = charge?.k === kind && !popped;
   const tick = `${kind}-${v.level}`; // 단계가 바뀔 때마다 움직이는 것들을 새로 그려 애니메이션을 다시 건다
   const lvLabel = (n) => (n >= v.max ? "MAX" : `+${n}`);
   const cc = atMax ? ENH_GOLD : kt.c;
@@ -595,10 +627,11 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
       left={
         <>
           <style>{ENH_CSS}</style>
+          {popped && <span key={`sc-${tick}`} aria-hidden className="enh-anim fixed inset-0 z-[130] pointer-events-none bg-white opacity-0" style={{ animation: "enhScreen .38s ease-out both" }}></span>}
           {/* 📌 지금 단계(2026-10-11 「무대」) — PC 는 위에 아이콘 무대(넓게) · 아래 눈썹 · 큰 +N, 폰은 왼쪽 큰 +N | 오른쪽 무대.
                  무대 = 아이콘 크게 가운데 + 발밑 도트 그림자. 강화하면 무대가 그쪽 색으로 번쩍 → 도트 충격파 둘 · 반짝이가 끊어지는 움직임(steps)으로 터지고 아이콘이 들썩.
                  큰 숫자는 옛 단계가 위로 빠지고 새 단계가 아래에서 올라온다(마지막 단계는 금빛 MAX). 탭 구조 · 다른 칸은 그대로(운영자 "탭으로 나눴으면 나눈 대로") */}
-          <div className="flex sm:flex-col items-end sm:items-stretch justify-between gap-4 sm:gap-0">
+          <div key={popped ? `sh-${tick}` : "still"} className="enh-anim flex sm:flex-col items-end sm:items-stretch justify-between gap-4 sm:gap-0" style={popped ? { animation: "enhShake .38s steps(10) both" } : undefined}>
             <div className="min-w-0 order-1 sm:order-2 sm:mt-5">
               <p className="text-[10px] font-black tracking-[0.35em] leading-none" style={{ color: cc }}>{kt.en}</p>
               <div className="relative mt-3 h-[62px] overflow-hidden">
@@ -617,17 +650,37 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
               </div>
             </div>
             {/* 📌 무대 — 아이콘 칸은 두 그림 중 큰 쪽(가로 24 · 세로 25칸) 크기로 고정(탭을 바꿔도 아래가 안 밀린다) */}
-            <div className="enh-ic relative shrink-0 order-2 sm:order-1 w-[104px] h-[100px] sm:w-full sm:h-[150px] flex items-center justify-center bg-white/[0.03]">
+            <div
+              className="enh-ic enh-anim relative shrink-0 order-2 sm:order-1 w-[104px] h-[100px] sm:w-full sm:h-[150px] flex items-center justify-center bg-white/[0.03]"
+              style={charging ? { "--kc": kt.c, animation: "enhEdge .36s steps(2) infinite" } : undefined}
+            >
+              {/* ① 모으기 — 빨려 드는 불티(되풀이) */}
+              {charging && ENH_GATHER.map((g, i) => {
+                const u = (n) => `calc(var(--px) * ${n}px)`;
+                return (
+                  <span
+                    key={`g${i}`}
+                    aria-hidden
+                    className="enh-anim absolute left-1/2 top-1/2 pointer-events-none opacity-0"
+                    style={{ width: u(g.n), height: u(g.n), marginLeft: u(-g.n / 2), marginTop: u(-g.n / 2), background: i % 3 === 0 ? "#ffffff" : kt.c, "--dx": g.dx, "--dy": g.dy, animation: `enhGather .56s ${g.d}ms steps(6) infinite` }}
+                  ></span>
+                );
+              })}
               {popped && (
                 <>
-                  <span key={`f-${tick}`} aria-hidden className="enh-anim absolute inset-0 pointer-events-none opacity-0" style={{ background: hexA(cc, 0.18), animation: "enhFlash .7s ease-out both" }}></span>
-                  {[0, 1].map((i) => (
-                    <EnhRing
-                      key={`r${i}-${tick}`}
-                      color={i ? "#ffffff" : cc}
-                      style={{ width: `calc(${ENH_ICON_BOX[1]}px * var(--px))`, height: `calc(${ENH_ICON_BOX[1]}px * var(--px))`, animation: `enhRing .62s ${0.28 + i * 0.12}s steps(6) both` }}
-                    />
-                  ))}
+                  {/* ② 터짐 — 무대 번쩍 · 빛줄기(화면 번쩍 · 흔들림은 위 판에서) */}
+                  <span key={`f-${tick}`} aria-hidden className="enh-anim absolute inset-0 pointer-events-none opacity-0" style={{ background: hexA(cc, 0.22), animation: "enhFlash .8s ease-out both" }}></span>
+                  {ENH_RAYS.map((r, i) => {
+                    const u = (n) => `calc(var(--px) * ${n}px)`;
+                    return (
+                      <span
+                        key={`ray${i}-${tick}`}
+                        aria-hidden
+                        className="enh-anim absolute pointer-events-none opacity-0"
+                        style={{ left: `calc(50% - ${u(1)})`, top: `calc(50% - ${u(r.len + 4)})`, width: u(2), height: u(r.len), transformOrigin: `50% calc(100% + ${u(4)})`, background: i % 2 ? "#ffffff" : cc, "--deg": `${r.deg}deg`, animation: `enhRay .5s ${i % 2 ? 40 : 0}ms steps(5) both` }}
+                      ></span>
+                    );
+                  })}
                   {ENH_BURST.map((p, i) => {
                     const col = p.c === "kind" ? cc : p.c;
                     const u = (n) => `calc(var(--px) * ${n}px)`;
@@ -645,15 +698,37 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
                           ...(p.tw ? { boxShadow: `${u(1)} 0 0 ${col}, ${u(-1)} 0 0 ${col}, 0 ${u(1)} 0 ${col}, 0 ${u(-1)} 0 ${col}` } : {}),
                           "--dx": p.dx,
                           "--dy": p.dy,
-                          animation: `enhSpark .78s ${0.3 + p.d / 1000}s steps(8) both`,
+                          animation: `enhSpark .7s ${p.d / 1000}s steps(8) both`,
                         }}
                       ></span>
                     );
                   })}
+                  {/* ③ 여운 — 위로 떠오르는 반짝이 */}
+                  {ENH_DRIFT.map((d, i) => {
+                    const u = (n) => `calc(var(--px) * ${n}px)`;
+                    const col = i % 2 ? "#ffffff" : cc;
+                    return (
+                      <span
+                        key={`dr${i}-${tick}`}
+                        aria-hidden
+                        className="enh-anim absolute pointer-events-none opacity-0"
+                        style={{ left: `calc(50% + ${u(d.x)})`, top: `calc(50% + ${u(d.y)})`, width: u(1), height: u(1), background: col, ...(d.tw ? { boxShadow: `${u(1)} 0 0 ${col}, ${u(-1)} 0 0 ${col}, 0 ${u(1)} 0 ${col}, 0 ${u(-1)} 0 ${col}` } : {}), animation: `enhRise 1s ${0.35 + d.d / 1000}s steps(10) both` }}
+                      ></span>
+                    );
+                  })}
+                  {/* 무대 가운데 큰 도장 — 「+4」(마지막 단계는 금빛 MAX). 아이콘 위에 쾅 찍혔다가 사라진다 */}
+                  <span
+                    key={`st-${tick}`}
+                    aria-hidden
+                    className="enh-anim absolute inset-0 z-10 flex items-center justify-center pointer-events-none opacity-0 text-[44px] sm:text-[60px] font-black tabular-nums tracking-[-0.04em] leading-none"
+                    style={{ color: atMax ? ENH_GOLD : "#ffffff", textShadow: `2px 0 0 #131313, -2px 0 0 #131313, 0 2px 0 #131313, 0 -2px 0 #131313, 2px 2px 0 #131313, -2px 2px 0 #131313, 2px -2px 0 #131313, -2px -2px 0 #131313, 0 6px 0 ${atMax ? "#7a4b00" : hexA(kt.c, 0.55)}`, animation: "enhStamp 1.15s .05s cubic-bezier(0.2,0.8,0.2,1) both" }}
+                  >
+                    {lvLabel(v.level)}
+                  </span>
                 </>
               )}
               <span className="relative flex flex-col items-center justify-end" style={{ width: `calc(${ENH_ICON_BOX[0]}px * var(--px))`, height: `calc(${ENH_ICON_BOX[1] + 3}px * var(--px))` }}>
-                <EnhPixelIcon key={`i-${tick}`} k={kind} fluid className="enh-anim relative" style={popped ? { animation: "enhHop .55s .3s ease-out both" } : undefined} />
+                <EnhPixelIcon key={`i-${tick}`} k={kind} fluid className="enh-anim relative" style={popped ? { animation: "enhPop .5s cubic-bezier(0.2,0.8,0.2,1) both" } : charging ? { animation: "enhTremble .1s steps(2) infinite, enhCharge .48s ease-in forwards" } : undefined} />
                 {/* 발밑 도트 그림자 — 납작한 타원 두 줄(번짐 없이 칸으로) */}
                 <span aria-hidden className="block bg-black/45" style={{ marginTop: "calc(var(--px) * 1px)", width: "calc(var(--px) * 14px)", height: "calc(var(--px) * 1px)" }}></span>
                 <span aria-hidden className="block bg-black/30" style={{ width: "calc(var(--px) * 10px)", height: "calc(var(--px) * 1px)" }}></span>
@@ -723,7 +798,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
           <>
             <button
               type="button"
-              onClick={() => onEnhance(kind, "xp", cost)}
+              onClick={() => doEnhance(kind, "xp", cost)}
               disabled={!canXp}
               aria-label={`${kt.label} 강화 · ${fmt(cost)} XP`}
               className="flex-1 min-w-0 h-12 px-3 rounded-full inline-flex items-center justify-center text-[#131313] text-[14px] font-black tabular-nums transition-[transform,filter] enabled:hover:brightness-105 enabled:active:scale-[0.97] enabled:active:brightness-90 outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
@@ -733,7 +808,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
             </button>
             <button
               type="button"
-              onClick={() => onEnhance(kind, "point", cost)}
+              onClick={() => doEnhance(kind, "point", cost)}
               disabled={!canPoint}
               aria-label={`${kt.label} 강화 · ${fmt(pointCost)} 빙옥`}
               className="shrink-0 min-w-[104px] h-12 px-4 rounded-full text-white text-[13px] font-black tabular-nums transition-colors enabled:hover:bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-35 disabled:cursor-default"
