@@ -156,6 +156,8 @@ export async function POST(request) {
       color: normalizeColor(b.color),
       // 📌 카드 배경 장면 — 목록(lib/itemBackdrops.js)에 있는 키만, 아니면 "" (기본 바탕). 상품 고유 값이라 아이템 연동과 무관
       backdrop: isBackdropKey(b.backdrop) ? String(b.backdrop) : "",
+      // 📌 이벤트 테마 — 아는 값("halloween")만, 아니면 "" (ARCTIC 할로윈 탭)
+      theme: b.theme === "halloween" ? "halloween" : "",
       type,
       roleId: roleIdIn,
       roleName: grantsRole ? (b.roleName || "").trim() : "",

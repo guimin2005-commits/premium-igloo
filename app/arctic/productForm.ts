@@ -49,6 +49,8 @@ export type ProductForm = {
   detachOnSeason: boolean;
   // 📌 빙옥 전용 결제 — 켜면 가격 칸(price · price7 · price30 · priceInf)은 빙옥 단위다. 저장할 때 ×10,000 해 XP 로 보낸다(toPayload)
   pointOnly: boolean;
+  // 📌 이벤트 테마 — "halloween" 이면 ARCTIC 할로윈 탭에 모인다. "" = 없음
+  theme: string;
   price: string;
   discountPct: string;
   // 할인 종료 — datetime-local 값(KST "YYYY-MM-DDTHH:mm"). 비우면 기한 없음
@@ -89,6 +91,7 @@ export const EMPTY_PRODUCT_FORM: ProductForm = {
   roleName: "",
   detachOnSeason: false,
   pointOnly: false,
+  theme: "",
   price: "",
   discountPct: "",
   discountUntil: "",
@@ -193,6 +196,7 @@ export const formFromShopItem = (it: any): ProductForm => ({
   roleName: it.roleName || "",
   detachOnSeason: !!it.detachOnSeason,
   pointOnly: !!it.pointOnly,
+  theme: it.theme === "halloween" ? "halloween" : "",
   price: toField(it.price, !!it.pointOnly),
   discountPct: it.discountPct ? String(it.discountPct) : "",
   discountUntil: toKstInput(it.discountUntil),

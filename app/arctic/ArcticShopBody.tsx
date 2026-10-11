@@ -66,10 +66,13 @@ const TYPES = [
   { v: "timed", l: "기간제" },
   // 📌 시즌 — 빙옥 전용(pointOnly) 상품만 모은 프리미엄 스토어(시즌 상품). 유형이 아니라 결제 방식으로 거른다. 탭 줄에서는 구분선 뒤 맨 끝
   { v: "season", l: "시즌" },
+  // 📌 할로윈 — 이벤트 테마(관리자가 상품 폼에서 켠 상품, ShopItem.theme "halloween"). 시즌 옆. 테마 상품이 하나도 없으면 탭을 숨긴다(잠깐 운용 — 2026-10-11 운영자)
+  { v: "halloween", l: "할로윈" },
 ];
-// 📌 모바일 유형 줄은 홈 · 전체 · 시즌만 두고 나머지는 "카테고리 ▾" 칩 패널로 접는다
-const MOBILE_TABS = [{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v === "all" || t.v === "season")];
-const PANEL_TYPES = TYPES.filter((t) => t.v !== "all" && t.v !== "season");
+const THEME_TABS = ["halloween"];
+// 📌 모바일 유형 줄은 홈 · 전체 · 시즌(· 이벤트 테마)만 두고 나머지는 "카테고리 ▾" 칩 패널로 접는다
+const MOBILE_TABS = [{ v: "home", l: "홈" }, ...TYPES.filter((t) => t.v === "all" || t.v === "season" || THEME_TABS.includes(t.v))];
+const PANEL_TYPES = TYPES.filter((t) => t.v !== "all" && t.v !== "season" && !THEME_TABS.includes(t.v));
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
 //    label — 이름 머리말에서 뗀 분류(「카드 스킨」 …, lib/itemName). 없으면 유형 이름
@@ -507,11 +510,11 @@ export default function ArcticShopBody({
   const scoped = useMemo(() => {
     const q = submitted.trim().toLowerCase();
     return items.filter((it) => {
-      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : it.type !== typeFilter)) return false;
+      if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : typeFilter === "halloween" ? it.theme !== "halloween" : it.type !== typeFilter)) return false;
       if (wishOnly && !wish.includes(it._id)) return false;
       // 세트는 "세트"와 구성 아이템 이름으로도 찾는다
       const setText = isBundle(it) ? (Array.isArray(it.bundleItems) ? it.bundleItems.map((c: { name?: string }) => ` ${c?.name || ""}`).join("") : "") : "";
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${setText}`.toLowerCase().includes(q)) return false;
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${it.theme === "halloween" ? " 할로윈" : ""}${setText}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [items, typeFilter, wishOnly, wish, submitted]);
@@ -772,6 +775,8 @@ export default function ArcticShopBody({
   };
   // 모바일 카테고리 단추에 걸 이름 — 패널 쪽 유형을 보고 있을 때만
   const catType = PANEL_TYPES.find((t) => tabOn(t.v));
+  // 이벤트 테마 탭은 그 테마 상품이 하나라도 있을 때만(관리자에게는 숨김 상품까지 — 목록에 실린 상품 기준)
+  const hasTheme = (v: string) => items.some((it) => it.theme === v);
   // 인벤토리 — 산 것 · 받은 것을 그 자리에서 팝업으로. PC 도구 칸 · 모바일 줄 끝 두 곳에 건다 (하단바 다섯 칸은 찼다)
   const invButton = (
     <button type="button" onClick={() => setInvOpen(true)} aria-label="인벤토리" title="인벤토리"
@@ -869,7 +874,7 @@ export default function ArcticShopBody({
         <div className="hidden md:block max-w-7xl mx-auto px-6">
           <div className="overflow-x-auto overflow-y-hidden no-bar">
             <nav className="w-max mx-auto flex items-center gap-7 h-[46px]">
-              {[{ v: "home", l: "홈" }, ...TYPES].map((t) => (
+              {[{ v: "home", l: "홈" }, ...TYPES].filter((t) => !THEME_TABS.includes(t.v) || hasTheme(t.v)).map((t) => (
                 <React.Fragment key={t.v}>
                   {/* 시즌 스토어는 유형 탭과 한 칸 떨어뜨린다 */}
                   {t.v === "season" && <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />}
@@ -894,7 +899,7 @@ export default function ArcticShopBody({
                 <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0] -ml-1"></span>
               </>
             )}
-            {MOBILE_TABS.map((t) => tabButton(t))}
+            {MOBILE_TABS.filter((t) => !THEME_TABS.includes(t.v) || hasTheme(t.v)).map((t) => tabButton(t))}
           </nav>
           <span aria-hidden className="shrink-0 w-px h-4 bg-[#e0e0e0]" />
           {/* 📌 카테고리 — 패널의 유형을 고르면 그 이름 + 밑줄. 폭은 가장 긴 "기프트카드" + ▾ (실측 약 81px) 로 고정 → 이름이 바뀌어도 줄이 안 움직인다.
@@ -1569,6 +1574,12 @@ export default function ArcticShopBody({
                       <label className={F_LABEL}>판매 상태</label>
                       <FormToggle on={!!editForm.active} onClick={() => setEditForm({ ...editForm, active: !editForm.active })}
                         onLabel="판매 중" offLabel="숨김" />
+                    </div>
+                    {/* 이벤트 테마 — 켜면 ARCTIC 「할로윈」 탭에 모인다(테마 상품이 하나도 없으면 탭은 숨는다) */}
+                    <div>
+                      <label className={F_LABEL}>이벤트 테마</label>
+                      <FormToggle on={editForm.theme === "halloween"} onClick={() => setEditForm({ ...editForm, theme: editForm.theme === "halloween" ? "" : "halloween" })}
+                        onLabel="할로윈 탭에 보이기" offLabel="테마 없음" />
                     </div>
                   </FormGroup>
 
