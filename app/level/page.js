@@ -526,7 +526,6 @@ const ENH_CSS = `
 @keyframes enhScreen { 0% { opacity: 0.5; } 100% { opacity: 0; } }
 @keyframes enhShake { 0%, 100% { transform: none; } 15% { transform: translate(-4px, 2px); } 30% { transform: translate(4px, -2px); } 45% { transform: translate(-3px, -1px); } 60% { transform: translate(3px, 1px); } 80% { transform: translate(-1px, 0); } }
 @keyframes enhRay { 0% { transform: rotate(var(--deg)) scaleY(0); opacity: 1; } 35% { transform: rotate(var(--deg)) scaleY(1); opacity: 1; } 100% { transform: rotate(var(--deg)) scaleY(1.25); opacity: 0; } }
-@keyframes enhStamp { 0% { transform: scale(2.4); opacity: 0; } 18% { transform: scale(0.9); opacity: 1; } 30% { transform: scale(1.06); } 42% { transform: scale(1); } 78% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.04); opacity: 0; } }
 @keyframes enhPop { 0% { transform: scale(1.35); filter: brightness(3); } 45% { transform: scale(0.94); filter: brightness(1.4); } 100% { transform: none; filter: none; } }
 @keyframes enhRise { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(0, calc(var(--px) * -16px)); opacity: 0; } }
 @keyframes enhFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
@@ -540,7 +539,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
 
   // 📌 강화 연출 3박자(2026-10-11 운영자 "강화는 연출이 생명") —
   //    ① 모으기: 강화를 누른 순간부터 서버 답이 올 때까지 — 불티가 아이콘으로 빨려 들고, 아이콘이 떨며 밝아지고, 무대 테가 그쪽 색으로 깜빡
-  //    ② 터짐: 단계가 오르면(모으기가 짧았으면 0.48초를 채우고) — 화면 번쩍 · 본문 흔들림 · 빛줄기 8개 · 도트 불티 · 아이콘 튀어 오름 · 무대 가운데 큰 「+4」 도장
+  //    ② 터짐: 단계가 오르면(모으기가 짧았으면 0.48초를 채우고) — 화면 번쩍 · 판 흔들림 · 빛줄기 8개 · 도트 불티 · 아이콘 튀어 오름(무대 가운데 「+4」 도장은 뺐다 — 운영자 "숫자 +1! 외곽선까지 개짜침", 새 단계는 큰 숫자가 넘어가며 보인다)
   //    ③ 여운: 반짝이가 위로 떠오르고 · 큰 숫자 넘어감 · 새 칸 차오름 · 다음 단계 숫자 · 마친 줄 번쩍. 마지막 단계는 모두 금빛 + 팡파르
   //    실패(단계 그대로)면 모으기만 멈춘다
   const prevLv = useRef({ chat: enh.chat.level, voice: enh.voice.level });
@@ -716,15 +715,6 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
                       ></span>
                     );
                   })}
-                  {/* 무대 가운데 큰 도장 — 「+4」(마지막 단계는 금빛 MAX). 아이콘 위에 쾅 찍혔다가 사라진다 */}
-                  <span
-                    key={`st-${tick}`}
-                    aria-hidden
-                    className="enh-anim absolute inset-0 z-10 flex items-center justify-center pointer-events-none opacity-0 text-[44px] sm:text-[60px] font-black tabular-nums tracking-[-0.04em] leading-none"
-                    style={{ color: atMax ? ENH_GOLD : "#ffffff", textShadow: `2px 0 0 #131313, -2px 0 0 #131313, 0 2px 0 #131313, 0 -2px 0 #131313, 2px 2px 0 #131313, -2px 2px 0 #131313, 2px -2px 0 #131313, -2px -2px 0 #131313, 0 6px 0 ${atMax ? "#7a4b00" : hexA(kt.c, 0.55)}`, animation: "enhStamp 1.15s .05s cubic-bezier(0.2,0.8,0.2,1) both" }}
-                  >
-                    {lvLabel(v.level)}
-                  </span>
                 </>
               )}
               <span className="relative flex flex-col items-center justify-end" style={{ width: `calc(${ENH_ICON_BOX[0]}px * var(--px))`, height: `calc(${ENH_ICON_BOX[1] + 3}px * var(--px))` }}>
