@@ -39,6 +39,12 @@ const UserXpSchema = new mongoose.Schema({
   xpStopUntil: { type: Date, default: null, index: true },
   xpStopBy: { type: String, default: "" },
   xpStopReason: { type: String, default: "" },
+  // 📌 잠수 채널 이동(봇 features/afkCheck.js — 잠수 확인에 응답하지 않아 서버 잠수 채널로 옮겨진 것). 2026-10-13 운영자 "제재 먹은 인원은
+  //    1회 · 2회 · 3회 반복되면 잠수 메시지 오는 시간을 5분씩 줄여 10분까지" · 횟수는 저절로 지우지 않는다(관리 › 제재 · 잠수 기록에서 관리자가 지운다)
+  //    afkMoves: 지금까지 옮겨진 횟수 · afkSanctionMoves: 그중 제재 중에 옮겨진 횟수(첫 확인 시간을 줄이는 데 쓴다) · afkMovedAt: 마지막으로 옮겨진 시각
+  afkMoves: { type: Number, default: 0 },
+  afkSanctionMoves: { type: Number, default: 0 },
+  afkMovedAt: { type: Date, default: null },
   // 📌 아이템 효과 "하루 1번" 기록 — 키 "<itemId>:<effectId>" → 마지막으로 받은 날(KST "YYYY-MM-DD").
   //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
@@ -553,6 +559,21 @@ const NoticeAnnounceSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 export const NoticeAnnounce = mongoose.models.NoticeAnnounce || mongoose.model("NoticeAnnounce", NoticeAnnounceSchema);
+
+// 📌 잠수 채널 이동 기록 — 봇이 옮길 때마다 한 줄(features/afkCheck.js). 사이트 관리 › 제재 · 잠수 기록이 읽는다. models/AfkLog.js 와 같은 칸 · 같은 보관(1년)
+const AfkLogSchema = new mongoose.Schema({
+  userId: { type: String, index: true },
+  displayName: { type: String, default: "" },
+  channelId: { type: String, default: "" },   // 옮기기 전 음성 채널
+  channelName: { type: String, default: "" },
+  sanctioned: { type: Boolean, default: false }, // 그때 제재 중이었나(음성 XP 정지 · XP 획득 중단 기록)
+  waitMin: { type: Number, default: 0 },          // 이번에 확인 메시지가 오기까지 혼자 있던 시간 기준(분)
+  moves: { type: Number, default: 0 },            // 옮긴 뒤 누적 횟수
+  sanctionMoves: { type: Number, default: 0 },    // 옮긴 뒤 제재 중 누적 횟수
+  nextWaitMin: { type: Number, default: 0 },      // 다음 첫 확인까지(분) — 제재 중이면 줄어든 값, 아니면 일반 값
+  createdAt: { type: Date, default: Date.now, index: { expires: 60 * 60 * 24 * 365 } },
+});
+export const AfkLog = mongoose.models.AfkLog || mongoose.model("AfkLog", AfkLogSchema);
 
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();

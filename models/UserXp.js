@@ -44,6 +44,12 @@ const UserXpSchema = new mongoose.Schema({
   xpStopUntil: { type: Date, default: null, index: true },
   xpStopBy: { type: String, default: "" },     // 세운 관리자 이름
   xpStopReason: { type: String, default: "" }, // 사유(관리 화면에만)
+  // 📌 잠수 채널 이동(봇 features/afkCheck.js — 잠수 확인에 응답하지 않아 서버 잠수 채널로 옮겨진 것). 2026-10-13 운영자 "제재 먹은 인원은
+  //    1회 · 2회 · 3회 반복되면 잠수 메시지 오는 시간을 5분씩 줄여 10분까지" · 횟수는 저절로 지우지 않는다(관리 › 제재 · 잠수 기록에서 관리자가 지운다)
+  //    afkMoves: 지금까지 옮겨진 횟수 · afkSanctionMoves: 그중 제재 중에 옮겨진 횟수(첫 확인 시간을 줄이는 데 쓴다) · afkMovedAt: 마지막으로 옮겨진 시각
+  afkMoves: { type: Number, default: 0 },
+  afkSanctionMoves: { type: Number, default: 0 },
+  afkMovedAt: { type: Date, default: null },
   // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(기록으로만 — 봇이 $max 로 적는다.
   //    2026-10-04 레벨 업 퀘스트는 이 값을 보지 않고 다시 오른 레벨도 매번 센다)
   effectDaily: { type: Map, of: String, default: {} },

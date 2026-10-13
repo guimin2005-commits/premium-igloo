@@ -8,15 +8,19 @@
 //    · 혼자가 된 뒤 afkCheckFirstMin 분(기본 60)이 되면 그 음성 채널 채팅에 본인 멘션 + [확인] 버튼을 띄운다.
 //      제재받은 사람은 afkCheckSanctionMin 분(기본 30) — 운영자 "제재 먹은 인원의 경우는 최소 시간을 30분으로".
 //      제재받은 사람 = 음성 XP 정지 중이거나 XP 획득 중단 기록(지금 · 예약 · 기간이 끝났지만 해제하지 않은 것)이 있는 사람(UserXp, 5분마다 읽는다)
+//      📌 2026-10-13 운영자 "제재 먹은 인원은 1회 · 2회 · 3회 반복 잠수 채널로 이동되면 잠수 메시지 오는 시간 5분씩 줄여 10분까지" —
+//         제재 중에 옮겨진 횟수(UserXp.afkSanctionMoves)만큼 첫 확인을 5분씩 당긴다: 30 → 25 → 20 → 15 → 10분(바닥). 횟수는 저절로 지우지 않는다
+//         (관리 › 제재 · 잠수 기록에서 관리자가 지운다). 사이트 lib/afkCheck.js afkSanctionWaitMin 과 같은 식
 //      확인을 누르면 메시지를 지우고, 계속 혼자면 다음 확인은 afkCheckMinMin~afkCheckMaxMin 분(기본 20~60) 사이 아무 때나.
 //    · afkCheckReplyMin 분(기본 5) 안에 안 누르면 서버 잠수 채널로 옮긴다(잠수 채널은 XP · 음성 시간이 쌓이지 않는다 — voiceTime.js).
+//      옮기면 UserXp.afkMoves(+제재 중이면 afkSanctionMoves) · afkMovedAt 을 올리고 AfkLog 에 한 줄 남긴다(관리 › 제재 · 잠수 기록)
 //    · 누가 같은 채널에 들어오거나 본인이 음성에서 나가면 확인을 멈추고(떠 있는 버튼은 지운다), 다시 혼자가 되면 처음부터 센다.
 //      혼자인 채로 다른 채널로 옮기면 이어서 센다 — 채널을 옮겨 시계를 처음으로 돌리지 못하게.
 //    · 다른 사람이 버튼을 누르면 그 사람에게만 "본인만 누를 수 있습니다". 누른 본인에게는 "확인됐습니다"가 본인에게만 보인다.
 //    · 봇 메모리에만 둔다 — 재시작하면 지금 혼자인 사람도 처음부터 센다(혼자 시간을 짧게 잡는 쪽으로만 틀린다).
 import { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { getSettings } from "../botSettings.js";
-import { UserXp } from "../db.js";
+import { UserXp, AfkLog } from "../db.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { buildMessage, commonVars } from "../botMessages.js";
 import { config } from "../config.js";
@@ -30,20 +34,29 @@ const isStaff = (member) =>
   !!member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
 const PREFIX = "afkcheck:";
 
-// userId → { since: 혼자가 된 시각, dueAt: 다음 확인 시각, prompt: { nonce, channelId, messageId, expiresAt } | null }
+// userId → { since: 혼자가 된 시각, dueAt: 다음 확인 시각, firstMs: 첫 확인까지 잡은 시간, prompt: { nonce, channelId, messageId, expiresAt } | null }
 const state = new Map();
-// 제재받은 사람 — 5분마다 다시 읽는다. 읽기 전 · 실패 때는 예전 목록을 그대로 쓴다
-let sanctioned = new Set();
+// 제재받은 사람 — userId → 제재 중 잠수 채널 이동 횟수. 5분마다 다시 읽는다. 읽기 전 · 실패 때는 예전 목록을 그대로 쓴다
+let sanctioned = new Map();
 let sanctionedAt = 0;
 async function refreshSanctioned() {
   if (Date.now() - sanctionedAt < 5 * 60_000) return;
   sanctionedAt = Date.now();
   try {
-    const docs = await UserXp.find({ $or: [{ voiceXpOff: true }, { xpStopUntil: { $ne: null } }] }, { userId: 1 }).lean();
-    sanctioned = new Set(docs.map((d) => d.userId));
+    const docs = await UserXp.find({ $or: [{ voiceXpOff: true }, { xpStopUntil: { $ne: null } }] }, { userId: 1, afkSanctionMoves: 1 }).lean();
+    sanctioned = new Map(docs.map((d) => [d.userId, Math.max(0, Number(d.afkSanctionMoves) || 0)]));
   } catch (e) {
     console.error("잠수 확인: 제재 목록 읽기 실패:", e?.message || e);
   }
+}
+// 📌 제재 중 첫 확인(분) — 기본(afkCheckSanctionMin, 30)에서 이동 횟수 × 5분을 빼고 10분 아래로는 안 내려간다
+//    (관리자가 기본을 10분보다 짧게 잡았으면 그 값이 바닥). 사이트 lib/afkCheck.js afkSanctionWaitMin 과 같은 식
+export const SANCTION_STEP_MIN = 5;
+export const SANCTION_FLOOR_MIN = 10;
+export function afkSanctionWaitMin(baseMin, moves) {
+  const base = Math.max(1, Number(baseMin) || 30);
+  const floor = Math.min(base, SANCTION_FLOOR_MIN);
+  return Math.max(floor, base - Math.max(0, Number(moves) || 0) * SANCTION_STEP_MIN);
 }
 let guildRef = null;
 let started = false;
@@ -101,8 +114,9 @@ async function sendPrompt(userId, vs, s) {
   return { nonce, channelId: ch.id, messageId: msg.id, expiresAt: Date.now() + reply * 60_000 };
 }
 
-// 응답 없음 — 서버 잠수 채널로 옮긴다. 잠수 채널이 없거나 옮길 권한이 없으면 로그만 남긴다
-async function moveToAfk(userId) {
+// 응답 없음 — 서버 잠수 채널로 옮긴다. 잠수 채널이 없거나 옮길 권한이 없으면 로그만 남긴다.
+//    옮겼으면 횟수(UserXp) · 기록(AfkLog)을 남긴다 — 기록이 실패해도 옮긴 건 그대로(로그만)
+async function moveToAfk(userId, st) {
   const guild = guildRef;
   const afkId = guild?.afkChannelId;
   const vs = guild?.voiceStates.cache.get(userId);
@@ -110,10 +124,32 @@ async function moveToAfk(userId) {
     if (!afkId) console.error("잠수 확인: 서버 잠수 채널이 지정돼 있지 않아 옮기지 못했습니다");
     return;
   }
-  await vs.setChannel(afkId, "잠수 확인 응답 없음").then(
-    () => console.log(`🛌 잠수 확인 응답 없음 → 잠수 채널로 이동: ${vs.member?.displayName || userId}`),
-    (e) => console.error(`잠수 채널 이동 실패 (${userId}):`, e?.message || e)
+  const from = { id: vs.channelId, name: vs.channel?.name || "" };
+  const name = vs.member?.displayName || vs.member?.user?.username || "";
+  const moved = await vs.setChannel(afkId, "잠수 확인 응답 없음").then(
+    () => { console.log(`🛌 잠수 확인 응답 없음 → 잠수 채널로 이동: ${name || userId}`); return true; },
+    (e) => { console.error(`잠수 채널 이동 실패 (${userId}):`, e?.message || e); return false; }
   );
+  if (!moved) return;
+  const wasSanctioned = sanctioned.has(userId);
+  try {
+    const doc = await UserXp.findOneAndUpdate(
+      { userId },
+      { $inc: { afkMoves: 1, ...(wasSanctioned ? { afkSanctionMoves: 1 } : {}) }, $set: { afkMovedAt: new Date() } },
+      { new: true, projection: { afkMoves: 1, afkSanctionMoves: 1 } }
+    ).lean();
+    const moves = Number(doc?.afkMoves) || 0;
+    const sMoves = Number(doc?.afkSanctionMoves) || 0;
+    if (wasSanctioned) sanctioned.set(userId, sMoves);
+    const s = getSettings();
+    await AfkLog.create({
+      userId, displayName: name, channelId: from.id, channelName: from.name,
+      sanctioned: wasSanctioned, waitMin: Math.round((st?.firstMs || 0) / 60_000), moves, sanctionMoves: sMoves,
+      nextWaitMin: wasSanctioned ? afkSanctionWaitMin(s.afkCheckSanctionMin, sMoves) : Math.max(1, Number(s.afkCheckFirstMin) || 60),
+    });
+  } catch (e) {
+    console.error(`잠수 채널 이동 기록 실패 (${userId}):`, e?.message || e);
+  }
 }
 
 // 겹쳐 부르면(음성 변경 · 30초 주기) 한 번만 돌고, 도는 동안 들어온 요청은 끝난 뒤 한 번 더 — 같은 사람에게 버튼이 두 번 가지 않게
@@ -151,15 +187,15 @@ async function runTick() {
     seen.add(userId);
     let st = state.get(userId);
     if (!st) {
-      const first = sanctioned.has(userId) ? minutes(s.afkCheckSanctionMin, 30) : minutes(s.afkCheckFirstMin, 60);
-      state.set(userId, (st = { since: now, dueAt: now + first, prompt: null }));
+      const first = sanctioned.has(userId) ? afkSanctionWaitMin(s.afkCheckSanctionMin, sanctioned.get(userId)) * 60_000 : minutes(s.afkCheckFirstMin, 60);
+      state.set(userId, (st = { since: now, dueAt: now + first, firstMs: first, prompt: null }));
     }
     if (st.prompt) {
       if (now >= st.prompt.expiresAt) {
         const p = st.prompt;
         state.delete(userId);
         await deletePrompt(p);
-        await moveToAfk(userId);
+        await moveToAfk(userId, st);
       }
       continue;
     }

@@ -54,6 +54,8 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "봇 메시지", href: "/admin/messages", icon: ICON_PATHS.sparkles },
       // 📌 잠수 의심 — 음성 연속 · 혼자 · 음소거 (app/api/admin/activity — 읽기 전용)
       { title: "이상 활동", href: "/admin/activity", icon: ICON_PATHS.clock },
+      // 📌 제재 중(음성 XP 정지 · XP 획득 중단) · 잠수 채널로 옮겨진 유저 · 이동 기록 (app/api/admin/sanctions)
+      { title: "제재 · 잠수 기록", href: "/admin/sanctions", icon: ICON_PATHS.eye },
     ],
   },
   {
