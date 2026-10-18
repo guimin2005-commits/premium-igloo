@@ -3292,12 +3292,20 @@ export default function LevelPage() {
     const attendRole = attendBuff - attendItem;
     const fmt = (n) => n.toLocaleString();
     const extra = [buff > 0 && { l: "역할", v: `+${fmt(buff)}` }, boost > 0 && { l: "부스트", v: `+${fmt(boost)}` }].filter(Boolean);
+    // 📌 핫타임(2026-10-19 운영자 "세부 효과에 핫타임도 넣어 · 핫타임 수치가 있어야지") — 봇과 같은 식: 채팅은 굴린 값(기본 + 강화) × 배수(반올림),
+    //    음성은 (기본 + 등급 + 강화) × 배수. 역할 · 부스트 · 아이템 · 출석에는 붙지 않는다. 기간 밖이면 줄 없음(/api/xp/me hotTime)
+    const hm = me?.hotTime?.on ? Math.max(1, Number(me.hotTime.mult) || 1) : 1;
+    const hl = `핫타임 ×${hm.toLocaleString("en-US", { maximumFractionDigits: 1 })}`;
+    const chatHot = (x) => Math.round(x * hm) - x;
+    const hotLo = hm > 1 ? chatHot(enh.chat.range[0]) : 0;
+    const hotHi = hm > 1 ? chatHot(enh.chat.range[1]) : 0;
+    const voiceHot = hm > 1 ? Math.round((P.voiceXp + tier + voiceEnh) * (hm - 1)) : 0;
     return {
-      chatLo: enh.chat.range[0] + buff + boost + itemChat,
-      chatHi: enh.chat.range[1] + buff + boost + itemChat,
-      chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, ...extra, itemChat > 0 && { l: "아이템", v: `+${fmt(itemChat)}` }].filter(Boolean),
-      voice: P.voiceXp + tier + voiceEnh + buff + boost + itemVoice,
-      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, ...extra, itemVoice > 0 && { l: "아이템", v: `+${fmt(itemVoice)}` }].filter(Boolean),
+      chatLo: enh.chat.range[0] + hotLo + buff + boost + itemChat,
+      chatHi: enh.chat.range[1] + hotHi + buff + boost + itemChat,
+      chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, hm > 1 && { l: hl, v: `+${fmt(hotLo)}~${fmt(hotHi)}` }, ...extra, itemChat > 0 && { l: "아이템", v: `+${fmt(itemChat)}` }].filter(Boolean),
+      voice: P.voiceXp + tier + voiceEnh + voiceHot + buff + boost + itemVoice,
+      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, hm > 1 && { l: hl, v: `+${fmt(voiceHot)}` }, ...extra, itemVoice > 0 && { l: "아이템", v: `+${fmt(itemVoice)}` }].filter(Boolean),
       // 📌 출석 1회 — 시뮬레이터 출석 줄과 같은 값(기본 + 역할 · 아이템 출석 가산). 아이템 몫은 서버가 따로 준다(attendItemXp)
       attend: P.attendXp + attendBuff,
       attendParts: [{ l: "기본", v: fmt(P.attendXp) }, attendRole > 0 && { l: "역할", v: `+${fmt(attendRole)}` }, attendItem > 0 && { l: "아이템", v: `+${fmt(attendItem)}` }].filter(Boolean),
