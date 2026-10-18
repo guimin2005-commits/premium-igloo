@@ -2448,7 +2448,7 @@ export default function LevelPage() {
 
   // 이벤트 패스 「유령 펭귄의 초대」 — 카드 아래 바로가기 띠. 열리기 전엔 여는 날만 알리고, 그 뒤엔 패스 창(EventPassModal)
   // 📌 켜짐 · 기간은 설정 문서(GET /api/event-pass?meta=1)를 따른다 — 관리 화면에서 기간을 바꾸면 띠도 같이 바뀐다.
-  //    꺼져 있으면 띠를 숨긴다(누구나 "준비 중"만 보게 되므로). 관리자는 꺼져 있어도 · 시작 전에도 띠가 보이고 창을 연다(미리 보기 · 「비공개」 칩) — 유저 화면 중엔 유저와 같게
+  //    (예전엔 꺼져 있으면 띠를 숨기고 관리자만 보였다 — 아래 📌 2026-10-18 밤 결정으로 누구나. 「비공개」 칩은 관리자 미리보기에만 — 서버 adminPreview)
   const [eventPassMeta, setEventPassMeta] = useState(null); // { enabled, start, end, day, at(읽은 시각) } — 읽기 전 · 실패는 null(띠 없음)
   useEffect(() => {
     let alive = true;
@@ -2463,14 +2463,14 @@ export default function LevelPage() {
       .catch(() => {});
     return () => { alive = false; };
   }, []);
-  const eventPassAdmin = isAdminUser;
-  const eventPassOn = !!eventPassMeta && (eventPassMeta.enabled || eventPassAdmin) && eventPassMeta.at < eventPassMeta.end;
+  // 📌 2026-10-18 밤 운영자 "비공개긴 한데 이벤트 배너는 들어가지게 바꿔 · 사람들이 클릭해서 화면 보는 건 지금부터" —
+  //    꺼져 있어도 · 시작 전이어도 누구나 띠가 보이고 창이 열린다(보기 전용 — 받기는 창 안에서 「10. 19. 에 열립니다」로 잠김). 끝 시각이 지나면 띠가 빠진다
+  const eventPassOn = !!eventPassMeta && eventPassMeta.at < eventPassMeta.end;
   const [eventPassOpen, setEventPassOpen] = useState(false);
   const openEventPass = useCallback(() => {
     playTone(660, 0.06, "sine", 0.03);
-    if (!eventPassAdmin && eventPassMeta && Date.now() < eventPassMeta.start) { pushToast(`이벤트 패스는 ${eventPassMeta.day} 에 열립니다`); return; }
     setEventPassOpen(true);
-  }, [pushToast, eventPassAdmin, eventPassMeta]);
+  }, []);
   // 닫는 소리 — 시즌 패스 창과 같다
   const closeEventPass = useCallback(() => {
     setEventPassOpen(false);
@@ -3658,6 +3658,12 @@ export default function LevelPage() {
               <span className="lux-shimmer">LEVEL</span>
             </h1>
             <span className="hidden sm:inline text-[12px] font-black text-[#d01634] whitespace-nowrap">SEASON {SEASON.number} · {SEASON.name}</span>
+            {/* 📌 핫타임(2026-10-19 운영자 "이 부분 옆에 핫타임 표시 띄워") — 기간 안일 때만(/api/xp/me hotTime). 오늘 배수(평일 · 주말)를 글자로, 폰도 보인다 */}
+            {me?.hotTime?.on && (
+              <span title={me.hotTime.name || "핫타임"} className="self-center shrink-0 inline-flex items-center h-[22px] px-2.5 rounded-full bg-[#e91e3f] text-white text-[11px] font-black leading-[22px] tracking-[0.04em] whitespace-nowrap tabular-nums">
+                HOT TIME ×{Number(me.hotTime.mult).toLocaleString("en-US", { maximumFractionDigits: 1 })}
+              </span>
+            )}
           </div>
           <div className="inline-flex items-center gap-2 md:gap-2.5 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap">
             {seasonDday.ended ? "시즌 종료" : <><span className="sm:hidden">시즌 </span><span className="hidden sm:inline">종료까지 </span>D-{seasonDday.days}</>}

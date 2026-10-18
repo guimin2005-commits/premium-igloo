@@ -12,6 +12,7 @@ import Purchase from "@/models/Purchase";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import BotSetting from "@/models/BotSetting";
+import { hotTimeState } from "@/lib/hotTime";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
@@ -185,6 +186,8 @@ export async function GET() {
         // 지난 시즌 기록 — 최근 시즌부터 [{ season, name, level, tier, rank, total, at }] (등급 창 「지난 시즌」 탭)
         seasonHistory: seasonHistoryOf(doc),
         rolesSynced: heldRoles !== null,
+        // 📌 지금 핫타임(lib/hotTime — 관리 › 레벨 설정 「핫타임」) — 레벨 화면 머리 줄 「HOT TIME ×배수」(2026-10-19 운영자 "이 부분 옆에 핫타임 표시 띄워"). 꺼짐 · 기간 밖이면 on false
+        hotTime: (() => { const h = hotTimeState(setting, now.getTime()); return { on: h.on, mult: h.mult, weekend: h.weekend, name: h.name, until: h.until }; })(),
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {
           current: Math.max(0, xp - currentCum),

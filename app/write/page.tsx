@@ -437,10 +437,8 @@ export default function AdminWritePage() {
     }
   };
 
-  const restoreDraft = () => {
-    try {
-      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
-      if (!d) return;
+  // 보류 · 자동 저장 한 벌(collectDraft 모양)을 칸에 채운다 — 새 글 「이어서 작성」 · 수정 글 「이어서 수정」이 같이 쓴다
+  const applyDraft = (d: any) => {
       setCategory(d.category || "공지사항"); setTitle(d.title || ""); setContent(d.content || ""); setPublishAt(d.publishAt || ""); setHidden(!!d.hidden);
       setNoticeTag(d.noticeTag || "일반"); setIsPinned(!!d.isPinned); setBannerUrl(d.bannerUrl || "");
       setDcOn(d.dcOn !== false); setDcMention(MENTIONS.some((m) => m.v === d.dcMention) ? d.dcMention : "none");
@@ -456,6 +454,12 @@ export default function AdminWritePage() {
       setTournamentTeamDay(d.tournamentTeamDay || ""); setTournamentEventDay(d.tournamentEventDay || "");
       setTournamentSchedule(Array.isArray(d.tournamentSchedule) ? d.tournamentSchedule : []);
       if (d.survey) setSurvey({ enabled: !!d.survey.enabled, title: d.survey.title || "", desc: d.survey.desc || "", closed: !!d.survey.closed, questions: Array.isArray(d.survey.questions) ? d.survey.questions : [], privacy: readPrivacy(d.survey.privacy) });
+  };
+  const restoreDraft = () => {
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+      if (!d) return;
+      applyDraft(d);
       setHasDraft(false);
       localStorage.removeItem(DRAFT_KEY);
     } catch {}
@@ -493,8 +497,13 @@ export default function AdminWritePage() {
   const leaveDirty = isNewPost ? hasWriting && written !== keptWritten.current : keptWritten.current !== null && written !== keptWritten.current;
   const [leaveAsk, setLeaveAsk] = useState<{ href: string | null } | null>(null); // href null = 「취소」(뒤로)
   const leftRef = useRef(false); // 나가기로 답했거나 등록 · 수정을 마쳤다 — 더 묻거나 보류하지 않는다
-  const live = useRef({ dirty: false, isNew: true, hasDraft: false, collect: collectDraft });
-  live.current = { dirty: leaveDirty, isNew: isNewPost, hasDraft, collect: collectDraft };
+  // 수정 글 자동 저장 칸 — 글마다 따로({ w: 그때 written, d: collectDraft }). editPending = 열 때 남아 있던 저장 안 한 수정(띠에서 이어서 · 버리기를 고르기 전엔 덮어쓰지 않는다)
+  const EDIT_KEY = (id: string) => `writeEdit:${id}`;
+  const storeEdit = (id: string, d: any, w: string) => { try { localStorage.setItem(EDIT_KEY(id), JSON.stringify({ w, d, savedAt: new Date().toISOString() })); return true; } catch { return false; } };
+  const [editPending, setEditPending] = useState<{ w: string; d: any; savedAt?: string } | null>(null);
+  const autoWrote = useRef(false); // 이 화면이 보류 칸(DRAFT_KEY)에 자동 저장했다 — 「보류 안 함」 · 등록 뒤 지운다
+  const live = useRef({ dirty: false, isNew: true, hasDraft: false, collect: collectDraft, editId: "", editPending: false, written: "" });
+  live.current = { dirty: leaveDirty, isNew: isNewPost, hasDraft, collect: collectDraft, editId, editPending: !!editPending, written };
   const latestWritten = useRef(written);
   latestWritten.current = written;
   // 수정 글 — 불러와 채운 뒤 잠시 기다렸다 그때의 written 을 기준으로(채운 뒤 맞추는 효과가 한 번 더 바꿔도 묻지 않게)
@@ -539,24 +548,71 @@ export default function AdminWritePage() {
   }, []);
   function keepOnExit() {
     const l = live.current;
-    if (leftRef.current || !l.dirty || !l.isNew || l.hasDraft) return;
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(l.collect())); } catch {}
+    if (leftRef.current || !l.dirty) return;
+    if (!l.isNew) { if (l.editId && !l.editPending) storeEdit(l.editId, l.collect(), l.written); return; }
+    if (l.hasDraft) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(l.collect())); autoWrote.current = true; } catch {}
   }
+  // 📌 자동 저장(2026-10-18 운영자 고름 「이어지게 + 자동 저장」 — 서버를 다시 띄우다 쓰던 글이 날아갔고, 수정 글은 나갔다 다시 「수정」을 누르면 원래 글로 돌아갔다).
+  //    쓰는 동안 0.7초마다 이 브라우저에 — 새 글은 보류 칸(DRAFT_KEY · 남은 보류 글이 있으면 덮어쓰지 않는다), 수정 글은 글마다 따로(EDIT_KEY(id)).
+  //    다시 열면: 새 글은 「보류된 글이 있습니다」, 수정 글은 「저장하지 않은 수정 내용이 있습니다」 띠 → 이어서 · 버리기. 올리기(등록 · 수정)를 마치면 지운다
+  useEffect(() => {
+    if (leftRef.current) return;
+    const t = window.setTimeout(() => {
+      if (leftRef.current) return;
+      try {
+        if (isNewPost) {
+          if (hasDraft) return;
+          if (hasWriting) { localStorage.setItem(DRAFT_KEY, JSON.stringify(collectDraft())); autoWrote.current = true; }
+          else if (autoWrote.current) { localStorage.removeItem(DRAFT_KEY); autoWrote.current = false; }
+          return;
+        }
+        // 띠(저장 안 한 수정)를 고르지 않고 새로 고치기 시작하면 — 띠는 접고 지금 고치는 것을 저장한다(고르기 전 띠 때문에 새 수정이 저장 안 되지 않게)
+        if (editPending && keptWritten.current !== null && written !== keptWritten.current) { setEditPending(null); return; }
+        if (!editId || editPending || keptWritten.current === null) return;
+        if (written !== keptWritten.current) storeEdit(editId, collectDraft(), written);
+        else localStorage.removeItem(EDIT_KEY(editId));
+      } catch {}
+    }, 700);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [written, hasDraft, editId, editPending, isNewPost, hasWriting]);
+  // 수정 글 — 불러와 기준을 잡은 뒤(위 loadedTick 0.4초) 이 글의 저장 안 한 수정이 남아 있으면 띠로 묻는다
+  useEffect(() => {
+    if (!loadedTick || !editId) return;
+    const t = window.setTimeout(() => {
+      try {
+        const s = JSON.parse(localStorage.getItem(EDIT_KEY(editId)) || "null");
+        if (s?.d && s.w !== keptWritten.current) setEditPending(s);
+        else if (s) localStorage.removeItem(EDIT_KEY(editId));
+      } catch {}
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [loadedTick, editId]);
+  const resumeEdit = () => { if (editPending?.d) applyDraft(editPending.d); setEditPending(null); sfxOk(); };
+  const dropEdit = () => { try { if (editId) localStorage.removeItem(EDIT_KEY(editId)); } catch {} setEditPending(null); };
   useLeaveGuard(leaveDirty, (href) => {
     if (leftRef.current) return true;
     setLeaveAsk({ href });
     return false;
   });
   // 묻기 창의 답 — go: 옮기기(href null 이면 뒤로)
-  const leaveTo = (href: string | null) => {
+  //    discard — 「보류 안 함」 · 「버리기」: 이 화면이 자동 저장해 둔 것도 지운다(새 글은 이 화면이 쓴 보류 칸만 — 예전 보류 글은 그대로)
+  const leaveTo = (href: string | null, discard = false) => {
     leftRef.current = true;
     setLeaveAsk(null);
+    if (discard) {
+      try {
+        if (!isNewPost && editId) localStorage.removeItem(EDIT_KEY(editId));
+        else if (autoWrote.current) { localStorage.removeItem(DRAFT_KEY); autoWrote.current = false; }
+      } catch {}
+    }
     if (href === null) router.back();
     else router.push(href);
   };
   const leaveKeep = () => {
     if (!leaveAsk) return;
-    if (!storeDraft()) {
+    if (!(isNewPost ? storeDraft() : storeEdit(editId, collectDraft(), written))) {
       setLeaveAsk(null);
       setPopupConfig({ isOpen: true, message: "보류 저장에 실패했습니다.", isError: true });
       return;
@@ -886,6 +942,8 @@ export default function AdminWritePage() {
       const dcLine = category === "공지사항" ? dcResultLine(d?.discord, !!dcInfo?.botOnline) : "";
       if (res.ok) {
         leftRef.current = true; // 다 올렸다 — 이 뒤 이동은 묻지도 보류하지도 않는다
+        // 올렸으니 자동 저장해 둔 것은 지운다(수정 글 칸 · 이 화면이 쓴 새 글 보류 칸)
+        try { if (editId) localStorage.removeItem(EDIT_KEY(editId)); else if (autoWrote.current) { localStorage.removeItem(DRAFT_KEY); autoWrote.current = false; } } catch {}
         setPopupConfig({ isOpen: true, message: `${editId ? "수정되었습니다." : "등록되었습니다."}${dcLine ? `\n${dcLine}` : ""}`, isError: false });
       }
       else setPopupConfig({ isOpen: true, message: d?.message || "등록 실패", isError: true });
@@ -995,6 +1053,15 @@ export default function AdminWritePage() {
               <p className="min-w-0 flex-1 text-[13px] font-bold">보류된 글이 있습니다</p>
               <Btn variant="ghost" size="sm" onClick={discardDraft}>삭제</Btn>
               <Btn size="sm" onClick={restoreDraft}>이어서 작성</Btn>
+            </div>
+          )}
+          {/* 📌 수정 글 — 이 글에 저장하지 않은 수정(자동 저장)이 남아 있으면 이어서 · 버리기(보류 띠와 같은 모양) */}
+          {editPending && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#ededed] bg-white px-5 py-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />
+              <p className="min-w-0 flex-1 text-[13px] font-bold">저장하지 않은 수정 내용이 있습니다</p>
+              <Btn variant="ghost" size="sm" onClick={dropEdit}>버리기</Btn>
+              <Btn size="sm" onClick={resumeEdit}>이어서 수정</Btn>
             </div>
           )}
 
@@ -1681,21 +1748,22 @@ export default function AdminWritePage() {
       {/* 📌 나가기 전 보류 묻기 — 바깥 · Esc 는 「계속 작성」 */}
       {leaveAsk && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-4 overlay-in" onClick={() => setLeaveAsk(null)}>
-          <div role="alertdialog" aria-modal="true" aria-label={isNewPost ? "작성 중인 글을 보류할까요?" : "수정한 내용을 버리고 나갈까요?"} onClick={(e) => e.stopPropagation()}
+          <div role="alertdialog" aria-modal="true" aria-label={isNewPost ? "작성 중인 글을 보류할까요?" : "수정한 내용을 보류할까요?"} onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setLeaveAsk(null); } }}
             className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
-            <h2 className="text-[17px] font-black tracking-tight break-keep">{isNewPost ? "작성 중인 글을 보류할까요?" : "수정한 내용을 버리고 나갈까요?"}</h2>
+            <h2 className="text-[17px] font-black tracking-tight break-keep">{isNewPost ? "작성 중인 글을 보류할까요?" : "수정한 내용을 보류할까요?"}</h2>
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               {isNewPost ? (
                 <>
                   <Btn variant="ghost" onClick={() => setLeaveAsk(null)}>계속 작성</Btn>
-                  <Btn variant="secondary" onClick={() => leaveTo(leaveAsk.href)}>보류 안 함</Btn>
+                  <Btn variant="secondary" onClick={() => leaveTo(leaveAsk.href, true)}>보류 안 함</Btn>
                   <Btn onClick={leaveKeep} autoFocus>보류하고 이동</Btn>
                 </>
               ) : (
                 <>
-                  <Btn variant="ghost" onClick={() => setLeaveAsk(null)} autoFocus>계속 수정</Btn>
-                  <Btn variant="danger" onClick={() => leaveTo(leaveAsk.href)}>나가기</Btn>
+                  <Btn variant="ghost" onClick={() => setLeaveAsk(null)}>계속 수정</Btn>
+                  <Btn variant="secondary" onClick={() => leaveTo(leaveAsk.href, true)}>버리기</Btn>
+                  <Btn onClick={leaveKeep} autoFocus>보류하고 이동</Btn>
                 </>
               )}
             </div>

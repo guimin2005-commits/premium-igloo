@@ -68,8 +68,9 @@ const TITLE_ART = { src: `${ART}/title.png`, w: 601, h: 86, pad: 32, size: 88, t
 const COLW = 150;
 const X0 = 102;
 const LEAD = 72;
-const TAIL = 106; // 끝 길 — 다 채우면 유령 펭귄이 이 길 끝(마지막 랜턴 · 글자 오른쪽)에 선다
-const PAD_R = 136; // 마지막 칸 가운데에서 길 판 오른쪽 끝까지(끝 길 + 여유)
+// 📌 2026-10-19 운영자 "이벤트 패스 14에서 끝났는데 이 선이 왜 있는 거야" — 길은 마지막 랜턴에서 끝난다(뒤로 이어지는 끝 길 · 점선 없음).
+//    다 채웠으면 유령 펭귄은 마지막 랜턴 바로 앞 틈(마지막 단계 끝 자리)에 선다
+const PAD_R = 96; // 마지막 칸 가운데에서 길 판 오른쪽 끝까지(마지막 칸 글자 반폭 66 + 여유)
 const AMP = 24;
 const SLOT = 96;
 const LT_S = 5; // 길 위 랜턴 배율(35 × 55)
@@ -82,7 +83,7 @@ const colTop = (i) => 18 + AMP + wy(i);
 // 📌 길 위 유령 펭귄 — 2026-10-18 운영자 "이건 해결이 필요하지 않을까.." : 2배(82 × 106)가 칸 사이에서 다음 칸 이름(「유령 펭귄…」) · 칸 · 꼬리표 · Lv 글자를 덮었다.
 //    1배(41 × 53 — 정수 배율이라야 도트 한 칸이 고르다. 2배는 칸 사이 150 에 랜턴 35 와 같이 못 들어간다. 큰 유령 펭귄은 머리 3배)로 줄이고 자리 규칙을 바꿨다:
 //    · 가로 — 랜턴 두 개 사이 빈 틈 안에서만: 단계 안 비율을 [앞 랜턴 오른쪽 + 여백 + 반폭, 다음 랜턴 왼쪽 − 여백 − 반폭]에 옮긴다.
-//      첫 단계 전은 앞 길(첫 랜턴 왼쪽까지) · 다 채우면 끝 길 끝. 켜진 길은 유령 펭귄 가운데까지(불을 들고 지나간 자리)
+//      첫 단계 전은 앞 길(첫 랜턴 왼쪽까지) · 다 채우면 마지막 랜턴 바로 앞 틈(길은 마지막 랜턴에서 끝 — 10/19). 켜진 길은 유령 펭귄 가운데까지(불을 들고 지나간 자리)
 //    · 세로 — 길(pathY)에 랜턴처럼 꿴다(길 가운데가 그림 위에서 ME_K — 유령 펭귄이 든 등불 언저리). 다만 가로로 겹치는 기둥의
 //      위 띠(칸 묶음 · 반짝이 · 배지 · 기간 꼬리표 · 이름 줄 — 반폭 ME_BAND)보다 아래로 내린다. 떠 있는 높이(ME_FL)까지 넣어서 여백 ME_M.
 //      내려가도 아래 끝은 이웃 기둥의 단계 XP · 받기 줄(기둥 위 219~)보다 위 — 높이 차가 가장 큰 이웃(21)에서도 13px 남는다
@@ -219,7 +220,7 @@ const laneGeom = (tiers, passXp, level) => {
     const t = clamp01((x - xs[i]) / COLW);
     return ys[i] + (ys[i + 1] - ys[i]) * t * t * (3 - 2 * t);
   };
-  // 📌 진행 자리(위 ME 📌) — 첫 단계 전이면 앞 길(첫 랜턴 앞까지) · 단계 사이면 두 랜턴 사이 틈 · 다 채웠으면 끝까지 켜고 끝 길 끝
+  // 📌 진행 자리(위 ME 📌) — 첫 단계 전이면 앞 길(첫 랜턴 앞까지) · 단계 사이면 두 랜턴 사이 틈 · 다 채웠으면 마지막 랜턴까지 켜고 그 바로 앞 틈
   const meHalf = ME.w / 2;
   const reach = (LT.w * LT_S) / 2 + ME_M + meHalf; // 랜턴 가운데에서 유령 펭귄 가운데까지 가장 가까운 거리
   let prog, meX;
@@ -228,7 +229,7 @@ const laneGeom = (tiers, passXp, level) => {
     prog = meX = a + (b - a) * clamp01(passXp / Math.max(1, tiers[0].need));
   } else if (level >= n) {
     prog = Infinity;
-    meX = lastX + TAIL - meHalf - ME_M;
+    meX = n > 1 ? lastX - reach : X0 - reach;
   } else {
     const lo = tiers[level - 1].need, hi = tiers[level].need;
     const a = xs[level - 1] + reach, b = xs[level] - reach;
@@ -242,7 +243,7 @@ const laneGeom = (tiers, passXp, level) => {
   });
   const lit = [], dots = [];
   let run = null;
-  for (let x = X0 - LEAD; x < lastX + TAIL; x += 3) {
+  for (let x = X0 - LEAD; x <= lastX; x += 3) {
     const y = snap3(pathY(x));
     if (x < prog) {
       if (run && run.y === y && run.x + run.w === x) run.w += 3;
@@ -257,6 +258,13 @@ const EP_CSS = `
 @keyframes epIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @keyframes epFloat { 0%, 100% { transform: translateY(0); } 12.5%, 87.5% { transform: translateY(-1px); } 25%, 75% { transform: translateY(-2px); } 37.5%, 62.5% { transform: translateY(-3px); } 50% { transform: translateY(-4px); } }
 @keyframes epFloat3 { 0%, 100% { transform: translateY(0); } 25%, 75% { transform: translateY(-3px); } 50% { transform: translateY(-6px); } }
+.ep-lw { position: relative; }
+.ep-hint { position: absolute; left: 50%; bottom: 1px; z-index: 4; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 10px; font-size: 12px; font-weight: 800; line-height: 18px; color: ${EP.text}; white-space: nowrap; cursor: pointer; --bg: #0f0b28; --hi: #241d58; --sh: ${EP.ink}; }
+.ep-hint i { display: block; line-height: 0; }
+.ep-hint i.l { animation: epNudgeL 1.2s steps(1, end) infinite; }
+.ep-hint i.r { animation: epNudgeR 1.2s steps(1, end) infinite; }
+@keyframes epNudgeR { 0%, 100% { transform: translateX(0); } 25%, 75% { transform: translateX(2px); } 50% { transform: translateX(4px); } }
+@keyframes epNudgeL { 0%, 100% { transform: translateX(0); } 25%, 75% { transform: translateX(-2px); } 50% { transform: translateX(-4px); } }
 @keyframes epFlick { 0%, 100% { opacity: 0; } 9% { opacity: 1; } 15% { opacity: 0; } 41% { opacity: 1; } 44% { opacity: 0; } 68% { opacity: 1; } 77% { opacity: 0; } }
 .ep-win { position: relative; width: 100%; height: 88vh; height: 88dvh; padding: 3px 3px 0; background: ${EP.ink}; clip-path: ${NOTCH6_TOP}; animation: epIn .32s cubic-bezier(0.16,1,0.3,1); color: ${EP.text}; }
 .ep-wi { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: ${EP.panel}; clip-path: ${NOTCH_TOP}; }
@@ -472,7 +480,7 @@ const EP_CSS = `
   .ep-pv.two .ep-pvg > .s { flex: 1 1 0%; min-width: 0; margin: 0 0 0 15px; }
   .ep-pv.two .ep-pvc { aspect-ratio: auto; height: 440px; }
 }
-@media (prefers-reduced-motion: reduce) { .ep-win, .ep-pv, .ep-float, .ep-flick { animation: none !important; } .ep-flick { opacity: 0; } .ep-gauge > i > b { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ep-win, .ep-pv, .ep-float, .ep-flick, .ep-hint i { animation: none !important; } .ep-flick { opacity: 0; } .ep-gauge > i > b { transition: none; } }
 `;
 
 // 도트 그림(rows · pal) — 같은 색 가로 줄을 rect 하나로(crispEdges · 정수 배율 u). 시즌 패스 칸의 빙옥 구슬과 같은 그리기
@@ -501,6 +509,11 @@ const CHECK = {
 };
 // 기간 꼬리표 시계 — 금빛 테 · 흰 바늘(칸 1 = 2px)
 const CLOCK = { rows: [".ggg.", "g.w.g", "g.wwg", "g...g", ".ggg."], pal: { g: "#ffd27a", w: "#ffffff" } };
+// 첫 안내 화살표 — 옆으로 넘기라는 도트 ◀ ▶(칸 1 = 2px)
+const ARW_R = { rows: ["a...", "aa..", "aaa.", "aaaa", "aaa.", "aa..", "a..."], pal: { a: "#b4ecf9" } };
+const ARW_L = { rows: ARW_R.rows.map((r) => [...r].reverse().join("")), pal: ARW_R.pal };
+// 📌 첫 안내 키(이 브라우저) — 한 번 보면(길을 옆으로 넘기거나 안내를 누르면) 다시 안 뜬다
+const HINT_KEY = "ep-swipe-hint";
 // 닫기 X — 두 칸 굵기 도트(칸 1 = 2px)
 const XMARK = { rows: ["xx....xx", "xxx..xxx", ".xxxxxx.", "..xxxx..", "..xxxx..", ".xxxxxx.", "xxx..xxx", "xx....xx"], pal: { x: EP.text } };
 
@@ -857,6 +870,8 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
   const centeredRef = useRef(false);
   const listRef = useRef(null); // 폰 목록 — 키가 넉넉하면 여기만 스크롤한다
   const tipTimer = useRef(0);
+  const [hint, setHint] = useState(false); // 첫 안내(옆으로 넘겨 보세요) — PC 길이 넘칠 때 처음 한 번
+  const hintAt = useRef(0);
 
   // 읽은 상태 반영 — 실패면 이미 그린 상태는 그대로 둔다(뒤에서 새로 읽기만 실패)
   const apply = useCallback((j) => {
@@ -971,6 +986,27 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
     box.scrollLeft = Math.max(0, left);
   }, [open, narrow, geom, tiers, isOpen]);
   useWheelX(trackRef, bodyRef, open && !narrow && tiers.length > 0);
+  // 📌 2026-10-19 운영자 "유령 펭귄 팝업 처음 화면 입장하는 유저에게 옆으로 스크롤 하라는 안내 · 약간 튜토리얼" —
+  //    PC 물결 길이 창보다 길 때만, 이 브라우저에서 처음 한 번 길 아래 띠에 「옆으로 넘겨 보세요」 + 좌우로 움직이는 도트 화살표.
+  //    길을 옆으로 넘기거나(휠 포함) 안내를 누르면 사라지고 다시 안 뜬다. 폰은 목록이 세로라 띄우지 않는다.
+  //    자리는 길 판 아래 띠(기둥이 가장 내려간 끝 312 아래 · LANE_H 336) — 칸 · 이름 · 길 · 받기를 가리지 않는다
+  const hasGeom = !!geom;
+  useEffect(() => {
+    if (!open || narrow || !hasGeom) return;
+    let seen = true;
+    try { seen = localStorage.getItem(HINT_KEY) === "1"; } catch {}
+    if (seen) return;
+    // 처음 맞춤(가운데로 굴리기)이 끝난 뒤에 띄운다 — 그 굴림을 "넘겼다"로 잘못 세지 않게
+    const t = setTimeout(() => {
+      const box = trackRef.current;
+      if (box && box.scrollWidth > box.clientWidth + 4) { hintAt.current = Date.now(); setHint(true); }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [open, narrow, hasGeom]);
+  const dismissHint = useCallback(() => {
+    setHint(false);
+    try { localStorage.setItem(HINT_KEY, "1"); } catch {}
+  }, []);
 
   const claim = useCallback(async (kind, ref = "") => {
     if (busyRef.current) return;
@@ -1048,6 +1084,8 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
     },
   });
   const onScrollAny = tip ? closeTip : undefined;
+  // 길 스크롤 — 말풍선 닫기 + 첫 안내 지우기(띄운 직후의 맞춤 굴림은 빼고)
+  const onTrackScroll = (tip || hint) ? () => { if (tip) closeTip(); if (hint && Date.now() - hintAt.current > 300) dismissHint(); } : undefined;
   // 📌 미리보기를 열 때 말풍선을 고정(pin)한다 — 마우스로 연 말풍선(hover)은 미리보기 판이 덮자마자 pointerleave 로 접혀, 판을 닫으면 돌아올 자리가 없었다
   const openPreview = (r) => {
     sfxTick();
@@ -1065,8 +1103,8 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
     <>
       {span && !narrow && <span className="ep-tag ep-pp">{span}</span>}
       {dday && <span className={`ep-tag ep-dd ep-pp${ended ? " end" : ""}`}>{dday}</span>}
-      {/* 관리자만 보는 미리보기(꺼져 있으면 다른 사람은 단계가 비어 온다) */}
-      {data && data.enabled === false && !guest && tiers.length > 0 && <span className="ep-tag ep-off ep-pp">비공개</span>}
+      {/* 관리자 미리보기(꺼져 있을 때 — 서버 adminPreview). 유저는 꺼져 있어도 보기 전용으로 단계를 본다(📌 2026-10-18 밤) */}
+      {data?.adminPreview && !guest && tiers.length > 0 && <span className="ep-tag ep-off ep-pp">비공개</span>}
     </>
   );
   const hasTiers = !!data && !guest && tiers.length > 0;
@@ -1080,14 +1118,22 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
       </button>
     );
   };
-  const allBtn = hasTiers && (
+  // 📌 받기가 아직 안 열렸으면(꺼짐 · 시작 전) 「모두 받기」 자리에 잠긴 단추로 여는 날만 — 「10. 19. 에 열립니다」(시작 전) · 「준비 중」(시작 뒤 아직 꺼짐) · 「종료」.
+  //    운영자 "사람들이 클릭해서 화면 보는 건 지금부터" — 보기만 되고 받기는 막힌다(서버도 open 일 때만 받는다)
+  const startMs = Date.parse(data?.startsAt || "");
+  const lockText = isOpen ? "" : ended ? "종료" : Number.isFinite(startMs) && Number.isFinite(nowMs) && nowMs < startMs ? `${kstDay(data.startsAt)} 에 열립니다` : "준비 중";
+  const allBtn = hasTiers && (lockText ? (
+    <button type="button" className="ep-gb ep-all off" disabled aria-label={lockText}>
+      <span className="inline-flex items-center">{lockText}</span>
+    </button>
+  ) : (
     <button type="button" className={`ep-gb ep-all${claimable > 0 ? "" : " off"}`} onClick={() => claim("all")} disabled={!!busy || claimable <= 0}>
       <span style={busy === "all" ? { visibility: "hidden" } : undefined} className="inline-flex items-center">
         모두 받기<span className="ep-n">{claimable}</span>
       </span>
       {busy === "all" && busyDots}
     </button>
-  );
+  ));
   // 📌 아래 판 — 지금 단계만(위 📌 2026-10-18):
   //    PC: [Lv N] [게이지 · 아래 줄 "3,400 / 8,000 XP" | "Lv N+1까지 4,600 XP"] [큰 「모두 받기」] 한 줄 · 폰: [Lv N | Lv N+1까지 4,600 XP] → 게이지 → 꽉 찬 「모두 받기」
   //    다 채웠으면 「모두 달성」 · 꽉 찬 게이지(숫자 없음)
@@ -1133,7 +1179,7 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
 
   // ── PC — 물결 랜턴 길: 칸 묶음 → 이름(하나면 이름 · 여럿이면 「보상 N개」) → 랜턴(길 위) → Lv → 단계 XP · 받기 ──
   const lane = geom && (
-    <div ref={trackRef} className="ep-track" onScroll={onScrollAny}>
+    <div ref={trackRef} className="ep-track" onScroll={onTrackScroll}>
       <div className="ep-lane" style={{ width: geom.width }}>
         <svg className="ep-rope" width={geom.width} height={LANE_H} shapeRendering="crispEdges" aria-hidden>
           {geom.dots.map((d) => <rect key={`d${d.x}`} x={d.x} y={d.y} width="3" height="3" fill="#3a3170" />)}
@@ -1227,7 +1273,18 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
                   </div>
                   <Spectre scale={3} className="ep-hero x3" style={{ position: "absolute" }} />
                 </div>
-                {empty || lane}
+                {empty || (
+                  <div className="ep-lw">
+                    {lane}
+                    {hint && !narrow && (
+                      <button type="button" className="ep-hint ep-pp" onClick={dismissHint}>
+                        <i className="l"><Sprite {...ARW_L} u={2} /></i>
+                        옆으로 넘겨 보세요
+                        <i className="r"><Sprite {...ARW_R} u={2} /></i>
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
