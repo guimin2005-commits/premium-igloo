@@ -1594,14 +1594,24 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       ? {
           kind: `배지 ${wornBadges.length}/${MAX_BADGES}`, empty: false, accent: badgeAccent, glow: invGlowOf(wornBadges[0]),
           name: `${short(wornBadges[0].name)}${wornBadges.length > 1 ? ` 외 ${wornBadges.length - 1}` : ""}`,
-          // 단 배지를 한 칸에 작게 나란히(최대 3)
-          art: (size) => (
-            <span className="flex items-center justify-center -space-x-0.5">
-              {wornBadges.map((b, i) => (
-                <ItemIcon key={b.itemId || i} icon={b.icon} imageUrl={b.imageUrl} type={b.type} size={Math.round(size * (wornBadges.length > 1 ? 0.5 : 0.85))} color={invAccentOf(b)} />
-              ))}
-            </span>
-          ),
+          // 단 배지(최대 3) — 하나면 크게 하나. 📌 2026-10-19 운영자 "배지 나가잖아" → "겹치는 듯이 · 좌부터 맨 앞에 1 2 3 · 카드 겹치는 느낌":
+          //    둘 이상이면 배지마다 작은 카드(짙은 판 · 가는 테 · 흐림 없는 오른쪽 그림자)를 오른쪽으로 조금씩 밀어 겹친다 — 1번(왼쪽)이 맨 앞.
+          //    카드 폭 0.48 칸 · 한 장마다 0.22 칸씩(셋이어도 0.92 칸 — 칸 안)
+          art: (size) => {
+            const n = wornBadges.length;
+            if (n < 2) return <ItemIcon icon={wornBadges[0].icon} imageUrl={wornBadges[0].imageUrl} type={wornBadges[0].type} size={Math.round(size * 0.85)} color={invAccentOf(wornBadges[0])} />;
+            const c = Math.round(size * 0.48), step = Math.round(size * (n >= 3 ? 0.22 : 0.3));
+            return (
+              <span className="relative block" style={{ width: c + step * (n - 1), height: c }}>
+                {wornBadges.map((b, i) => (
+                  <span key={b.itemId || i} className="absolute top-0 flex items-center justify-center rounded-[6px]"
+                    style={{ left: step * i, width: c, height: c, zIndex: n - i, background: "#17161f", border: "1px solid rgba(255,255,255,0.16)", boxShadow: "3px 0 0 rgba(0,0,0,0.55)" }}>
+                    <ItemIcon icon={b.icon} imageUrl={b.imageUrl} type={b.type} size={Math.round(c * 0.76)} color={invAccentOf(b)} />
+                  </span>
+                ))}
+              </span>
+            );
+          },
         }
       : { kind: `배지 0/${MAX_BADGES}`, empty: true, name: "", accent: "", glow: "", art: () => null },
   };

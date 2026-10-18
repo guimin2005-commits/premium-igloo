@@ -855,7 +855,7 @@ const fetchState = async () => {
 };
 
 // pushToast(msg, accent) — 레벨 페이지 토스트. onClaimed — 받은 뒤 페이지 잔액 · XP 를 다시 읽는다(loadMe)
-export default function EventPassModal({ open, onClose, pushToast, onClaimed }) {
+export default function EventPassModal({ open, onClose, pushToast, onClaimed, onCount }) {
   const narrow = useNarrow();
   const [data, setData] = useState(null); // 마지막으로 받은 상태 — 다시 열면 바로 그리고 뒤에서 새로 읽는다
   const [status, setStatus] = useState("idle"); // idle · loading · ok · error
@@ -881,6 +881,10 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed }) 
     } else setStatus((s) => (s === "ok" ? "ok" : "error"));
   }, []);
   const load = useCallback(() => fetchState().then(apply), [apply]);
+  // 📌 받을 단계 수를 띠 배지(app/level/page.js)에 알린다 — 받기 · 다시 읽기로 상태가 바뀔 때마다(받고 닫으면 바로 줄어든다)
+  useEffect(() => {
+    if (data && !data.guest && onCount) onCount(Math.max(0, Number(data.claimable) || 0));
+  }, [data, onCount]);
 
   // 열 때마다 새로 읽는다 · 닫으면 다음 열 때 길을 다시 맞춘다
   useEffect(() => {

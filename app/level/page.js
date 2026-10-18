@@ -2477,6 +2477,22 @@ export default function LevelPage() {
     playTone(659.25, 0.06, "sine", 0.025);
     setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
   }, []);
+  // 📌 2026-10-19 운영자 "보상 받을 수 있으면 배너에 뭐라도 띄워" — 띠 오른쪽 위 빨간 숫자(받을 단계 수 · 받기가 열렸을 때만 — 서버 claimable, 닫혀 있으면 0).
+  //    읽는 때: 띠가 보일 때 한 번 · XP 가 바뀌면(30초 폴링) 1분에 한 번까지 · 창이 상태를 받을 때마다(받기 · 다시 읽기 — onCount)
+  const [eventPassCount, setEventPassCount] = useState(0);
+  const evCountAt = useRef(0);
+  const signedIn = !!session?.user;
+  const loadEventPassCount = useCallback(() => {
+    if (!signedIn) return;
+    evCountAt.current = Date.now();
+    fetch("/api/event-pass", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok && !j.guest) setEventPassCount(Math.max(0, Number(j.claimable) || 0)); })
+      .catch(() => {});
+  }, [signedIn]);
+  useEffect(() => {
+    if (eventPassOn && Date.now() - evCountAt.current > 60_000) loadEventPassCount();
+  }, [eventPassOn, loadEventPassCount, me?.xp]);
 
   // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
   const [quests, setQuests] = useState(null);
@@ -3639,7 +3655,7 @@ export default function LevelPage() {
       )}
 
       {/* 이벤트 패스 창 — 받으면 잔액 · XP 를 다시 읽는다 */}
-      <EventPassModal open={eventPassOpen} onClose={closeEventPass} pushToast={pushToast} onClaimed={loadMe} />
+      <EventPassModal open={eventPassOpen} onClose={closeEventPass} pushToast={pushToast} onClaimed={loadMe} onCount={setEventPassCount} />
 
       {promo && <PromoOverlay from={promo.from} to={promo.to} onClose={closePromo} />}
 
@@ -3954,15 +3970,23 @@ export default function LevelPage() {
                     {/* 📌 이벤트 패스 바로가기(2026-10-17 운영자 시안 합격) — 카드 안이 아니라 카드 바로 아래 가로 띠. PC 카드 폭 · 폰 전체 폭, 같은 그림 한 장.
                            그림: public/banners/event-pass-strip.png(992 × 240, .claude/mockups/event-pass/strip.mjs). 이벤트 끝(10. 31. 24:00 KST)나면 빠진다 */}
                     {eventPassOn && (
-                      <button
-                        type="button"
-                        onClick={openEventPass}
-                        aria-label="유령 펭귄의 초대 · 이벤트 패스"
-                        className="mt-3 lg:mt-3.5 block w-full rounded-[18px] overflow-hidden shadow-[0_18px_40px_-22px_rgba(30,10,80,0.7)] transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#9ff8ff]/70"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/banners/event-pass-strip.png" alt="" width={992} height={240} draggable={false} className="block w-full h-auto select-none" />
-                      </button>
+                      <div className="relative mt-3 lg:mt-3.5">
+                        <button
+                          type="button"
+                          onClick={openEventPass}
+                          aria-label={eventPassCount > 0 ? `유령 펭귄의 초대 · 이벤트 패스 · 받을 보상 ${eventPassCount}` : "유령 펭귄의 초대 · 이벤트 패스"}
+                          className="block w-full rounded-[18px] overflow-hidden shadow-[0_18px_40px_-22px_rgba(30,10,80,0.7)] transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#9ff8ff]/70"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/banners/event-pass-strip.png" alt="" width={992} height={240} draggable={false} className="block w-full h-auto select-none" />
+                        </button>
+                        {/* 받을 보상 수 — 시즌 패스 단추 배지와 같은 빨간 둥근 숫자(띠 크기에 맞춰 조금 크게 · 글자 줄 높이 = 높이 22 — 반 픽셀 쏠림 없게). 띠 둥근 모서리 밖에 걸친다 */}
+                        {eventPassCount > 0 && (
+                          <span aria-hidden className="pointer-events-none absolute -top-2 -right-2 z-10 min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums ring-2 ring-white">
+                            {eventPassCount}
+                          </span>
+                        )}
+                      </div>
                     )}
                     </div>
 
