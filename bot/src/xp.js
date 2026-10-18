@@ -181,6 +181,10 @@ export async function grantXp(member, amount, meta = {}) {
   //    진행도(xp - passBaseXp)만 더 오르고 레벨 · XP 는 그대로다. 회수(음수)에는 붙이지 않는다.
   //    지급 대기열의 퀘스트 보상(source "quest")은 features/grantQueue.js 가 같은 식으로 붙인다(2026-10-04 — 운영진 지급은 빼고)
   const passBoost = amount > 0 ? Math.floor((amount * perksOf(member).passBoost) / 100) : 0;
+  // 📌 핫타임 추가분(meta.hot — 채팅 · 음성 지급만 · 2026-10-19 운영자 "핫타임 수치는 이벤트 패스 진행도에 포함 안 되게") — XpLog.hot 으로 남긴다.
+  //    이벤트 패스 진행도(사이트 lib/eventPass.js)는 amount + passBoost 에서 이 값을 뺀다 — 그래서 그 몫에 붙은 패스 가속(비율만큼)도 같이 넣는다. 레벨 · XP · 시즌 패스는 그대로
+  const hotXp = amount > 0 && Number(meta.hot) > 0 ? Math.min(amount, Math.round(Number(meta.hot))) : 0;
+  const hotLog = hotXp > 0 ? hotXp + (passBoost > 0 ? Math.floor((passBoost * hotXp) / amount) : 0) : 0;
   const inc = { xp: amount };
   if (passBoost > 0) inc.passBaseXp = -passBoost;
   const update = {
@@ -216,6 +220,7 @@ export async function grantXp(member, amount, meta = {}) {
     // 📌 스레드에서 받은 채팅이면 부모 채널 — 퀘스트가 채널을 부모 기준으로 맞춘다
     ...(meta.pt ? { pt: meta.pt } : {}),
     ...(passBoost > 0 ? { passBoost } : {}),
+    ...(hotLog > 0 ? { hot: hotLog } : {}),
     // 📌 음성 상황 — 음성 지급(features/voiceXp.js)만 넘긴다. 다른 지급 줄에는 칸 자체가 없다
     ...(meta.ctx ? { ctx: meta.ctx } : {}),
     // 📌 음성 지급의 그 주기(초) — 관리 › 이상 활동이 로그마다 이 값으로 간격 · 시간을 센다(lib/adminActivity.js)

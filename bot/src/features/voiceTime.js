@@ -23,7 +23,7 @@ import { UserXp } from "../db.js";
 import { kstToday, VOICE_TIME_START } from "../leveling.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getMuteMultiplier, isLevelOpen } from "../botSettings.js";
-import { relieveMute, voiceRate, payVoiceCycle } from "./voiceXp.js";
+import { relieveMute, voiceRate, voiceHotRate, payVoiceCycle } from "./voiceXp.js";
 import { idleMinutes } from "./activity.js";
 import { noteXpStop, stopUntilOf, notStopped } from "../xpStop.js";
 import { config } from "../config.js";
@@ -126,13 +126,15 @@ function cut(userId, vs, now = Date.now()) {
 //    0 으로 시작하면 모르는 사람이 '무활동 0분'으로 찍힌다(features/activity.js idleMinutes 가 null 을 돌려준다)
 const idleOf = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Math.max(0, Number(v)));
 const maxIdle = (a, b) => (a == null ? b ?? null : b == null ? a : Math.max(a, b)); // null(모름)은 건너뛴다 — 둘 다 모르면 null
-const newCycle = (ch, channel, member) => ({ ch, chName: channel?.name || "", pc: channel?.parentId || "", sec: 0, xp: 0, muS: 0, dfS: 0, lvS: 0, nS: {}, idle: null, member, dirty: true });
+// 📌 hot — 그 바퀴 XP 중 핫타임으로 더 받은 몫(voiceXp.js voiceHotRate · 2026-10-19 이벤트 패스 진행도에서 뺀다). 예전에 저장된 바퀴는 0
+const newCycle = (ch, channel, member) => ({ ch, chName: channel?.name || "", pc: channel?.parentId || "", sec: 0, xp: 0, hot: 0, muS: 0, dfS: 0, lvS: 0, nS: {}, idle: null, member, dirty: true });
 const cycleOf = (v, member) => ({
   ch: String(v?.ch || ""),
   chName: v?.chName || "",
   pc: v?.pc || "",
   sec: Math.max(0, Number(v?.sec) || 0),
   xp: Math.max(0, Number(v?.xp) || 0),
+  hot: Math.max(0, Number(v?.hot) || 0),
   muS: Number(v?.muS) || 0,
   dfS: Number(v?.dfS) || 0,
   lvS: Number(v?.lvS) || 0,
@@ -141,7 +143,7 @@ const cycleOf = (v, member) => ({
   member,
   dirty: false,
 });
-const snapOf = (c) => ({ ch: c.ch, chName: c.chName, pc: c.pc, sec: c.sec, xp: c.xp, muS: c.muS, dfS: c.dfS, lvS: c.lvS, nS: c.nS, idle: c.idle });
+const snapOf = (c) => ({ ch: c.ch, chName: c.chName, pc: c.pc, sec: c.sec, xp: c.xp, hot: c.hot || 0, muS: c.muS, dfS: c.dfS, lvS: c.lvS, nS: c.nS, idle: c.idle });
 
 // 같은 사람의 닫힌 바퀴 여럿을 하나로 — 초 · XP · 상황 시간은 더하고, 채널은 가장 오래 머문 곳
 function mergeCycles(list) {
@@ -150,6 +152,7 @@ function mergeCycles(list) {
   for (const c of list.slice(1)) {
     out.sec += c.sec;
     out.xp += c.xp;
+    out.hot = (out.hot || 0) + (c.hot || 0);
     out.muS += c.muS;
     out.dfS += c.dfS;
     out.lvS += c.lvS;
@@ -299,6 +302,7 @@ async function doFlush(final) {
         c = null;
       }
       const rate = voiceRate(member, channel, d, s, pc.n, pc.stay || 0) * pc.mult;
+      const hotRate = voiceHotRate(member, d, s) * pc.mult; // 그중 핫타임 추가분(같은 음소거 배율) — 바퀴의 hot 으로 쌓는다
       let left = pc.ms / 1000;
       while (left > 0) {
         if (c && full(c)) {
@@ -309,6 +313,7 @@ async function doFlush(final) {
         const take = Math.min(left, interval - c.sec);
         c.sec += take;
         c.xp += (rate * take) / interval;
+        c.hot = (c.hot || 0) + (hotRate * take) / interval;
         if (pc.mu) c.muS += take;
         if (pc.df) c.dfS += take;
         if (pc.lv) c.lvS += take;

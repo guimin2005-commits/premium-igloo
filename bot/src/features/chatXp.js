@@ -104,14 +104,16 @@ export function registerChatXp(client) {
       const rolled = min + Math.floor(Math.random() * (max - min + 1));
 
       // 📌 핫타임(hotTime.js) — 굴린 값(기본 + 강화)에만 배수. 아이템 % 효과는 배수 전 값에 붙는다(운영자 "아이템에는 핫타임 효과가 적용되지 않음")
+      const hotRolled = Math.round(rolled * hotTimeMult(s));
       const amount =
-        Math.round(rolled * hotTimeMult(s)) +
+        hotRolled +
         getBuffXp(message.member) +
         channelPolicy.boostXp +
         getActiveBoostXp(message.member, message.channel) +
         effectXp(message.member, "chat", { base: rolled, channel: message.channel });
 
-      const got = await grantXp(message.member, amount, { reason: "chat", ...where });
+      // 📌 hot — 핫타임으로 더 받은 몫(XpLog.hot · 2026-10-19 운영자 "핫타임 수치는 이벤트 패스 진행도에 포함 안 되게") — 이벤트 패스가 빼고 센다
+      const got = await grantXp(message.member, amount, { reason: "chat", ...where, hot: Math.max(0, hotRolled - rolled) });
 
       // 채팅 잭팟 — XP 를 받은 메시지에서만, 터지면 따로 지급(XpLog "effect")
       const jackpot = jackpotXp(message.member, { channel: message.channel });

@@ -86,6 +86,15 @@ export function voiceRate(member, channel, doc, s, count, staySec = 0) {
   const core = (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp) * hotTimeMult(s);
   return core + getBuffXp(member) + channelXp + getActiveBoostXp(member, channel) + itemXp;
 }
+// 📌 1회분 중 핫타임으로 더 받은 몫(배수 − 1 만큼 · 음소거 배율 전) — voiceRate 의 core 와 같은 기준. 핫타임 밖이면 0.
+//    2026-10-19 운영자 "핫타임 수치는 이벤트 패스 진행도에 포함 안 되게" — voiceTime.js 가 바퀴마다 쌓아 XpLog.hot 으로 남기고, 이벤트 패스가 그만큼 빼고 센다
+export function voiceHotRate(member, doc, s) {
+  const m = hotTimeMult(s);
+  if (!(m > 1)) return 0;
+  const base = Math.max(0, Number(s.voiceXp) || 0);
+  const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
+  return (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp) * (m - 1);
+}
 
 // 📌 사탕 바구니(아이템 효과 voiceCandy — 2026-10-14 할로윈 「유령 펭귄의 초대」) — 음성 XP 를 받은 바퀴의 실제 초를 UserXp.voiceCandySec 에 쌓고,
 //    효과의 N분(여러 개면 가장 짧은 것 — 쌓는 칸은 하나)이 찰 때마다 무작위 XP 하나(그 효과의 구간 표 — itemEffects.js candyTiersOf · 기본 100~3,000)를 주고 그만큼 뺀다.
@@ -133,8 +142,11 @@ export async function payVoiceCycle(member, c) {
   const today = kstToday();
   const attendMin = Math.max(1, s.attendVoiceMin || 60);
 
-  const paid = await grantXp(member, Math.max(0, Math.floor(Number(c.amount) || 0)), {
+  const paidAmount = Math.max(0, Math.floor(Number(c.amount) || 0));
+  const paid = await grantXp(member, paidAmount, {
     reason: "voice",
+    // 📌 이 바퀴의 핫타임 추가분(voiceTime.js 가 쌓은 c.hot) — XpLog.hot(이벤트 패스가 빼고 센다). 줄 XP 를 넘지 않게
+    hot: Math.min(paidAmount, Math.max(0, Math.round(Number(c.hot) || 0))),
     channelId: c.ch,
     channelName: c.chName || "",
     pc: c.pc || "", // 카테고리 — 퀘스트 채널 조건(XpLog.pc)

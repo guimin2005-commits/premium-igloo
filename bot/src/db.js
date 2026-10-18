@@ -281,6 +281,9 @@ const XpLogSchema = new mongoose.Schema({
   // 📌 시즌 패스 가속(아이템 효과 passBoost) — 이 지급과 함께 passBaseXp 를 낮춘 폭(진행도에만 더해진 XP). 없으면 0.
   //    시즌 기준선을 로그로 되짚을 때(seasonStartBaseXp) amount 와 함께 빼야 가속분이 사라지지 않는다
   passBoost: { type: Number, default: 0 },
+  // 📌 핫타임으로 더 받은 몫(+ 그 몫의 패스 가속) — 채팅 · 음성 줄에만, 핫타임 밖 · 예전 줄은 칸 없음(xp.js grantXp meta.hot).
+  //    2026-10-19 운영자 "핫타임 수치는 이벤트 패스 진행도에 포함 안 되게" — 사이트 lib/eventPass.js 가 amount + passBoost 에서 뺀다. models/XpLog.js 와 같은 칸
+  hot: { type: Number },
   // 📌 음성 지급 줄에만 — 그 주기의 음성 상황(features/voiceXp.js voiceCtx). 다른 줄 · 예전 줄에는 없다. models/XpLog.js 와 같은 칸
   //    n: 그 채널의 봇 아닌 사람 수(본인 포함) · mute: 마이크 꺼짐(본인 · 서버) · deaf: 헤드셋 꺼짐(본인 · 서버)
   //    live: 화면 공유 · 캠 · idle: 마지막 활동(features/activity.js) 뒤 지난 분 — 재시작 뒤 아직 활동 기록이 없어 모르면 칸 없음(관리 › 이상 활동 "모름")
