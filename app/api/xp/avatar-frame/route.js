@@ -22,14 +22,14 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const frame = String(body?.frame ?? "").trim().toLowerCase();
     if (frame !== SKIN_NONE && !FRAME_OF[frame]) {
-      return NextResponse.json({ success: false, error: "알 수 없는 테두리입니다." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "알 수 없는 프로필 테두리입니다." }, { status: 400 });
     }
 
     await connectToDatabase();
     const [perks, mine] = await Promise.all([getPerks(auth.userId), UserXp.findOne({ userId: auth.userId }, { seasonFrame: 1 }).lean()]);
     const avatarFrames = withSeasonFrame(perks.avatarFrames, mine);
     if (frame !== SKIN_NONE && !avatarFrames.includes(frame)) {
-      return NextResponse.json({ success: false, error: "가지고 있지 않은 테두리입니다." }, { status: 403 });
+      return NextResponse.json({ success: false, error: "가지고 있지 않은 프로필 테두리입니다." }, { status: 403 });
     }
 
     // XP 문서가 없는 유저(지급으로만 받음)는 쓰기인 여기서 만든다(카드 스킨과 같은 규칙)
@@ -40,7 +40,7 @@ export async function POST(request) {
     });
     return NextResponse.json({ success: true, data: { avatarFrame: pickAvatarFrame(avatarFrames, frame) } });
   } catch (error) {
-    console.error("아바타 테두리 저장 실패:", error);
+    console.error("프로필 테두리 저장 실패:", error);
     return NextResponse.json({ success: false, error: "저장하지 못했습니다." }, { status: 500 });
   }
 }

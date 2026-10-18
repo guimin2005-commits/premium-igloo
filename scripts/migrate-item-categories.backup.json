@@ -1,0 +1,2109 @@
+[
+  {
+    "col": "items",
+    "id": "6aba8d37975e9a06a23745c0",
+    "name": "카드 스킨 · 골드",
+    "before": {
+      "name": "카드 스킨 · 골드",
+      "category": null
+    },
+    "after": {
+      "name": "골드"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aba97340db8d9482ac48e44",
+    "name": "카드 스킨 · 오로라",
+    "before": {
+      "name": "카드 스킨 · 오로라",
+      "category": null
+    },
+    "after": {
+      "name": "오로라"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aba97340db8d9482ac48e45",
+    "name": "카드 스킨 · 아이스",
+    "before": {
+      "name": "카드 스킨 · 아이스",
+      "category": null
+    },
+    "after": {
+      "name": "아이스"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aba97340db8d9482ac48e46",
+    "name": "카드 스킨 · 크림슨",
+    "before": {
+      "name": "카드 스킨 · 크림슨",
+      "category": null
+    },
+    "after": {
+      "name": "크림슨"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb800db8d9482ac4af67",
+    "name": "카드 스킨 · 새로운 세계",
+    "before": {
+      "name": "카드 스킨 · 새로운 세계",
+      "category": null
+    },
+    "after": {
+      "name": "새로운 세계"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af68",
+    "name": "카드 스킨 · 항해도",
+    "before": {
+      "name": "카드 스킨 · 항해도",
+      "category": null
+    },
+    "after": {
+      "name": "항해도"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af69",
+    "name": "카드 스킨 · 비공정",
+    "before": {
+      "name": "카드 스킨 · 비공정",
+      "category": null
+    },
+    "after": {
+      "name": "비공정"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af6a",
+    "name": "배지 · 섬",
+    "before": {
+      "name": "배지 · 섬",
+      "category": null
+    },
+    "after": {
+      "name": "섬"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af6b",
+    "name": "배지 · 나침반",
+    "before": {
+      "name": "배지 · 나침반",
+      "category": null
+    },
+    "after": {
+      "name": "나침반"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af6c",
+    "name": "배지 · 비공정",
+    "before": {
+      "name": "배지 · 비공정",
+      "category": null
+    },
+    "after": {
+      "name": "비공정"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af6d",
+    "name": "배지 · 차원문",
+    "before": {
+      "name": "배지 · 차원문",
+      "category": null
+    },
+    "after": {
+      "name": "차원문"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6abdcb810db8d9482ac4af6e",
+    "name": "배지 · 개척 깃발",
+    "before": {
+      "name": "배지 · 개척 깃발",
+      "category": null
+    },
+    "after": {
+      "name": "개척 깃발"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e49",
+    "name": "아바타 테두리 · 브론즈",
+    "before": {
+      "name": "아바타 테두리 · 브론즈",
+      "category": null
+    },
+    "after": {
+      "name": "브론즈"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e4a",
+    "name": "아바타 테두리 · 실버",
+    "before": {
+      "name": "아바타 테두리 · 실버",
+      "category": null
+    },
+    "after": {
+      "name": "실버"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e4b",
+    "name": "아바타 테두리 · 골드",
+    "before": {
+      "name": "아바타 테두리 · 골드",
+      "category": null
+    },
+    "after": {
+      "name": "골드"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e4c",
+    "name": "아바타 테두리 · 플래티넘",
+    "before": {
+      "name": "아바타 테두리 · 플래티넘",
+      "category": null
+    },
+    "after": {
+      "name": "플래티넘"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e4d",
+    "name": "아바타 테두리 · 다이아몬드",
+    "before": {
+      "name": "아바타 테두리 · 다이아몬드",
+      "category": null
+    },
+    "after": {
+      "name": "다이아몬드"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e4e",
+    "name": "아바타 테두리 · 마스터",
+    "before": {
+      "name": "아바타 테두리 · 마스터",
+      "category": null
+    },
+    "after": {
+      "name": "마스터"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e4f",
+    "name": "아바타 테두리 · 그랜드마스터",
+    "before": {
+      "name": "아바타 테두리 · 그랜드마스터",
+      "category": null
+    },
+    "after": {
+      "name": "그랜드마스터"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e50",
+    "name": "아바타 테두리 · 챌린저",
+    "before": {
+      "name": "아바타 테두리 · 챌린저",
+      "category": null
+    },
+    "after": {
+      "name": "챌린저"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9320431451f25f647e51",
+    "name": "아바타 테두리 · 이글루",
+    "before": {
+      "name": "아바타 테두리 · 이글루",
+      "category": null
+    },
+    "after": {
+      "name": "이글루"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e52",
+    "name": "카드 스킨 · 브론즈 등급",
+    "before": {
+      "name": "카드 스킨 · 브론즈 등급",
+      "category": null
+    },
+    "after": {
+      "name": "브론즈 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e53",
+    "name": "카드 스킨 · 실버 등급",
+    "before": {
+      "name": "카드 스킨 · 실버 등급",
+      "category": null
+    },
+    "after": {
+      "name": "실버 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e54",
+    "name": "카드 스킨 · 골드 등급",
+    "before": {
+      "name": "카드 스킨 · 골드 등급",
+      "category": null
+    },
+    "after": {
+      "name": "골드 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e55",
+    "name": "카드 스킨 · 플래티넘 등급",
+    "before": {
+      "name": "카드 스킨 · 플래티넘 등급",
+      "category": null
+    },
+    "after": {
+      "name": "플래티넘 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e56",
+    "name": "카드 스킨 · 다이아몬드 등급",
+    "before": {
+      "name": "카드 스킨 · 다이아몬드 등급",
+      "category": null
+    },
+    "after": {
+      "name": "다이아몬드 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e57",
+    "name": "카드 스킨 · 마스터 등급",
+    "before": {
+      "name": "카드 스킨 · 마스터 등급",
+      "category": null
+    },
+    "after": {
+      "name": "마스터 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e58",
+    "name": "카드 스킨 · 그랜드마스터 등급",
+    "before": {
+      "name": "카드 스킨 · 그랜드마스터 등급",
+      "category": null
+    },
+    "after": {
+      "name": "그랜드마스터 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e59",
+    "name": "카드 스킨 · 챌린저 등급",
+    "before": {
+      "name": "카드 스킨 · 챌린저 등급",
+      "category": null
+    },
+    "after": {
+      "name": "챌린저 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e5a",
+    "name": "카드 스킨 · 이글루 등급",
+    "before": {
+      "name": "카드 스킨 · 이글루 등급",
+      "category": null
+    },
+    "after": {
+      "name": "이글루 등급"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e5b",
+    "name": "아바타 테두리 · 항해도",
+    "before": {
+      "name": "아바타 테두리 · 항해도",
+      "category": null
+    },
+    "after": {
+      "name": "항해도"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e5c",
+    "name": "아바타 테두리 · 비공정",
+    "before": {
+      "name": "아바타 테두리 · 비공정",
+      "category": null
+    },
+    "after": {
+      "name": "비공정"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e5d",
+    "name": "카드 스킨 · 호박 밭",
+    "before": {
+      "name": "카드 스킨 · 호박 밭",
+      "category": null
+    },
+    "after": {
+      "name": "호박 밭"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e5e",
+    "name": "카드 스킨 · 유령 파티",
+    "before": {
+      "name": "카드 스킨 · 유령 파티",
+      "category": null
+    },
+    "after": {
+      "name": "유령 파티"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e5f",
+    "name": "카드 스킨 · 마녀의 밤",
+    "before": {
+      "name": "카드 스킨 · 마녀의 밤",
+      "category": null
+    },
+    "after": {
+      "name": "마녀의 밤"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e60",
+    "name": "카드 스킨 · 사탕 가게",
+    "before": {
+      "name": "카드 스킨 · 사탕 가게",
+      "category": null
+    },
+    "after": {
+      "name": "사탕 가게"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e61",
+    "name": "카드 스킨 · 달빛 묘지",
+    "before": {
+      "name": "카드 스킨 · 달빛 묘지",
+      "category": null
+    },
+    "after": {
+      "name": "달빛 묘지"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e62",
+    "name": "카드 스킨 · 검은 고양이",
+    "before": {
+      "name": "카드 스킨 · 검은 고양이",
+      "category": null
+    },
+    "after": {
+      "name": "검은 고양이"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e63",
+    "name": "아바타 테두리 · 호박 입",
+    "before": {
+      "name": "아바타 테두리 · 호박 입",
+      "category": null
+    },
+    "after": {
+      "name": "호박 입"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e64",
+    "name": "아바타 테두리 · 수정 구슬",
+    "before": {
+      "name": "아바타 테두리 · 수정 구슬",
+      "category": null
+    },
+    "after": {
+      "name": "수정 구슬"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e65",
+    "name": "아바타 테두리 · 유령 이불",
+    "before": {
+      "name": "아바타 테두리 · 유령 이불",
+      "category": null
+    },
+    "after": {
+      "name": "유령 이불"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e66",
+    "name": "아바타 테두리 · 포장 사탕",
+    "before": {
+      "name": "아바타 테두리 · 포장 사탕",
+      "category": null
+    },
+    "after": {
+      "name": "포장 사탕"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9321431451f25f647e67",
+    "name": "아바타 테두리 · 미라",
+    "before": {
+      "name": "아바타 테두리 · 미라",
+      "category": null
+    },
+    "after": {
+      "name": "미라"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e68",
+    "name": "아바타 테두리 · 유령의 집 창문",
+    "before": {
+      "name": "아바타 테두리 · 유령의 집 창문",
+      "category": null
+    },
+    "after": {
+      "name": "유령의 집 창문"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e69",
+    "name": "아바타 테두리 · 검은 고양이",
+    "before": {
+      "name": "아바타 테두리 · 검은 고양이",
+      "category": null
+    },
+    "after": {
+      "name": "검은 고양이"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e6a",
+    "name": "배지 · 잭오랜턴",
+    "before": {
+      "name": "배지 · 잭오랜턴",
+      "category": null
+    },
+    "after": {
+      "name": "잭오랜턴"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e6b",
+    "name": "배지 · 꼬마 유령",
+    "before": {
+      "name": "배지 · 꼬마 유령",
+      "category": null
+    },
+    "after": {
+      "name": "꼬마 유령"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e6c",
+    "name": "배지 · 박쥐",
+    "before": {
+      "name": "배지 · 박쥐",
+      "category": null
+    },
+    "after": {
+      "name": "박쥐"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e6d",
+    "name": "배지 · 마녀 모자",
+    "before": {
+      "name": "배지 · 마녀 모자",
+      "category": null
+    },
+    "after": {
+      "name": "마녀 모자"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e6e",
+    "name": "배지 · 마녀의 솥",
+    "before": {
+      "name": "배지 · 마녀의 솥",
+      "category": null
+    },
+    "after": {
+      "name": "마녀의 솥"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e6f",
+    "name": "배지 · 막대사탕",
+    "before": {
+      "name": "배지 · 막대사탕",
+      "category": null
+    },
+    "after": {
+      "name": "막대사탕"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e70",
+    "name": "배지 · 검은 고양이",
+    "before": {
+      "name": "배지 · 검은 고양이",
+      "category": null
+    },
+    "after": {
+      "name": "검은 고양이"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e71",
+    "name": "배지 · 해골 사탕",
+    "before": {
+      "name": "배지 · 해골 사탕",
+      "category": null
+    },
+    "after": {
+      "name": "해골 사탕"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6aca9322431451f25f647e72",
+    "name": "배지 · 유령의 집",
+    "before": {
+      "name": "배지 · 유령의 집",
+      "category": null
+    },
+    "after": {
+      "name": "유령의 집"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6acb522b2fc255e695546feb",
+    "name": "아바타 테두리 · 새로운 세계",
+    "before": {
+      "name": "아바타 테두리 · 새로운 세계",
+      "category": null
+    },
+    "after": {
+      "name": "새로운 세계"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6acb522b2fc255e695546fec",
+    "name": "아바타 테두리 · 호박 밭",
+    "before": {
+      "name": "아바타 테두리 · 호박 밭",
+      "category": null
+    },
+    "after": {
+      "name": "호박 밭"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6acb522b2fc255e695546fed",
+    "name": "아바타 테두리 · 유령 파티",
+    "before": {
+      "name": "아바타 테두리 · 유령 파티",
+      "category": null
+    },
+    "after": {
+      "name": "유령 파티"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6acb522b2fc255e695546fee",
+    "name": "아바타 테두리 · 마녀의 밤",
+    "before": {
+      "name": "아바타 테두리 · 마녀의 밤",
+      "category": null
+    },
+    "after": {
+      "name": "마녀의 밤"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6acb522b2fc255e695546fef",
+    "name": "아바타 테두리 · 사탕 가게",
+    "before": {
+      "name": "아바타 테두리 · 사탕 가게",
+      "category": null
+    },
+    "after": {
+      "name": "사탕 가게"
+    }
+  },
+  {
+    "col": "items",
+    "id": "6acb522b2fc255e695546ff0",
+    "name": "아바타 테두리 · 달빛 묘지",
+    "before": {
+      "name": "아바타 테두리 · 달빛 묘지",
+      "category": null
+    },
+    "after": {
+      "name": "달빛 묘지"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdc0838fb054deb0c0773a",
+    "name": "카드 스킨 · 골드",
+    "before": {
+      "name": "카드 스킨 · 골드",
+      "category": null
+    },
+    "after": {
+      "name": "골드"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdc0b68fb054deb0c0773b",
+    "name": "카드 스킨 · 오로라",
+    "before": {
+      "name": "카드 스킨 · 오로라",
+      "category": null
+    },
+    "after": {
+      "name": "오로라"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdc0f98fb054deb0c0773c",
+    "name": "카드 스킨 · 아이스",
+    "before": {
+      "name": "카드 스킨 · 아이스",
+      "category": null
+    },
+    "after": {
+      "name": "아이스"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdc11b8fb054deb0c0773d",
+    "name": "카드 스킨 · 크림슨",
+    "before": {
+      "name": "카드 스킨 · 크림슨",
+      "category": null
+    },
+    "after": {
+      "name": "크림슨"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdd002e1e1d55dc12e7318",
+    "name": "카드 스킨 · 항해도",
+    "before": {
+      "name": "카드 스킨 · 항해도",
+      "category": null
+    },
+    "after": {
+      "name": "항해도"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdd0218a1ee1b89544650e",
+    "name": "카드 스킨 · 비공정",
+    "before": {
+      "name": "카드 스킨 · 비공정",
+      "category": null
+    },
+    "after": {
+      "name": "비공정"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdd8ef5b4589976e12fa1d",
+    "name": "배지 · 나침반",
+    "before": {
+      "name": "배지 · 나침반",
+      "category": null
+    },
+    "after": {
+      "name": "나침반"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6abdf10818094f35f1030355",
+    "name": "배지 · 비공정",
+    "before": {
+      "name": "배지 · 비공정",
+      "category": null
+    },
+    "after": {
+      "name": "비공정"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6acb146712b5e2911deb231c",
+    "name": "아바타 테두리 · 항해도",
+    "before": {
+      "name": "아바타 테두리 · 항해도",
+      "category": null
+    },
+    "after": {
+      "name": "항해도"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6acb14d112b5e2911deb231d",
+    "name": "아바타 테두리 · 비공정",
+    "before": {
+      "name": "아바타 테두리 · 비공정",
+      "category": null
+    },
+    "after": {
+      "name": "비공정"
+    }
+  },
+  {
+    "col": "shopitems",
+    "id": "6acb5675d5bd3cf6a6fdcf84",
+    "name": "아바타 테두리 · 새로운 세계",
+    "before": {
+      "name": "아바타 테두리 · 새로운 세계",
+      "category": null
+    },
+    "after": {
+      "name": "새로운 세계"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acfa66f702649f3daf52b67",
+    "name": "카드 배경 · 유령 펭귄의 밤",
+    "before": {
+      "name": "카드 배경 · 유령 펭귄의 밤",
+      "category": null
+    },
+    "after": {
+      "name": "유령 펭귄의 밤"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aba8d37975e9a06a23745c0",
+    "name": "카드 스킨 · 골드",
+    "before": {
+      "name": "카드 스킨 · 골드",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 골드",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "골드",
+      "_draftBase.name": "골드"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aba97340db8d9482ac48e44",
+    "name": "카드 스킨 · 오로라",
+    "before": {
+      "name": "카드 스킨 · 오로라",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 오로라",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "오로라",
+      "_draftBase.name": "오로라"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aba97340db8d9482ac48e45",
+    "name": "카드 스킨 · 아이스",
+    "before": {
+      "name": "카드 스킨 · 아이스",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 아이스",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "아이스",
+      "_draftBase.name": "아이스"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aba97340db8d9482ac48e46",
+    "name": "카드 스킨 · 크림슨",
+    "before": {
+      "name": "카드 스킨 · 크림슨",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 크림슨",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "크림슨",
+      "_draftBase.name": "크림슨"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb800db8d9482ac4af67",
+    "name": "카드 스킨 · 새로운 세계",
+    "before": {
+      "name": "카드 스킨 · 새로운 세계",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 새로운 세계",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "새로운 세계",
+      "_draftBase.name": "새로운 세계"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af68",
+    "name": "카드 스킨 · 항해도",
+    "before": {
+      "name": "카드 스킨 · 항해도",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 항해도",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "항해도",
+      "_draftBase.name": "항해도"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af69",
+    "name": "카드 스킨 · 비공정",
+    "before": {
+      "name": "카드 스킨 · 비공정",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 비공정",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "비공정",
+      "_draftBase.name": "비공정"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af6a",
+    "name": "배지 · 섬",
+    "before": {
+      "name": "배지 · 섬",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 섬",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "섬",
+      "_draftBase.name": "섬"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af6b",
+    "name": "배지 · 나침반",
+    "before": {
+      "name": "배지 · 나침반",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 나침반",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "나침반",
+      "_draftBase.name": "나침반"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af6c",
+    "name": "배지 · 비공정",
+    "before": {
+      "name": "배지 · 비공정",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 비공정",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "비공정",
+      "_draftBase.name": "비공정"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af6d",
+    "name": "배지 · 차원문",
+    "before": {
+      "name": "배지 · 차원문",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 차원문",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "차원문",
+      "_draftBase.name": "차원문"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6abdcb810db8d9482ac4af6e",
+    "name": "배지 · 개척 깃발",
+    "before": {
+      "name": "배지 · 개척 깃발",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 개척 깃발",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "개척 깃발",
+      "_draftBase.name": "개척 깃발"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e49",
+    "name": "아바타 테두리 · 브론즈",
+    "before": {
+      "name": "아바타 테두리 · 브론즈",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 브론즈",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "브론즈",
+      "_draftBase.name": "브론즈"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e4a",
+    "name": "아바타 테두리 · 실버",
+    "before": {
+      "name": "아바타 테두리 · 실버",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 실버",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "실버",
+      "_draftBase.name": "실버"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e4b",
+    "name": "아바타 테두리 · 골드",
+    "before": {
+      "name": "아바타 테두리 · 골드",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 골드",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "골드",
+      "_draftBase.name": "골드"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e4c",
+    "name": "아바타 테두리 · 플래티넘",
+    "before": {
+      "name": "아바타 테두리 · 플래티넘",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 플래티넘",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "플래티넘",
+      "_draftBase.name": "플래티넘"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e4d",
+    "name": "아바타 테두리 · 다이아몬드",
+    "before": {
+      "name": "아바타 테두리 · 다이아몬드",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 다이아몬드",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "다이아몬드",
+      "_draftBase.name": "다이아몬드"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e4e",
+    "name": "아바타 테두리 · 마스터",
+    "before": {
+      "name": "아바타 테두리 · 마스터",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 마스터",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "마스터",
+      "_draftBase.name": "마스터"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e4f",
+    "name": "아바타 테두리 · 그랜드마스터",
+    "before": {
+      "name": "아바타 테두리 · 그랜드마스터",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 그랜드마스터",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "그랜드마스터",
+      "_draftBase.name": "그랜드마스터"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e50",
+    "name": "아바타 테두리 · 챌린저",
+    "before": {
+      "name": "아바타 테두리 · 챌린저",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 챌린저",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "챌린저",
+      "_draftBase.name": "챌린저"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9320431451f25f647e51",
+    "name": "아바타 테두리 · 이글루",
+    "before": {
+      "name": "아바타 테두리 · 이글루",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 이글루",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "이글루",
+      "_draftBase.name": "이글루"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e52",
+    "name": "카드 스킨 · 브론즈 등급",
+    "before": {
+      "name": "카드 스킨 · 브론즈 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 브론즈 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "브론즈 등급",
+      "_draftBase.name": "브론즈 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e53",
+    "name": "카드 스킨 · 실버 등급",
+    "before": {
+      "name": "카드 스킨 · 실버 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 실버 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "실버 등급",
+      "_draftBase.name": "실버 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e54",
+    "name": "카드 스킨 · 골드 등급",
+    "before": {
+      "name": "카드 스킨 · 골드 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 골드 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "골드 등급",
+      "_draftBase.name": "골드 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e55",
+    "name": "카드 스킨 · 플래티넘 등급",
+    "before": {
+      "name": "카드 스킨 · 플래티넘 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 플래티넘 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "플래티넘 등급",
+      "_draftBase.name": "플래티넘 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e56",
+    "name": "카드 스킨 · 다이아몬드 등급",
+    "before": {
+      "name": "카드 스킨 · 다이아몬드 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 다이아몬드 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "다이아몬드 등급",
+      "_draftBase.name": "다이아몬드 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e57",
+    "name": "카드 스킨 · 마스터 등급",
+    "before": {
+      "name": "카드 스킨 · 마스터 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 마스터 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "마스터 등급",
+      "_draftBase.name": "마스터 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e58",
+    "name": "카드 스킨 · 그랜드마스터 등급",
+    "before": {
+      "name": "카드 스킨 · 그랜드마스터 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 그랜드마스터 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "그랜드마스터 등급",
+      "_draftBase.name": "그랜드마스터 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e59",
+    "name": "카드 스킨 · 챌린저 등급",
+    "before": {
+      "name": "카드 스킨 · 챌린저 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 챌린저 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "챌린저 등급",
+      "_draftBase.name": "챌린저 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e5a",
+    "name": "카드 스킨 · 이글루 등급",
+    "before": {
+      "name": "카드 스킨 · 이글루 등급",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 이글루 등급",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "이글루 등급",
+      "_draftBase.name": "이글루 등급"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e5b",
+    "name": "아바타 테두리 · 항해도",
+    "before": {
+      "name": "아바타 테두리 · 항해도",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 항해도",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "항해도",
+      "_draftBase.name": "항해도"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e5c",
+    "name": "아바타 테두리 · 비공정",
+    "before": {
+      "name": "아바타 테두리 · 비공정",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 비공정",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "비공정",
+      "_draftBase.name": "비공정"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e5d",
+    "name": "카드 테두리 · 호박 밭",
+    "before": {
+      "name": "카드 테두리 · 호박 밭",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 호박 밭",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "호박 밭",
+      "_draftBase.name": "호박 밭"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acb522b2fc255e695546feb",
+    "name": "아바타 테두리 · 새로운 세계",
+    "before": {
+      "name": "아바타 테두리 · 새로운 세계",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 새로운 세계",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "새로운 세계",
+      "_draftBase.name": "새로운 세계"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e5e",
+    "name": "카드 스킨 · 유령 파티",
+    "before": {
+      "name": "카드 스킨 · 유령 파티",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 유령 파티",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "유령 파티",
+      "_draftBase.name": "유령 파티"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e5f",
+    "name": "카드 스킨 · 마녀의 밤",
+    "before": {
+      "name": "카드 스킨 · 마녀의 밤",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 마녀의 밤",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "마녀의 밤",
+      "_draftBase.name": "마녀의 밤"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e60",
+    "name": "카드 스킨 · 사탕 가게",
+    "before": {
+      "name": "카드 스킨 · 사탕 가게",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 사탕 가게",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "사탕 가게",
+      "_draftBase.name": "사탕 가게"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e61",
+    "name": "카드 스킨 · 달빛 묘지",
+    "before": {
+      "name": "카드 스킨 · 달빛 묘지",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 달빛 묘지",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "달빛 묘지",
+      "_draftBase.name": "달빛 묘지"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e62",
+    "name": "카드 스킨 · 검은 고양이",
+    "before": {
+      "name": "카드 스킨 · 검은 고양이",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 검은 고양이",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "검은 고양이",
+      "_draftBase.name": "검은 고양이"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e63",
+    "name": "프로필 테두리 · 호박 입",
+    "before": {
+      "name": "프로필 테두리 · 호박 입",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 호박 입",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "호박 입",
+      "_draftBase.name": "호박 입"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e64",
+    "name": "아바타 테두리 · 수정 구슬",
+    "before": {
+      "name": "아바타 테두리 · 수정 구슬",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 수정 구슬",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "수정 구슬",
+      "_draftBase.name": "수정 구슬"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e65",
+    "name": "아바타 테두리 · 유령 이불",
+    "before": {
+      "name": "아바타 테두리 · 유령 이불",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 유령 이불",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "유령 이불",
+      "_draftBase.name": "유령 이불"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e66",
+    "name": "아바타 테두리 · 포장 사탕",
+    "before": {
+      "name": "아바타 테두리 · 포장 사탕",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 포장 사탕",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "포장 사탕",
+      "_draftBase.name": "포장 사탕"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9321431451f25f647e67",
+    "name": "아바타 테두리 · 미라",
+    "before": {
+      "name": "아바타 테두리 · 미라",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 미라",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "미라",
+      "_draftBase.name": "미라"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e68",
+    "name": "아바타 테두리 · 유령의 집 창문",
+    "before": {
+      "name": "아바타 테두리 · 유령의 집 창문",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 유령의 집 창문",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "유령의 집 창문",
+      "_draftBase.name": "유령의 집 창문"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e69",
+    "name": "아바타 테두리 · 검은 고양이",
+    "before": {
+      "name": "아바타 테두리 · 검은 고양이",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 검은 고양이",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "검은 고양이",
+      "_draftBase.name": "검은 고양이"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e6a",
+    "name": "배지 · 잭오랜턴",
+    "before": {
+      "name": "배지 · 잭오랜턴",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 잭오랜턴",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "잭오랜턴",
+      "_draftBase.name": "잭오랜턴"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e6b",
+    "name": "배지 · 꼬마 유령",
+    "before": {
+      "name": "배지 · 꼬마 유령",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 꼬마 유령",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "꼬마 유령",
+      "_draftBase.name": "꼬마 유령"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e6c",
+    "name": "배지 · 박쥐",
+    "before": {
+      "name": "배지 · 박쥐",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 박쥐",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "박쥐",
+      "_draftBase.name": "박쥐"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e6d",
+    "name": "배지 · 마녀 모자",
+    "before": {
+      "name": "배지 · 마녀 모자",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 마녀 모자",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "마녀 모자",
+      "_draftBase.name": "마녀 모자"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e6e",
+    "name": "배지 · 마녀의 솥",
+    "before": {
+      "name": "배지 · 마녀의 솥",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 마녀의 솥",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "마녀의 솥",
+      "_draftBase.name": "마녀의 솥"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e6f",
+    "name": "배지 · 막대사탕",
+    "before": {
+      "name": "배지 · 막대사탕",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 막대사탕",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "막대사탕",
+      "_draftBase.name": "막대사탕"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e70",
+    "name": "배지 · 검은 고양이",
+    "before": {
+      "name": "배지 · 검은 고양이",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 검은 고양이",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "검은 고양이",
+      "_draftBase.name": "검은 고양이"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e71",
+    "name": "배지 · 해골 사탕",
+    "before": {
+      "name": "배지 · 해골 사탕",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 해골 사탕",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "해골 사탕",
+      "_draftBase.name": "해골 사탕"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6aca9322431451f25f647e72",
+    "name": "배지 · 유령의 집",
+    "before": {
+      "name": "배지 · 유령의 집",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 유령의 집",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "유령의 집",
+      "_draftBase.name": "유령의 집"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acb522b2fc255e695546fec",
+    "name": "아바타 테두리 · 호박 밭",
+    "before": {
+      "name": "아바타 테두리 · 호박 밭",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 호박 밭",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "호박 밭",
+      "_draftBase.name": "호박 밭"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acb522b2fc255e695546fed",
+    "name": "아바타 테두리 · 유령 파티",
+    "before": {
+      "name": "아바타 테두리 · 유령 파티",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 유령 파티",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "유령 파티",
+      "_draftBase.name": "유령 파티"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acb522b2fc255e695546fee",
+    "name": "아바타 테두리 · 마녀의 밤",
+    "before": {
+      "name": "아바타 테두리 · 마녀의 밤",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 마녀의 밤",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "마녀의 밤",
+      "_draftBase.name": "마녀의 밤"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acb522b2fc255e695546fef",
+    "name": "아바타 테두리 · 사탕 가게",
+    "before": {
+      "name": "아바타 테두리 · 사탕 가게",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 사탕 가게",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "사탕 가게",
+      "_draftBase.name": "사탕 가게"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6acb522b2fc255e695546ff0",
+    "name": "아바타 테두리 · 달빛 묘지",
+    "before": {
+      "name": "아바타 테두리 · 달빛 묘지",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 달빛 묘지",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "달빛 묘지",
+      "_draftBase.name": "달빛 묘지"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6ad38aaf5397ec5757611a16",
+    "name": "카드 테두리 · 유령 펭귄의 초대",
+    "before": {
+      "name": "카드 테두리 · 유령 펭귄의 초대",
+      "category": null
+    },
+    "after": {
+      "name": "유령 펭귄의 초대"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6ad38aaf5397ec5757611a17",
+    "name": "프로필 테두리 · 유령 펭귄의 꼬리",
+    "before": {
+      "name": "프로필 테두리 · 유령 펭귄의 꼬리",
+      "category": null
+    },
+    "after": {
+      "name": "유령 펭귄의 꼬리"
+    }
+  },
+  {
+    "col": "draft_items",
+    "id": "6ad38aaf5397ec5757611a18",
+    "name": "배지 · 유령 펭귄",
+    "before": {
+      "name": "배지 · 유령 펭귄",
+      "category": null
+    },
+    "after": {
+      "name": "유령 펭귄"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdc0838fb054deb0c0773a",
+    "name": "카드 스킨 · 골드",
+    "before": {
+      "name": "카드 스킨 · 골드",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 골드",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "골드",
+      "_draftBase.name": "골드"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdc0b68fb054deb0c0773b",
+    "name": "카드 스킨 · 오로라",
+    "before": {
+      "name": "카드 스킨 · 오로라",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 오로라",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "오로라",
+      "_draftBase.name": "오로라"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdc0f98fb054deb0c0773c",
+    "name": "카드 스킨 · 아이스",
+    "before": {
+      "name": "카드 스킨 · 아이스",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 아이스",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "아이스",
+      "_draftBase.name": "아이스"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdc11b8fb054deb0c0773d",
+    "name": "카드 스킨 · 크림슨",
+    "before": {
+      "name": "카드 스킨 · 크림슨",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 크림슨",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "크림슨",
+      "_draftBase.name": "크림슨"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdd002e1e1d55dc12e7318",
+    "name": "카드 스킨 · 항해도",
+    "before": {
+      "name": "카드 스킨 · 항해도",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 항해도",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "항해도",
+      "_draftBase.name": "항해도"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdd0218a1ee1b89544650e",
+    "name": "카드 스킨 · 비공정",
+    "before": {
+      "name": "카드 스킨 · 비공정",
+      "category": null,
+      "_draftBase": {
+        "name": "카드 스킨 · 비공정",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "비공정",
+      "_draftBase.name": "비공정"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdd8ef5b4589976e12fa1d",
+    "name": "배지 · 나침반",
+    "before": {
+      "name": "배지 · 나침반",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 나침반",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "나침반",
+      "_draftBase.name": "나침반"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6abdf10818094f35f1030355",
+    "name": "배지 · 비공정",
+    "before": {
+      "name": "배지 · 비공정",
+      "category": null,
+      "_draftBase": {
+        "name": "배지 · 비공정",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "비공정",
+      "_draftBase.name": "비공정"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6acb146712b5e2911deb231c",
+    "name": "아바타 테두리 · 항해도",
+    "before": {
+      "name": "아바타 테두리 · 항해도",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 항해도",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "항해도",
+      "_draftBase.name": "항해도"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6acb14d112b5e2911deb231d",
+    "name": "아바타 테두리 · 비공정",
+    "before": {
+      "name": "아바타 테두리 · 비공정",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 비공정",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "비공정",
+      "_draftBase.name": "비공정"
+    }
+  },
+  {
+    "col": "draft_shopitems",
+    "id": "6acb5675d5bd3cf6a6fdcf84",
+    "name": "아바타 테두리 · 새로운 세계",
+    "before": {
+      "name": "아바타 테두리 · 새로운 세계",
+      "category": null,
+      "_draftBase": {
+        "name": "아바타 테두리 · 새로운 세계",
+        "category": null
+      }
+    },
+    "after": {
+      "name": "새로운 세계",
+      "_draftBase.name": "새로운 세계"
+    }
+  }
+]

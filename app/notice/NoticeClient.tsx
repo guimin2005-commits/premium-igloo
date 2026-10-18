@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ADMIN_USERS } from "@/lib/admins";
 import { ICON_PATHS } from "../components/Icons";
+import { useAdminView } from "../components/AdminView";
 
 // 📌 공지사항 목록 — 화이트 & 블랙. 제목 · 밑줄 탭 · 검색 · 줄 목록(날짜 · 태그 · 제목 · ›).
 //    읽는 것은 페이지(이동 규칙 1): 줄을 누르면 /notice/[id] 로 간다. 목록 위 모달·본문 미리보기는 없다.
@@ -48,9 +48,9 @@ const dcLabelOf = (d?: DcRow) =>
 export default function NoticeClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, status } = useSession() as any;
-  const isLoggedIn = status === "authenticated";
-  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { status } = useSession();
+  // 📌 관리자로 보는 중일 때만(「유저 화면으로 보기」 켜면 유저와 같게) — 글쓰기 · 수정 · 삭제 · 숨김 글(?all=1) · 디스코드 상태
+  const { admin: isAdmin } = useAdminView();
 
   const [notices, setNotices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

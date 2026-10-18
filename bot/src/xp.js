@@ -3,7 +3,7 @@ import { UserXp, XpLog, isDuplicateKeyError } from "./db.js";
 import { getLevelByXp, getCumulativeXpByLevel, kstToday } from "./leveling.js";
 import { isXpStopped, notStopped, noteXpStop, stopUntilOf } from "./xpStop.js";
 import { getRoleConfigs } from "./roleConfigs.js";
-import { heldEffects, effectXp, effectTimeOk, claimDaily, kstNow, perksOf } from "./itemEffects.js";
+import { heldEffects, levelUpEffectXp, effectTimeOk, claimDaily, kstNow, perksOf } from "./itemEffects.js";
 import { getSettings, isLevelOpen } from "./botSettings.js";
 import { buildMessageWithCard, cardAvatar, commonVars, tierOf, progressBar } from "./botMessages.js";
 import { config } from "./config.js";
@@ -36,7 +36,6 @@ function topExclusive(level) {
 //    배타 역할은 최상위 하나만 지급한다 (하위 티어는 아래 revoke가 거둬간다)
 //    📌 notify=false 면 알림 없이 역할만 맞춘다 — 티어 설정 저장 뒤 전원 재동기화(needsRoleSync)가 채널을 도배하지 않게
 async function grantRewardRoles(member, level, { notify = true } = {}) {
-  const s = getSettings();
   const top = topExclusive(level);
 
   for (const cfg of getRoleConfigs()) {
@@ -47,7 +46,9 @@ async function grantRewardRoles(member, level, { notify = true } = {}) {
         await member.roles.add(cfg.roleId, `레벨 ${cfg.rewardLevel} 도달 보상`);
         console.log(`🎖 ${member.displayName} → ${cfg.roleName || cfg.roleId} 지급 (Lv.${level})`);
 
-        if (notify && s.roleGrantEnabled) announceRoleGrant(member, cfg);
+        // 📌 2026-10-17 켜고 끄기는 봇 메시지 「보내기」(roleGrant 템플릿 enabled) 하나 — buildMessage 가 꺼진 템플릿이면 보내지 않는다.
+        //    옛 레벨 설정 「알림 사용」(BotSetting.roleGrantEnabled)은 더 보지 않는다(관리 화면에서 걷었다 · 저장된 false 는 템플릿이 없을 때 legacy 로 꺼짐에 반영된다)
+        if (notify) announceRoleGrant(member, cfg);
       } catch (e) {
         console.error(`역할 지급 실패 (${cfg.roleName || cfg.roleId}):`, e.message);
       }
@@ -227,28 +228,34 @@ export async function grantXp(member, amount, meta = {}) {
     // 바꾸기 직전 레벨을 돌려받는다 — 두 지급이 동시에 같은 레벨업을 봐도 알림 · 역할 · 레벨 업 퀘스트 · 레벨업 효과는 실제로 오른 쪽 하나만 처리하게.
     // 📌 xp 가 방금 $inc 결과 그대로일 때만 쓴다 — 그 사이 다른 지급(채팅 · 음성 · 큐)이 xp 를 바꿨으면
     //    뒤에 온 쪽이 더 큰 xp 로 레벨을 맞추므로 여기서 작은 레벨로 덮어쓰지 않는다(레벨 역행 방지).
+    // 📌 최고 도달 레벨(maxLevel)도 같은 한 번의 쓰기에서 $max 로 올리고 바꾸기 전 값(peak)을 함께 돌려받는다 — 효과 지급으로 오른 레벨 포함.
+    //    레벨업 효과는 peak 를 넘은 레벨만 준다(아래 · 2026-10-17). 레벨 쓰기와 따로 $max 를 하면 동시 지급의 도착 순서가 엇갈려
+    //    가운데 레벨의 효과를 아무도 못 받거나, 그 사이 관리자 초기화(maxLevel 0)를 옛 최고 레벨로 되돌릴 수 있다 — xp 조건이 걸린 이 쓰기에 묶는다
     const prev = await UserXp.findOneAndUpdate(
       { userId: member.id, xp: doc.xp },
-      { $set: { level: newLevel } },
-      { new: false, projection: { level: 1 } }
+      { $set: { level: newLevel }, $max: { maxLevel: newLevel } },
+      { new: false, projection: { level: 1, maxLevel: 1 } }
     ).lean();
     if (!prev) return doc;
     const before = Math.floor(Number(prev.level) || 0);
+    const peak = Math.floor(Number(prev.maxLevel) || 0);
 
     if (newLevel > before) {
       // 지급하면서 하위 티어(배타 역할)도 함께 거둔다
       syncRewardRoles(member, newLevel).catch(() => {});
       // 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 알리지 않는다 (역할 지급은 그대로)
       if (newLevel > Math.max(1, before)) announceLevelUp(member, Math.max(1, before), newLevel, doc.xp);
-      // 📌 최고 도달 레벨(maxLevel)은 어떤 지급으로 올랐든 $max 로 원자적으로 기록한다 — 효과 지급으로 오른 레벨 포함.
-      //    기록으로만 둔다(레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다 — 아래). 기록이 잠깐 실패해도 퀘스트 · 레벨업 효과를 막지 않게 오류는 삼킨다
-      await UserXp.updateOne({ userId: member.id }, { $max: { maxLevel: newLevel } }).catch(() => {});
       // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 2026-10-04 "XP를 써서 내려갔다가 다시 오른 레벨도 레벨이다 / 시작 레벨은 동일 유지".
-      //    오른 레벨마다 매번 센다(레벨업 알림 · 레벨업 효과와 같은 기준 — 예전엔 처음 도달한 레벨만). 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 제외
+      //    오른 레벨마다 매번 센다(레벨업 알림과 같은 기준 — 레벨업 효과만 2026-10-17 부터 처음 오른 레벨). 레벨 0(아직 계산 전인 새 문서) → 1 은 시작 레벨이라 제외
       if (newLevel > Math.max(1, before)) bumpActivity(member.id, "levelup", newLevel - Math.max(1, before));
-      // 📌 아이템 효과 "레벨이 오를 때마다" — 2026-10-04 오른 레벨마다 매번 준다. 상점 · 강화에 XP 를 써서 내려갔다가 다시 올라도 또 받는다.
+      // 📌 아이템 효과 "레벨이 오를 때마다" — 처음 오른 레벨(시즌 최고 레벨 maxLevel 을 넘은 만큼)은 효과 값 그대로,
+      //    상점 · 강화에 XP 를 써서 내려갔다가 다시 오른 레벨은 효과마다 정한 「다시 오른 레벨」 몫(비우면 절반 — 2026-10-18 운영자 "최초 레벨업 시는 3000이고 내려갔다가 다시 올라간 건 1500" · 관리 화면 칸).
+      //    레벨업 알림 · 레벨 업 퀘스트는 그대로 매번. 관리자 초기화(app/api/xp/grant mode reset)는 maxLevel 도 0 으로 비워 다시 처음부터.
       //    효과 지급으로 오른 레벨에는 다시 붙이지 않는다(재귀 방지). 레벨 0(아직 계산 전인 새 문서) → 1 은 레벨업으로 치지 않는다
-      if (meta.reason !== "effect-levelup") await grantLevelUpEffects(member, newLevel - Math.max(1, before));
+      if (meta.reason !== "effect-levelup") {
+        const first = Math.max(0, newLevel - Math.max(1, before, peak));
+        await grantLevelUpEffects(member, first, newLevel - Math.max(1, before) - first);
+      }
     } else if (newLevel < before) {
       // 회수(음수 지급)로 레벨이 내려가면 그만큼 보상 역할도 거둔다
       revokeRewardRoles(member, newLevel).catch(() => {});
@@ -259,11 +266,15 @@ export async function grantXp(member, amount, meta = {}) {
 
 // 레벨업 효과 — (효과 합 × 오른 레벨 수) 를 따로 지급. 오류는 로그만 남긴다(원래 지급은 이미 끝났다)
 //    📌 XP 획득 중단 중이면 주지 않는다 — 운영진 지급(지급 대기열)으로 레벨이 올라도 효과는 없다(grantXp 입구도 막는다)
-export async function grantLevelUpEffects(member, gained) {
-  if (!(gained > 0) || isXpStopped(member.id)) return;
+// gained: 처음 오른 레벨 수(효과 값 그대로) · again: 내려갔다가 다시 오른 레벨 수(효과마다 정한 「다시 오른 레벨」 몫 · 비우면 절반 — 2026-10-18 itemEffects levelUpEffectXp)
+export async function grantLevelUpEffects(member, gained, again = 0) {
+  const first = Math.max(0, Math.floor(Number(gained) || 0));
+  const re = Math.max(0, Math.floor(Number(again) || 0));
+  if (!(first + re > 0) || isXpStopped(member.id)) return;
   try {
-    const per = effectXp(member, "levelUp");
-    if (per > 0) await grantXp(member, per * gained, { reason: "effect-levelup" });
+    const per = levelUpEffectXp(member);
+    const total = per.first * first + per.again * re;
+    if (total > 0) await grantXp(member, total, { reason: "effect-levelup" });
   } catch (e) {
     console.error(`아이템 효과 지급 오류 (levelUp / ${member.displayName}):`, e.message);
   }

@@ -1,23 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
-import { SEASON } from "@/lib/season";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { POINT_RATE, xpToPoint } from "@/lib/pointRate";
-import { playTone } from "@/lib/sfx";
 import {
   AdminPage,
   Panel,
-  PanelGrid,
   FieldRow,
   Inline,
   Switch,
   Segmented,
   Btn,
   SaveBar,
-  StatRow,
   DataTable,
   DetailPane,
   EmptyRow,
@@ -27,12 +24,16 @@ import {
   fieldNote,
   ConfirmDialog,
   useAdminGuard,
+  useToast,
+  sfxErr,
+  sfxTick,
   type Column,
 } from "../ui";
 
 // 📌 시즌 패스 구성 화면 — 무료/프리미엄 2트랙의 티어 사다리를 관리한다.
 //    2026-09 관리자 개편: 설정 틀과 목록 틀을 한 화면에 쌓는다 (세부 탭 없이).
-//      · 위 — 기본 설정 패널(사용 · 해금가)과 요약 숫자 칸을 넓은 화면에서 두 열로
+//      · 위 — 기본 설정 패널(사용 · 해금가). 📌 2026-10-17 요약 숫자 칸은 뺐다 — 「해금가 빙옥」 · 「상태」는 바로 옆 설정 값을 다시 보여 줄 뿐이라
+//        티어 수 · 만렙 필요 XP 만 티어 구성 머리로 올렸다. 머리 설명 문장도 뺐다(설명 문장 금지)
 //      · 아래 — 티어 구성 패널 안에 전체 폭 표. 티어가 20개를 넘으면 세로 폼은 훑을 수 없어
 //        표는 한 줄 요약만 두고, 줄(또는 편집)을 누르면 상세 칸에서 고친다
 //      · 저장 — 불러온 스냅샷과 다를 때만 뜨는 저장 줄(SaveBar). 무엇이 바뀌었는지 한 줄씩 보여 준다
@@ -44,7 +45,10 @@ import {
 //      · 필요 XP 일괄 — 첫 티어 + 간격(고정 · %)으로 모든 티어의 필요 XP 를 한 번에 채운다(보상은 그대로)
 //      · 편집 칸의 [확인] → [저장], 삭제 확인 → 바로 저장 — 목록 반영과 저장 줄을 두 번 누르던 것
 //      · 같은 필요 XP 는 순서가 그대로라 막지 않는다(+0 주황). 줄어드는 티어만 저장 때 정렬을 묻는다
+//        (📌 2026-10-17 따로 있던 「정렬」 단추는 뺐다 — 저장할 때 「정렬 후 저장」이 같은 일을 한다)
 //      · 결과는 알림 모달 대신 토스트 + 효과음 — Enter 로 연달아 고칠 때 모달을 닫느라 손이 멈추지 않게
+//        (📌 2026-10-17 공용 useToast 로 — 소리는 예전 그대로: 성공 · 실패 · 목록만 바뀐 조작은 짧은 틱)
+//    주소 ?sec=basic|tiers — 그 패널로 한 번 내려간다(기능 검색 바로가기)
 
 type RewardKind = "xp" | "point" | "role" | "item";
 // 📌 days — 아이템 보상의 기간(일). 0 = 무기한, 아이템이 아닌 보상은 늘 0 (서버 lib/seasonPass.js normalizeReward 와 같은 모양)
@@ -219,15 +223,6 @@ const bulkPlan = (b: Bulk, current: number): { needs: number[]; error?: undefine
   if (needs[needs.length - 1] > MAX_NUM) return { error: "마지막 티어 누적이 10억 XP를 넘습니다. 필요량을 줄여 주세요." };
   return { needs };
 };
-
-// ── 효과음 ─────────────────────────────────────
-// 📌 관리자 봇 메시지 화면과 같은 소리 한 벌 — 저장 성공 · 실패 · 목록만 바뀐 조작(추가 · 정렬)
-const sfxOk = () => [660, 880].forEach((f, i) => setTimeout(() => playTone(f, 0.1, "sine", 0.035), i * 80));
-const sfxErr = () => {
-  playTone(300, 0.14, "square", 0.035);
-  setTimeout(() => playTone(220, 0.2, "square", 0.035), 130);
-};
-const sfxTick = () => playTone(740, 0.06, "sine", 0.03);
 
 // ── Enter 로 저장 ──────────────────────────────
 // 📌 한글 조합 중 Enter(isComposing · keyCode 229)는 조합을 끝내는 키다 — 저장으로 받으면 "5만"의 "만"이
@@ -510,8 +505,8 @@ function RewardFields({
           }}
           options={items.map((it: any) => ({
             value: it._id,
-            label: it.name,
-            hint: itemTypeLabel(it.type),
+            label: it.shortName || it.name,
+            hint: it.categoryLabel || itemTypeLabel(it.type),
             icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
           }))}
         />
@@ -688,22 +683,17 @@ export default function AdminPassPage() {
   }, [priceNote]);
 
   // 📌 결과 토스트 — 저장 성공 · 실패 · 목록 조작. 모달처럼 [확인]을 누르지 않아도 사라진다
-  const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
+  //    공용 useToast(성공 sfxOk · 실패 sfxErr). 목록만 바뀐 조작(info — 추가 · 새 티어 빼기 · 변경 없음)은 예전처럼 짧은 틱만
+  const { toast, toastEl } = useToast();
+  const showToast = useCallback(
+    (msg: string, tone: "ok" | "err" | "info" = "ok") => {
+      if (tone === "info") {
+        toast(msg, false, { sound: false });
+        sfxTick();
+      } else toast(msg, tone === "err");
     },
-    []
+    [toast]
   );
-  const showToast = useCallback((msg: string, tone: "ok" | "err" | "info" = "ok") => {
-    setToast({ msg, error: tone === "err" });
-    if (tone === "err") sfxErr();
-    else if (tone === "ok") sfxOk();
-    else sfxTick();
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), tone === "err" ? 4000 : 2600);
-  }, []);
 
   // 봇이 실제로 붙일 수 있는 역할만 — 디스코드가 관리하는 역할(부스트 등)은 지급이 불가능하다
   const grantableRoles = useMemo(() => guildRoles.filter((r: any) => !r.managed), [guildRoles]);
@@ -1050,13 +1040,6 @@ export default function AdminPassPage() {
     requestSave({ tiers: next }, "list", `티어 ${no}을(를) 삭제했습니다.`);
   };
 
-  const sortTiers = () => {
-    if (savingRef.current) return;
-    // 초안은 key 로 티어를 가리켜 정렬해도 같은 티어를 따라간다
-    setTiers([...tiers].sort((a, b) => a.need - b.need).map((t, i) => ({ ...t, level: i + 1 })));
-    showToast("필요 XP 순으로 정렬했습니다.", "info");
-  };
-
   // 표 안 필요 XP(이 티어에 필요한 양) — 칸을 벗어나면 목록에만, Enter 면 저장까지. 뒤 티어들은 필요량을 그대로 두고 누적만 밀린다
   const commitNeed = (key: string, step: number) => {
     const next = withStep(tiers, key, step);
@@ -1186,19 +1169,35 @@ export default function AdminPassPage() {
     applyConfig(snap);
   };
 
+  // 📌 저장 줄 — 불러오기 실패면 바뀐 것과 상관없이 잠근 채 이유를 띄운다(옛 저장 단추 disabled 와 같다).
+  //    편집 칸이 열려 있는 동안은 숨긴다: 칸의 [저장]이 칸 값 + 나머지 변경을 한 번에 저장하므로
+  //    저장 단추가 두 개 보이면 무엇이 다른지 헷갈린다.
+  const barNote =
+    !paneOpen && loadFailed ? <span className="font-bold text-[#d01634]">설정을 불러오지 못해 저장이 막혀 있습니다</span> : undefined;
+  // 저장 줄이 떠 있는 동안의 높이(--admin-bar — 공용 토스트가 그 위에 뜬다)는 SaveBar 가 알린다
+
+  // 📌 ?sec=basic|tiers — 불러온 뒤 그 패널로 한 번 내려간다. 같은 sec 로 다시 그려져도 다시 움직이지 않는다
+  const sec = useSearchParams().get("sec");
+  const secDone = useRef<string | null>(null);
+  const secReady = !gate && !isLoading;
+  useEffect(() => {
+    if (!sec) {
+      secDone.current = null;
+      return;
+    }
+    if (!secReady || secDone.current === sec) return;
+    const el = document.getElementById(`sec-${sec}`);
+    if (!el) return;
+    secDone.current = sec;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sec, secReady]);
+
   // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (7개 파일에 복사돼 있던 것)
   if (gate) return gate;
 
   const maxNeed = tiers.length ? Math.max(...tiers.map((t) => t.need)) : 0;
   const draftIdx = draft ? tiers.findIndex((t) => t.key === draft.key) : -1;
   const deleteNo = deleteKey ? tiers.findIndex((t) => t.key === deleteKey) + 1 : 0;
-
-  // 📌 저장 줄 — 불러오기 실패면 바뀐 것과 상관없이 잠근 채 이유를 띄운다(옛 저장 단추 disabled 와 같다).
-  //    편집 칸이 열려 있는 동안은 숨긴다: 칸의 [저장]이 칸 값 + 나머지 변경을 한 번에 저장하므로
-  //    저장 단추가 두 개 보이면 무엇이 다른지 헷갈린다.
-  const barNote =
-    !paneOpen && loadFailed ? <span className="font-bold text-[#d01634]">설정을 불러오지 못해 저장이 막혀 있습니다</span> : undefined;
-  const barShown = (isDirty && !loadFailed && !paneOpen) || !!barNote;
 
   // 칸 하나 = 보상 목록. PC 는 한 줄에 하나씩 쌓고, 모바일 줄 카드는 " · " 로 이어 한 덩어리로 흐르게 한다
   const rewardCell = (list: Reward[], dot: string, track: string) => (
@@ -1313,8 +1312,6 @@ export default function AdminPassPage() {
       <AdminPage
         section="SYSTEM : LEVEL"
         title="시즌 패스"
-        // desc 에는 어느 시즌을 만지는지와, 화면에 안 보이는 초기화 시점만 남긴다
-        desc={`시즌 ${SEASON.number} ‘${SEASON.name}’ · 새 시즌이 시작되면 수령 기록과 해금 상태가 초기화됩니다. 서버 부스터는 프리미엄이 자동으로 열립니다.`}
         footer={
           <SaveBar
             dirty={isDirty && !loadFailed && !paneOpen}
@@ -1345,83 +1342,71 @@ export default function AdminPassPage() {
           </div>
         )}
 
-        {/* 기본 설정 + 요약 — 넓은 화면에서 두 열 */}
-        <PanelGrid className="mb-5">
-          <Panel title="기본 설정" flush>
-            <FieldRow label="시즌 패스 사용" hint="끄면 보상표는 그대로 보이지만 수령 · 해금이 막힙니다" changed={enabledChanged}>
-              <Inline>
-                <Switch on={enabled} onChange={() => setEnabled(!enabled)} label="시즌 패스 사용" />
-                <span className={`font-bold ${enabled ? "text-[#131313]" : "text-[#5a5a5a]"}`}>
-                  {enabled ? "운영 중" : "중단 (수령 불가)"}
+        {/* 기본 설정 — 전체 폭(요약 숫자 칸은 티어 구성 머리로 옮겼다) */}
+        <Panel id="sec-basic" title="기본 설정" flush className="mb-5 scroll-mt-24">
+          <FieldRow label="시즌 패스 사용" hint="끄면 보상표는 그대로 보이지만 수령 · 해금이 막힙니다" changed={enabledChanged}>
+            <Inline>
+              <Switch on={enabled} onChange={() => setEnabled(!enabled)} label="시즌 패스 사용" />
+              <span className={`font-bold ${enabled ? "text-[#131313]" : "text-[#5a5a5a]"}`}>
+                {enabled ? "운영 중" : "중단 (수령 불가)"}
+              </span>
+            </Inline>
+          </FieldRow>
+          <FieldRow
+            label="프리미엄 트랙 해금가"
+            hint={
+              priceNote ? (
+                <span className="font-bold text-[#d01634]">{priceNote}</span>
+              ) : (
+                // 📌 빙옥 계산이 헷갈린다는 요청으로 둔 환산 한 줄(TMI 예외)
+                <span className="tabular-nums">
+                  {toInt(unlockPoint).toLocaleString()} 빙옥 = {priceXp.toLocaleString()} XP 상당
                 </span>
-              </Inline>
-            </FieldRow>
-            <FieldRow
-              label="프리미엄 트랙 해금가"
-              hint={
-                priceNote ? (
-                  <span className="font-bold text-[#d01634]">{priceNote}</span>
-                ) : (
-                  // 📌 빙옥 계산이 헷갈린다는 요청으로 둔 환산 한 줄(TMI 예외)
-                  <span className="tabular-nums">
-                    {toInt(unlockPoint).toLocaleString()} 빙옥 = {priceXp.toLocaleString()} XP 상당
-                  </span>
-                )
-              }
-              changed={priceChanged}
-            >
-              <Inline>
-                <input
-                  type="number"
-                  min={1}
-                  value={unlockPoint}
-                  onChange={(e) => setUnlockPoint(e.target.value)}
-                  // 📌 비운 채 저장하면 0 이 되어 프리미엄이 전원 무료로 열린다 — 칸을 벗어날 때 직전 값으로 되돌린다
-                  onBlur={() => {
-                    if (toInt(unlockPoint) <= 0) {
-                      setUnlockPoint(lastPriceRef.current);
-                      setPriceNote(PRICE_REVERT_MSG);
-                    } else {
-                      lastPriceRef.current = String(toInt(unlockPoint));
-                    }
-                  }}
-                  // Enter = 바로 저장 (savePrice)
-                  onKeyDown={(e) => enterKey(e, savePrice)}
-                  placeholder="예: 300"
-                  aria-label="프리미엄 트랙 해금가 (빙옥)"
-                  className={numClass}
-                />
-                <span className="font-bold">빙옥</span>
-              </Inline>
-            </FieldRow>
-          </Panel>
+              )
+            }
+            changed={priceChanged}
+          >
+            <Inline>
+              <input
+                type="number"
+                min={1}
+                value={unlockPoint}
+                onChange={(e) => setUnlockPoint(e.target.value)}
+                // 📌 비운 채 저장하면 0 이 되어 프리미엄이 전원 무료로 열린다 — 칸을 벗어날 때 직전 값으로 되돌린다
+                onBlur={() => {
+                  if (toInt(unlockPoint) <= 0) {
+                    setUnlockPoint(lastPriceRef.current);
+                    setPriceNote(PRICE_REVERT_MSG);
+                  } else {
+                    lastPriceRef.current = String(toInt(unlockPoint));
+                  }
+                }}
+                // Enter = 바로 저장 (savePrice)
+                onKeyDown={(e) => enterKey(e, savePrice)}
+                placeholder="예: 300"
+                aria-label="프리미엄 트랙 해금가 (빙옥)"
+                className={numClass}
+              />
+              <span className="font-bold">빙옥</span>
+            </Inline>
+          </FieldRow>
+        </Panel>
 
-          {/* 구성 요약 — 표를 보기 전에 규모를 먼저 읽는다. 옆 칸(xl 반 폭)에서는 네 칸이 좁아 2×2 로 */}
-          <StatRow
-            className="xl:grid-cols-2"
-            items={[
-              { label: "티어 수", value: tiers.length.toLocaleString() },
-              { label: "만렙 필요 XP", value: maxNeed.toLocaleString() },
-              { label: "해금가 빙옥", value: toInt(unlockPoint).toLocaleString() },
-              { label: "상태", value: onOffLabel(enabled) },
-            ]}
-          />
-        </PanelGrid>
-
-        {/* 티어 구성 — 패널 머리에 정렬 · 일괄 · 추가, 본문은 전체 폭 표 */}
+        {/* 티어 구성 — 머리에 규모(티어 수 · 만렙 필요 XP)와 일괄 · 추가, 본문은 전체 폭 표 */}
         <Panel
+          id="sec-tiers"
+          className="scroll-mt-24"
           flush
           title={
             <>
-              티어 구성 <span className="ml-1 text-[#8a8a8a] tabular-nums">{tiers.length}</span>
+              티어 구성
+              <span className="ml-2 text-[12px] font-bold text-[#8a8a8a] tabular-nums whitespace-nowrap">
+                티어 수 {isLoading ? "—" : tiers.length.toLocaleString()} · 만렙 필요 XP {isLoading ? "—" : maxNeed.toLocaleString()}
+              </span>
             </>
           }
           right={
             <>
-              {/* 줄어드는 티어가 있을 때만 — 그 줄은 표에서 빨갛게 보인다 */}
-              <Btn variant="ghost" size="sm" onClick={sortTiers} disabled={!badOrder}>
-                정렬
-              </Btn>
               <Btn variant="secondary" size="sm" onClick={openBulk} disabled={isLoading}>
                 필요 XP 일괄
               </Btn>
@@ -1705,19 +1690,8 @@ export default function AdminPassPage() {
         }
       />
 
-      {/* 결과 토스트 — 저장 줄이 떠 있으면 그 위로 (관리자 봇 메시지 화면과 같은 모양) */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`fixed ${barShown ? "bottom-[180px] md:bottom-24" : "bottom-[96px] md:bottom-6"} left-1/2 -translate-x-1/2 z-[130] w-max max-w-[calc(100vw-2rem)] px-5 py-3 rounded-full border text-[13px] font-bold break-keep shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${
-            toast.error ? "bg-white border-[#e91e3f] text-[#d01634]" : "bg-[#131313] border-[#131313] text-white"
-          }`}
-        >
-          {toast.error ? "⚠ " : "✓ "}
-          {toast.msg}
-        </div>
-      )}
+      {/* 결과 토스트 — 저장 줄이 떠 있으면 그 위로(SaveBar 가 알리는 --admin-bar) */}
+      {toastEl}
     </>
   );
 }

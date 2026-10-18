@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
-import { isSupporterSession } from "@/lib/supporters";
+import { isSupporterViewer } from "@/lib/adminViewServer";
 import { kstDayStart } from "@/lib/kst";
 import SupporterReport from "@/models/SupporterReport";
 
@@ -21,7 +21,7 @@ async function gate() {
   if (!session?.user?.name || !session.user.id) {
     return { deny: NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 }) };
   }
-  if (!isSupporterSession(session)) {
+  if (!(await isSupporterViewer(session))) {
     return { deny: NextResponse.json({ success: false, error: "서포터즈 전용입니다." }, { status: 403 }) };
   }
   return { session };

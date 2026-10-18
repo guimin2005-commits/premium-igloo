@@ -4,8 +4,7 @@ import Link from "next/link";
 import { Reveal, CountUp } from "./components/Lux";
 import { statusOf } from "@/lib/tournamentPhase";
 import { SEASON, getSeasonDday } from "@/lib/season";
-import { useSession } from "next-auth/react";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "./components/AdminView";
 
 // 📌 홈 — 화이트 & 블랙 편집형 골격 (승인된 2안 목업).
 //    마스트헤드(상자 없음) → 헤어라인 티커 → 소식(공지사항 · 지금 진행 중, 번호 없음)
@@ -205,8 +204,8 @@ export default function Home() {
   }, []);
 
   // 레벨 · 상점 배너는 공개됐을 때만 — 관리자는 공개 전에도 본다 (전역 메뉴 · 독과 같은 기준)
-  const { data: session } = useSession();
-  const isAdmin = isAdminName(session?.user?.name);
+  //   📌 관리자 판정은 useAdminView().admin — 「유저 화면으로 보기」를 켜면 유저처럼 비공개 배너가 빠진다
+  const { admin: isAdmin } = useAdminView();
   const levelOpen = policy.levelPublic || isAdmin;
   const shopOpen = levelOpen && (policy.shopPublic || isAdmin);
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import PromoOverlay from "@/app/level/PromoOverlay";
@@ -11,6 +11,7 @@ import { VOICE_TIERS, tierPaint, tierText } from "@/lib/voiceTiers";
 import { POINT_RATE } from "@/lib/pointRate";
 import { parseTargetKeys, MAX_TARGETS } from "@/lib/adminTargetKeys";
 import { groupOrders } from "@/lib/orderGroups";
+import { hotTimeState } from "@/lib/hotTime";
 import { QUEST_REASONS, QUEST_METRICS, QUEST_DAY_LABELS, questReasonOf, questCondLabel, questTimed } from "@/lib/questKinds";
 import {
   AdminPage,
@@ -27,22 +28,24 @@ import {
   Toggle,
   Switch,
   Btn,
-  SwapLabel,
   SaveBar,
-  Toolbar,
   SearchInput,
   StatusChip,
   DataTable,
   DetailPane,
   useNotice,
+  useToast,
+  ChoiceChip,
+  FormSheet,
   ConfirmDialog,
   useAdminGuard,
+  backdropClose,
 } from "../ui";
 import type { Column } from "../ui";
 
 const CHANNEL_TYPE_LABEL: Record<string, string> = { text: "텍스트", voice: "음성", category: "카테고리" };
 const CHANNEL_TYPE_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
-const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과" };
+const REASON_LABEL: Record<string, string> = { chat: "채팅", voice: "음성", attend: "출석", effect: "효과", "effect-levelup": "레벨업 효과" };
 const PERIOD_LABEL: Record<string, string> = { daily: "일일", weekly: "주간", monthly: "월간" };
 
 // 📌 주기별 무작위 노출 개수 — 등록된 퀘스트 중 매 주기마다 이 개수만큼 뽑아 보여준다 (0이면 전부)
@@ -90,44 +93,43 @@ const MUTE_MODES = [{ v: "off", l: "제한 없음" }, { v: "reduce", l: "감소"
 const MUTE_TARGETS = [{ v: "both", l: "마이크+헤드셋 모두" }, { v: "any", l: "하나라도 음소거" }];
 
 // ── 탭 ──────────────────────────────────────────────────────
-//    운영 흐름대로 네 갈래다: 규칙을 정하고(정책) → 역할에 잇고(역할) →
-//    돌릴 것을 만들고(콘텐츠) → 주고 확인한다(지급·내역).
-//    예전에는 9개였는데, 같은 성격의 화면이 흩어져 있어 어디로 가야 할지가 매번 헷갈렸다.
+//    운영 흐름대로 네 갈래다: 규칙을 정하고(정책 — XP 가 얼마나 · 언제 더 붙는지) → 역할에 잇고(역할) →
+//    돌릴 것을 만들고(퀘스트) → 주고 확인한다(지급·내역).
+//    📌 2026-10-17 관리 화면 정리 — 「콘텐츠」 탭을 「퀘스트」로 바꿨다. 채널 정책 · 기간제 부스트는 XP 정책이라 정책 탭(XP 이벤트 · 채널 정책)으로 옮겼다.
+//       알림 채널 패널 5개는 봇 메시지 「보내는 곳」, 서포터즈는 서포터즈 › 설정, RANKER 는 시즌 전환, ARCTIC 상점 공개는 상점 관리 › 설정으로 옮겼다.
 const TAB_ORDER: { id: string; short: string }[] = [
   { id: "policy", short: "정책" },
   { id: "roles", short: "역할" },
-  { id: "content", short: "콘텐츠" },
+  { id: "quests", short: "퀘스트" },
   { id: "ledger", short: "지급·내역" },
 ];
 
-// 📌 세부 탭(?sec=)은 없앴다 — 탭 안의 묶음을 한 화면의 패널로 펼쳤다(메뉴가 세 겹이던 것이 불만이었다).
-//    다만 옛 주소가 곳곳에 남아 있어(ARCTIC 의 '비공개 · 공개로 바꾸기', 서포터즈 화면의 '역할 지정' 등)
-//    sec 가 오면 그 묶음이 옮겨 간 패널(id="sec-…")로 스크롤해 준다.
-//    mute 는 예전 '음소거 · 퇴장' 묶음에 공개 토글이 함께 있었고, 그 주소로 오는 쪽은 전부 공개 토글을 찾는다.
+// 📌 ?sec= — 그 패널(id="sec-…")로 한 번 스크롤한다(기능 검색 · 다른 화면의 바로가기). 모르는 값이면 스크롤하지 않는다.
+//    tier · inventory 는 옛 패널(음성 티어 역할 일괄 연결 · 인벤토리 표기) — 합친 표 / 역할 탭 첫 패널로
 const SEC_ANCHOR: Record<string, Record<string, string>> = {
-  policy: { xp: "xp", enhance: "enhance", mute: "public", public: "public", levelup: "levelup", rolegrant: "rolegrant", streak: "streak", expiry: "expiry", notice: "notice" },
-  roles: { reward: "reward", tier: "tier", inventory: "inventory", supporter: "supporter", protected: "protected", ranker: "ranker" },
-  content: { channels: "channels", quests: "quests", boosts: "boosts" },
+  policy: { xp: "xp", streak: "streak", muting: "muting", afk: "afk", enhance: "enhance", events: "events", hottime: "hottime", boosts: "boosts", channels: "channels", public: "public" },
+  roles: { reward: "reward", tier: "reward", inventory: "reward", protected: "protected", promo: "promo" },
+  quests: { quests: "quests" },
   ledger: { grant: "grant", logs: "logs", reset: "reset" },
 };
-
-// 📌 옛 주소 → 새 탭·패널 이사표.
-//    9개 탭을 4개로 접었기 때문에 예전 링크(좌측 내비, 상점의 '비공개' 배너, 북마크,
-//    안내글에 적어 둔 주소)가 그대로 남아 있다. 모르는 tab 값이 들어오면 조용히
-//    첫 탭으로 떨어뜨리지 않고 이 표로 옮겨 준다 — 링크가 죽으면 무엇이 어디로
-//    갔는지 아무도 모른 채 화면만 엉뚱하게 열린다.
-const LEGACY_TAB: Record<string, { tab: string; sec?: string }> = {
-  settings: { tab: "policy" }, // 옛 세부 탭 id(xp/mute/levelup/rolegrant)는 SEC_ANCHOR 가 받는다
-  channels: { tab: "content", sec: "channels" },
-  quests: { tab: "content", sec: "quests" },
-  boosts: { tab: "content", sec: "boosts" },
-  inventory: { tab: "roles", sec: "inventory" },
-  grant: { tab: "ledger" }, // 옛 세부 탭 id(grant/reset/logs)도 그대로 받는다
-  logs: { tab: "ledger", sec: "logs" }, // 옛 XP 로그 탭 = 새 '지급 내역'
-  leaderboard: { tab: "ledger" }, // 랭킹은 /level?tab=rank 로 넘겼다 (ledger 머리의 바로가기)
+// 📌 다른 화면으로 옮긴 패널의 옛 주소 → 그 화면으로 넘겨준다(글쓰기 「채널 없음」 · ARCTIC 「비공개」 · 서포터즈 「역할 지정」 · 북마크).
+//    mute 는 예전 '음소거 · 퇴장' 묶음의 공개 토글을 찾는 주소 — 그 주소를 쓰는 곳(ARCTIC 상점 비공개 안내)은 상점 공개를 찾는다 → 상점 관리 › 설정
+const MOVED_SEC: Record<string, Record<string, string>> = {
+  policy: {
+    levelup: "/admin/messages?key=levelUp",
+    rolegrant: "/admin/messages?key=roleGrant",
+    attendnotice: "/admin/messages?key=autoAttend",
+    notice: "/admin/messages?key=noticePost",
+    expiry: "/admin/messages?key=expiryReminder",
+    mute: "/admin/shop?open=settings",
+  },
+  roles: {
+    supporter: "/admin/supporters?tab=settings",
+    ranker: "/admin/role-migration?tab=ranker",
+  },
 };
-// roles 탭은 이름이 그대로라 세부 탭만 옮긴다 — 폼과 목록을 한 화면으로 합쳤다
-const LEGACY_ROLE_SEC: Record<string, string> = { form: "reward", list: "reward" };
+// 옛 「콘텐츠」 탭 주소(기능 검색 · 북마크 — tab=content&sec=quests|boosts|channels) — 채널 정책 · 기간제 부스트는 정책 탭, 나머지는 퀘스트 탭
+const fromContentTab = (sec: string) => (sec === "boosts" || sec === "channels" ? { tab: "policy", sec } : { tab: "quests", sec: "quests" });
 
 const fmtDateTime = (v: string | Date) => {
   const d = new Date(v);
@@ -157,20 +159,53 @@ const toLocalInput = (v: string | Date) => {
 
 const ts = (v: string | Date) => new Date(v).getTime();
 
-// 📌 지급 내역 한 줄 — 봇 자동 지급(XpLog)과 관리자 수동 지급(Payout)을 한 모양으로 맞춘 것.
-//    src 로 어느 쪽인지 구분하고, 한쪽에만 있는 값(채널명·처리 상태)은 선택 항목으로 둔다.
+// 📌 지급 내역 한 줄 — 봇 자동 지급(XpLog) · 관리자 수동 지급(Payout) · 아이템 지급(Purchase 운영진 지급) · 지급 대기열(Payout 대기 · 실패)을
+//    한 모양으로 맞춘 것. src 로 어느 쪽인지 구분하고, 한쪽에만 있는 값(채널명 · 처리 상태 · 수량)은 선택 항목으로 둔다.
+//    payout · grant — 줄 끝 동작(지급 취소 · 지급 완료 · 사유 · 회수)이 쓰는 원본
+type PayoutDoc = {
+  _id: string; userName?: string; userId?: string; amount?: number; currency?: string; reason?: string;
+  status?: string; error?: string; source?: string; kind?: string; createdAt: string;
+};
+type GrantGroup = {
+  _id: string; ids?: string[]; userName?: string; userId?: string; itemName?: string; qty?: number;
+  days?: number; adminNote?: string; status: string; createdAt: string;
+};
 type LedgerRow = {
   k: string;
-  src: "bot" | "manual";
+  src: "bot" | "manual" | "item" | "pending";
+  kind: string; // 구분 칩 글자 — 채팅 · 음성 · 출석 · 효과 · 수동 · 아이템 · 퀘스트 …
   at: string | Date;
   name: string;
-  amount: number;
+  amount?: number;
   unit?: string; // "XP" | "빙옥" — 수동 지급 재화
+  qty?: number; // 아이템 수량
   note: string;
   channelName?: string;
   status?: string | null;
   error?: string | null;
+  payout?: PayoutDoc;
+  grant?: GrantGroup;
 };
+// 지급 내역 거르기 — 봇 사유(chat · voice · attend · effect)는 /api/xp-logs 로, 나머지는 각자의 목록으로
+const LEDGER_FILTERS = [
+  { v: "", l: "전체" },
+  { v: "chat", l: "채팅" },
+  { v: "voice", l: "음성" },
+  { v: "attend", l: "출석" },
+  { v: "effect", l: "효과" },
+  { v: "manual", l: "수동" },
+  { v: "item", l: "아이템" },
+  { v: "pending", l: "대기" },
+];
+const BOT_FILTERS = new Set(["", "chat", "voice", "attend", "effect"]);
+// 지급 대기열 출처(Payout.source) — 대기 줄의 구분 칩
+const PAYOUT_SOURCE: Record<string, string> = { manual: "수동", admin: "수동", quest: "퀘스트", code: "코드", referral: "초대", etc: "기타" };
+// 지급 대기열 상태 — 수동 · 대기 줄의 칩
+const payoutChip = (s?: string | null): { l: string; tone: "ok" | "warn" | "bad" | "info" } =>
+  s === "paid" ? { l: "완료", tone: "ok" } : s === "failed" ? { l: "실패", tone: "bad" } : s === "processing" ? { l: "처리 중", tone: "info" } : { l: "대기", tone: "warn" };
+// 지급 취소 — 아직 지급되지 않은 XP 건(대기 · 실패)만(app/api/payout DELETE 와 같은 조건) · 지급 완료 — 대기로 남은 빙옥 기록만(PUT)
+const payoutCancelable = (p?: PayoutDoc) => !!p && p.currency !== "point" && (p.status === "pending" || p.status === "failed");
+const payoutCompletable = (p?: PayoutDoc) => !!p && p.currency === "point" && p.status === "pending";
 
 // 📌 수동 지급 — 한 폼에서 XP · 빙옥 · 아이템을 고른다. 아이템 기간은 영구/7일/30일/직접 입력.
 type GrantKind = "xp" | "point" | "item";
@@ -271,19 +306,11 @@ const streakRuleError = (rows: any): string => {
   return "";
 };
 
-// 시즌 결과의 RANKER 역할 지급 상태
-//    📌 봇(seasonSettle)은 요청된 것뿐 아니라 결산 때 역할이 정해진(rankerRoleId) 결과도 스스로 집는다 — 둘 다 '대기'
-const rankerQueued = (r: any) => !r.roleGrantedAt && !r.error && (!!r.roleGrantRequested || !!r.rankerRoleId);
-const rankerStatus = (r: any): { l: string; tone: "ok" | "warn" | "bad" | "neutral" } =>
-  r.roleGrantedAt ? { l: "지급 완료", tone: "ok" }
-  : r.error ? { l: "지급 실패", tone: "bad" }
-  : rankerQueued(r) ? { l: "지급 대기", tone: "warn" }
-  : { l: "미지급", tone: "neutral" };
-
 // ── 저장 줄(SaveBar) 용 ─────────────────────────────────────
-//    설정은 BotSetting 단일 문서 하나라 정책 · 서포터즈 · 보호 역할 · 퀘스트 노출이 모두 같은 저장을 탄다.
+//    설정은 BotSetting 단일 문서 하나라 정책 · 보호 역할 · 퀘스트 노출이 모두 같은 저장을 탄다.
 //    그래서 저장 줄도 하나 — 불러온 값(스냅샷)과 지금 값을 비교해 바뀐 게 있으면 어느 탭에서든 뜬다
 //    (예전에는 다른 탭에서 고친 값이 이 탭의 '저장'에 조용히 묻어 나갔다).
+//    📌 다른 화면으로 옮긴 칸(알림 채널 · 서포터즈 · RANKER · 상점 공개)은 여기 없다 — POST 도 그 칸을 쓰지 않는다(app/api/bot-settings)
 const SETTING_LABEL: Record<string, string> = {
   chatXpMin: "채팅 XP 최소",
   chatXpMax: "채팅 XP 최대",
@@ -294,8 +321,6 @@ const SETTING_LABEL: Record<string, string> = {
   attendVoiceMin: "출석 인정 시간",
   attendStreakEnabled: "연속 출석 보너스",
   attendStreakRules: "연속 출석 규칙",
-  expiryReminderEnabled: "만료 알림",
-  expiryReminderHours: "만료 알림 시점",
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, `${g.label} 강화 ${f.label}`]))),
   muteMode: "음소거 처리",
   muteReducePct: "감소 비율",
@@ -306,22 +331,15 @@ const SETTING_LABEL: Record<string, string> = {
   afkCheckMinMin: "AFK 방지 다음 확인 최소",
   afkCheckMaxMin: "AFK 방지 다음 확인 최대",
   afkCheckReplyMin: "AFK 방지 응답 시간",
-  levelupChannelId: "레벨업 알림 채널",
-  levelupMessage: "레벨업 알림 문구",
-  roleGrantEnabled: "역할 지급 알림",
-  roleGrantChannelId: "역할 지급 알림 채널",
-  roleGrantMessage: "역할 지급 알림 문구",
-  attendChannelId: "자동 출석 알림 채널",
-  noticeChannelId: "공지 채널",
-  shopPublic: "ARCTIC 상점 공개",
+  hotTimeOn: "핫타임",
+  hotTimeName: "핫타임 이름",
+  hotTimeFrom: "핫타임 시작",
+  hotTimeUntil: "핫타임 끝",
+  hotTimeWeekdayMult: "핫타임 평일 배수",
+  hotTimeWeekendMult: "핫타임 금토일 배수",
   levelPublic: "SYSTEM : LEVEL 공개",
   resetOnLeave: "퇴장 시 XP 초기화",
-  supporterRoleId: "서포터즈 역할",
-  supporterBaseXp: "서포터즈 월 기본 XP",
-  supporterGoalChat: "서포터즈 월 목표 채팅",
-  supporterGoalVoiceMin: "서포터즈 월 목표 음성",
   protectedRoleIds: "보호 역할",
-  rankerRoleId: "RANKER 역할",
   questPickDaily: "일일 노출 개수",
   questPickWeekly: "주간 노출 개수",
   questPickMonthly: "월간 노출 개수",
@@ -337,9 +355,6 @@ const SETTING_DEFAULT: Record<string, number> = {
   chatXpMin: 50,
   chatXpMax: 500,
   attendVoiceMin: 60,
-  supporterBaseXp: 150000,
-  supporterGoalChat: 0,
-  supporterGoalVoiceMin: 0,
   questPickDaily: 0,
   questPickWeekly: 0,
   questPickMonthly: 0,
@@ -349,14 +364,24 @@ const SETTING_DEFAULT: Record<string, number> = {
   questRerollPriceDaily: 1,
   questRerollPriceWeekly: 2,
   questRerollPriceMonthly: 3,
-  expiryReminderHours: 24,
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, f.def]))),
 };
-const SETTING_TEXT = new Set(["levelupMessage", "roleGrantMessage", "attendStreakRules"]);
+const SETTING_TEXT = new Set(["attendStreakRules"]);
 // 입력칸은 문자열, 서버 값은 숫자 · 빈 값은 기본값처럼 — 겉보기가 같으면 같은 값으로 본다
+// 핫타임 기간 입력 — 저장값(ISO)은 [시작일 0시, 끝나는 날 다음 날 0시) KST. 입력칸은 날짜만
+const kstDay = (v: unknown, end = false) => {
+  const t = v ? new Date(String(v)).getTime() : NaN;
+  if (!Number.isFinite(t)) return "";
+  return new Date(t - (end ? 1 : 0) + 9 * 3600e3).toISOString().slice(0, 10);
+};
+const dayStartIso = (d: string) => (d ? new Date(`${d}T00:00:00+09:00`).toISOString() : null);
+const dayEndIso = (d: string) => (d ? new Date(new Date(`${d}T00:00:00+09:00`).getTime() + 86400e3).toISOString() : null);
+
 const normSetting = (k: string, v: any) => {
-  if (k === "roleGrantEnabled" || k === "expiryReminderEnabled") return String(v !== false);
-  if (k === "resetOnLeave" || k === "shopPublic" || k === "levelPublic" || k === "attendStreakEnabled") return String(!!v);
+  if (k === "resetOnLeave" || k === "levelPublic" || k === "attendStreakEnabled" || k === "hotTimeOn") return String(!!v);
+  // 핫타임 기간 — 서버는 ISO 글자, 입력칸은 그날 0시(KST) ISO 로 넣으므로 시각으로 맞춰 비교한다
+  if (k === "hotTimeFrom" || k === "hotTimeUntil") { const t = v ? new Date(v).getTime() : NaN; return Number.isFinite(t) ? String(t) : ""; }
+  if (k === "hotTimeWeekdayMult" || k === "hotTimeWeekendMult") return v == null || v === "" ? "" : String(Number(v));
   if (k === "muteMode") return v || "off";
   if (k === "muteTarget") return v || "both";
   // 규칙 표 — 입력 중엔 글자("7"), 서버 값은 숫자(7)라 칸 모양으로 맞춰 비교한다
@@ -580,6 +605,24 @@ function PanelEmpty({ children }: { children: React.ReactNode }) {
 
 // 패널 제목 옆 개수
 const Count = ({ n }: { n: number }) => <span className="ml-1.5 text-[13px] font-bold text-[#8a8a8a] tabular-nums">{n}</span>;
+// 패널 안 작은 묶음 머리(XP 이벤트의 핫타임 · 기간제 부스트) — 이름 · 오른쪽 동작 한 줄
+function SubHead({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-h-[52px] px-5 py-2.5 border-b border-[#ededed] bg-[#f7f7f7]">
+      <h3 className="min-w-0 text-[13px] font-black">{children}</h3>
+      {right && <div className="ml-auto flex flex-wrap items-center gap-2">{right}</div>}
+    </div>
+  );
+}
+
+// 등급 사다리(lib/voiceTiers) 한 칸 — 등급 · 보상 역할 표의 위쪽 고정 줄
+type Tier = { key: string; name: string; min: number };
+const TIERS = VOICE_TIERS as Tier[];
+// 역할 설정(RoleConfig) 한 줄
+type RoleCfg = { _id: string; roleId: string; roleName?: string; rewardLevel?: number | null; buffXp?: number; attendBuffXp?: number; exclusive?: boolean };
+// 등급 · 보상 역할 표 한 줄 — 등급 줄(tier, 연결된 역할 cfg 는 없을 수 있다) · 그 밖의 보상 역할 줄
+type RoleRow = { k: string; tier: Tier | null; cfg: RoleCfg | null };
+const EMPTY_TIER_FORM = { roleId: "", buffXp: "", attendBuffXp: "" };
 // 표의 빈 칸 — 모바일 줄 카드에서는 대시가 줄줄이 붙지 않게 숨긴다
 const Dash = () => <span className="hidden md:inline text-[#a3a3a3]">—</span>;
 
@@ -638,7 +681,7 @@ function QuestPresetDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" {...backdropClose(busy ? undefined : onClose)}>
       <div role="dialog" aria-modal="true" aria-label="추천 퀘스트" onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-lg max-h-[88dvh] sm:max-h-[84dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
         <div className="shrink-0 flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
@@ -689,7 +732,12 @@ function QuestPresetDialog({
 
 export default function AdminBotPage() {
   const { isAdmin, gate } = useAdminGuard();
+  // 결과 모달 — 효과음(성공 · 실패)은 useNotice 가 같이 울린다
   const { notify, noticeEl } = useNotice();
+  // 📌 가벼운 저장 결과(설정 · 역할 · 채널 · 부스트 · 퀘스트 · 지급 대기 처리)는 효과음 붙은 한 줄 알림 — [확인]을 누르지 않아도 사라진다.
+  //    놓치면 안 되는 결과(여러 명 지급 · 초기화 등)는 그대로 notify(모달)
+  const { toast, toastEl } = useToast();
+  const router = useRouter();
 
   // ── 탭 해석 ─────────────────────────────────
   const searchParams = useSearchParams();
@@ -698,22 +746,22 @@ export default function AdminBotPage() {
 
   let tab = rawTab;
   let sec = rawSec;
-  if (!TAB_ORDER.some((t) => t.id === tab)) {
-    const moved = LEGACY_TAB[tab];
-    if (moved) {
-      tab = moved.tab;
-      sec = moved.sec ?? rawSec;
-    } else {
-      tab = "policy";
-      sec = "";
-    }
+  if (tab === "content") ({ tab, sec } = fromContentTab(rawSec));
+  else if (!TAB_ORDER.some((t) => t.id === tab)) {
+    // 모르는 탭 — 첫 탭(옛 9개 탭 주소는 저장소 안에서 쓰지 않는다)
+    tab = "policy";
+    sec = "";
   }
-  if (tab === "roles" && LEGACY_ROLE_SEC[sec]) sec = LEGACY_ROLE_SEC[sec];
-  // 옛 세부 탭 → 스크롤할 패널 (모르는 값이면 스크롤하지 않는다)
+  // 다른 화면으로 옮긴 패널의 옛 주소 — 그 화면으로 넘겨준다(아래 효과)
+  const movedTo = MOVED_SEC[tab]?.[sec] || "";
+  // 스크롤할 패널 (모르는 값이면 스크롤하지 않는다)
   const anchor = SEC_ANCHOR[tab]?.[sec] || "";
+  useEffect(() => {
+    if (movedTo) router.replace(movedTo);
+  }, [movedTo, router]);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest" | "inventory"; id: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "role" | "channel" | "boost" | "quest"; id: string } | null>(null);
 
   // 공통 데이터
   const [guildRoles, setGuildRoles] = useState<any[]>([]);
@@ -733,18 +781,29 @@ export default function AdminBotPage() {
   const [questView, setQuestView] = useState<"all" | "daily" | "weekly" | "monthly">("all");
   // 추천 퀘스트 창 (QuestPresetDialog)
   const [questPresetOpen, setQuestPresetOpen] = useState(false);
-  const [invRoles, setInvRoles] = useState<any[]>([]);
-  const [shopItems, setShopItems] = useState<any[]>([]);
 
   // 지급 내역 (봇 자동 지급 XpLog)
   const [logs, setLogs] = useState<any[]>([]);
   const [logTotal, setLogTotal] = useState(0);
   const [logPage, setLogPage] = useState(0);
   const [logQuery, setLogQuery] = useState("");
-  // "" 전체 · chat/voice/attend 봇 사유 · manual 관리자 수동 지급(Payout)
-  const [ledgerFilter, setLedgerFilter] = useState("");
+  // LEDGER_FILTERS — "" 전체 · chat/voice/attend/effect 봇 사유 · manual 관리자 수동 지급(Payout) · item 아이템 지급 · pending 지급 대기열
+  //    ?filter= 로 바로 열 수 있다(예: /admin/bot?tab=ledger&sec=logs&filter=pending — 옛 /payouts 대신 지급 대기열). 주소가 바뀌면 따라간다
+  const filterParam = searchParams.get("filter");
+  const filterFromUrl = LEDGER_FILTERS.some((f) => f.v === filterParam) ? (filterParam as string) : "";
+  const [ledgerFilter, setLedgerFilter] = useState(filterFromUrl);
+  const [seenFilter, setSeenFilter] = useState(filterParam);
+  if (filterParam !== seenFilter) {
+    setSeenFilter(filterParam);
+    if (filterParam !== null) { setLedgerFilter(filterFromUrl); setLogPage(0); }
+  }
+  // 지급 대기열(옛 /payouts 화면) — 대기 · 처리 중 · 실패 건. 줄 끝 「지급 취소」 · 「지급 완료」
+  const [queue, setQueue] = useState<PayoutDoc[]>([]);
+  const [payCancel, setPayCancel] = useState<PayoutDoc | null>(null);
+  const [payBusy, setPayBusy] = useState(false);
 
-  const saved = () => notify("저장되었습니다. 봇에는 1분 이내 자동 반영됩니다.");
+  // 봇은 1분마다 설정을 다시 읽는다
+  const saved = () => toast("저장했습니다.");
 
   // 편집 칸 — 한 번에 하나만 연다.
   // 어느 탭에서 열었는지를 함께 들고 있어서, 다른 탭으로 옮기면 저절로 닫힌 것으로 친다
@@ -770,12 +829,6 @@ export default function AdminBotPage() {
   const [pickSnapshot, setPickSnapshot] = useState<Record<string, any> | null>(null);
   const [isProtectedRoleOpen, setIsProtectedRoleOpen] = useState(false);
 
-  // 시즌 결과(봇 결산) — 역할 탭의 RANKER 패널. rankerConfirm: 지급을 확인 중인 시즌 번호
-  const [seasonResults, setSeasonResults] = useState<any[]>([]);
-  const [seasonLoading, setSeasonLoading] = useState(true);
-  const [rankerConfirm, setRankerConfirm] = useState<number | null>(null);
-  const [rankerBusy, setRankerBusy] = useState(false);
-
   // ── 데이터 로드 ─────────────────────────────
   const fetchCore = useCallback(() => {
     Promise.all([
@@ -787,9 +840,7 @@ export default function AdminBotPage() {
       fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: null })),
       fetch("/api/xp-boost", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
       fetch("/api/daily-quest", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/inventory-role", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/shop/items?all=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([cfg, roles, chCfg, channels, st, bst, qst, inv, shop]) => {
+    ]).then(([cfg, roles, chCfg, channels, st, bst, qst]) => {
       setConfigs(Array.isArray(cfg?.data) ? cfg.data : []);
       setGuildRoles(Array.isArray(roles?.data) ? roles.data : []);
       setChannelConfigs(Array.isArray(chCfg?.data) ? chCfg.data : []);
@@ -808,8 +859,6 @@ export default function AdminBotPage() {
       }
       setBoosts(Array.isArray(bst?.data) ? bst.data : []);
       setQuests(Array.isArray(qst?.data) ? qst.data : []);
-      setInvRoles(Array.isArray(inv?.data) ? inv.data : []);
-      setShopItems(Array.isArray(shop?.data) ? shop.data : []);
     }).finally(() => setIsLoading(false));
   }, []);
 
@@ -818,8 +867,8 @@ export default function AdminBotPage() {
   // 봇 자동 지급 로그 — 지급·내역 탭에서는 내역 표가 늘 보이므로 탭만 본다
   useEffect(() => {
     if (!isAdmin || tab !== "ledger") return;
-    // '수동'은 Payout(grantLogs)만 보여 준다 — 화면에 쓰지도 않을 봇 로그를 부를 이유가 없다
-    if (ledgerFilter === "manual") return;
+    // 수동 · 아이템 · 대기는 각자의 목록만 보여 준다 — 화면에 쓰지도 않을 봇 로그를 부를 이유가 없다
+    if (!BOT_FILTERS.has(ledgerFilter)) return;
     const qs = new URLSearchParams({ limit: "50", skip: String(logPage * 50) });
     if (ledgerFilter) qs.set("reason", ledgerFilter);
     if (logQuery.trim()) qs.set("q", logQuery.trim());
@@ -829,17 +878,17 @@ export default function AdminBotPage() {
       .catch(() => {});
   }, [isAdmin, tab, logPage, ledgerFilter, logQuery]);
 
-  // 시즌 결과 — 역할 탭에서만
-  const loadSeasonResults = useCallback(() => {
-    fetch("/api/admin/season-results", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setSeasonResults(Array.isArray(d?.data) ? d.data : []))
-      .catch(() => {})
-      .finally(() => setSeasonLoading(false));
+  // 지급 대기열 — 대기 · 처리 중 · 실패(app/api/payout ?status=). 완료 기록은 내역(수동)에 남는다
+  const loadQueue = useCallback(() => {
+    Promise.all(
+      ["pending", "processing", "failed"].map((s) =>
+        fetch(`/api/payout?status=${s}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((d) => (d?.success && Array.isArray(d.data) ? (d.data as PayoutDoc[]) : []))
+          .catch(() => [] as PayoutDoc[])
+      )
+    ).then((lists) => setQueue(lists.flat().sort((a, b) => ts(b.createdAt) - ts(a.createdAt))));
   }, []);
-  useEffect(() => {
-    if (isAdmin && tab === "roles") loadSeasonResults();
-  }, [isAdmin, tab, loadSeasonResults]);
 
   // ── 설정 저장 ───────────────────────────────
   const postSettings = async () => {
@@ -912,9 +961,12 @@ export default function AdminBotPage() {
   const [confirmAll, setConfirmAll] = useState(false);
   // "all" = 전체 초기화 단추, [키] = 칸에 적은 한 명 — 이름이 "all" 인 유저를 적어도 전체로 읽지 않게 모양을 나눈다
   const [confirmReset, setConfirmReset] = useState<"all" | [string] | null>(null);
+  // 📌 XP 초기화 대상 — 수동 지급 대상 칸과 따로(예전엔 같은 값을 써서 한쪽에 적으면 다른 쪽도 바뀌었다)
+  const [resetTarget, setResetTarget] = useState("");
   // 📌 여러 명 지급 · 제거 — 대상 칸의 미리 확인(useTargetCheck) 결과로 이름을 보여 주고 한 번 확인한 뒤 targets 로 보낸다
   const grantCheck = useTargetCheck(grantForm.target);
   const itemCheck = useTargetCheck(itemGrant.target);
+  const resetCheck = useTargetCheck(resetTarget);
   const [multiConfirm, setMultiConfirm] = useState<{ kind: "grant" | "remove" | "item"; keys: string[]; names: string[]; amount: number } | null>(null);
   const openMulti = (kind: "grant" | "remove" | "item", check: TargetCheckState, amount = 0) =>
     setMultiConfirm({ kind, keys: check.keys, names: (check.data?.found || []).map((f) => f.name), amount });
@@ -962,12 +1014,13 @@ export default function AdminBotPage() {
     if (!isAdmin || tab !== "ledger") return;
     loadGrantLogs();
     loadItemGrants();
+    loadQueue();
     // 기프트카드는 수동 지급 대상이 아니다
     fetch("/api/admin/items", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setGrantItems((Array.isArray(d?.data) ? d.data : []).filter((it: any) => it.type !== "physical")))
       .catch(() => {});
-  }, [isAdmin, tab, loadGrantLogs, loadItemGrants]);
+  }, [isAdmin, tab, loadGrantLogs, loadItemGrants, loadQueue]);
 
   const patchItemGrant = async (body: Record<string, unknown>, okMsg: string) => {
     if (grantRowBusy) return false;
@@ -975,19 +1028,54 @@ export default function AdminBotPage() {
     try {
       const res = await fetch("/api/admin/items/grant", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await res.json().catch(() => null);
-      if (res.ok && d?.success) { notify(d.message || okMsg); loadItemGrants(); return true; }
-      notify(d?.message || "처리에 실패했습니다.", true);
+      if (res.ok && d?.success) { toast(d.message || okMsg); loadItemGrants(); return true; }
+      toast(d?.message || "처리에 실패했습니다.", true);
       return false;
     } catch {
-      notify("서버와 통신 중 오류가 발생했습니다.", true);
+      toast("서버와 통신 중 오류가 발생했습니다.", true);
       return false;
     } finally {
       setGrantRowBusy(false);
     }
   };
+
+  // ── 지급 대기열 처리 — 옛 /payouts 화면의 「지급 취소」(대기 · 실패한 XP 건) · 「지급 완료」(대기로 남은 빙옥 기록) ──
+  const afterPayout = () => { loadQueue(); loadGrantLogs(); };
+  const cancelPayout = async () => {
+    const p = payCancel;
+    if (!p || payBusy) return;
+    setPayBusy(true);
+    try {
+      const res = await fetch(`/api/payout?id=${encodeURIComponent(p._id)}`, { method: "DELETE" });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.success) toast("지급을 취소했습니다.");
+      else toast(d?.error || "취소하지 못했습니다.", true);
+    } catch {
+      toast("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setPayBusy(false);
+      setPayCancel(null);
+      afterPayout();
+    }
+  };
+  const completePayout = async (p: PayoutDoc) => {
+    if (payBusy) return;
+    setPayBusy(true);
+    try {
+      const res = await fetch("/api/payout", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p._id, status: "paid" }) });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.success) toast("지급 완료로 바꿨습니다.");
+      else toast(d?.error || "바꾸지 못했습니다.", true);
+    } catch {
+      toast("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setPayBusy(false);
+      afterPayout();
+    }
+  };
   const saveGrantNote = async () => {
     if (!noteEdit) return;
-    if (!noteEdit.text.trim()) return notify("사유를 입력해주세요.", true);
+    if (!noteEdit.text.trim()) return toast("사유를 입력해주세요.", true);
     if (await patchItemGrant({ ids: noteEdit.ids, adminNote: noteEdit.text }, "사유를 고쳤습니다.")) setNoteEdit(null);
   };
 
@@ -1041,27 +1129,31 @@ export default function AdminBotPage() {
   //    대상 — "all"(전체 단추) 또는 칸에서 나눈 키 목록(targets, 1명이면 서버가 한 명 경로로 받는다)
   const runGrant = async (target: "all" | string[], override?: { amount?: number; mode?: "reset" }) => {
     if (isGranting) return;
+    // 초기화는 자기 대상 칸(resetTarget)을 쓴다 — 지급 칸의 금액 · 사유는 보내지 않는다(사유가 비면 서버가 「관리자 초기화」로 적는다)
+    const reset = override?.mode === "reset";
     setIsGranting(true);
     try {
       const res = await fetch("/api/xp/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: grantForm.amount, reason: grantForm.reason,
+          ...(reset ? {} : { amount: grantForm.amount, reason: grantForm.reason }),
           ...(target === "all" ? { target } : { targets: target }),
-          currency: grantKind === "point" ? "point" : "xp", ...override,
+          currency: grantKind === "point" && !reset ? "point" : "xp", ...override,
         }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
         notify(d.message || "처리했습니다.");
-        setGrantForm({ target: "", amount: "", reason: "" });
+        if (reset) setResetTarget("");
+        else setGrantForm({ target: "", amount: "", reason: "" });
         loadGrantLogs();
+        loadQueue();
       } else {
         notify(d.message || "처리에 실패했습니다.", true);
         // 도중에 끊긴 빙옥 지급 — 반영된 사람의 기록이 남았다
         if (d?.partial) loadGrantLogs();
         // 못 찾음 · 이름 겹침 — 칩을 서버가 본 대로 다시 맞춘다
-        if (target !== "all" && targetRejected(res, d)) grantCheck.recheck();
+        if (target !== "all" && targetRejected(res, d)) (reset ? resetCheck : grantCheck).recheck();
       }
     } catch {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
@@ -1096,75 +1188,89 @@ export default function AdminBotPage() {
     runGrant(grantCheck.keys, { amount: -amount });
   };
 
-  // ── 음성 티어 역할 일괄 등록 ──────────────────
-  //    📌 칸은 저장된 연결(배타 역할 중 지급 레벨이 그 티어 시작 레벨인 것)을 기본으로 보여 준다.
-  //       예전엔 늘 빈칸으로 시작해, 저장해 둔 연결이 새로고침하면 사라진 것처럼 보였다(DB 에는 그대로 있었다).
-  //    tierEdits 는 바꾼 칸만 든다 — 바꾼 티어만 저장하고, 빠진 역할은 티어에서 뗀다.
-  const [tierEdits, setTierEdits] = useState<Record<string, string>>({});
-  // 승급 화면 미리보기(임시) — 고른 등급의 승급 화면을 소리째 띄운다. 서버에 아무것도 적지 않는다
+  // ── 등급 · 보상 역할 ──────────────────────────
+  //    📌 2026-10-17 「레벨 보상 역할」 표와 「음성 티어 역할 일괄 연결」을 한 표로 합쳤다 — 같은 RoleConfig 를 두 곳에서 고쳐,
+  //       표에서 등급 역할의 지급 레벨을 바꾸면 등급 칸에서 말없이 빠졌다. 이제 등급 줄(위에 고정)은 등급 칸에서만 고친다:
+  //       역할 · Boost 만 고치고 지급 레벨은 그 등급 시작 레벨 · 배타(최상위 하나만 유지)로 늘 저장한다.
+  //    저장된 연결 — 배타 역할 중 지급 레벨이 그 등급 시작 레벨인 것(예전 일괄 연결 칸과 같은 판정)
+  const cfgs: RoleCfg[] = configs;
+  const savedTier: Record<string, string> = {};
+  for (const t of TIERS) {
+    const cfg = cfgs.find((c) => c.exclusive && Number(c.rewardLevel) === t.min);
+    if (cfg) savedTier[t.key] = cfg.roleId;
+  }
+  const tierRoleIds = new Set(Object.values(savedTier));
+  const [tierForm, setTierForm] = useState(EMPTY_TIER_FORM);
+  const [tierSaving, setTierSaving] = useState(false);
+  // 승급 화면 미리보기 — 고른 등급의 승급 화면을 소리째 띄운다. 서버에 아무것도 적지 않는다(2026-10-08 운영자 요청)
   const [promoPick, setPromoPick] = useState(3);
   const [promoPlay, setPromoPlay] = useState<number | null>(null);
   const [promoRun, setPromoRun] = useState(0);
-  const [tierSaving, setTierSaving] = useState(false);
-  const savedTier: Record<string, string> = {};
-  for (const t of VOICE_TIERS as any[]) {
-    const cfg = configs.find((c: any) => c.exclusive && Number(c.rewardLevel) === t.min);
-    if (cfg) savedTier[t.key] = cfg.roleId;
-  }
-  const tierValue = (key: string) => (key in tierEdits ? tierEdits[key] : savedTier[key] || "");
-  const tierChanged = (key: string) => key in tierEdits && tierEdits[key] !== (savedTier[key] || "");
-  const tierDirty = (VOICE_TIERS as any[]).some((t) => tierChanged(t.key));
 
-  const saveTierRoles = async () => {
-    const tiers = VOICE_TIERS as any[];
-    const changed = tiers.filter((t) => tierChanged(t.key));
-    if (!changed.length) return;
-    // 같은 역할을 두 티어에 붙이면 지급·회수가 서로 싸운다
-    const finalIds = tiers.map((t) => tierValue(t.key)).filter(Boolean);
-    if (new Set(finalIds).size !== finalIds.length) return notify("같은 역할을 여러 티어에 연결할 수 없습니다.", true);
+  // 등급 칸 열기 — 연결된 역할 · 그 역할의 Boost 로 채운다
+  const openTier = (t: Tier) => {
+    const cfg = cfgs.find((c) => c.roleId === savedTier[t.key]);
+    setTierForm({
+      roleId: savedTier[t.key] || "",
+      buffXp: cfg?.buffXp ? String(cfg.buffXp) : "",
+      attendBuffXp: cfg?.attendBuffXp ? String(cfg.attendBuffXp) : "",
+    });
+    openFormAt("tier", t.key);
+  };
+  // 역할을 바꾸면 Boost 칸은 그 역할에 이미 걸린 값으로(예전 일괄 연결과 같다 — 새로 붙는 역할의 Boost 를 0 으로 덮지 않는다)
+  const pickTierRole = (roleId: string) => {
+    const cfg = cfgs.find((c) => c.roleId === roleId);
+    setTierForm({ roleId, buffXp: cfg?.buffXp ? String(cfg.buffXp) : "", attendBuffXp: cfg?.attendBuffXp ? String(cfg.attendBuffXp) : "" });
+  };
+
+  const saveTier = async () => {
+    const t = TIERS.find((x) => x.key === editId);
+    if (!t || tierSaving) return;
+    const oldId = savedTier[t.key] || "";
+    const newId = tierForm.roleId;
+    // 같은 역할을 두 등급에 붙이면 지급 · 회수가 서로 싸운다
+    if (newId && Object.entries(savedTier).some(([k, id]) => k !== t.key && id === newId)) return toast("같은 역할을 여러 등급에 연결할 수 없습니다.", true);
+    if (!oldId && !newId) { closeForm(); return; }
 
     setTierSaving(true);
     let fail = 0;
-    const post = (body: any) =>
+    const post = (body: Record<string, unknown>) =>
       fetch("/api/role-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
         .then((r) => r.ok).catch(() => false);
-    // ① 티어에서 빠지는 역할 — 역할 버프가 있으면 버프만 남기고 티어만 풀고, 없으면 설정을 지운다
-    const keep = new Set(finalIds);
-    for (const t of changed) {
-      const oldId = savedTier[t.key];
-      if (!oldId || keep.has(oldId)) continue;
-      const cfg = configs.find((c: any) => c.roleId === oldId);
-      if (!cfg) continue;
-      const ok = cfg.buffXp > 0 || cfg.attendBuffXp > 0
-        ? await post({ roleId: oldId, roleName: cfg.roleName, rewardLevel: null, buffXp: cfg.buffXp, attendBuffXp: cfg.attendBuffXp, exclusive: false })
-        : await fetch(`/api/role-config?id=${cfg._id}`, { method: "DELETE" }).then((r) => r.ok).catch(() => false);
-      if (!ok) fail++;
+    // ① 등급에서 빠지는 역할 — Boost 가 있으면 Boost 만 남기고 등급만 풀고, 없으면 설정을 지운다
+    if (oldId && oldId !== newId) {
+      const cfg = cfgs.find((c) => c.roleId === oldId);
+      if (cfg) {
+        const ok = (cfg.buffXp || 0) > 0 || (cfg.attendBuffXp || 0) > 0
+          ? await post({ roleId: oldId, roleName: cfg.roleName, rewardLevel: null, buffXp: cfg.buffXp || 0, attendBuffXp: cfg.attendBuffXp || 0, exclusive: false })
+          : await fetch(`/api/role-config?id=${cfg._id}`, { method: "DELETE" }).then((r) => r.ok).catch(() => false);
+        if (!ok) fail++;
+      }
     }
-    // ② 새로 붙는 역할 — 그 역할에 걸린 역할 버프는 그대로 둔다(예전엔 0 으로 덮었다)
-    for (const t of changed) {
-      const roleId = tierValue(t.key);
-      if (!roleId) continue;
-      const cfg = configs.find((c: any) => c.roleId === roleId);
+    // ② 붙는(또는 그대로인) 역할 — 지급 레벨 = 등급 시작 레벨 · 배타(최상위 하나만 유지) · Boost 는 칸 값
+    if (newId) {
       const ok = await post({
-        roleId,
-        roleName: guildRoles.find((r) => r.id === roleId)?.name || t.name,
+        roleId: newId,
+        roleName: guildRoles.find((r) => r.id === newId)?.name || t.name,
         rewardLevel: t.min,
-        buffXp: cfg?.buffXp || 0,
-        attendBuffXp: cfg?.attendBuffXp || 0,
-        exclusive: true, // 티어 사다리 — 최상위 하나만 유지된다
+        buffXp: Number(tierForm.buffXp) || 0,
+        attendBuffXp: Number(tierForm.attendBuffXp) || 0,
+        exclusive: true,
       });
       if (!ok) fail++;
     }
     setTierSaving(false);
-    setTierEdits({});
     fetchCore();
-    if (!fail) notify(`티어 역할 ${changed.length}개를 저장했습니다. 봇에는 1분 이내 반영됩니다.`);
-    else notify(`일부를 저장하지 못했습니다(${fail}건). 다시 시도해 주세요.`, true);
+    if (!fail) { closeForm(); setTierForm(EMPTY_TIER_FORM); saved(); }
+    else toast(`일부를 저장하지 못했습니다(${fail}건). 다시 시도해 주세요.`, true);
   };
 
   // ── 저장 핸들러 ─────────────────────────────
   const saveRole = async () => {
     if (!roleForm.roleId) return notify("역할을 선택해주세요.", true);
+    // 등급 줄에 연결된 역할은 등급 칸에서만 고친다(이 칸으로 저장하면 지급 레벨 · 배타가 풀려 등급에서 빠진다)
+    const own = editId ? cfgs.find((c) => c._id === editId) : null;
+    if (tierRoleIds.has(roleForm.roleId) && own?.roleId !== roleForm.roleId) return toast("등급에 연결된 역할입니다. 등급 줄에서 고쳐 주세요.", true);
     const picked = guildRoles.find((r) => r.id === roleForm.roleId);
     const res = await fetch("/api/role-config", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1239,7 +1345,7 @@ export default function AdminBotPage() {
       body: JSON.stringify(questForm),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (d?.success) { setQuestForm(EMPTY_QUEST); closeForm(); fetchCore(); notify("저장되었습니다. 유저 화면에 바로 반영됩니다."); }
+    if (d?.success) { setQuestForm(EMPTY_QUEST); closeForm(); fetchCore(); toast("저장했습니다."); }
     else notify(d?.error || "저장에 실패했습니다.", true);
   };
 
@@ -1257,14 +1363,15 @@ export default function AdminBotPage() {
 
   const executeDelete = async () => {
     if (!deleteConfirm) return;
-    const api = { role: "/api/role-config", channel: "/api/channel-config", boost: "/api/xp-boost", quest: "/api/daily-quest", inventory: "/api/inventory-role" }[deleteConfirm.kind];
+    const api = { role: "/api/role-config", channel: "/api/channel-config", boost: "/api/xp-boost", quest: "/api/daily-quest" }[deleteConfirm.kind];
     const res = await fetch(`${api}?id=${deleteConfirm.id}`, { method: "DELETE" }).catch(() => null);
-    if (res?.ok) fetchCore();
+    if (res?.ok) { fetchCore(); toast("삭제했습니다."); }
+    else toast("삭제하지 못했습니다.", true);
     setDeleteConfirm(null);
   };
 
-  // 📌 옛 ?sec= 주소로 들어오면 그 묶음이 옮겨 간 패널로 한 번 데려간다.
-  //    패널은 데이터가 와야 그려지거나 키가 바뀌므로, 불러오기가 끝난 뒤 한 번만 움직인다.
+  // 📌 ?sec= 로 들어오면(기능 검색 · 다른 화면의 바로가기) 그 패널로 한 번 데려간다.
+  //    패널은 데이터가 와야 그려지거나 키가 바뀌므로, 불러오기가 끝난 뒤 한 번만 움직인다. 같은 화면에서 다른 sec 로 오면 다시 움직인다
   const scrolledTo = useRef("");
   const settingsReady = !!settings;
   useEffect(() => {
@@ -1284,8 +1391,6 @@ export default function AdminBotPage() {
   // 봇이 실제로 지급할 수 있는 역할만 — 디스코드가 관리하는 역할(서버 부스트 등)은 줄 수 없다.
   // 부스트 대상 지정과 인벤토리 표시에는 관리 역할도 쓸 수 있으므로 그쪽은 guildRoles 를 그대로 쓴다.
   const grantableRoles = guildRoles.filter((r) => !r.managed);
-  const roleNameOf = (id: string) => guildRoles.find((g) => g.id === id)?.name || "";
-  const channelNameOf = (id: string) => guildChannels.find((c) => c.id === id)?.name || id;
 
   const roleOptions = (list: any[]) => list.map((r) => ({ value: r.id, label: r.name, color: r.color }));
   const channelOptions = guildChannels.map((c) => ({
@@ -1294,14 +1399,12 @@ export default function AdminBotPage() {
     hint: CHANNEL_TYPE_LABEL[c.type],
     indent: !!c.parentId,
   }));
-  const textChannelOptions = guildChannels.filter((c) => c.type === "text").map((c) => ({ value: c.id, label: `# ${c.name}` }));
   // 퀘스트 조건 줄의 채널 이름 — 지운 채널이면 null(조건 줄이 "채널 N곳"으로 적는다)
   const chNameOf = (id: string) => {
     const c = guildChannels.find((x) => x.id === id);
     return c ? `${CHANNEL_TYPE_ICON[c.type] || "#"}${c.name}` : "";
   };
 
-  // 📌 등록하지 않아도 인벤토리에 잡히는 역할 — /api/shop/my-items 가 상품·역할 설정 역할을 그대로 인정하기 때문
   // 📌 시즌 전환 보호 역할 — 설정 문서(BotSetting)의 배열 하나라 저장은 기존 postSettings 를 그대로 쓴다
   const protectedRoleIds: string[] = Array.isArray(settings?.protectedRoleIds) ? settings.protectedRoleIds : [];
   const toggleProtectedRole = (id: string) =>
@@ -1317,19 +1420,14 @@ export default function AdminBotPage() {
     !!settings && !!settingsSnap &&
     Object.keys({ ...settingsSnap, ...settings }).some((k) => normSetting(k, settings[k]) !== normSetting(k, settingsSnap[k]));
   const chg = (k: string) => !!settings && !!settingsSnap && normSetting(k, settings[k]) !== normSetting(k, settingsSnap[k]);
+  // 핫타임 지금 상태 — 저장된 값 기준(입력 중인 값이 아니라)
+  const hot = hotTimeState(settingsSnap || {});
   const fmtSetting = (k: string, v: any): string => {
-    if (k === "roleGrantEnabled") return v !== false ? "사용" : "사용 안 함";
-    if (k === "shopPublic" || k === "levelPublic") return v ? "공개" : "비공개";
+    if (k === "levelPublic") return v ? "공개" : "비공개";
     if (k === "resetOnLeave") return v ? "초기화함" : "유지함";
     if (k === "muteMode") return MUTE_MODES.find((o) => o.v === (v || "off"))?.l || String(v);
     if (k === "muteTarget") return MUTE_TARGETS.find((o) => o.v === (v || "both"))?.l || String(v);
-    if (k === "levelupChannelId") return v ? `#${channelNameOf(v)}` : "알림 끄기";
-    if (k === "roleGrantChannelId" || k === "attendChannelId") return v ? `#${channelNameOf(v)}` : "레벨업 채널과 동일";
-    if (k === "noticeChannelId") return v ? `#${channelNameOf(v)}` : "보내지 않음";
-    if (k === "supporterRoleId" || k === "rankerRoleId") return v ? roleNameOf(v) || v : "지정 안 함";
     if (k === "attendStreakEnabled") return v ? "사용" : "사용 안 함";
-    if (k === "expiryReminderEnabled") return v !== false ? "사용" : "사용 안 함";
-    if (k === "expiryReminderHours") return v === "" ? "비움" : `${v ?? 24}시간 전`;
     if (k === "protectedRoleIds") return `${Array.isArray(v) ? v.length : 0}개`;
     const raw = v == null && k in SETTING_DEFAULT ? SETTING_DEFAULT[k] : v;
     if (raw == null || raw === "") return "비움";
@@ -1349,114 +1447,134 @@ export default function AdminBotPage() {
   const addStreakRule = () => setSettings({ ...settings, attendStreakRules: [...streakRules, { ...EMPTY_STREAK_RULE }] });
   const removeStreakRule = (i: number) => setSettings({ ...settings, attendStreakRules: streakRules.filter((_, j) => j !== i) });
 
-  // ── RANKER 역할 지급 — 저장된 역할(없으면 결산 때 역할)로 봇에 요청한다 ──
-  //    서버는 DB 의 설정을 읽는다 — 고르고 저장 안 한 역할로 지급된 줄 알면 안 된다
-  const rankerRoleFor = (r: any) => settingsSnap?.rankerRoleId || r?.rankerRoleId || "";
-  const askRankerGrant = (r: any) => {
-    if (chg("rankerRoleId")) return notify("RANKER 역할을 먼저 저장해 주세요.", true);
-    if (!rankerRoleFor(r)) return notify("RANKER 역할을 먼저 선택해 주세요.", true);
-    setRankerConfirm(r.season);
-  };
-  const requestRankerGrant = async (season: number) => {
-    if (rankerBusy) return;
-    setRankerBusy(true);
-    try {
-      const res = await fetch("/api/admin/season-results", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ season }),
-      });
-      const d = await res.json().catch(() => null);
-      if (res.ok && d?.success) notify(d.message || "지급을 요청했습니다.");
-      else notify(d?.message || "요청에 실패했습니다.", true);
-      loadSeasonResults();
-    } catch {
-      notify("서버와 통신 중 오류가 발생했습니다.", true);
-    } finally {
-      setRankerBusy(false);
-      setRankerConfirm(null);
-    }
-  };
-  const rankerTarget = rankerConfirm !== null ? seasonResults.find((r) => r.season === rankerConfirm) : null;
   // 노출 방식 칸은 자기 저장 · 취소가 있다 — 그 칸이 열린 동안 저장 줄까지 띄우면 저장 단추가 둘이 된다
   const showSaveBar = settingsDirty && !isFormOpen("questPick");
 
-  // ── 지급 내역 — 두 출처를 하나로 ──────────────
-  //    XpLog 는 봇이 자동으로 준 것(채팅·음성·출석), Payout 은 관리자가 수동으로 준 것.
-  //    예전에는 탭이 따로 있어 "그 지급이 어디에 찍혔더라"를 매번 두 곳에서 찾아야 했다.
+  // ── 지급 내역 — 네 출처를 한 표로 ──────────────
+  //    XpLog 는 봇이 자동으로 준 것(채팅 · 음성 · 출석 · 효과), Payout 은 관리자가 수동으로 준 것(최근 50건) · 지급 대기열(대기 · 처리 중 · 실패),
+  //    아이템은 운영진 아이템 지급(/api/admin/items/grant — 한 번에 300건 · 더 보기). 예전엔 아이템 지급이 수동 지급을 「아이템」으로 바꿔야만 보였고,
+  //    대기열은 관리 틀 밖 옛 화면(/payouts)에만 있었다.
   const logQ = logQuery.trim().toLowerCase();
-  const manualRows: LedgerRow[] = grantLogs
-    .filter((g) => !logQ || String(g.userName || g.userId || "").toLowerCase().includes(logQ))
+  const nameHit = (s: unknown) => !logQ || String(s || "").toLowerCase().includes(logQ);
+  const payoutRow = (g: PayoutDoc, src: "manual" | "pending"): LedgerRow => ({
+    k: (src === "pending" ? "p" : "m") + g._id,
+    src,
+    kind: src === "pending" ? PAYOUT_SOURCE[g.source || ""] || "기타" : "수동",
+    at: g.createdAt,
+    name: g.userName || g.userId || "",
+    amount: g.amount || 0,
+    unit: g.currency === "point" ? "빙옥" : "XP",
+    note: g.reason || (src === "manual" ? "관리자 지급" : "-"),
+    status: g.status,
+    error: g.error,
+    payout: g,
+  });
+  const manualRows: LedgerRow[] = (grantLogs as PayoutDoc[]).filter((g) => nameHit(g.userName || g.userId)).map((g) => payoutRow(g, "manual"));
+  const queueRows: LedgerRow[] = queue.filter((g) => nameHit(g.userName || g.userId)).map((g) => payoutRow(g, "pending"));
+  // 한 사람에게 여러 개 준 건(같은 orderId)은 한 줄 ×N — lib/orderGroups.js
+  const itemGroups = groupOrders(itemGrants) as GrantGroup[];
+  const itemRows: LedgerRow[] = itemGroups
+    .filter((g) => nameHit(g.userName || g.userId))
     .map((g) => ({
-      k: "m" + g._id,
-      src: "manual",
+      k: "i" + g._id,
+      src: "item",
+      kind: "아이템",
       at: g.createdAt,
-      name: g.userName || g.userId,
-      amount: g.amount || 0,
-      unit: g.currency === "point" ? "빙옥" : "XP",
-      note: g.reason || "관리자 지급",
+      name: g.userName || g.userId || "",
+      qty: g.qty || 1,
+      note: `${g.itemName || "아이템"} · ${(g.days || 0) > 0 ? `${g.days}일` : "영구"}${g.adminNote ? ` · ${g.adminNote}` : ""}`,
       status: g.status,
-      error: g.error,
+      grant: g,
     }));
   const botRows: LedgerRow[] = logs.map((l) => ({
     k: "b" + l._id,
     src: "bot",
+    kind: REASON_LABEL[l.reason] || "봇",
     at: l.createdAt,
     name: l.displayName || l.userId,
     amount: l.amount || 0,
-    note: REASON_LABEL[l.reason] || "-",
+    note: l.reason === "effect" || l.reason === "effect-levelup" ? "아이템 효과" : "자동 지급",
     channelName: l.channelName,
   }));
 
   let ledgerRows: LedgerRow[];
-  if (ledgerFilter === "manual") {
-    ledgerRows = manualRows;
-  } else if (ledgerFilter === "") {
-    // 쪽 넘김은 양이 압도적으로 많은 봇 로그를 기준으로 한다. 수동 지급은 이 쪽이 덮는
+  if (ledgerFilter === "manual") ledgerRows = manualRows;
+  else if (ledgerFilter === "item") ledgerRows = itemRows;
+  else if (ledgerFilter === "pending") ledgerRows = queueRows;
+  else if (ledgerFilter === "") {
+    // 쪽 넘김은 양이 압도적으로 많은 봇 로그를 기준으로 한다. 수동 · 아이템 지급은 이 쪽이 덮는
     // 시간 구간 안의 것만 끼워 넣어야 시간순이 어긋나지 않는다 (첫 쪽은 위쪽이 열려 있다).
     const newest = logPage === 0 ? Infinity : botRows.length ? ts(botRows[0].at) : Infinity;
     const oldest = botRows.length ? ts(botRows[botRows.length - 1].at) : -Infinity;
-    ledgerRows = [...botRows, ...manualRows.filter((m) => ts(m.at) <= newest && ts(m.at) >= oldest)]
-      .sort((a, b) => ts(b.at) - ts(a.at));
+    const inPage = (m: LedgerRow) => ts(m.at) <= newest && ts(m.at) >= oldest;
+    ledgerRows = [...botRows, ...manualRows.filter(inPage), ...itemRows.filter(inPage)].sort((a, b) => ts(b.at) - ts(a.at));
   } else {
     ledgerRows = botRows;
   }
+  // 머리 오른쪽 건수 — 거르기마다 그 출처의 수(봇은 전체 검색 결과, 수동은 최근 50건, 아이템은 읽은 만큼)
+  const ledgerCount =
+    ledgerFilter === "manual" ? `수동 ${manualRows.length.toLocaleString()}`
+    : ledgerFilter === "item" ? `아이템 ${itemRows.length.toLocaleString()}${itemGrantsNext ? "+" : ""}`
+    : ledgerFilter === "pending" ? `대기 ${queueRows.length.toLocaleString()}`
+    : ledgerFilter === "" ? `봇 ${logTotal.toLocaleString()} · 수동 ${manualRows.length.toLocaleString()} · 아이템 ${itemRows.length.toLocaleString()}`
+    : `봇 ${logTotal.toLocaleString()}`;
 
   const hrefTab = (id: string) => `/admin/bot?tab=${id}`;
 
   const loadingRow = <div className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>;
 
   // ── 표 열 ───────────────────────────────────
-  const roleCols: Column<any>[] = [
+  // 등급 · 보상 역할 — 위에 등급 줄(사다리 차례), 그 아래 그 밖의 보상 역할(지급 레벨 순 · 레벨 없는 Boost 역할은 끝)
+  const roleRows: RoleRow[] = [
+    ...TIERS.map((t) => ({ k: `t:${t.key}`, tier: t, cfg: cfgs.find((c) => c.roleId === savedTier[t.key]) || null })),
+    ...cfgs
+      .filter((c) => !tierRoleIds.has(c.roleId))
+      .sort((a, b) => (a.rewardLevel ?? Infinity) - (b.rewardLevel ?? Infinity) || String(a.roleName || "").localeCompare(String(b.roleName || ""), "ko"))
+      .map((c) => ({ k: c._id, tier: null, cfg: c })),
+  ];
+  const boostCell = (n: number | undefined, mob: string) =>
+    (n || 0) > 0 ? <span className="tabular-nums"><span className="md:hidden">{mob} </span>+{(n || 0).toLocaleString()}</span> : <Dash />;
+  // 📌 첫 열 = 지급(등급 줄은 등급 · 시작 레벨) — 모바일 줄 카드 머리에 「◆ 브론즈 Lv.90+ · 역할」로 함께
+  const roleCols: Column<RoleRow>[] = [
     {
-      key: "role", label: "역할", mobile: "title",
-      render: (c) => {
-        const role = guildRoles.find((r) => r.id === c.roleId);
-        return (
-          <span className="inline-flex items-center gap-2.5 min-w-0">
-            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: role?.color || "#99aab5" }} />
-            <span className="font-bold truncate">{c.roleName || role?.name || c.roleId}</span>
-            {c.exclusive && <StatusChip>등급 역할</StatusChip>}
+      key: "lv", label: "지급", mobile: "title",
+      render: ({ tier, cfg }) =>
+        tier ? (
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ background: tierPaint(tier) }} />
+            <span className="font-bold truncate" style={tierText(tier)}>{tier.name}</span>
+            <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">Lv.{tier.min}+</span>
           </span>
-        );
-      },
-    },
-    {
-      key: "lv", label: "지급 레벨",
-      render: (c) =>
-        c.rewardLevel != null ? (
-          <span className="font-bold text-[#e91e3f] tabular-nums">Lv.{c.rewardLevel}<span className="md:hidden"> 도달 시 지급</span></span>
-        ) : c.buffXp > 0 || c.attendBuffXp > 0 ? <Dash /> : (
+        ) : cfg?.rewardLevel != null ? (
+          <span className="font-bold text-[#e91e3f] tabular-nums">Lv.{cfg.rewardLevel}</span>
+        ) : (cfg?.buffXp || 0) > 0 || (cfg?.attendBuffXp || 0) > 0 ? <Dash /> : (
           <span className="text-[#5a5a5a]">효과 없음</span>
         ),
     },
     {
-      key: "buff", label: "채팅·음성 Boost", align: "right",
-      render: (c) => (c.buffXp > 0 ? <span className="tabular-nums"><span className="md:hidden">채팅/음성 </span>+{c.buffXp.toLocaleString()}</span> : <Dash />),
+      key: "role", label: "역할", mobile: "title",
+      render: ({ tier, cfg }) => {
+        if (!cfg) return <span className="text-[#a3a3a3]">미연결</span>;
+        const role = guildRoles.find((r) => r.id === cfg.roleId);
+        return (
+          <span className="inline-flex items-center gap-2.5 min-w-0">
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: role?.color || "#99aab5" }} />
+            <span className="font-bold truncate">{cfg.roleName || role?.name || cfg.roleId}</span>
+            {!tier && cfg.exclusive && <StatusChip>배타</StatusChip>}
+          </span>
+        );
+      },
     },
-    {
-      key: "attend", label: "출석 Boost", align: "right",
-      render: (c) => (c.attendBuffXp > 0 ? <span className="tabular-nums"><span className="md:hidden">출석 </span>+{c.attendBuffXp.toLocaleString()}</span> : <Dash />),
-    },
+    { key: "buff", label: "채팅·음성 Boost", align: "right", render: ({ cfg }) => boostCell(cfg?.buffXp, "채팅/음성") },
+    { key: "attend", label: "출석 Boost", align: "right", render: ({ cfg }) => boostCell(cfg?.attendBuffXp, "출석") },
   ];
+  // 열린 칸의 줄 — 등급 칸은 "t:<등급 키>", 역할 칸은 설정 _id
+  const roleSelKey = isFormOpen("tier") ? `t:${editId}` : isFormOpen("role") ? editId : null;
+  const openTierRow = TIERS.find((t) => t.key === editId) || null;
+  // 등급 칸 역할 목록 — 다른 등급에 연결된 역할은 뺀다(같은 역할을 두 등급에 붙이지 않게)
+  const tierRoleOptions = grantableRoles.filter((r) => !tierRoleIds.has(r.id) || r.id === savedTier[openTierRow?.key || ""]);
+  // 보상 역할 칸 역할 목록 — 등급에 연결된 역할은 뺀다(그 칸에서 저장하면 등급에서 빠진다). 고치는 중인 역할은 남긴다
+  const rewardRoleOptions = grantableRoles.filter((r) => !tierRoleIds.has(r.id) || r.id === roleForm.roleId);
 
   const channelCols: Column<any>[] = [
     {
@@ -1563,24 +1681,41 @@ export default function AdminBotPage() {
     },
   ];
 
+  // 줄 끝 동작 — 지급 대기열(지급 취소 · 지급 완료) · 아이템 지급(사유 · 회수). 역할 이전 · 역할 환불 · 역할 정리 기록은 그 도구가 다루므로 두지 않는다(API 도 막는다)
+  const rowActions = (r: LedgerRow) => {
+    if (r.payout) {
+      const p = r.payout;
+      if (payoutCompletable(p)) return <Btn size="sm" variant="secondary" disabled={payBusy} onClick={() => completePayout(p)}>지급 완료</Btn>;
+      if (payoutCancelable(p)) return <Btn size="sm" variant="ghost" className="!text-[#d01634]" disabled={payBusy} onClick={() => setPayCancel(p)}>지급 취소</Btn>;
+      return null;
+    }
+    const g = r.grant;
+    if (!g || /^역할 (이전|환불|정리)/.test(String(g.adminNote || ""))) return null;
+    const live = g.status === "pending" || g.status === "completed";
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Btn size="sm" variant="ghost" disabled={grantRowBusy} onClick={() => setNoteEdit({ key: g._id, ids: g.ids || [String(g._id)], text: g.adminNote || "" })}>사유</Btn>
+        {live && <Btn size="sm" variant="ghost" className="!text-[#d01634]" disabled={grantRowBusy} onClick={() => setRevokeTarget(g)}>회수</Btn>}
+      </span>
+    );
+  };
   const ledgerCols: Column<LedgerRow>[] = [
     {
       key: "src", label: "구분", mobile: "title", className: "w-16",
-      render: (r) => <StatusChip tone={r.src === "manual" ? "ink" : "neutral"}>{r.src === "manual" ? "수동" : "봇"}</StatusChip>,
+      render: (r) => <StatusChip tone={r.src === "manual" ? "ink" : r.src === "item" ? "info" : r.src === "pending" ? "warn" : "neutral"}>{r.kind}</StatusChip>,
     },
     {
       key: "name", label: "유저", mobile: "title",
-      render: (r) => (
-        <span className="inline-flex items-center gap-2 min-w-0">
-          <span className="font-bold truncate max-w-[13rem]">{r.name}</span>
-          {/* 처리 상태는 수동 지급에만 있다 — 값이 비어 있어도 '대기'로 보여 줘야 큐에 남은 걸 알 수 있다 */}
-          {r.src === "manual" && (
-            <StatusChip tone={r.status === "paid" ? "ok" : r.status === "failed" ? "bad" : "neutral"}>
-              {r.status === "paid" ? "완료" : r.status === "failed" ? "실패" : "대기"}
-            </StatusChip>
-          )}
-        </span>
-      ),
+      render: (r) => {
+        // 처리 상태 — 지급 대기열(수동 · 대기)과 아이템 지급에만 있다. 값이 비어 있어도 '대기'로 보여 줘야 큐에 남은 걸 알 수 있다
+        const st = r.payout ? payoutChip(r.status) : r.grant ? GRANT_STATUS[r.grant.status] || { l: r.grant.status, tone: "neutral" as const } : null;
+        return (
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className="font-bold truncate max-w-[13rem]">{r.name}</span>
+            {st && <StatusChip tone={st.tone}>{st.l}</StatusChip>}
+          </span>
+        );
+      },
     },
     {
       key: "note", label: "내용",
@@ -1595,13 +1730,18 @@ export default function AdminBotPage() {
     { key: "at", label: "일시", className: "whitespace-nowrap", render: (r) => <span className="text-[12px] text-[#8a8a8a] tabular-nums">{fmtDateTime(r.at)}</span> },
     {
       key: "amount", label: "수량", align: "right",
-      render: (r) => (
-        <span className={`font-black tabular-nums whitespace-nowrap ${r.amount >= 0 ? "text-[#e91e3f]" : "text-amber-700"}`}>
-          {r.amount >= 0 ? "+" : ""}{r.amount.toLocaleString()}
-          {r.unit === "빙옥" && <span className="ml-1 text-[11px] text-[#3f9e93]">빙옥</span>}
-        </span>
-      ),
+      render: (r) =>
+        r.qty != null ? (
+          <span className="font-black tabular-nums whitespace-nowrap">×{r.qty.toLocaleString()}</span>
+        ) : (
+          <span className={`font-black tabular-nums whitespace-nowrap ${(r.amount || 0) >= 0 ? "text-[#e91e3f]" : "text-amber-700"}`}>
+            {(r.amount || 0) >= 0 ? "+" : ""}{(r.amount || 0).toLocaleString()}
+            {r.unit === "빙옥" && <span className="ml-1 text-[11px] text-[#3f9e93]">빙옥</span>}
+          </span>
+        ),
     },
+    // 📌 동작 칸 — 늘 둔다(거르기를 바꿔도 열이 생겼다 없어지며 표가 흔들리지 않게). 동작이 없는 줄은 비운다
+    { key: "act", label: <span className="sr-only">동작</span>, align: "right", className: "w-px", render: rowActions },
   ];
 
   const tableFlat = "!border-0 !rounded-none";
@@ -1625,7 +1765,7 @@ export default function AdminBotPage() {
       }
     >
       {/* ═══════════ 정책 ═══════════
-          📌 예전 세부 탭 넷(지급량 · 음소거 · 레벨업 알림 · 역할 지급 알림)을 패널로 한 화면에 펼쳤다.
+          📌 XP 가 얼마나 · 언제 더 붙는지를 한 탭에 — 왼쪽 지급량 · 출석 · 음소거 · AFK, 오른쪽 강화 · XP 이벤트(핫타임 + 기간제 부스트) · 채널 정책.
              공개 토글 · 퇴장 초기화처럼 되돌리기 어려운 설정은 맨 아래 빨간 테두리 패널 하나에 모았다. */}
       {tab === "policy" && (settings ? (
         <>
@@ -1736,7 +1876,7 @@ export default function AdminBotPage() {
                 )}
               </Panel>
 
-              <Panel title="음소거 처리" flush>
+              <Panel id="sec-muting" className="scroll-mt-24" title="음소거 처리" flush>
                 <FieldRow label="음소거 시 처리" changed={chg("muteMode")} hint="차단은 지급 자체를 건너뜁니다">
                   <Segmented options={MUTE_MODES} value={settings.muteMode || "off"} onChange={(v) => setSettings({ ...settings, muteMode: v })} />
                 </FieldRow>
@@ -1753,7 +1893,7 @@ export default function AdminBotPage() {
               </Panel>
 
               {/* 📌 2026-10-04 AFK 방지 시스템(운영자 명칭) — 음성 채널에 혼자인 사람에게 그 채널 채팅으로 [확인] 버튼(본인만 누름). 관리자 · 서포터즈는 빠진다(bot/src/features/afkCheck.js) */}
-              <Panel title="AFK 방지 시스템" flush>
+              <Panel id="sec-afk" className="scroll-mt-24" title="AFK 방지 시스템" flush>
                 <FieldRow label="사용" changed={chg("afkCheckOn")} hint="음성 채널에 혼자인 사람만 · 관리자 · 서포터즈 제외">
                   <Toggle
                     on={settings.afkCheckOn !== false}
@@ -1824,122 +1964,101 @@ export default function AdminBotPage() {
                 </div>
               </Panel>
 
-              <Panel id="sec-levelup" className="scroll-mt-24" title="레벨업 알림" flush>
-                <FieldRow label="알림 채널" changed={chg("levelupChannelId")} hint="레벨업 시 메시지를 보낼 채널">
-                  <Dropdown
-                    theme="light"
-                    buttonClassName={DD}
-                    value={settings.levelupChannelId || ""}
-                    onChange={(v) => setSettings({ ...settings, levelupChannelId: v })}
-                    options={[{ value: "", label: "알림 끄기" }, ...textChannelOptions]}
-                  />
-                </FieldRow>
-                {/* 📌 문구는 봇 메시지 화면(임베드 디자인 · 문구)으로 옮겼다 — 여기엔 채널만 */}
-                <FieldRow label="알림 문구">
-                  <Link href="/admin/messages?key=levelUp" className={LINK_PILL}>문구·디자인 편집 →</Link>
-                </FieldRow>
-              </Panel>
-
-              <Panel id="sec-rolegrant" className="scroll-mt-24" title="역할 지급 알림" flush>
-                <FieldRow label="알림 사용" changed={chg("roleGrantEnabled")}>
-                  <Toggle
-                    on={settings.roleGrantEnabled !== false}
-                    onClick={() => setSettings({ ...settings, roleGrantEnabled: settings.roleGrantEnabled === false })}
-                    onLabel="사용 중"
-                    offLabel="사용 안 함"
-                  />
-                </FieldRow>
-                <div className={settings.roleGrantEnabled === false ? "opacity-40 pointer-events-none" : ""}>
-                  <FieldRow label="알림 채널" changed={chg("roleGrantChannelId")} hint="레벨 보상 역할이 지급됐을 때 메시지를 보낼 채널">
-                    <Dropdown
-                      theme="light"
-                      buttonClassName={DD}
-                      value={settings.roleGrantChannelId || ""}
-                      onChange={(v) => setSettings({ ...settings, roleGrantChannelId: v })}
-                      options={[{ value: "", label: "레벨업 알림 채널과 동일" }, ...textChannelOptions]}
+              {/* 📌 XP 이벤트 — 기간 한정으로 XP 를 더 주는 두 가지를 한 패널에(2026-10-17 — 예전엔 핫타임은 정책, 기간제 부스트는 콘텐츠 탭).
+                     핫타임(lib/hotTime.js · 봇 hotTime.js): 기간 안 채팅 · 음성 「기본 XP + 강화 + 음성 등급 가산」 × 배수. 금 · 토 · 일(KST)은 오른쪽 배수.
+                       역할 버프 · 채널 · 기간제 부스트 · 아이템 효과에는 안 붙는다. 기간은 시작일 0시 ~ 끝나는 날 24시(KST). 저장은 저장 줄.
+                     기간제 부스트: 대상(역할 · 채널) · 기간 안 지급 1회당 +XP. 줄마다 편집 칸에서 바로 저장 */}
+              <Panel id="sec-events" className="scroll-mt-24" title="XP 이벤트" right={hot.on ? <StatusChip tone="ok">핫타임 ×{hot.mult}</StatusChip> : null} flush>
+                <div id="sec-hottime" className="scroll-mt-24">
+                  <SubHead>핫타임</SubHead>
+                  <FieldRow label="사용" changed={chg("hotTimeOn")} hint="기본 XP · 강화 · 음성 등급 가산에만 · 아이템 효과 제외">
+                    <Toggle
+                      on={settings.hotTimeOn === true}
+                      onClick={() => setSettings({ ...settings, hotTimeOn: settings.hotTimeOn !== true })}
+                      onLabel="사용 중"
+                      offLabel="사용 안 함"
                     />
                   </FieldRow>
-                  <FieldRow label="알림 문구">
-                    <Link href="/admin/messages?key=roleGrant" className={LINK_PILL}>문구·디자인 편집 →</Link>
+                  <FieldRow label="이름" changed={chg("hotTimeName")}>
+                    <input type="text" maxLength={40} value={settings.hotTimeName || ""} placeholder="유령 펭귄의 초대"
+                      onChange={(e) => setSettings({ ...settings, hotTimeName: e.target.value })} className={inputClass} />
                   </FieldRow>
-                </div>
-              </Panel>
-
-              {/* 📌 음성 자동 출석 알림 — 채널만 여기, 켜기 · 끄기 · 문구는 봇 메시지(autoAttend). 비우면 레벨업 채널 */}
-              <Panel id="sec-attendnotice" className="scroll-mt-24" title="자동 출석 알림" flush>
-                <FieldRow label="알림 채널" changed={chg("attendChannelId")} hint="음성 자동 출석 때 메시지를 보낼 채널">
-                  <Dropdown
-                    theme="light"
-                    buttonClassName={DD}
-                    value={settings.attendChannelId || ""}
-                    onChange={(v) => setSettings({ ...settings, attendChannelId: v })}
-                    options={[{ value: "", label: "레벨업 알림 채널과 동일" }, ...textChannelOptions]}
-                  />
-                </FieldRow>
-                <FieldRow label="알림 문구">
-                  <Link href="/admin/messages?key=autoAttend" className={LINK_PILL}>문구·디자인 편집 →</Link>
-                </FieldRow>
-              </Panel>
-
-              {/* 📌 사이트 공지 → 디스코드 — 채널만 여기, 문구 · 디자인은 봇 메시지(noticePost). 글마다 보내기 · 멘션은 글쓰기에서 */}
-              <Panel id="sec-notice" className="scroll-mt-24" title="공지 알림" flush>
-                <FieldRow label="공지 채널" changed={chg("noticeChannelId")} hint="사이트 공지를 봇이 보낼 채널">
-                  <Dropdown
-                    theme="light"
-                    buttonClassName={DD}
-                    value={settings.noticeChannelId || ""}
-                    onChange={(v) => setSettings({ ...settings, noticeChannelId: v })}
-                    options={[{ value: "", label: "보내지 않음" }, ...textChannelOptions]}
-                  />
-                </FieldRow>
-                <FieldRow label="공지 문구">
-                  <Link href="/admin/messages?key=noticePost" className={LINK_PILL}>문구·디자인 편집 →</Link>
-                </FieldRow>
-              </Panel>
-
-              {/* 📌 기간제 만료 임박 DM — 만료 N시간 전에 한 번 (봇 expiryReminder). 1~168시간 */}
-              <Panel id="sec-expiry" className="scroll-mt-24" title="기간제 만료 알림" flush>
-                <FieldRow label="알림 사용" changed={chg("expiryReminderEnabled")}>
-                  <Toggle
-                    on={settings.expiryReminderEnabled !== false}
-                    onClick={() => setSettings({ ...settings, expiryReminderEnabled: settings.expiryReminderEnabled === false })}
-                    onLabel="사용 중"
-                    offLabel="사용 안 함"
-                  />
-                </FieldRow>
-                <div className={settings.expiryReminderEnabled === false ? "opacity-40 pointer-events-none" : ""}>
-                  <FieldRow label="보내는 시점" changed={chg("expiryReminderHours")}>
+                  <FieldRow label="기간" changed={chg("hotTimeFrom") || chg("hotTimeUntil")} hint="시작일 0시 ~ 끝나는 날 24시">
                     <Inline>
-                      만료
-                      <input type="number" min={1} max={168} aria-label="만료 몇 시간 전" value={settings.expiryReminderHours ?? 24}
-                        onChange={(e) => setSettings({ ...settings, expiryReminderHours: e.target.value })} className={numClass} />
-                      시간 전
+                      <input type="date" aria-label="핫타임 시작일" value={kstDay(settings.hotTimeFrom)}
+                        onChange={(e) => setSettings({ ...settings, hotTimeFrom: dayStartIso(e.target.value) })} className={`${inputClass} !w-auto`} />
+                      ~
+                      <input type="date" aria-label="핫타임 끝나는 날" value={kstDay(settings.hotTimeUntil, true)}
+                        onChange={(e) => setSettings({ ...settings, hotTimeUntil: dayEndIso(e.target.value) })} className={`${inputClass} !w-auto`} />
                     </Inline>
                   </FieldRow>
-                  <FieldRow label="DM 문구">
-                    <Link href="/admin/messages?key=expiryReminder" className={LINK_PILL}>문구·디자인 편집 →</Link>
+                  <FieldRow label="배수" changed={chg("hotTimeWeekdayMult") || chg("hotTimeWeekendMult")} hint="평일 · 금토일">
+                    <Inline>
+                      평일
+                      <input type="number" step={0.1} min={1} max={5} aria-label="평일 배수" value={settings.hotTimeWeekdayMult ?? 1.5}
+                        onChange={(e) => setSettings({ ...settings, hotTimeWeekdayMult: e.target.value })} className={`${inputClass} !w-20 tabular-nums`} />
+                      배 · 금토일
+                      <input type="number" step={0.1} min={1} max={5} aria-label="금토일 배수" value={settings.hotTimeWeekendMult ?? 2}
+                        onChange={(e) => setSettings({ ...settings, hotTimeWeekendMult: e.target.value })} className={`${inputClass} !w-20 tabular-nums`} />
+                      배
+                    </Inline>
                   </FieldRow>
                 </div>
+                <div id="sec-boosts" className="scroll-mt-24 border-t border-[#ededed]">
+                  <SubHead right={<Btn variant="secondary" size="sm" onClick={() => { setBoostForm(EMPTY_BOOST); openFormAt("boost"); }}>＋ 추가</Btn>}>
+                    기간제 부스트<Count n={boosts.length} />
+                  </SubHead>
+                  {isLoading ? loadingRow
+                    : boosts.length === 0 ? <PanelEmpty>등록된 부스트가 없습니다.</PanelEmpty>
+                    : (
+                      <DataTable
+                        className={tableFlat}
+                        columns={boostCols}
+                        rows={boosts}
+                        rowKey={(b) => b._id}
+                        selectedKey={isFormOpen("boost") ? editId : null}
+                        onRowClick={(b) => {
+                          setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) });
+                          openFormAt("boost", b._id);
+                        }}
+                      />
+                    )}
+                </div>
+              </Panel>
+
+              {/* 채널 정책 — 채널 · 카테고리별 Boost XP · 지급 제외(2026-10-17 콘텐츠 탭에서 옮김) */}
+              <Panel
+                id="sec-channels"
+                className="scroll-mt-24"
+                title={<>채널 정책<Count n={channelConfigs.length} /></>}
+                right={<Btn variant="secondary" size="sm" onClick={() => { setChForm(EMPTY_CHANNEL); openFormAt("channel"); }}>＋ 추가</Btn>}
+                flush
+              >
+                {isLoading ? loadingRow
+                  : channelConfigs.length === 0 ? <PanelEmpty>설정된 채널이 없습니다.</PanelEmpty>
+                  : (
+                    <DataTable
+                      className={tableFlat}
+                      columns={channelCols}
+                      rows={channelConfigs}
+                      rowKey={(c) => c._id}
+                      selectedKey={isFormOpen("channel") ? editId : null}
+                      onRowClick={(c) => { setChForm({ channelId: c.channelId, boostXp: c.boostXp ? String(c.boostXp) : "", excluded: !!c.excluded }); openFormAt("channel", c._id); }}
+                    />
+                  )}
               </Panel>
             </div>
           </PanelGrid>
 
-          {/* 📌 공개 · 초기화 — 켜고 끄는 순간 유저 화면이 바뀌거나 기록이 지워지는 설정만 한곳에. 저장 줄로 저장된다 */}
+          {/* 📌 공개 · 초기화 — 켜고 끄는 순간 유저 화면이 바뀌거나 기록이 지워지는 설정만 한곳에. 저장 줄로 저장된다
+                 (ARCTIC 상점 공개는 2026-10-17 상점 관리 › 설정으로 옮겼다) */}
           <Panel id="sec-public" className="mt-5 scroll-mt-24 !border-[#e91e3f]/40" title={<span className="text-[#d01634]">공개 · 초기화</span>} flush>
-            <FieldRow label="ARCTIC 상점 공개" changed={chg("shopPublic")} hint="비공개면 일반 유저에게 ‘준비 중’ 화면이 보이고 관리자만 상점을 이용할 수 있습니다">
-              <Toggle
-                on={!!settings.shopPublic}
-                onClick={() => setSettings({ ...settings, shopPublic: !settings.shopPublic })}
-                onLabel="공개 중"
-                offLabel="비공개 (관리자만)"
-              />
-            </FieldRow>
             <FieldRow label="SYSTEM : LEVEL 공개" changed={chg("levelPublic")} hint="비공개면 /level 전체(ARCTIC·시즌 패스·랭킹 포함)가 예고 화면으로 바뀌고 메뉴에서 빠집니다">
               <Toggle
                 on={!!settings.levelPublic}
                 onClick={() => setSettings({ ...settings, levelPublic: !settings.levelPublic })}
                 onLabel="공개 중"
-                offLabel="비공개 (관리자만) · 10월 공개 예정"
+                offLabel="비공개 (관리자만)"
               />
             </FieldRow>
             <FieldRow label="서버 퇴장 시 XP 초기화" changed={chg("resetOnLeave")} hint="켜면 나간 유저의 XP 기록이 삭제되어 복구할 수 없습니다">
@@ -1955,140 +2074,47 @@ export default function AdminBotPage() {
       ) : loadingRow)}
 
       {/* ═══════════ 역할 ═══════════
-          📌 세부 탭 다섯을 두 열로 — 왼쪽은 역할 목록 · 티어 연결, 오른쪽은 서포터즈 · 보호 역할(저장 줄) · 인벤토리 안내 */}
+          📌 왼쪽은 등급 · 보상 역할 한 표(등급 줄 위 고정), 오른쪽은 시즌 전환 보호 역할(저장 줄) · 승급 화면 미리보기 */}
       {tab === "roles" && (
         <PanelGrid>
           <div className="min-w-0 space-y-5">
             <Panel
               id="sec-reward"
               className="scroll-mt-24"
-              title={<>레벨 보상 역할<Count n={configs.length} /></>}
+              title={<>등급 · 보상 역할<Count n={configs.length} /></>}
               right={<Btn variant="secondary" size="sm" onClick={() => { setRoleForm(EMPTY_ROLE); openFormAt("role"); }}>＋ 추가</Btn>}
               flush
             >
-              {isLoading ? loadingRow
-                : configs.length === 0 ? <PanelEmpty>설정된 역할이 없습니다.</PanelEmpty>
-                : (
-                  <DataTable
-                    className={tableFlat}
-                    columns={roleCols}
-                    rows={configs}
-                    rowKey={(c) => c._id}
-                    selectedKey={isFormOpen("role") ? editId : null}
-                    onRowClick={(c) => {
-                      // exclusive 는 폼에 칸이 없다 — 옮겨 담지 않으면 티어 역할을 수정할 때 조용히 풀린다
-                      setRoleForm({
-                        roleId: c.roleId,
-                        rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel),
-                        buffXp: c.buffXp ? String(c.buffXp) : "",
-                        attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "",
-                        exclusive: !!c.exclusive,
-                      });
-                      openFormAt("role", c._id);
-                    }}
-                  />
-                )}
+              {isLoading ? loadingRow : (
+                <DataTable
+                  className={tableFlat}
+                  columns={roleCols}
+                  rows={roleRows}
+                  rowKey={(r) => r.k}
+                  selectedKey={roleSelKey}
+                  onRowClick={(r) => {
+                    if (r.tier) return openTier(r.tier);
+                    const c = r.cfg;
+                    if (!c) return;
+                    // exclusive 는 폼에 칸이 없다 — 옮겨 담지 않으면 배타 역할을 수정할 때 조용히 풀린다
+                    setRoleForm({
+                      roleId: c.roleId,
+                      rewardLevel: c.rewardLevel == null ? "" : String(c.rewardLevel),
+                      buffXp: c.buffXp ? String(c.buffXp) : "",
+                      attendBuffXp: c.attendBuffXp ? String(c.attendBuffXp) : "",
+                      exclusive: !!c.exclusive,
+                    });
+                    openFormAt("role", c._id);
+                  }}
+                />
+              )}
             </Panel>
-
-            <Panel
-              id="sec-tier"
-              className="scroll-mt-24"
-              title="음성 티어 역할 일괄 연결"
-              desc="지급 레벨이 자동으로 채워지고 배타 모드로 저장돼 승급 시 아래 티어 역할이 회수됩니다 · 역할의 ‘따로 표시(hoist)’를 켜면 멤버 목록이 티어별로 묶입니다"
-              right={
-                <>
-                  <Btn variant="ghost" size="sm" onClick={() => setTierEdits({})} disabled={!tierDirty || tierSaving}>선택 초기화</Btn>
-                  <Btn size="sm" onClick={saveTierRoles} disabled={!tierDirty || tierSaving}><SwapLabel swap={tierSaving} to="연결 중…">티어 역할 연결</SwapLabel></Btn>
-                </>
-              }
-              flush
-            >
-              {(VOICE_TIERS as any[]).map((t) => (
-                <FieldRow
-                  key={t.key}
-                  changed={tierChanged(t.key)}
-                  label={
-                    <span className="inline-flex items-center gap-2 min-w-0">
-                      <span aria-hidden className="shrink-0 w-2.5 h-2.5 rotate-45" style={{ background: tierPaint(t) }} />
-                      <span className="truncate" style={tierText(t)}>{t.name}</span>
-                      <span className="shrink-0 text-[12px] font-bold text-[#8a8a8a] tabular-nums">Lv.{t.min}+</span>
-                    </span>
-                  }
-                >
-                  <select value={tierValue(t.key)} onChange={(e) => setTierEdits({ ...tierEdits, [t.key]: e.target.value })} className={inputClass}>
-                    <option value="">— 역할 선택 —</option>
-                    {grantableRoles.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                </FieldRow>
-              ))}
-            </Panel>
-
-            <Panel
-              id="sec-promo"
-              className="scroll-mt-24"
-              title="승급 화면 미리보기"
-              right={<Btn size="sm" onClick={() => { setPromoRun((n) => n + 1); setPromoPlay(promoPick); }}>재생</Btn>}
-              flush
-            >
-              <FieldRow label="등급">
-                <select value={promoPick} onChange={(e) => setPromoPick(Number(e.target.value))} className={inputClass}>
-                  {(VOICE_TIERS as any[]).map((t, i) => i > 0 && (
-                    <option key={t.key} value={i}>{VOICE_TIERS[i - 1].name} → {t.name}</option>
-                  ))}
-                </select>
-              </FieldRow>
-            </Panel>
-            {promoPlay != null && <PromoOverlay key={promoRun} from={promoPlay - 1} to={promoPlay} onClose={() => setPromoPlay(null)} />}
           </div>
 
           <div className="min-w-0 space-y-5">
-            {/* 📌 서포터즈 설정도 BotSetting 단일 문서의 필드라 저장은 저장 줄(기존 postSettings)을 그대로 탄다 */}
-            <Panel id="sec-supporter" className="scroll-mt-24" title="서포터즈" desc="입장 반영은 세션 갱신(최대 10분) 뒤입니다." flush>
+            <Panel id="sec-protected" className="scroll-mt-24" title="시즌 전환 보호 역할" flush>
               {!settings ? loadingRow : (
-                <>
-                  <FieldRow label="서포터즈 역할" changed={chg("supporterRoleId")} hint="환경변수 DISCORD_SUPPORTER_ROLE_ID 가 있으면 그 값이 우선합니다">
-                    <Dropdown
-                      theme="light"
-                      buttonClassName={DD}
-                      value={settings.supporterRoleId || ""}
-                      onChange={(v) => setSettings({ ...settings, supporterRoleId: v })}
-                      placeholder="역할을 선택하세요"
-                      options={[{ value: "", label: "지정 안 함" }, ...roleOptions(guildRoles)]}
-                    />
-                  </FieldRow>
-                  <FieldRow label="월 기본 XP" changed={chg("supporterBaseXp")}>
-                    <Inline>
-                      <input type="number" min={0} value={settings.supporterBaseXp ?? 150000} onChange={(e) => setSettings({ ...settings, supporterBaseXp: e.target.value })} className={numClass} />
-                      XP
-                    </Inline>
-                  </FieldRow>
-                  <FieldRow label="월 목표 채팅" changed={chg("supporterGoalChat")} hint="0 이면 목표 없음">
-                    <Inline>
-                      <input type="number" min={0} value={settings.supporterGoalChat ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalChat: e.target.value })} className={numClass} />
-                      회
-                    </Inline>
-                  </FieldRow>
-                  <FieldRow label="월 목표 음성" changed={chg("supporterGoalVoiceMin")} hint="0 이면 목표 없음">
-                    <Inline>
-                      <input type="number" min={0} value={settings.supporterGoalVoiceMin ?? 0} onChange={(e) => setSettings({ ...settings, supporterGoalVoiceMin: e.target.value })} className={numClass} />
-                      분
-                    </Inline>
-                  </FieldRow>
-                </>
-              )}
-            </Panel>
-
-            <Panel
-              id="sec-protected"
-              className="scroll-mt-24"
-              title="시즌 전환 보호 역할"
-              desc="시즌 전환으로 디스코드 역할을 뗄 때도 절대 제외할 역할 — 어린이·청소년·어른 같은 등급 역할"
-              flush
-            >
-              {!settings ? loadingRow : (
-                <FieldRow label="보호할 역할" top changed={chg("protectedRoleIds")} hint="선택한 역할은 상품으로 팔렸더라도 시즌 전환 대상에서 제외됩니다">
+                <FieldRow label="보호할 역할" top changed={chg("protectedRoleIds")} hint="시즌 전환 때 디스코드에서 떼지 않습니다">
                   {/* 여러 개를 고르는 자리라 항목을 눌러도 목록이 닫히지 않는다 — 공용 Dropdown 은 단일 선택용이다 */}
                   <div className={`relative ${isProtectedRoleOpen ? "z-50" : ""}`}>
                     <button type="button" onClick={() => setIsProtectedRoleOpen(!isProtectedRoleOpen)} className={`${inputClass} flex items-center justify-between text-left`}>
@@ -2135,196 +2161,90 @@ export default function AdminBotPage() {
               )}
             </Panel>
 
-            {/* 📌 RANKER — 역할은 설정 문서(저장 줄), 시즌 결과는 봇 결산(SeasonResult) 목록. 지급은 봇이 한다 */}
-            <Panel id="sec-ranker" className="scroll-mt-24" title="RANKER" flush>
-              {!settings ? loadingRow : (
-                <FieldRow label="RANKER 역할" changed={chg("rankerRoleId")}>
-                  <Dropdown
-                    theme="light"
-                    buttonClassName={DD}
-                    value={settings.rankerRoleId || ""}
-                    onChange={(v) => setSettings({ ...settings, rankerRoleId: v })}
-                    placeholder="역할을 선택하세요"
-                    options={[{ value: "", label: "지정 안 함" }, ...roleOptions(grantableRoles)]}
-                  />
-                </FieldRow>
-              )}
-              <div className="px-5 py-3 border-b border-[#ededed] text-[13px] font-bold">
-                시즌 결과<Count n={seasonResults.length} />
-              </div>
-              {seasonLoading ? loadingRow
-                : seasonResults.length === 0 ? <PanelEmpty>결산 기록이 없습니다.</PanelEmpty>
-                : (
-                  <div className="divide-y divide-[#ededed]">
-                    {seasonResults.map((r) => {
-                      const st = rankerStatus(r);
-                      const top: any[] = Array.isArray(r.top) ? r.top : [];
-                      // 지급 전이고, 봇 대기열에 없거나 지난 시도가 실패한 것만 요청할 수 있다 (app/api/admin/season-results 와 같은 조건)
-                      const canGrant = !r.roleGrantedAt && !rankerQueued(r) && top.length > 0;
-                      return (
-                        <div key={r.season} className="px-5 py-4 min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="shrink-0 text-[12px] font-black text-[#8a8a8a] tabular-nums">S{r.season}</span>
-                            <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{r.name || `시즌 ${r.season}`}</span>
-                            <StatusChip tone={st.tone} className="shrink-0">{st.l}</StatusChip>
-                          </div>
-                          {top.length > 0 && (
-                            <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                              {top.map((t) => (
-                                <div key={t.rank} title={`${Number(t.xp || 0).toLocaleString()} XP`} className="min-w-0 flex items-center gap-2 px-3 py-2 bg-[#f2f2f2]">
-                                  <span className={`shrink-0 text-[12px] font-black tabular-nums ${t.rank === 1 ? "text-[#e91e3f]" : "text-[#5a5a5a]"}`}>{t.rank}</span>
-                                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{t.name || t.userId}</span>
-                                  <span className="shrink-0 text-[11px] font-bold text-[#8a8a8a] tabular-nums">Lv.{t.level}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {(r.error || canGrant) && (
-                            <div className="mt-2.5 flex items-center gap-3 min-w-0">
-                              {/* 📌 지급을 마친 뒤 남은 error 는 실패가 아니라 메모(서버에 없던 랭커 · 발표 실패 등) — 빨강 대신 회색 */}
-                              {r.error && <p className={`min-w-0 flex-1 text-[12px] break-keep ${r.roleGrantedAt ? "text-[#5a5a5a]" : "text-[#d01634]"}`}>{r.error}</p>}
-                              {canGrant && (
-                                <Btn variant="secondary" size="sm" className="ml-auto" disabled={rankerBusy} onClick={() => askRankerGrant(r)}>
-                                  RANKER 역할 지급
-                                </Btn>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-            </Panel>
-
-            {/* 📌 표기는 이제 아이템 등록 한 곳에서 관리한다 — 여기 남은 옛 데이터는 그쪽의 가져오기 버튼이 옮긴다 */}
+            {/* 📌 승급 화면 미리보기 — 2026-10-08 운영자 요청(관리 화면에 [등급 선택] [재생]). 서버에 아무것도 적지 않는다 */}
             <Panel
-              id="sec-inventory"
+              id="sec-promo"
               className="scroll-mt-24"
-              title="인벤토리 표기"
-              right={<Link href="/admin/shop?tab=items" className={LINK_PILL}>아이템 등록으로</Link>}
+              title="승급 화면 미리보기"
+              right={<Btn size="sm" onClick={() => { setPromoRun((n) => n + 1); setPromoPlay(promoPick); }}>재생</Btn>}
+              flush
             >
-              <p className="text-[13px] text-[#5a5a5a] break-keep">
-                인벤토리 표기는 <b className="text-[#131313]">아이템 등록</b>에서 관리합니다.
-                {invRoles.length > 0 && <span className="block mt-1 text-[12px] text-[#5a5a5a]">옛 표기 역할 {invRoles.length}개가 남아 있습니다.</span>}
-              </p>
+              <FieldRow label="등급">
+                <select value={promoPick} onChange={(e) => setPromoPick(Number(e.target.value))} className={inputClass}>
+                  {TIERS.map((t, i) => i > 0 && (
+                    <option key={t.key} value={i}>{TIERS[i - 1].name} → {t.name}</option>
+                  ))}
+                </select>
+              </FieldRow>
             </Panel>
+            {promoPlay != null && <PromoOverlay key={promoRun} from={promoPlay - 1} to={promoPlay} onClose={() => setPromoPlay(null)} />}
           </div>
         </PanelGrid>
       )}
 
-      {/* ═══════════ 콘텐츠 ═══════════
-          📌 퀘스트(표가 넓다)는 전체 폭, 채널 정책 · 부스트는 그 아래 두 열. 줄을 누르면 편집 칸이 뜬다 */}
-      {tab === "content" && (
-        <>
-          <Panel
-            id="sec-quests"
-            className="scroll-mt-24"
-            title={<>퀘스트<Count n={quests.length} /></>}
-            right={
-              <>
-                <Btn variant="ghost" size="sm" onClick={openPicks}>노출 방식</Btn>
-                {/* 📌 추천 퀘스트 — 모바일은 "추천" 두 글자(제목 줄의 세 단추가 한 줄에 들게) */}
-                <Btn variant="ghost" size="sm" onClick={() => setQuestPresetOpen(true)}>
-                  <span className="md:hidden">추천</span>
-                  <span className="hidden md:inline">추천 퀘스트</span>
-                </Btn>
-                <Btn variant="secondary" size="sm" onClick={() => { setQuestForm({ ...EMPTY_QUEST, period: questView === "all" ? "daily" : questView }); openFormAt("quest"); }}>＋ 추가</Btn>
-              </>
-            }
-            flush
-          >
-            {/* 주기별 요약 — 예전 주기별 묶음 머리에 있던 개수 · 노출 방식 한 줄 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 border-b border-[#ededed]">
-              {QUEST_PICK_FIELDS.map((f, i) => {
-                const rows = quests.filter((q) => (q.period || "daily") === f.period);
-                const on = rows.filter((q) => q.enabled).length;
-                const pick = Number(settings?.[f.key] ?? 0);
-                return (
-                  <div key={f.period} className={`min-w-0 px-5 py-3 border-[#ededed] ${i > 0 ? "border-t md:border-t-0 md:border-l" : ""}`}>
-                    <p className="text-[13px] font-bold">{PERIOD_LABEL[f.period]} 퀘스트<Count n={rows.length} /></p>
-                    <p className="mt-0.5 text-[12px] text-[#5a5a5a] break-keep">
-                      {rows.length === 0
-                        ? f.every + " 초기화"
-                        : pick > 0
-                        ? `${f.every}마다 유저마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위${on > pick ? rerollSummary(Number(settings?.[f.rr] ?? REROLL_FREE_DEF), Number(settings?.[f.price] ?? f.priceDef)) : ""}`
-                        : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="px-5 py-3 border-b border-[#ededed]">
-              <Segmented options={questViewOptions} value={questView} onChange={(v) => setQuestView(v as typeof questView)} />
-            </div>
-            {isLoading ? loadingRow
-              : questRows.length === 0 ? <PanelEmpty>{questView === "all" ? "등록된 퀘스트가 없습니다." : `등록된 ${PERIOD_LABEL[questView]} 퀘스트가 없습니다.`}</PanelEmpty>
-              : (
-                <DataTable
-                  className={tableFlat}
-                  columns={questCols}
-                  rows={questRows}
-                  rowKey={(q) => q._id}
-                  selectedKey={isFormOpen("quest") ? editId : null}
-                  onRowClick={(q) => {
-                    setQuestForm(questToForm(q));
-                    openFormAt("quest", q._id);
-                  }}
-                />
-              )}
-          </Panel>
-
-          <PanelGrid className="mt-5">
-            <Panel
-              id="sec-channels"
-              className="scroll-mt-24"
-              title={<>채널 정책<Count n={channelConfigs.length} /></>}
-              right={<Btn variant="secondary" size="sm" onClick={() => { setChForm(EMPTY_CHANNEL); openFormAt("channel"); }}>＋ 추가</Btn>}
-              flush
-            >
-              {isLoading ? loadingRow
-                : channelConfigs.length === 0 ? <PanelEmpty>설정된 채널이 없습니다.</PanelEmpty>
-                : (
-                  <DataTable
-                    className={tableFlat}
-                    columns={channelCols}
-                    rows={channelConfigs}
-                    rowKey={(c) => c._id}
-                    selectedKey={isFormOpen("channel") ? editId : null}
-                    onRowClick={(c) => { setChForm({ channelId: c.channelId, boostXp: c.boostXp ? String(c.boostXp) : "", excluded: !!c.excluded }); openFormAt("channel", c._id); }}
-                  />
-                )}
-            </Panel>
-
-            <Panel
-              id="sec-boosts"
-              className="scroll-mt-24"
-              title={<>기간제 부스트<Count n={boosts.length} /></>}
-              right={<Btn variant="secondary" size="sm" onClick={() => { setBoostForm(EMPTY_BOOST); openFormAt("boost"); }}>＋ 추가</Btn>}
-              flush
-            >
-              {isLoading ? loadingRow
-                : boosts.length === 0 ? <PanelEmpty>등록된 부스트가 없습니다.</PanelEmpty>
-                : (
-                  <DataTable
-                    className={tableFlat}
-                    columns={boostCols}
-                    rows={boosts}
-                    rowKey={(b) => b._id}
-                    selectedKey={isFormOpen("boost") ? editId : null}
-                    onRowClick={(b) => {
-                      setBoostForm({ id: b._id, name: b.name, targetRoleId: b.targetRoleId || "", targetChannelId: b.targetChannelId || "", boostXp: String(b.boostXp), startAt: toLocalInput(b.startAt), endAt: toLocalInput(b.endAt) });
-                      openFormAt("boost", b._id);
-                    }}
-                  />
-                )}
-            </Panel>
-          </PanelGrid>
-        </>
+      {/* ═══════════ 퀘스트 ═══════════
+          📌 2026-10-17 「콘텐츠」 탭 이름을 바꿨다 — 채널 정책 · 기간제 부스트는 정책 탭으로. 줄을 누르면 편집 칸이 뜬다 */}
+      {tab === "quests" && (
+        <Panel
+          id="sec-quests"
+          className="scroll-mt-24"
+          title={<>퀘스트<Count n={quests.length} /></>}
+          right={
+            <>
+              <Btn variant="ghost" size="sm" onClick={openPicks}>노출 방식</Btn>
+              {/* 📌 추천 퀘스트 — 모바일은 "추천" 두 글자(제목 줄의 세 단추가 한 줄에 들게) */}
+              <Btn variant="ghost" size="sm" onClick={() => setQuestPresetOpen(true)}>
+                <span className="md:hidden">추천</span>
+                <span className="hidden md:inline">추천 퀘스트</span>
+              </Btn>
+              <Btn variant="secondary" size="sm" onClick={() => { setQuestForm({ ...EMPTY_QUEST, period: questView === "all" ? "daily" : questView }); openFormAt("quest"); }}>＋ 추가</Btn>
+            </>
+          }
+          flush
+        >
+          {/* 주기별 요약 — 예전 주기별 묶음 머리에 있던 개수 · 노출 방식 한 줄 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 border-b border-[#ededed]">
+            {QUEST_PICK_FIELDS.map((f, i) => {
+              const rows = quests.filter((q) => (q.period || "daily") === f.period);
+              const on = rows.filter((q) => q.enabled).length;
+              const pick = Number(settings?.[f.key] ?? 0);
+              return (
+                <div key={f.period} className={`min-w-0 px-5 py-3 border-[#ededed] ${i > 0 ? "border-t md:border-t-0 md:border-l" : ""}`}>
+                  <p className="text-[13px] font-bold">{PERIOD_LABEL[f.period]} 퀘스트<Count n={rows.length} /></p>
+                  <p className="mt-0.5 text-[12px] text-[#5a5a5a] break-keep">
+                    {rows.length === 0
+                      ? f.every + " 초기화"
+                      : pick > 0
+                      ? `${f.every}마다 유저마다 활성 ${on}개 중 ${Math.min(pick, on)}개 무작위${on > pick ? rerollSummary(Number(settings?.[f.rr] ?? REROLL_FREE_DEF), Number(settings?.[f.price] ?? f.priceDef)) : ""}`
+                      : `활성 ${on}개 전부 노출 · ${f.every} 초기화`}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="px-5 py-3 border-b border-[#ededed]">
+            <Segmented options={questViewOptions} value={questView} onChange={(v) => setQuestView(v as typeof questView)} />
+          </div>
+          {isLoading ? loadingRow
+            : questRows.length === 0 ? <PanelEmpty>{questView === "all" ? "등록된 퀘스트가 없습니다." : `등록된 ${PERIOD_LABEL[questView]} 퀘스트가 없습니다.`}</PanelEmpty>
+            : (
+              <DataTable
+                className={tableFlat}
+                columns={questCols}
+                rows={questRows}
+                rowKey={(q) => q._id}
+                selectedKey={isFormOpen("quest") ? editId : null}
+                onRowClick={(q) => {
+                  setQuestForm(questToForm(q));
+                  openFormAt("quest", q._id);
+                }}
+              />
+            )}
+        </Panel>
       )}
 
       {/* ═══════════ 지급 · 내역 ═══════════
-          📌 왼쪽 좁은 열에 수동 지급 · 초기화 폼, 오른쪽 넓은 열에 내역 표. 좁은 화면에선 위아래로 */}
+          📌 왼쪽 좁은 열에 수동 지급 · 초기화 폼, 오른쪽 넓은 열에 내역 표(봇 · 수동 · 아이템 · 대기열 한 표). 좁은 화면에선 위아래로 */}
       {tab === "ledger" && (
         <div className="xl:flex xl:items-start xl:gap-5">
           <div className="xl:w-[440px] xl:shrink-0 min-w-0 space-y-5 mb-5 xl:mb-0">
@@ -2387,7 +2307,7 @@ export default function AdminBotPage() {
                         onChange={(v) => setItemGrant({ ...itemGrant, itemId: v })}
                         placeholder={grantItems.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
                         options={grantItems.map((it: any) => ({
-                          value: it._id, label: it.name, hint: itemTypeLabel(it.type),
+                          value: it._id, label: it.shortName || it.name, hint: it.categoryLabel || itemTypeLabel(it.type),
                           icon: <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={it.type} size={18} color={it.color || itemTypeColor(it.type)} />,
                         }))}
                       />
@@ -2430,71 +2350,20 @@ export default function AdminBotPage() {
               )}
             </Panel>
 
-            {grantKind === "item" && itemGrants.length > 0 && (
-              <Panel title={<>최근 아이템 지급<Count n={groupOrders(itemGrants).length} /></>} flush>
-                <div className="divide-y divide-[#ededed]">
-                  {/* 한 사람에게 여러 개 준 건(같은 orderId)은 한 줄 ×N — lib/orderGroups.js */}
-                  {groupOrders(itemGrants).map((g: any) => {
-                    const st = GRANT_STATUS[g.status] || { l: g.status, tone: "neutral" as const };
-                    const tool = /^역할 (이전|환불|정리)/.test(String(g.adminNote || ""));
-                    const live = g.status === "pending" || g.status === "completed";
-                    const editing = noteEdit?.key === g._id;
-                    return (
-                      <div key={g._id} className="px-5 py-3 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{g.userName || g.userId}</span>
-                          <StatusChip tone={st.tone}>{st.l}</StatusChip>
-                        </div>
-                        {editing && noteEdit ? (
-                          <div className="mt-2 flex items-center gap-1.5 min-w-0">
-                            <input autoFocus type="text" maxLength={100} value={noteEdit.text}
-                              onChange={(e) => setNoteEdit((n) => (n ? { ...n, text: e.target.value } : n))}
-                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveGrantNote(); } if (e.key === "Escape") setNoteEdit(null); }}
-                              placeholder="사유" className={`${inputClass} min-w-0 flex-1`} />
-                            <Btn size="sm" variant="primary" onClick={saveGrantNote} disabled={grantRowBusy}>저장</Btn>
-                            <Btn size="sm" variant="ghost" onClick={() => setNoteEdit(null)} disabled={grantRowBusy}>취소</Btn>
-                          </div>
-                        ) : (
-                          <div className="mt-1 flex items-center gap-2 min-w-0">
-                            <p className="min-w-0 flex-1 text-[12px] text-[#5a5a5a] truncate">
-                              {g.itemName}{g.qty > 1 ? ` ×${g.qty}` : ""}{g.adminNote ? ` · ${g.adminNote}` : ""} · {g.days > 0 ? `${g.days}일` : "영구"}
-                              <span className="ml-2 text-[#8a8a8a] tabular-nums">{fmtDateTime(g.createdAt)}</span>
-                            </p>
-                            {!tool && (
-                              <span className="shrink-0 flex items-center gap-1">
-                                <Btn size="sm" variant="ghost" onClick={() => setNoteEdit({ key: g._id, ids: g.ids || [String(g._id)], text: g.adminNote || "" })} disabled={grantRowBusy}>사유</Btn>
-                                {live && <Btn size="sm" variant="ghost" onClick={() => setRevokeTarget(g)} disabled={grantRowBusy}>회수</Btn>}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* 📌 더 보기 — 2026-10-04 추천대로: 오래된 지급도 이 목록에서 찾아 회수할 수 있게(한 번에 300건) */}
-                {itemGrantsNext && (
-                  <div className="px-5 py-3 border-t border-[#ededed] flex justify-center">
-                    <Btn variant="secondary" className="w-[116px]" onClick={loadMoreItemGrants} disabled={itemGrantsBusy}>더 보기</Btn>
-                  </div>
-                )}
-              </Panel>
-            )}
-
-            {/* 📌 초기화는 되돌릴 수 없다 — 빨간 테두리로 따로 떼고, 누르면 확인 모달을 한 번 더 거친다 */}
+            {/* 📌 초기화는 되돌릴 수 없다 — 빨간 테두리로 따로 떼고, 누르면 확인 모달을 한 번 더 거친다. 대상 칸은 수동 지급과 따로 */}
             <Panel
               id="sec-reset"
               className="scroll-mt-24 !border-[#e91e3f]/40"
               title={<span className="text-[#d01634]">XP 초기화</span>}
               desc="되돌릴 수 없습니다 — 레벨 보상 역할도 봇이 30초 이내에 함께 회수하며, ARCTIC에서 구매한 역할만 남습니다."
             >
-              <Field label="대상" hint="‘수동 지급’의 XP · 빙옥 대상 칸과 같은 값을 씁니다">
-                <TargetInput value={grantForm.target} onChange={(v) => setGrantForm((f) => ({ ...f, target: v }))} />
-                <TargetChips check={grantCheck} onPick={(k, id) => setGrantForm((f) => ({ ...f, target: pickTargetKey(grantCheck.keys, k, id) }))} />
+              <Field label="대상">
+                <TargetInput value={resetTarget} onChange={setResetTarget} />
+                <TargetChips check={resetCheck} onPick={(k, id) => setResetTarget(pickTargetKey(resetCheck.keys, k, id))} />
               </Field>
               <div className="flex flex-wrap gap-2">
                 {/* 초기화는 한 명씩 — 2명 이상 적혀 있으면 잠근다(서버도 400) */}
-                <Btn variant="danger" disabled={isGranting || grantCheck.keys.length !== 1 || grantCheck.locked} onClick={() => setConfirmReset([grantCheck.keys[0]])}>
+                <Btn variant="danger" disabled={isGranting || resetCheck.keys.length !== 1 || resetCheck.locked} onClick={() => setConfirmReset([resetCheck.keys[0]])}>
                   위 대상 초기화
                 </Btn>
                 <Btn variant="danger" disabled={isGranting} onClick={() => setConfirmReset("all")}>
@@ -2505,52 +2374,43 @@ export default function AdminBotPage() {
           </div>
 
           <div className="flex-1 min-w-0">
-            {/* 두 출처의 건수는 세는 기준이 달라(봇=전체 검색 결과, 수동=최근 50건) 따로 적는다.
-                지금 필터가 덮지 않는 쪽은 감춘다 — '채팅'을 보는 중에 '수동 37'이 남아 있으면 그 37건이 목록에 있는 줄 안다. */}
+            {/* 출처마다 건수의 기준이 달라(봇=전체 검색 결과, 수동=최근 50건, 아이템=읽은 만큼) 지금 거르기가 덮는 출처만 적는다 */}
             <Panel
               id="sec-logs"
               className="scroll-mt-24"
               title="지급 내역"
-              desc="봇 기록은 100일까지만 보관 · 수동 기록은 최근 50건"
-              right={
-                <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">
-                  {ledgerFilter === "manual"
-                    ? `수동 ${manualRows.length.toLocaleString()}`
-                    : ledgerFilter === ""
-                    ? `봇 ${logTotal.toLocaleString()} · 수동 ${manualRows.length.toLocaleString()}`
-                    : `봇 ${logTotal.toLocaleString()}`}
-                </span>
-              }
+              right={<span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{ledgerCount}</span>}
               flush
             >
-              <div className="px-5 py-3 border-b border-[#ededed]">
-                <Toolbar className="!mb-0">
-                  <SearchInput value={logQuery} onChange={(v) => { setLogQuery(v); setLogPage(0); }} placeholder="유저 이름 검색" />
-                  <Segmented
-                    options={[
-                      { v: "", l: "전체" },
-                      { v: "chat", l: "채팅" },
-                      { v: "voice", l: "음성" },
-                      { v: "attend", l: "출석" },
-                      { v: "manual", l: "수동" },
-                    ]}
-                    value={ledgerFilter}
-                    onChange={(v) => { setLedgerFilter(v); setLogPage(0); }}
-                  />
-                </Toolbar>
+              <div className="px-5 py-3 border-b border-[#ededed] space-y-2.5">
+                <SearchInput value={logQuery} onChange={(v) => { setLogQuery(v); setLogPage(0); }} placeholder="유저 이름 검색" />
+                {/* 거르기 칩 — 8개라 좁은 화면에서는 줄을 바꿔 감싼다(옆 스크롤 없음) */}
+                <div role="group" aria-label="구분" className="flex flex-wrap gap-1.5">
+                  {LEDGER_FILTERS.map((f) => (
+                    <ChoiceChip key={f.v} on={ledgerFilter === f.v} n={f.v === "pending" ? queue.length : undefined}
+                      onClick={() => { setLedgerFilter(f.v); setLogPage(0); }}>
+                      {f.l}
+                    </ChoiceChip>
+                  ))}
+                </div>
               </div>
 
               {ledgerRows.length === 0 ? (
-                <PanelEmpty>표시할 지급 내역이 없습니다.</PanelEmpty>
+                <PanelEmpty>{ledgerFilter === "pending" ? "대기 중인 지급이 없습니다." : "표시할 지급 내역이 없습니다."}</PanelEmpty>
               ) : (
                 <>
                   <DataTable className={tableFlat} columns={ledgerCols} rows={ledgerRows} rowKey={(r) => r.k} />
-                  {/* 쪽 넘김은 봇 로그 기준 — 수동 지급은 최근 50건이 전부라 나눌 쪽이 없다 */}
-                  {ledgerFilter !== "manual" && (
+                  {/* 쪽 넘김은 봇 로그 기준 — 수동 · 대기는 읽은 것이 전부라 나눌 쪽이 없다. 아이템은 더 보기(한 번에 300건) */}
+                  {BOT_FILTERS.has(ledgerFilter) && (
                     <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-[#ededed]">
                       <Btn variant="ghost" size="sm" disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p - 1))}>이전</Btn>
                       <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{logPage + 1} / {Math.max(1, Math.ceil(logTotal / 50))}</span>
                       <Btn variant="ghost" size="sm" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => setLogPage((p) => p + 1)}>다음</Btn>
+                    </div>
+                  )}
+                  {ledgerFilter === "item" && itemGrantsNext && (
+                    <div className="px-5 py-3 border-t border-[#ededed] flex justify-center">
+                      <Btn variant="secondary" className="w-[116px]" onClick={loadMoreItemGrants} disabled={itemGrantsBusy}>더 보기</Btn>
                     </div>
                   )}
                 </>
@@ -2560,17 +2420,11 @@ export default function AdminBotPage() {
         </div>
       )}
 
-      {/* 작동 방식 각주 */}
-      <div className="mt-8 pt-5 border-t border-[#ededed] max-w-4xl text-[12px] text-[#5a5a5a] leading-relaxed break-keep">
-        <p><b className="text-[#131313]">작동 방식</b> — 봇이 1분마다 설정을 다시 읽습니다. 최종 지급량 = 기본 XP + 역할 Boost + 채널 Boost + 기간제 부스트 (음소거 시 설정된 배율 적용).</p>
-        <p className="mt-1">역할 자동 지급이 작동하려면 봇에게 <b className="text-[#131313]">역할 관리 권한</b>이 있고, 봇의 역할이 지급 대상 역할보다 <b className="text-[#131313]">위에</b> 있어야 합니다.</p>
-      </div>
-
       {/* ═══════════ 편집 칸 ═══════════ */}
       <EditPane
         open={isFormOpen("role")}
-        title={editId ? "역할 수정" : "역할 추가"}
-        badge={roleForm.exclusive ? <StatusChip>등급 역할</StatusChip> : undefined}
+        title={editId ? "보상 역할 수정" : "보상 역할 추가"}
+        badge={roleForm.exclusive ? <StatusChip>배타</StatusChip> : undefined}
         saveLabel="저장"
         onSubmit={saveRole}
         onCancel={() => { setRoleForm(EMPTY_ROLE); closeForm(); }}
@@ -2583,7 +2437,7 @@ export default function AdminBotPage() {
             value={roleForm.roleId}
             onChange={(v) => setRoleForm({ ...roleForm, roleId: v })}
             placeholder="역할을 선택하세요"
-            options={roleOptions(grantableRoles)}
+            options={roleOptions(rewardRoleOptions)}
           />
         </Field>
         <Field label="지급 레벨 (선택)" hint="비우면 Boost 효과만 적용">
@@ -2596,8 +2450,34 @@ export default function AdminBotPage() {
           <input type="number" min={0} placeholder="예: 7000" value={roleForm.attendBuffXp} onChange={(e) => setRoleForm({ ...roleForm, attendBuffXp: e.target.value })} className={inputClass} />
         </Field>
         {roleForm.exclusive && (
-          <p className={fieldNote}>티어 사다리(등급 역할)로 저장돼 있습니다 — 승급하면 아래 티어 역할이 자동 회수됩니다.</p>
+          <p className={fieldNote}>배타 역할 — 더 높은 배타 역할을 받으면 회수됩니다.</p>
         )}
+      </EditPane>
+
+      {/* 등급 칸 — 그 등급에 붙일 디스코드 역할 · Boost. 지급 레벨은 등급 시작 레벨 · 배타로 늘 저장한다(saveTier). 연결을 풀려면 「연결 안 함」 */}
+      <EditPane
+        open={isFormOpen("tier") && !!openTierRow}
+        title={openTierRow ? `${openTierRow.name} 등급` : ""}
+        sub={openTierRow ? <span className="tabular-nums">Lv.{openTierRow.min}+</span> : undefined}
+        saveLabel="저장"
+        onSubmit={saveTier}
+        onCancel={() => { setTierForm(EMPTY_TIER_FORM); closeForm(); }}
+      >
+        <Field label="디스코드 역할" hint="승급하면 아래 등급 역할은 회수됩니다">
+          <Dropdown
+            theme="light"
+            buttonClassName={DD}
+            value={tierForm.roleId}
+            onChange={pickTierRole}
+            options={[{ value: "", label: "연결 안 함" }, ...roleOptions(tierRoleOptions)]}
+          />
+        </Field>
+        <Field label="채팅/음성 Boost XP" hint="보유자의 XP 지급마다 추가">
+          <input type="number" min={0} placeholder="0" value={tierForm.buffXp} disabled={!tierForm.roleId} onChange={(e) => setTierForm({ ...tierForm, buffXp: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label="출석 Boost XP" hint="출석체크 시 추가 지급">
+          <input type="number" min={0} placeholder="0" value={tierForm.attendBuffXp} disabled={!tierForm.roleId} onChange={(e) => setTierForm({ ...tierForm, attendBuffXp: e.target.value })} className={inputClass} />
+        </Field>
       </EditPane>
 
       <EditPane
@@ -2675,7 +2555,6 @@ export default function AdminBotPage() {
         open={isFormOpen("quest")}
         width={480}
         title={editId ? "퀘스트 수정" : "퀘스트 추가"}
-        sub="진행도는 XP 지급 기록 · 봇이 세는 활동 · 출석 · 구매 · 강화 · 패스 · 퀘스트 수령 기록으로 판정합니다 · 출석 기준 시간과 보상은 정책 탭 지급량 · 주기에서"
         saveLabel={questForm.id ? "수정 저장" : "퀘스트 등록"}
         onSubmit={saveQuest}
         onCancel={() => { setQuestForm(EMPTY_QUEST); closeForm(); }}
@@ -2698,7 +2577,7 @@ export default function AdminBotPage() {
         </Field>
         {/* 📌 대상 · 방식 · 시간대 — 칸은 늘 같은 자리에 두고, 대상에 맞지 않는 방식 · 시간대는 흐리게만 한다(편집 칸 높이가 흔들리지 않게).
             고를 수 있는 조합은 lib/questKinds.js QUEST_REASONS — 저장 때 서버(normalizeQuestCond)가 한 번 더 맞춘다 */}
-        <Field label="측정 대상" hint="XP 지급 기록은 봇이 XP를 준 기록, 활동은 봇이 세는 메시지 · 답장 · 반응 등(2026-10-03부터), 기록은 출석 · 구매 · 강화 · 패스 · 퀘스트 수령 기록입니다.">
+        <Field label="측정 대상" hint="XP 지급 기록은 봇이 XP를 준 기록, 활동은 봇이 세는 메시지 · 답장 · 반응 등, 기록은 출석 · 구매 · 강화 · 패스 · 퀘스트 수령 기록입니다.">
           <Dropdown
             theme="light"
             buttonClassName={DD}
@@ -2730,7 +2609,6 @@ export default function AdminBotPage() {
           }
         >
           <Segmented
-            className="flex-wrap !rounded-2xl"
             options={QUEST_METRICS}
             value={questForm.metric}
             disabledValues={QUEST_METRICS.map((m) => m.v).filter((v) => !(questReasonOf(questForm.reason)?.metrics || []).includes(v) || (v === "run" && questForm.period === "daily"))}
@@ -2819,7 +2697,7 @@ export default function AdminBotPage() {
                   />
                 </div>
               </Field>
-              <Field label="음성 조건 (선택)" hint="그 채널 인원(본인 포함) · 화면 공유나 캠 · 마이크와 헤드셋을 켠 때만 셉니다 (음성만 · 2026-10-01 19:05 이후 기록)">
+              <Field label="음성 조건 (선택)" hint="그 채널 인원(본인 포함) · 화면 공유나 캠 · 마이크와 헤드셋을 켠 때만 셉니다 (음성만)">
                 <div className={`flex flex-wrap items-center gap-3 ${r?.voice ? "" : off}`}>
                   <label className="inline-flex items-center gap-2 text-[13px] text-[#5a5a5a]">
                     <input type="number" min={2} max={50} value={questForm.minPeople} placeholder="—"
@@ -2871,7 +2749,6 @@ export default function AdminBotPage() {
       <EditPane
         open={isFormOpen("questPick")}
         title="주기별 노출 방식"
-        sub="유저마다 주기가 시작된 뒤 처음 볼 때 따로 뽑고, 주기 중간에는 끄거나 지운 퀘스트 자리만 다시 채웁니다 · 직전 주기에 받은 퀘스트는 되도록 다시 뽑지 않습니다 · 바꾼 개수와 새로 만든 퀘스트는 다음 초기화부터 · 뽑히지 않은 퀘스트는 보상도 받을 수 없습니다."
         saveLabel="노출 방식 저장"
         onSubmit={savePicks}
         onCancel={cancelPicks}
@@ -2937,8 +2814,7 @@ export default function AdminBotPage() {
           deleteConfirm?.kind === "role" ? <>해당 역할 설정을 삭제하시겠습니까?<br/>이미 지급된 역할은 회수되지 않습니다.</>
           : deleteConfirm?.kind === "channel" ? <>해당 채널 설정을 삭제하시겠습니까?<br/>삭제 후 기본 XP 정책으로 돌아갑니다.</>
           : deleteConfirm?.kind === "boost" ? <>해당 부스트를 삭제하시겠습니까?<br/>진행 중이라면 즉시 중단됩니다.</>
-          : deleteConfirm?.kind === "quest" ? <>해당 퀘스트를 삭제하시겠습니까?<br/>유저 화면에서 바로 사라집니다.</>
-          : <>해당 인벤토리 역할 등록을 삭제하시겠습니까?<br/>디스코드 역할 자체는 그대로 남습니다.</>
+          : <>해당 퀘스트를 삭제하시겠습니까?<br/>유저 화면에서 바로 사라집니다.</>
         }
       />
 
@@ -3031,22 +2907,42 @@ export default function AdminBotPage() {
         ) : null}
       />
 
-      {/* RANKER 역할 지급 — 디스코드 역할이 바로 붙으므로 대상 · 역할을 보여 주고 한 번 확인 */}
+      {/* 📌 지급 취소 — 아직 지급되지 않은 XP 건(대기 · 실패)만 지운다. 지급된 기록은 남는다(app/api/payout DELETE) */}
       <ConfirmDialog
-        open={rankerConfirm !== null}
-        title="RANKER 역할 지급"
-        confirmLabel="지급"
-        busy={rankerBusy}
-        onCancel={() => setRankerConfirm(null)}
-        onConfirm={() => { if (rankerConfirm !== null) requestRankerGrant(rankerConfirm); }}
-        body={
-          <p className="break-keep">
-            시즌 {rankerConfirm} 상위 {(rankerTarget?.top || []).map((t: any) => t.name || t.userId).join(" · ") || "-"} 님에게{" "}
-            <strong className="text-[#131313]">{roleNameOf(rankerRoleFor(rankerTarget)) || rankerRoleFor(rankerTarget) || "-"}</strong>
-            {" "}역할을 지급합니다.
+        open={!!payCancel}
+        danger
+        title="지급 취소"
+        confirmLabel="지급 취소"
+        cancelLabel="닫기"
+        busy={payBusy}
+        onCancel={() => setPayCancel(null)}
+        onConfirm={cancelPayout}
+        body={payCancel ? (
+          <p className="break-keep tabular-nums">
+            {payCancel.userName || payCancel.userId} · {(payCancel.amount || 0) >= 0 ? "+" : ""}{(payCancel.amount || 0).toLocaleString()} XP{payCancel.reason ? ` · ${payCancel.reason}` : ""}
           </p>
-        }
+        ) : null}
       />
+
+      {/* 아이템 지급 사유 고치기 */}
+      <FormSheet
+        open={!!noteEdit}
+        onClose={() => setNoteEdit(null)}
+        title="지급 사유"
+        busy={grantRowBusy}
+        width={560}
+        onSubmit={saveGrantNote}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setNoteEdit(null)}>취소</Btn>
+            <Btn type="submit">저장</Btn>
+          </>
+        }
+      >
+        <input autoFocus type="text" maxLength={100} aria-label="사유" value={noteEdit?.text || ""}
+          onChange={(e) => setNoteEdit((n) => (n ? { ...n, text: e.target.value } : n))}
+          placeholder="사유" className={inputClass} />
+      </FormSheet>
 
       {/* 📌 초기화는 되돌릴 수 없어 한 번 더 확인한다 */}
       <ConfirmDialog
@@ -3070,6 +2966,7 @@ export default function AdminBotPage() {
       />
 
       {noticeEl}
+      {toastEl}
     </AdminPage>
   );
 }

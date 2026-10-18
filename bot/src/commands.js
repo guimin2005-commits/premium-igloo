@@ -5,8 +5,10 @@
 import {
   Events, REST, Routes, SlashCommandBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from "discord.js";
-import { UserXp } from "./db.js";
-import { getCumulativeXpByLevel, getLevelByXp, currentSeason } from "./leveling.js";
+import mongoose from "mongoose";
+import { UserXp, XpLog, Payout, Purchase, WalletLog } from "./db.js";
+import { getCumulativeXpByLevel, getLevelByXp, currentSeason, seasonStartMs } from "./leveling.js";
+import { RANK_PERIODS, rankPeriodOf, rankMonthStart, rankTotalSince, monthBoard, totalBoard, voiceTimeText } from "./rankBoards.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
 import { claimAttendance, streakBonusText } from "./attend.js";
@@ -21,7 +23,14 @@ const MAX_LEVEL = 1000; // leveling.js getLevelByXp 의 끝
 
 const definitions = [
   new SlashCommandBuilder().setName("레벨").setDescription("다음 레벨까지 필요한 XP를 확인합니다."),
-  new SlashCommandBuilder().setName("랭크").setDescription("서버 순위표(1~10위)와 내 순위를 확인합니다."),
+  // 📌 2026-10-18 「기준」 — 현재 · 누적 · 이번 달 · 음성 시간(사이트 랭킹 탭과 같은 값 — rankBoards.js). 비우면 현재
+  new SlashCommandBuilder()
+    .setName("랭크")
+    .setDescription("서버 순위표(1~10위)와 내 순위를 확인합니다.")
+    .addStringOption((o) =>
+      o.setName("기준").setDescription("순위 기준 — 비우면 현재 XP").setRequired(false)
+        .addChoices(...RANK_PERIODS.map((p) => ({ name: p.l, value: p.v })))
+    ),
   new SlashCommandBuilder().setName("출석체크").setDescription("오늘 출석을 체크합니다. 하루 한 번 받을 수 있습니다."),
   new SlashCommandBuilder().setName("퀘스트").setDescription("일일 · 주간 · 월간 퀘스트 진행도를 확인합니다."),
   new SlashCommandBuilder().setName("인벤토리").setDescription("보유한 아이템을 확인합니다."),
@@ -167,25 +176,80 @@ async function handleLevel(interaction, r) {
 }
 
 // 📌 /랭크 = 서버 순위표 — 1~10위 + 맨 아래 내 줄(카드). 글(임베드)은 템플릿 그대로({rank} · {total} 등 내 순위)
+//    📌 2026-10-18 「기준」(현재 · 누적 · 이번 달 · 음성 시간) — 사이트 랭킹 탭(app/api/xp/leaderboard period)과 같은 값 · 같은 정렬(값 내림차순 · 동점 userId 오름차순).
+//       누적 · 이번 달은 rankBoards.js 공용 블록(사이트와 글자 그대로 같은 계산 — 30초 기억), 음성 시간은 voiceSeconds 가 1초라도 있는 사람만.
+//       그 기준에 내 순위가 없으면(이번 달 0 XP · 음성 0초 등) 카드의 '나' 줄을 빼고 글은 「아직 기록이 없습니다」. 줄의 레벨은 늘 지금 XP 로 셈
 const RANK_TOP = 10;
-async function handleRank(interaction, r) {
-  const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
-  const xp = doc?.xp || 0;
-  const [above, total, topDocs] = await Promise.all([
-    UserXp.countDocuments(rankAbove(interaction.user.id, xp)),
+const RANK_M = { UserXp, XpLog, Payout, Purchase, WalletLog, ObjectId: mongoose.Types.ObjectId };
+const BOARD_TTL = 30 * 1000;
+const boardCache = new Map(); // "month|<시작>" · "total|<시작>" → { at, board }
+async function cachedBoard(key, make) {
+  const hit = boardCache.get(key);
+  if (hit && Date.now() - hit.at < BOARD_TTL) return hit.board;
+  const board = await make();
+  boardCache.set(key, { at: Date.now(), board });
+  return board;
+}
+// 기준마다 순위표 — { total(그 기준에 오른 인원), rows: 1~10위 [{ userId, xp, voiceSeconds? }], myRank(없으면 0), myXp, myVoice }
+async function rankBoardOf(period, myId, myDoc) {
+  if (period === "month" || period === "total") {
+    const since = period === "month" ? rankMonthStart() : rankTotalSince(seasonStartMs(currentSeason()), getSettings().ledgerSince);
+    const board = await cachedBoard(`${period}|${since.toISOString()}`, () => (period === "month" ? monthBoard(RANK_M, since) : totalBoard(RANK_M, since)));
+    const idx = board.findIndex((x) => x.userId === myId);
+    return { total: board.length, rows: board.slice(0, RANK_TOP), myRank: idx + 1, myXp: idx >= 0 ? board[idx].xp : 0 };
+  }
+  if (period === "voice") {
+    const myV = myDoc?.voiceSeconds || 0;
+    const filter = { voiceSeconds: { $gt: 0 } };
+    const [rows, total, above] = await Promise.all([
+      UserXp.find(filter, { userId: 1, voiceSeconds: 1 }).sort({ voiceSeconds: -1, userId: 1 }).limit(RANK_TOP).lean(),
+      UserXp.countDocuments(filter),
+      myV > 0 ? UserXp.countDocuments({ $or: [{ voiceSeconds: { $gt: myV } }, { voiceSeconds: myV, userId: { $lt: myId } }] }) : null,
+    ]);
+    return { total, rows: rows.map((d) => ({ userId: d.userId, voiceSeconds: d.voiceSeconds || 0 })), myRank: above == null ? 0 : above + 1, myVoice: myV };
+  }
+  const xp = myDoc?.xp || 0;
+  const [above, total, rows] = await Promise.all([
+    UserXp.countDocuments(rankAbove(myId, xp)),
     UserXp.countDocuments(),
-    UserXp.find({}, { userId: 1, xp: 1, username: 1, displayName: 1, avatarFramePick: 1, seasonFrame: 1 }).sort({ xp: -1, userId: 1 }).limit(RANK_TOP).lean(),
+    UserXp.find({}, { userId: 1, xp: 1 }).sort({ xp: -1, userId: 1 }).limit(RANK_TOP).lean(),
   ]);
+  return { total, rows: rows.map((d) => ({ userId: d.userId, xp: d.xp || 0 })), myRank: above + 1, myXp: xp };
+}
+async function handleRank(interaction, r) {
+  const period = rankPeriodOf(interaction.options?.getString?.("기준") || "all");
+  const myId = interaction.user.id;
+  const doc = await UserXp.findOne({ userId: myId }, { xp: 1, voiceSeconds: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
+  const xp = doc?.xp || 0;
+  const b = await rankBoardOf(period.v, myId, doc);
+  // 1~10위의 이름 · 지금 XP(레벨) · 테두리 — UserXp 문서에서(이번 달 · 누적 · 음성 순위표는 값만 준다)
+  const ids = b.rows.map((x) => x.userId);
+  const docsById = new Map(
+    (ids.length ? await UserXp.find({ userId: { $in: ids } }, { userId: 1, xp: 1, username: 1, displayName: 1, avatarFramePick: 1, seasonFrame: 1 }).lean() : [])
+      .map((d) => [d.userId, d])
+  );
+  //    xp 는 그 기준의 값으로 바꿔 끼우고 지금 XP 는 curXp 로. 이름은 UserXp 문서 > 순위표(이번 달 XpLog · 누적) 이름
+  const topDocs = b.rows.map((x) => {
+    const d = docsById.get(x.userId) || {};
+    return { ...d, userId: x.userId, displayName: d.displayName || x.displayName || x.name || "", xp: x.xp || 0, voiceSeconds: x.voiceSeconds || 0, curXp: d.xp || 0 };
+  });
   // 📌 낀 아바타 테두리 — 가진 테두리(아이템 perksOf + 시즌 티어 테두리) 중 고른 것. 서버에 없는 사람은 시즌 테두리만(아이템 보유를 못 본다)
   const frameOf = (m, d) => pickAvatarFrame(withSeasonFrame(m ? perksOf(m).avatarFrames : [], d), d?.avatarFramePick || "");
   const level = getLevelByXp(xp);
-  const rank = above + 1;
+  const ranked = b.myRank > 0;
+  const rank = ranked ? b.myRank : "-";
+  const total = b.total;
+  const voice = period.v === "voice";
+  const value = voice ? voiceTimeText(b.myVoice) : `${(b.myXp || 0).toLocaleString("ko-KR")} XP`;
+  // 순위 문장 — 현재는 예전 글 그대로, 다른 기준은 앞에 기준 이름 · 순위가 없으면 「아직 기록이 없습니다」
+  const head = period.v === "all" ? "" : `${period.mode} · `;
+  const rankLine = ranked ? `${head}${total.toLocaleString("ko-KR")}명 중 **${b.myRank}위**입니다.` : `${head}아직 기록이 없습니다.`;
   const base = commonVars(interaction.member, interaction.guild);
   const season = currentSeason();
 
   const payload = await msgCard(
     "cmdRank",
-    { ...base, rank, total, level, xp, tier: tierOf(level).name },
+    { ...base, rank, total, level, xp, tier: tierOf(level).name, mode: period.mode, value, rankLine },
     async () => {
       // 이름 · 사진 — 서버 멤버(캐시 → 없는 사람만 한 번에 받아 오기, 최대 2초) > 저장된 이름. 사진을 못 받으면 첫 글자 원형
       const ids = topDocs.map((d) => d.userId);
@@ -202,12 +266,14 @@ async function handleRank(interaction, r) {
       const top = await Promise.all(
         topDocs.map(async (d, i) => {
           const m = members.get(d.userId);
+          // xp 는 그 기준의 XP(현재 · 누적 · 이번 달) · 음성은 voiceSeconds — 레벨은 늘 지금 XP 로
           return {
             rank: i + 1,
             name: m?.displayName || d.displayName || d.username || "",
             avatar: m ? await cardAvatar(m) : null,
-            level: getLevelByXp(d.xp || 0),
+            level: getLevelByXp(d.curXp || 0),
             xp: d.xp || 0,
+            ...(voice ? { voiceSeconds: d.voiceSeconds || 0 } : {}),
             frame: frameOf(m, d) || undefined,
           };
         })
@@ -215,12 +281,18 @@ async function handleRank(interaction, r) {
       return {
         season: season.number,
         seasonName: season.name,
+        period: period.v,
         total,
         top,
-        me: { rank, name: base.name, avatar: await avatarOf(interaction), level, xp, frame: frameOf(interaction.member, doc) || undefined },
+        // 그 기준에 내 순위가 없으면 '나' 줄 없이
+        ...(ranked
+          ? { me: { rank: b.myRank, name: base.name, avatar: await avatarOf(interaction), level, xp: b.myXp || 0, ...(voice ? { voiceSeconds: b.myVoice || 0 } : {}), frame: frameOf(interaction.member, doc) || undefined } }
+          : {}),
       };
     },
-    `#${rank} / ${total.toLocaleString("ko-KR")} · Lv.${level} · 현재 ${xp.toLocaleString("ko-KR")} XP`
+    period.v === "all"
+      ? `#${rank} / ${total.toLocaleString("ko-KR")} · Lv.${level} · 현재 ${xp.toLocaleString("ko-KR")} XP`
+      : `${period.mode} · ${ranked ? `#${rank} / ${total.toLocaleString("ko-KR")} · ${value}` : "아직 기록이 없습니다"}`
   );
   return r.send({ ...payload, components: [linkRow("랭킹", "/level?tab=rank")] });
 }

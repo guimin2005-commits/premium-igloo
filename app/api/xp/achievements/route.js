@@ -53,7 +53,7 @@ async function relay(res, code) {
 //    _id — 문서가 생긴 시각(bornOf). 퇴장 초기화(봇 leaveReset)는 문서를 지우고, 다시 들어오면 새 문서가 생긴다
 const USER_FIELDS = {
   _id: 1, userId: 1, xp: 1, level: 1, maxLevel: 1, point: 1, voiceSeconds: 1, attendCount: 1, attendStreak: 1, attendBestStreak: 1,
-  chatEnhance: 1, voiceEnhance: 1, cardSkinPick: 1, avatarFramePick: 1, badgePick: 1, passUnlocked: 1, seasonHistory: 1,
+  chatEnhance: 1, voiceEnhance: 1, cardSkinPick: 1, cardScenePick: 1, avatarFramePick: 1, badgePick: 1, passUnlocked: 1, seasonHistory: 1,
 };
 const REC_FIELDS = { _id: 0, key: 1, unlockedAt: 1, seenAt: 1, claimedAt: 1, rewardXp: 1, rewardPoint: 1 };
 

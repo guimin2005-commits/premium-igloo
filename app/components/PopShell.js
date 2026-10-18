@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { ICON_PATHS } from "./Icons";
 
 // 팝업이 쓰는 모션 · 격자 · 스크롤바 — 레벨 페이지 밖(내 정보 · ARCTIC)에서도 열리므로 틀이 직접 싣는다
@@ -8,7 +8,17 @@ const POP_CSS = `
 @keyframes tierIn { from { opacity: 0; transform: translateY(16px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .lux-grid-bg-dark { background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 46px 46px; -webkit-mask-image: radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%); mask-image: radial-gradient(ellipse 90% 70% at 30% 0%, black 30%, transparent 100%); }
 .pop-scroll { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.22) transparent; }
+.pop-snap { height: calc(100% - round(up, 100% - var(--pop-hm), 1px)); }
+@media (width >= 40rem) { .pop-snap { width: calc(100% - 2 * round(up, (100% - min(var(--pop-w), 100%)) / 2, 1px)); height: calc(100% - 2 * round(up, (100% - var(--pop-h)) / 2, 1px)); } }
 `;
+// 📌 창을 정수 px 에 앉힌다(.pop-snap) — 가운데 맞춤이 홀수 폭 · 높이 화면에서 0.5px 에 떨어지면 테는 두 줄에 번지고 글자는 한 줄에 붙어
+//    알약 글자가 위 · 오른쪽으로 1px 어긋나 보였다(2026-10-17 인벤토리 「일반」 알약). 창 크기를 화면 홀짝에 맞춰 1px 안쪽으로 줄여 여백을 정수로 만든다.
+//    round() 를 못 읽는 브라우저는 아래 Tailwind 크기 그대로
+const SNAP = {
+  xl: { "--pop-w": "1100px", "--pop-h": "min(800px, 92vh)", "--pop-hm": "86dvh" },
+  wide: { "--pop-w": "1024px", "--pop-h": "min(820px, 92vh)", "--pop-hm": "90dvh" },
+  "": { "--pop-w": "768px", "--pop-h": "min(620px, 88vh)", "--pop-hm": "86dvh" },
+};
 
 // 📌 팝업 틀 — 인벤토리 · 시즌 패스 · 강화가 같은 틀을 쓴다.
 //    머리(아이콘 · 제목 · 수 · 닫기) → 알약 탭 → 본문(PC 왼쪽 요약 236px | 오른쪽 목록, 모바일은 위아래 바텀시트).
@@ -58,7 +68,12 @@ export const POP_THEME = {
 // glow: 번짐 색을 창이 정할 때(테마 번짐 대신) — 예: 인벤토리의 고른 아이템 색. "" 이면 번짐 없음
 // corner: "2xl" 이면 창 모서리 16px(다른 패널과 같은 값 — 인벤토리 2026-10-11 「다듬은 잉크 판」). 기본은 예전 그대로 24px
 // compact: 왼쪽 요약 판 없이 한 칸짜리 창(PC 최대 680px · 높이는 내용만큼, 모바일은 바텀시트 최대 88dvh) — 강화 창
-export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left, children, footer, theme = "ink", compact = false, corner = "3xl", glow }) => {
+// 📌 top — 왼쪽 · 오른쪽 칸 위에 전체 폭으로 까는 판(2026-10-15 인벤토리 「꾸미기」 장착 판). 있으면 본문이 칸마다가 아니라 한 번에 스크롤한다
+//    size "xl" — PC 1100 × 800 · 폰은 기본과 같은 높이(인벤토리 — 모든 탭 같은 크기, 2026-10-17 운영자 "그냥 똑같은 크기로 맞추라니까"). size "wide" — 넓은 창(PC 1024 × 820, 인벤토리 — 2026-10-15 운영자 "인벤토리 창 크기 늘려도 되니까"). body — 왼쪽 · 오른쪽 칸 대신 본문을 통째로 맡긴다(인벤토리 「꾸미기」 옷장 — 스크롤도 그쪽이)
+export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, top, left, children, body, footer, theme = "ink", compact = false, corner = "3xl", glow, size = "", tabsWrap = false }) => {
+  // 왼쪽 칸(상세) 폭 — 큰 창(xl · 1100)은 340, 그 밖은 236(2026-10-17 운영자 인벤토리 상세 칸 "이부분을 좀 더 늘려")
+  //    tabsWrap — 폰에서 탭이 넘치면 숨은 가로 스크롤 대신 다음 줄로 접는다(인벤토리 — 「즐겨찾기」 탭이 늘 붙어 폰 폭을 넘는다). PC 는 그대로 한 줄
+  const leftW = size === "xl" ? "sm:w-[340px]" : "sm:w-[236px]";
   const closeRef = useRef(null);
   // 열리면 닫기 버튼에 포커스 — 키보드로도 바로 닫고, 탭 순서가 팝업 안에서 시작한다
   useEffect(() => { if (open) closeRef.current?.focus({ preventScroll: true }); }, [open]);
@@ -82,8 +97,8 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : `sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)] ${corner === "2xl" ? "rounded-t-2xl sm:rounded-2xl" : "rounded-t-3xl sm:rounded-3xl"}`}`}
-        style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
+        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : `pop-snap ${size === "xl" ? "sm:max-w-[1100px] h-[86dvh] sm:h-[min(800px,92vh)]" : size === "wide" ? "sm:max-w-5xl h-[90dvh] sm:h-[min(820px,92vh)]" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)]"} ${corner === "2xl" ? "rounded-t-2xl sm:rounded-2xl" : "rounded-t-3xl sm:rounded-3xl"}`}`}
+        style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)", ...(compact ? null : SNAP[size] || SNAP[""]) }}
       >
         <style>{POP_CSS}</style>
         {t.grid && <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>}
@@ -118,14 +133,24 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, left,
         </div>
 
         {/* 탭 */}
-        <div className={`relative z-10 shrink-0 ${compact ? "px-5 sm:px-9" : "px-5 sm:px-7 border-b border-white/[0.08]"} ${tabs ? (compact ? "pt-4 sm:pt-5 flex" : "py-4 flex items-center gap-1.5 overflow-x-auto no-bar") : "pt-4"}`}>{tabs}</div>
+        <div className={`relative z-10 shrink-0 ${compact ? "px-5 sm:px-9" : "px-5 sm:px-7 border-b border-white/[0.08]"} ${tabs ? (compact ? "pt-4 sm:pt-5 flex" : tabsWrap ? "py-1 sm:py-4 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 sm:overflow-x-auto no-bar" : "py-4 flex items-center gap-1.5 overflow-x-auto no-bar") : "pt-4"}`}>{tabs}</div>
 
         {/* 본문 — PC 는 왼쪽 요약 | 오른쪽 목록, 모바일은 위아래로 한 번에 스크롤. compact 는 한 칸 */}
         {compact ? (
           <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 sm:px-9 pt-6 sm:pt-8 pb-6 sm:pb-9">{children}</div>
+        ) : body ? (
+          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden pop-scroll">{body}</div>
+        ) : top ? (
+          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pop-scroll">
+            <div className="px-5 sm:px-6 pt-5 sm:pt-6">{top}</div>
+            <div className="sm:flex sm:items-start">
+              <div className={`shrink-0 ${leftW} sm:self-stretch sm:border-r border-white/[0.08] px-5 sm:px-6 pt-1 pb-4 sm:pb-6 flex flex-col`}>{left}</div>
+              <div data-pop-list className="min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1">{children}</div>
+            </div>
+          </div>
         ) : (
           <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden sm:flex">
-            <div className="shrink-0 sm:w-[236px] sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto sm:overflow-x-hidden no-bar flex flex-col">{left}</div>
+            <div className={`shrink-0 ${leftW} sm:border-r border-white/[0.08] px-5 sm:px-6 pt-5 pb-4 sm:py-6 sm:overflow-y-auto sm:overflow-x-hidden no-bar flex flex-col`}>{left}</div>
             <div data-pop-list className="pop-scroll min-w-0 flex-1 px-5 sm:px-6 pb-6 pt-1 sm:py-6 sm:overflow-y-auto">{children}</div>
           </div>
         )}
@@ -149,26 +174,3 @@ export const PopTab = ({ on, onClick, label, n }) => (
     {n != null && <span className={`tabular-nums text-[11px] font-black ${on ? "text-[#8a8a8a]" : "text-white/35"}`}>{n}</span>}
   </button>
 );
-
-// 📌 관리자 테스트 초기화 버튼 — 한 번 누르면 확인 문구로 바뀌고, 3초 안에 한 번 더 누르면 실행한다
-//    compact: 탭 줄 오른쪽에 붙는 작은 알약(시즌 패스 창 — 아래 따로 한 줄을 두면 창에 세로 스크롤이 생겼다)
-export const AdminReset = ({ onReset, busy, label, compact = false }) => {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 3000);
-    return () => clearTimeout(t);
-  }, [armed]);
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => { if (!armed) { setArmed(true); return; } setArmed(false); onReset(); }}
-      className={`${compact ? "h-7 px-3 whitespace-nowrap" : "mt-3 w-full h-9"} shrink-0 rounded-full text-[11px] font-black transition-colors outline-none focus:outline-none disabled:opacity-40 ${
-        armed ? "bg-white text-[#131313]" : "border border-dashed border-white/20 text-white/50 hover:text-white hover:border-white/40"
-      }`}
-    >
-      {busy ? "초기화 중…" : armed ? "한 번 더 누르면 초기화" : label}
-    </button>
-  );
-};

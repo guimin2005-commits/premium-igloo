@@ -26,7 +26,7 @@ import { legacyFrameArtOf, productIconOf } from "@/lib/cosmeticArt";
 //    자리 · 크기는 칸 비율(%)이라 상품 카드 · 상세 · 결제 썸네일 · 관리 목록이 같은 모양. 작은 칸(small)은 그림자 · 「+N」 없이.
 //    구성 표기는 목록 · 상세 API 의 bundleItems(lib/bundleServer withBundleItems). 관리자가 고른 상품 아이콘은 세트 그림에선 쓰지 않는다
 //    구성 아이콘도 상품 그림과 같은 고르기(cosmeticKeys — 목록 API, lib/cosmeticArt productIconOf)
-type BundlePart = { icon?: string; imageUrl?: string; type?: string; color?: string; cosmeticKeys?: { skin?: string; frame?: string } };
+type BundlePart = { icon?: string; imageUrl?: string; type?: string; color?: string; cosmeticKeys?: { skin?: string; scene?: string; frame?: string } };
 export const bundlePartsOf = (it: any): BundlePart[] =>
   it?.type === "bundle" && Array.isArray(it?.bundleItems) ? it.bundleItems.filter((c: any) => c && typeof c === "object") : [];
 const COMBO: Record<number, [number, number, number][]> = {
@@ -45,7 +45,7 @@ function PartIcon({ p, icon, img, small }: { p: BundlePart; icon: string; img: s
 function StackArt({ parts, color, small, hero }: { parts: BundlePart[]; color: string; small: boolean; hero?: string }) {
   const list = parts.map((p) => ({ p, ...partIcon(p) }));
   let hi = hero ? list.findIndex((x) => x.icon === hero) : -1;
-  if (hi < 0 && !hero) { hi = list.findIndex((x) => !/^art:(deco|skin)-/.test(x.icon)); if (hi < 0) hi = 0; }
+  if (hi < 0 && !hero) { hi = list.findIndex((x) => !/^art:(deco|skin|scene)-/.test(x.icon)); if (hi < 0) hi = 0; }
   const front = hi >= 0 ? list[hi] : { p: { type: "bundle" } as BundlePart, icon: String(hero || ""), img: "" };
   const back = list.filter((_, i) => i !== hi).slice(0, 2);
   if (small) {

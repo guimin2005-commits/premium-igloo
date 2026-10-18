@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
       /* 📌 친구 초대 이벤트(/invite)는 내렸다 — 화면의 누적 보상(역할 · 포인트)이 실제 지급과 연동돼 있지 않았다.
          리뉴얼 전까지 들어오던 링크는 이벤트 목록으로 보낸다. 서버 쪽(app/api/referral · models/Referral)은 기록 보존용으로 남겨 둔다. */
       { source: "/invite", destination: "/event", permanent: false },
+      /* 📌 관리 › 이상 활동은 2026-10-17 제재 · 잠수의 「이상 활동」 탭으로 합쳤다. 옛 주소(?period= · ?sort= 그대로 넘어간다)를 그 탭으로.
+         페이지 안 redirect() 로 넘기면 스트리밍 중 이동이라 화면이 「This page couldn't load」(React #310)로 깨졌다 — 여기서 넘긴다 */
+      { source: "/admin/activity", destination: "/admin/sanctions?tab=activity", permanent: false },
     ];
   },
 };

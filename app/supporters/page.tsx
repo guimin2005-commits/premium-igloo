@@ -6,7 +6,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
 import { EmptySlot } from "../components/Hud";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 import { VOICE_TIME_START } from "@/lib/season";
 import { tone, useToasts, ToastStack, fmtDate, BLUE, fieldClass, CheckMark, CommentIcon, ArrowRight, type Post, type AckStats } from "./NoticeDetail";
 import { openLogin } from "../components/LoginPrompt";
@@ -197,7 +197,8 @@ export default function SupportersPage() {
   useEffect(() => setMounted(true), []);
   const authReady = mounted && authStatus !== "loading";
 
-  const isAdmin = isAdminName(user?.name);
+  // 📌 관리자로 보는 중일 때만 — 「유저 화면으로 보기」 켜면 역할 없는 관리자는 막힌 화면, 예약 · 가림 글 · 글쓰기 · 확인 현황 없이 유저와 같게
+  const { admin: isAdmin } = useAdminView();
   const allowed = !!user && (!!user.isSupporter || isAdmin);
 
   // 탭 — URL 이 기준. 첫 탭은 파라미터를 지운다

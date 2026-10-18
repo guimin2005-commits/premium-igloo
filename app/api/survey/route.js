@@ -6,7 +6,8 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Post from "@/models/Post";
 import SurveyResponse from "@/models/SurveyResponse";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+// 📌 응답 전체 조회 · 숨김 대회 제출 우회는 「유저 화면으로 보기」를 따른다(켜면 일반 유저와 같다). 응답 삭제는 requireAdmin 그대로
+import { isAdminViewer } from "@/lib/adminViewServer";
 import { requireAdmin, denyIfMaintenance } from "@/lib/apiAuth";
 
 // [조회] ?postId=... — 본인 제출 여부 / 관리자는 전체 응답
@@ -18,7 +19,7 @@ export async function GET(request) {
     if (!postId) return NextResponse.json({ success: false, message: "postId가 필요합니다." }, { status: 400 });
 
     const session = await getServerSession(authOptions);
-    const isAdmin = isAdminName(session?.user?.name);
+    const isAdmin = await isAdminViewer(session);
 
     if (searchParams.get("all") === "1") {
       // 통계/응답 전체 조회는 관리자 전용
@@ -53,9 +54,9 @@ export async function POST(request) {
     if (!postId) return NextResponse.json({ success: false, message: "postId가 필요합니다." }, { status: 400 });
 
     const post = await Post.findById(postId);
-    // 가린 글·공개 시각 전 예약 글은 상세처럼 설문도 닫혀 있다 — 관리자만 통과
+    // 가린 글·공개 시각 전 예약 글은 상세처럼 설문도 닫혀 있다 — 관리자로 볼 때만 통과
     const unpublished = !!post && (post.hidden || (!!post.publishAt && new Date(post.publishAt) > new Date()));
-    if (!post || !post.survey?.enabled || (unpublished && !isAdminName(session.user.name))) {
+    if (!post || !post.survey?.enabled || (unpublished && !(await isAdminViewer(session)))) {
       return NextResponse.json({ success: false, message: "설문이 열려 있지 않습니다." }, { status: 400 });
     }
     if (post.survey.closed) {

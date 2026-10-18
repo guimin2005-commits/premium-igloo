@@ -9,10 +9,11 @@ import ArcticDock from "../../arctic/ArcticDock";
 import { useSearchParams } from "next/navigation";
 import { ICON_PATHS } from "../../components/Icons";
 import { agoLabel } from "@/lib/ago";
+import { replaceItemTags } from "@/lib/itemTag";
 
 // 미리보기용 마크다운 기호 제거
 const stripMd = (t: string) =>
-  (t || "").replace(/\*\*(.*?)\*\*/g, "$1").replace(/__(.*?)__/g, "$1").replace(/~~(.*?)~~/g, "$1").replace(/==(.*?)==/g, "$1").replace(/\{([^}]+)\}/g, "$1");
+  replaceItemTags(t || "").replace(/\*\*(.*?)\*\*/g, "$1").replace(/__(.*?)__/g, "$1").replace(/~~(.*?)~~/g, "$1").replace(/==(.*?)==/g, "$1").replace(/\{([^}]+)\}/g, "$1");
 
 const NOTI_TYPE_STYLES: Record<string, string> = {
   경고: "bg-[#e91e3f]/10 text-[#e91e3f] border-[#e91e3f]/25",

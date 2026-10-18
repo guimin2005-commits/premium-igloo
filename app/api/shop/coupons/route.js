@@ -7,6 +7,8 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 import { couponDiscount, couponError } from "@/lib/shopPricing";
 import Coupon from "@/models/Coupon";
+import mongoose from "mongoose";
+import { randomInt } from "crypto";
 
 // ── [조회] 쿠폰 목록 (관리자) ──
 export async function GET() {
@@ -50,7 +52,9 @@ export async function POST(request) {
     // 관리자: 등록·수정
     const deny = await denyIfNotAdmin();
     if (deny) return deny;
-    if (!b.code?.trim()) {
+    // 여러 장(bulk)은 코드를 서버가 만든다(아래 bulkCreate)
+    const bulkOn = !b.id && !!b.bulk && typeof b.bulk === "object";
+    if (!bulkOn && !b.code?.trim()) {
       return NextResponse.json({ success: false, message: "쿠폰 코드를 입력해주세요." }, { status: 400 });
     }
 
@@ -86,7 +90,7 @@ export async function POST(request) {
     const perRaw = b.perUserLimit === "" || b.perUserLimit == null ? 1 : Math.floor(Number(b.perUserLimit));
 
     const payload = {
-      code: b.code.trim().toUpperCase(),
+      code: String(b.code || "").trim().toUpperCase(),
       name: (b.name || "").trim(),
       kind,
 
@@ -111,6 +115,10 @@ export async function POST(request) {
       expiresAt,
     };
 
+    // 📌 여러 장(2026-10-17 상점 관리 › 쿠폰 「여러 장」) — 같은 혜택 · 한도 · 만료로 N장. 코드 = 앞머리 + 무작위 글자(헷갈리는 0 · O · 1 · I 빼고).
+    //    bulk: { prefix, count 2~500, length 4~16 }. 겹치는 코드(있던 쿠폰 · 같은 요청 안)는 다시 뽑는다. 응답 codes = 만든 코드(만든 차례)
+    if (bulkOn) return await bulkCreate(payload, b.bulk);
+
     const doc = b.id
       ? await Coupon.findByIdAndUpdate(b.id, payload, { new: true })
       : await Coupon.create(payload);
@@ -121,6 +129,63 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "이미 존재하는 쿠폰 코드입니다." }, { status: 409 });
     }
     return NextResponse.json({ success: false }, { status: 500 });
+  }
+}
+
+const BULK_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const BULK_MAX = 500;
+const PREFIX_MAX = 20;
+async function bulkCreate(base, bulk) {
+  const prefix = String(bulk.prefix || "").trim().toUpperCase().replace(/\s+/g, "");
+  const count = Math.floor(Number(bulk.count) || 0);
+  const length = Math.floor(Number(bulk.length) || 0);
+  if (prefix.length > PREFIX_MAX) return NextResponse.json({ success: false, message: `앞머리는 ${PREFIX_MAX}자까지입니다.` }, { status: 400 });
+  if (!(count >= 2 && count <= BULK_MAX)) return NextResponse.json({ success: false, message: `장수는 2~${BULK_MAX}장입니다.` }, { status: 400 });
+  if (!(length >= 4 && length <= 16)) return NextResponse.json({ success: false, message: "무작위 글자 수는 4~16자입니다." }, { status: 400 });
+  const draw = () => prefix + Array.from({ length }, () => BULK_ALPHABET[randomInt(BULK_ALPHABET.length)]).join("");
+  const codes = [];
+  const seen = new Set();
+  // 겹침 — 같은 요청 안 · 이미 있는 쿠폰. 몇 번 다시 뽑아도 모자라면(글자 수가 너무 짧음) 알린다
+  for (let round = 0; round < 6 && codes.length < count; round++) {
+    const batch = [];
+    while (batch.length < (count - codes.length) * 2 && batch.length < 2000) {
+      const c = draw();
+      if (!seen.has(c)) { seen.add(c); batch.push(c); }
+      if (seen.size > count * 50) break;
+    }
+    const taken = new Set((await Coupon.find({ code: { $in: batch } }, { code: 1 }).lean()).map((x) => x.code));
+    for (const c of batch) if (!taken.has(c) && codes.length < count) codes.push(c);
+  }
+  if (codes.length < count) return NextResponse.json({ success: false, message: "겹치지 않는 코드를 만들지 못했습니다. 무작위 글자 수를 늘려 주세요." }, { status: 409 });
+  let made = [];
+  try {
+    made = await Coupon.insertMany(codes.map((code) => ({ ...base, code })), { ordered: false });
+  } catch (e) {
+    // 그 사이 같은 코드가 생겼으면 그 장만 빠진다 — 들어간 것만 돌려준다
+    made = Array.isArray(e?.insertedDocs) ? e.insertedDocs : [];
+    if (!made.length) throw e;
+  }
+  const ok = new Set(made.map((d) => d.code));
+  return NextResponse.json({ success: true, codes: codes.filter((c) => ok.has(c)), data: made });
+}
+
+// ── [사용 상태] (관리자) — { id, active } 그 칸만(목록 줄 스위치). 다른 칸은 그대로 ──
+export async function PATCH(request) {
+  try {
+    const deny = await denyIfNotAdmin();
+    if (deny) return deny;
+    await connectToDatabase();
+    const b = await request.json().catch(() => ({}));
+    const id = String(b?.id || "");
+    if (!mongoose.isValidObjectId(id) || typeof b?.active !== "boolean") {
+      return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
+    }
+    const doc = await Coupon.findByIdAndUpdate(id, { $set: { active: b.active } }, { new: true }).lean();
+    if (!doc) return NextResponse.json({ success: false, message: "쿠폰을 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({ success: true, data: doc });
+  } catch (e) {
+    console.error("쿠폰 사용 상태 저장 오류:", e);
+    return NextResponse.json({ success: false, message: "저장하지 못했습니다." }, { status: 500 });
   }
 }
 

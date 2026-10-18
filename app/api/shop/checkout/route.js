@@ -16,7 +16,7 @@ import { salePrice, couponError, couponClaimFilter, couponReleaseUpdate, isTimed
 import { getLevelByXp } from "@/lib/leveling";
 import { planPayment, splitByPrice } from "@/lib/shopPay";
 import { denyIfMaintenance } from "@/lib/apiAuth";
-import { isAdminName } from "@/lib/admins";
+import { isAdminViewer } from "@/lib/adminViewServer";
 import { getPerks } from "@/lib/itemPerks";
 import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
 import { activeXpStopUntil } from "@/lib/xpStop";
@@ -44,9 +44,9 @@ export async function POST(request) {
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
-    // 📌 서버 인증(디스코드 인증 역할 — lib/authOptions isVerified) 회원만 결제한다(약관 'ARCTIC 서버 인증 회원만'). 관리자는 통과.
+    // 📌 서버 인증(디스코드 인증 역할 — lib/authOptions isVerified) 회원만 결제한다(약관 'ARCTIC 서버 인증 회원만'). 관리자는 통과(「유저 화면으로 보기」 중이면 유저처럼 — lib/adminViewServer).
     //    화면은 인증 전 유저를 /verify 로 보내지만(app/ClientLayout) API 를 직접 부르면 그대로 사졌다 — 바로 구매와 같은 검사
-    if (session.user.isVerified !== true && !isAdminName(session.user.name)) {
+    if (session.user.isVerified !== true && !(await isAdminViewer(session))) {
       return NextResponse.json({ success: false, message: "서버 인증 후 이용할 수 있습니다." }, { status: 403 });
     }
     // 📌 점검 중에는 결제를 서버에서 막는다 (관리자는 통과)

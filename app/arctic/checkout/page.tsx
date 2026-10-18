@@ -9,14 +9,12 @@ import { salePrice, basePrice, durationLabel, isPointOnly, shownPrice, priceUnit
 import { POINT_RATE } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
 import { getLevelByXp } from "@/lib/leveling";
-import { itemTypeLabel } from "@/lib/items";
 import ArcticFooter from "../ArcticFooter";
 import ArcticDock from "../ArcticDock";
 import CardArt from "../CardArt";
 import { renewBaseOf, expiryLabel, bundleViewOf } from "../owned";
 import { isBundle } from "@/lib/bundle";
-import { splitItemName } from "@/lib/itemName";
-import { typeLabelOf } from "../ProductCard";
+import { categoryLabelOf, itemShortName } from "../ProductCard";
 import { isUnitSale, qtyCapOf } from "@/lib/unitSale";
 import { CART_KEY, CHECKOUT_KEY, readShopList, readShopRaw, writeShopList, removeShopKey, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
@@ -390,7 +388,7 @@ export default function CheckoutPage() {
                 {rows.map((r) => {
                   // 📌 세트 한 줄 — 세트 이름 · 값(가진 구성만큼 깎은 값, 정가 취소선) + 아래에 구성 아이템(가진 것은 "보유 중 · 빠짐")
                   if (setRow && setView && r === setRow) {
-                    const info = new Map<string, { name?: string }>((Array.isArray(r.item.bundleItems) ? r.item.bundleItems : []).map((c: { itemId: string; name?: string }) => [String(c.itemId), c]));
+                    const info = new Map<string, { name?: string; categoryLabel?: string; shortName?: string }>((Array.isArray(r.item.bundleItems) ? r.item.bundleItems : []).map((c: { itemId: string; name?: string; categoryLabel?: string; shortName?: string }) => [String(c.itemId), c]));
                     const list = Number(setView.quote.list) || 0;
                     return (
                       <div key={r.itemId} className="px-6 py-4">
@@ -399,8 +397,8 @@ export default function CheckoutPage() {
                             <CardArt it={r.item} iconSize={28} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-bold text-[#131313] truncate">{r.item.name}</h3>
-                            <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5 truncate">{typeLabelOf(r.item.type)} · 아이템 {setView.comps.length}개</p>
+                            <h3 className="text-sm font-bold text-[#131313] truncate">{itemShortName(r.item)}</h3>
+                            <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5 truncate">{categoryLabelOf(r.item)} · 아이템 {setView.comps.length}개</p>
                           </div>
                           <div className="relative text-right shrink-0">
                             <div className="text-sm font-black tabular-nums">{shownPrice(r.item, setPrice).toLocaleString()} {priceUnit(r.item)}</div>
@@ -412,12 +410,15 @@ export default function CheckoutPage() {
                         <ul className="mt-4 pl-[72px] space-y-1.5">
                           {setView.comps.map((c, i) => {
                             const st = String(setView.states[i]?.state || "new");
+                            // 📌 구성 분류 · 짧은 이름 — API bundleItems[].categoryLabel · shortName(2026-10-17 — 옛 행은 이름 머리말 → 유형 이름). 아이템이 없는 구성은 분류 없이
+                            const part = info.get(c.itemId);
+                            const kind = part?.name ? categoryLabelOf(part) : "";
                             return (
                               <li key={c.itemId} className="flex items-baseline justify-between gap-3 text-[12px]">
                                 {/* 분류 · 짧은 이름 — 이름이 같은 구성도 갈리게(상세 구성 칸과 같은 문법) */}
                                 <span className={`min-w-0 truncate font-bold ${st === "owned" ? "text-[#a3a3a3]" : "text-[#5a5a5a]"}`}>
-                                  {splitItemName(info.get(c.itemId)?.name).kind && <span className="text-[#a3a3a3]">{splitItemName(info.get(c.itemId)?.name).kind} · </span>}
-                                  {splitItemName(info.get(c.itemId)?.name).short || "아이템"}{c.qty > 1 ? ` ×${c.qty}` : ""}
+                                  {kind && <span className="text-[#a3a3a3]">{kind} · </span>}
+                                  {(part ? itemShortName(part) : "") || "아이템"}{c.qty > 1 ? ` ×${c.qty}` : ""}
                                 </span>
                                 <span className={`shrink-0 text-[11px] font-bold tabular-nums ${st === "renew" || st === "upgrade" ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>
                                   {st === "owned" ? "보유 중 · 빠짐" : st === "renew" ? `기간제 보유 · ${durationLabel(c.days)} 연장` : st === "upgrade" ? "기간제 보유 · 무제한으로" : durationLabel(c.days)}
@@ -439,11 +440,11 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
-                        {splitItemName(r.item.name).short}
+                        {itemShortName(r.item)}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${base != null ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{base != null ? " 연장" : ""}</span>}
                       </h3>
                       <p className="text-[10px] font-bold text-[#8a8a8a] mt-0.5 truncate">
-                        {splitItemName(r.item.name).kind || itemTypeLabel(r.item.type)} · 수량 {r.qty}{base != null && <> · <span className="tabular-nums">{expiryLabel(base + (r.days ?? 0) * 86400000)}까지</span></>}
+                        {categoryLabelOf(r.item)} · 수량 {r.qty}{base != null && <> · <span className="tabular-nums">{expiryLabel(base + (r.days ?? 0) * 86400000)}까지</span></>}
                       </p>
                     </div>
                     <div className="relative text-right shrink-0">

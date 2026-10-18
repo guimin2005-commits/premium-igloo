@@ -3,33 +3,20 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import Dropdown from "../components/Dropdown";
-import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
-import IconPicker from "../components/IconPicker";
-import BackdropPicker from "../components/BackdropPicker";
 import { salePrice, isTimed, durationOptions, durationLabel, cardPick, cardFrom, discountPctOf, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
 import { POINT_RATE } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
-import { itemEffectLines } from "@/lib/itemEffects";
-import { itemTypeLabel, itemTypeColor, ITEM_TYPE_OPTIONS } from "@/lib/items";
-import {
-  EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
-  buildDurations, pickType as pickProductType, applyItem, unlinkItem, customSnapOf, type CustomSnap, toPayload,
-  setPointOnly, formUnit, formSalePrice, priceCalc, durationsCalc,
-  SALE_MODES, saleModeOf, setSaleMode, saleModeError, basePriceOf, unitSaleOk, pickRole,
-} from "./productForm";
-import { MAX_PER_ORDER, clampPerOrder } from "@/lib/unitSale";
+import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import ArcticFooter from "./ArcticFooter";
 import ArcticDock from "./ArcticDock";
 import ArcticHome from "./ArcticHome";
 import BannerSlider, { useBanners } from "./BannerSlider";
-import { BUILTIN_BANNER_THEME, DEFAULT_THEMES, isThemeKey, onThemes, themeNameOf, themePickOptions } from "@/lib/shopThemes";
+import { BUILTIN_BANNER_THEME, DEFAULT_THEMES, isThemeKey, onThemes, themeNameOf } from "@/lib/shopThemes";
 import { SeasonHead, SeasonPicks, seasonPicks } from "./ArcticSeason";
 import CardArt from "./CardArt";
-import ProductCard, { typeLabelOf } from "./ProductCard";
+import ProductCard, { typeLabelOf, categoryLabelOf, itemShortName } from "./ProductCard";
 import { isBundle } from "@/lib/bundle";
-import { splitItemName } from "@/lib/itemName";
 import ShopFilterBar from "./ShopFilterBar";
 import { priceBuckets, inBucket } from "./priceBuckets";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -39,9 +26,8 @@ import { InventoryPopup } from "../components/Inventory";
 import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
 import { CART_KEY, WISH_KEY, readShopList, writeShopList, useShopUid } from "./shopStore";
 import { onCartChange } from "./cardCart";
-import { saleEnded, saleUntilLabel } from "@/lib/saleWindow";
-
-import { ADMIN_USERS } from "@/lib/admins";
+import { saleEnded } from "@/lib/saleWindow";
+import { useAdminView } from "../components/AdminView";
 
 // 📌 ARCTIC 본문 — /shop 라우트와 SYSTEM:LEVEL 의 ARCTIC 탭이 이 한 벌을 함께 쓴다.
 //    공개 전에는 관리자만 볼 수 있다 (레벨 대시보드 → 기본 정책 → ARCTIC 공개)
@@ -89,6 +75,8 @@ const HW_BANNERS = [
   { _id: "builtin-halloween-cat", imageUrl: "/banners/halloween-cat-pc.png", mobileImageUrl: "/banners/halloween-cat-mobile.png", title: "", subtitle: "", link: "" },
   // 세 번째(2026-10-11 운영자 "arctic 배너로 · 추가") — 할로윈 꾸미기 세트 최소 65% 할인 · ~ 11. 5. 23:59 + 부채꼴 카드(디스코드 홍보 이미지 윗부분)
   { _id: "builtin-halloween-set", imageUrl: "/banners/halloween-set-pc.png", mobileImageUrl: "/banners/halloween-set-mobile.png", title: "", subtitle: "", link: "" },
+  // 네 번째(2026-10-14 운영자 "이대로 ㄱㄱ") — 핫타임 「유령 펭귄의 초대」 · XP 최대 2배 · 이벤트 패스 · 10. 19. ~ 10. 31.(10/18 시작일 10. 16. → 10. 19. · scripts/gen-halloween-banner.mjs, BANNER=ghost)
+  { _id: "builtin-ghost-invite", imageUrl: "/banners/ghost-invite-pc.png", mobileImageUrl: "/banners/ghost-invite-mobile.png", title: "", subtitle: "", link: "" },
 ];
 // 📌 기본 배너 중 아직 「등록」 안 된 것(같은 그림인 배너가 없는 것)은 등록된 켜진 배너 뒤에 같이 돈다 — 관리자는 숨김 배너가 맨 뒤에(점으로 넘겨 본다).
 //    예전엔 켜진 배너가 하나라도 있으면 기본 배너를 통째로 뺐다 → HALLOWEEN 을 등록해 둔 탓에 검은 고양이 배너가 안 보였다(2026-10-11 "적용한 거 맞아?").
@@ -100,7 +88,7 @@ const withHwDefaults = (list: any[]) => {
 };
 
 // 상품 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천 (역할·권한은 자동 지급, 기프트카드는 운영진 발송)
-//    label — 이름 머리말에서 뗀 분류(「카드 스킨」 …, lib/itemName). 없으면 유형 이름
+//    label — 분류(ProductCard categoryLabelOf — API categoryLabel). 없으면 유형 이름
 function TypeBadge({ type, label = "", className = "" }: { type: string; label?: string; className?: string }) {
   return (
     <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
@@ -113,57 +101,6 @@ function TypeBadge({ type, label = "", className = "" }: { type: string; label?:
 
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "지급 완료", cancelled: "취소됨" };
 
-// 📌 관리자 상품 폼 묶음 — 기간·시즌 항목이 붙으면서 폼이 화면보다 길어졌다.
-//    접힌 상태에서도 값을 알 수 있게 한 줄 요약을 오른쪽에 남긴다.
-//    (컴포넌트를 본문 안에서 정의하면 입력할 때마다 새로 마운트돼 포커스를 잃는다 — 모듈 최상단에 둔다)
-function FormGroup({ title, summary, open, onToggle, children }: {
-  title: string;
-  summary?: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b border-black/[0.08]">
-      <button type="button" onClick={onToggle} className="w-full flex items-center justify-between gap-3 py-3.5 text-left">
-        <span className="text-[13px] font-black text-[#131313] shrink-0">{title}</span>
-        <span className="flex items-center gap-2 min-w-0">
-          {/* min-w-0 이 없으면 flex 안에서 줄어들지 못해 truncate 가 안 걸린다 */}
-          {!open && summary && <span className="min-w-0 text-[11px] text-[#8a8a8a] truncate">{summary}</span>}
-          <svg className={`w-3.5 h-3.5 shrink-0 text-[#a3a3a3] transition-transform duration-300 ${open ? "rotate-180" : ""}`}
-            fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-          </svg>
-        </span>
-      </button>
-      {open && (
-        <div className="pb-5 space-y-4" style={{ animation: "menuDrop 0.22s cubic-bezier(0.16,1,0.3,1)" }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 관리자 폼 입력칸 공통 모양
-const F_LABEL = "block text-xs font-bold text-[#5a5a5a] mb-2";
-const F_INPUT = "w-full bg-white border border-[#ededed] rounded-lg px-4 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
-const F_INPUT_SM = "w-full bg-white border border-[#ededed] rounded-lg px-3 py-3 text-sm text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]";
-const F_NOTE = "text-[10px] text-[#8a8a8a] mt-1.5";
-
-// 판매 상태 · 기간제 · 시즌 동작이 같은 모양을 쓴다
-function FormToggle({ on, onClick, onLabel, offLabel, disabled = false }: { on: boolean; onClick: () => void; onLabel: string; offLabel: string; disabled?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled}
-      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors disabled:opacity-60 disabled:cursor-default ${on ? "border-[#e91e3f] bg-[#e91e3f]/[0.06]" : "border-[#ededed] bg-white"}`}>
-      <span className={on ? "font-bold text-[#e91e3f]" : "text-[#8a8a8a]"}>{on ? onLabel : offLabel}</span>
-      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${on ? "bg-[#e91e3f]" : "bg-[#d4d4d4]"}`}>
-        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`}></span>
-      </span>
-    </button>
-  );
-}
-
 export default function ArcticShopBody({
   embedded = false,
   topSlot = null,
@@ -173,13 +110,11 @@ export default function ArcticShopBody({
    *  어느 탭이든 카테고리가 같은 높이에 오게 한다 */
   topSlot?: React.ReactNode;
 }) {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const isLoggedIn = status === "authenticated";
-  const realAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
-  // 📌 관리 버튼이 화면 곳곳에 박혀 있어 일반 유저가 보는 모습을 확인할 수 없었다.
-  //    미리보기를 켜면 관리 UI 만 숨긴다 — 접근 권한(비공개 상점 열람)은 그대로 둔다.
-  const [userPreview, setUserPreview] = useState(false);
-  const isAdmin = realAdmin && !userPreview;
+  // 📌 관리자로 보는 중(useAdminView().admin) — 계정 메뉴 「유저 화면으로 보기」를 켜면 false(2026-10-17 — 이 화면만의 「유저 화면」 미리보기 토글은 걷었다).
+  //    관리 줄 · 카드 「관리에서 수정 · 삭제」 · 숨김 딱지 · ?all=1 숨김 상품 · 비공개 상점 열람이 모두 이 값 하나를 따른다(서버 lib/shopAccess 도 같은 쿠키)
+  const { admin: isAdmin } = useAdminView();
 
   const [shopPublic, setShopPublic] = useState<boolean | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -327,13 +262,13 @@ export default function ArcticShopBody({
     // 이미 담겨 있으면 다시 눌러 뺀다 (상품은 1인 1개라 수량 개념이 없다)
     if (cart.some((c) => c.itemId === item._id)) {
       setCart((prev) => prev.filter((c) => c.itemId !== item._id));
-      setCartToast(`${item.name} 상품을 장바구니에서 삭제했습니다`);
+      setCartToast(`${itemShortName(item)} 상품을 장바구니에서 삭제했습니다`);
       setTimeout(() => setCartToast(""), 1800);
       return;
     }
     const days = daysFor(item);
     setCart((prev) => [...prev, { itemId: item._id, qty: 1, days }]);
-    setCartToast(`${item.name}${days > 0 ? ` (${durationLabel(days)})` : ""} 상품을 장바구니에 담았습니다`);
+    setCartToast(`${itemShortName(item)}${days > 0 ? ` (${durationLabel(days)})` : ""} 상품을 장바구니에 담았습니다`);
     setTimeout(() => setCartToast(""), 1800);
   };
 
@@ -388,7 +323,7 @@ export default function ArcticShopBody({
     // 📌 2026-10-04 로그인 전에는 상품을 보기만 — 찜 · 담기 · 구매는 로그인 창(ARCTIC · 구매)
     if (!isLoggedIn) return openLogin({ context: LOGIN_CTX.arcticBuy });
     setWish((prev) => (prev.includes(item._id) ? prev.filter((x) => x !== item._id) : [...prev, item._id]));
-    setCartToast(wish.includes(item._id) ? `${item.name} 상품의 찜을 해제했습니다` : `${item.name} 상품을 찜했습니다`);
+    setCartToast(wish.includes(item._id) ? `${itemShortName(item)} 상품의 찜을 해제했습니다` : `${itemShortName(item)} 상품을 찜했습니다`);
     setTimeout(() => setCartToast(""), 1600);
   };
 
@@ -408,7 +343,7 @@ export default function ArcticShopBody({
   useEffect(() => {
     if (status === "loading") return;
     let live = true;
-    fetch(`/api/shop/themes${realAdmin ? "?all=1" : ""}`, { cache: "no-store" })
+    fetch(`/api/shop/themes${isAdmin ? "?all=1" : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (!live || !d?.success || !Array.isArray(d.data)) return;
@@ -418,7 +353,7 @@ export default function ArcticShopBody({
       .catch(() => {})
       .finally(() => { if (live) setThemesReady(true); });
     return () => { live = false; };
-  }, [status, realAdmin]);
+  }, [status, isAdmin]);
   // 켜진 테마(차례대로 · 최대 2개 — lib/shopThemes THEME_ON_MAX) — 배너 자리 두 벌이 이 차례를 따른다
   const onList = useMemo(() => onThemes(themes), [themes]);
   // 그 테마 탭이 보이는가 — 손님은 그 테마 상품이 하나라도 있을 때(관리자는 숨김 상품까지 — 목록에 실린 상품 기준), 관리자는 비어 있어도
@@ -438,83 +373,8 @@ export default function ArcticShopBody({
   // 할로윈만 — 켜진 배너가 없으면 기본 배너 두 장(useBanners withDefaults — 자동 넘김도 두 장을 센다)
   const themeBannerList = themeBanner?.banners || [];
 
-  // 관리자 — 상점 안에서 바로 상품 추가·수정 (폼 상태·기간·유형·아이템 적용 규칙은 ./productForm 공용)
-  const [editForm, setEditForm] = useState<any>(null);
-  // 📌 「등록된 아이템」 고르는 중(저절로 고르지 않는다) · 고르기 직전의 직접 설정 값 — 관리 화면 상품 폼과 같다(productForm customSnapOf · unlinkItem)
-  const [efLinkPick, setEfLinkPick] = useState<string | null>(null);
-  const efSnap = useRef<{ key: string; snap: CustomSnap } | null>(null);
-  const [guildRoles, setGuildRoles] = useState<any[]>([]);
-  // 등록된 아이템(/api/admin/items) — 상품 폼에서 "등록된 아이템" 으로 고른다
-  const [regItems, setRegItems] = useState<any[]>([]);
-  const [isSavingItem, setIsSavingItem] = useState(false);
-  const [editError, setEditError] = useState("");
-  // 수정 폼 안내 토스트 — 누른 자리와 먼 오류 줄 대신 화면 위에 잠깐(상점 토스트와 같은 모양, 느낌표)
-  const [editNote, setEditNote] = useState("");
-  const noteEdit = (t: string) => { setEditNote(t); setTimeout(() => setEditNote((cur) => (cur === t ? "" : cur)), 1800); };
-  const [openGroups, setOpenGroups] = useState({ basic: true, price: false, stock: false, season: false });
-  const toggleGroup = (k: "basic" | "price" | "stock" | "season") => setOpenGroups((p) => ({ ...p, [k]: !p[k] }));
-
-  const pickType = (v: string) => setEditForm((f: any) => pickProductType(f, v));
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    fetch("/api/discord-roles", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setGuildRoles(Array.isArray(d?.data) ? d.data : []))
-      .catch(() => {});
-    fetch("/api/admin/items", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setRegItems(Array.isArray(d?.data) ? d.data : []))
-      .catch(() => {});
-  }, [isAdmin]);
-
-  const openEdit = (it?: any) => {
-    // 세트는 인라인 폼을 열지 않는다(구성 편집이 없다) — 관리자 상품 관리로
-    if (it && isBundle(it)) return router.push(`/admin/shop?edit=${it._id}`);
-    setEditError("");
-    setOpenGroups({ basic: true, price: false, stock: false, season: false });
-    // 폼을 열 때마다 아이템 고르는 중 · 잡아 둔 직접 설정 값을 푼다(저장 · 취소 · 바깥 눌러 닫기 뒤 다음 폼에 옛 상태가 남지 않게)
-    setEfLinkPick(null);
-    efSnap.current = null;
-    setEditForm(it ? formFromShopItem(it) : { ...EMPTY_PRODUCT_FORM });
-  };
-
-  const saveItem = async () => {
-    if (!editForm || isSavingItem) return;
-    // 📌 판매 방식마다 꼭 필요한 가격 — 관리자 상품 관리와 같은 문구(productForm saleModeError)
-    // 「등록된 아이템」을 골랐는데 아이템을 아직 안 골랐다 — 직접 설정 상품으로 저장되지 않게
-    if (efPicking && !efLinked) { setEditError("아이템을 선택해 주세요."); return; }
-    const bad = saleModeError(editForm);
-    if (bad) {
-      setEditError(bad);
-      return;
-    }
-    setIsSavingItem(true);
-    setEditError("");
-    try {
-      const role = guildRoles.find((r) => r.id === editForm.roleId);
-      const res = await fetch("/api/shop/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toPayload(editForm, role?.name || "")),
-      });
-      const d = await res.json();
-      if (res.ok && d.success) {
-        setItems((prev) => {
-          const exists = prev.some((x) => x._id === d.data._id);
-          return exists ? prev.map((x) => (x._id === d.data._id ? d.data : x)) : [...prev, d.data];
-        });
-        setEditForm(null);
-      } else {
-        setEditError(d.message || "저장에 실패했습니다.");
-      }
-    } catch {
-      setEditError("서버와 통신 중 오류가 발생했습니다.");
-    } finally {
-      setIsSavingItem(false);
-    }
-  };
-
+  // 📌 2026-10-17 상점 안 상품 인라인 편집 폼을 걷었다 — 상품을 고치는 곳은 관리 › 상점 관리 하나(카드 「관리에서 수정」 → /admin/shop?edit=<id>, 「상품 추가」 → 새 상품 폼).
+  //    규칙(app/arctic/productForm)도 그 한 곳에서만 지킨다
   const deleteItem = async () => {
     if (!deleteTarget) return;
     const res = await fetch(`/api/shop/items?id=${deleteTarget._id}`, { method: "DELETE" }).catch(() => null);
@@ -555,13 +415,13 @@ export default function ArcticShopBody({
       .then((d) => {
         const list = Array.isArray(d?.data) ? d.data : [];
         setItems(list);
-        // 관리자 '유저 화면' 미리보기는 숨김 상품이 빠진 목록이라 정리 기준으로 쓰지 않는다 (숨김 상품을 지우지 않게)
+        // 📌 유저 화면으로 보는 중이면 유저와 같은 목록이라 정리도 유저처럼 돈다(숨김 · 판매 종료 상품이 빠지고 토스트 한 번)
         //    📌 세트(lib/bundle.js)는 장바구니에 둘 수 없다 — 기준에서 빼 두면 아래 정리가 담겨 있던 세트를 뺀다
-        if (d?.success && Array.isArray(d?.data) && !userPreview) setCartValidIds(new Set(list.filter((i: { type?: string }) => !isBundle(i)).map((i: { _id: string }) => String(i._id))));
+        if (d?.success && Array.isArray(d?.data)) setCartValidIds(new Set(list.filter((i: { type?: string }) => !isBundle(i)).map((i: { _id: string }) => String(i._id))));
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
-  }, [status, isAdmin, userPreview, itemsReload]);
+  }, [status, isAdmin, itemsReload]);
 
   // 📌 목록에 없는(삭제·숨김) 상품 · 같은 상품 중복은 장바구니에서 뺀다 — 안 그러면 개수 배지에 유령 "1" 이 남는다.
   //    목록을 제대로 받았을 때만 정리한다 (실패로 장바구니를 날리지 않게). 저장은 위 저장 effect 가 한다.
@@ -600,11 +460,12 @@ export default function ArcticShopBody({
       // 유형 탭이 아닌 값은 이벤트 테마 키 — 그 테마 상품만(지운 테마 키를 가리키는 상품은 어느 테마 탭에도 없다)
       if (typeFilter !== "all" && (typeFilter === "timed" ? !isTimed(it) : typeFilter === "season" ? !isPointOnly(it) : TYPE_VALUES.has(typeFilter) ? it.type !== typeFilter : it.theme !== typeFilter)) return false;
       if (wishOnly && !wish.includes(it._id)) return false;
-      // 세트는 "세트"와 구성 아이템 이름으로도 찾는다
-      const setText = isBundle(it) ? (Array.isArray(it.bundleItems) ? it.bundleItems.map((c: { name?: string }) => ` ${c?.name || ""}`).join("") : "") : "";
+      // 세트는 "세트"와 구성 아이템 이름 · 분류로도 찾는다
+      const setText = isBundle(it) ? (Array.isArray(it.bundleItems) ? it.bundleItems.map((c: { name?: string; categoryLabel?: string }) => ` ${c?.name || ""} ${c?.categoryLabel || ""}`).join("") : "") : "";
       // 테마 상품은 테마 이름으로도 찾는다(받은 목록에 있는 테마만 — 손님은 켜진 테마)
       const themeName = themeNameOf(themes, it.theme);
-      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${themeName ? ` ${themeName}` : ""}${setText}`.toLowerCase().includes(q)) return false;
+      // 📌 분류(categoryLabelOf — 「카드 테두리」 · 직접 정한 분류)로도 찾는다(2026-10-17). 유형 이름(「꾸미기」 …)도 그대로
+      if (q && !`${it.name} ${it.description} ${it.roleName || ""} ${typeLabelOf(it.type)} ${categoryLabelOf(it)}${isTimed(it) ? " 기간제" : ""}${isPointOnly(it) ? " 빙옥 시즌" : ""}${themeName ? ` ${themeName}` : ""}${setText}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [items, typeFilter, wishOnly, wish, submitted, themes]);
@@ -710,7 +571,7 @@ export default function ArcticShopBody({
     }
   };
 
-  // 추천 단어 — 지금 있는 상품의 이름 · 역할 이름 · 유형에서 뽑는다
+  // 추천 단어 — 지금 있는 상품의 이름(짧은 이름) · 역할 이름 · 유형 · 분류에서 뽑는다
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [] as string[];
@@ -718,7 +579,7 @@ export default function ArcticShopBody({
     const push = (v?: string) => { const t = (v || "").trim(); if (t && t.toLowerCase().includes(q) && !out.includes(t)) out.push(t); };
     for (const t of TYPES) if (t.v !== "all") push(t.l);
     for (const t of themeTabs) push(t.l);
-    for (const it of items) { push(it.name); push(it.roleName); }
+    for (const it of items) { push(itemShortName(it)); push(it.roleName); push(categoryLabelOf(it)); }
     return out.slice(0, 7);
   }, [items, query, themeTabs]);
 
@@ -788,9 +649,8 @@ export default function ArcticShopBody({
   if (status === "loading" || shopPublic === null) {
     return <div className={`w-full flex-1 bg-white ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center text-sm text-[#8a8a8a]`}>불러오는 중...</div>;
   }
-  // 접근은 실제 권한으로 판정한다 — 미리보기는 관리 UI 만 숨기는 것이지
-  // 스토어를 못 보게 하는 게 아니다 (공개 전에도 유저 화면을 확인할 수 있어야 한다)
-  if (!shopPublic && !realAdmin) {
+  // 📌 공개 전 상점은 관리자로 보는 중일 때만 연다 — 유저 화면이면 유저처럼 준비 중 화면(서버 getShopAccess 도 같은 판정)
+  if (!shopPublic && !isAdmin) {
     return (
       <div className={`w-full flex-1 bg-white text-[#131313] ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center px-6`}>
         {/* break-keep을 주지 않으면 한국어가 단어 중간에서 잘려 내려간다 */}
@@ -820,44 +680,14 @@ export default function ArcticShopBody({
         ) : null}>
         {isAdmin && (
           <div className="mt-2 flex gap-2 text-[11px] font-bold">
-            {/* 📌 세트(lib/bundle.js)는 이 인라인 폼이 구성을 모른다 — 관리자 상품 관리(?edit=)에서 고친다 */}
-            {isBundle(it) ? (
-              <Link href={`/admin/shop?edit=${it._id}`} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">관리에서 수정</Link>
-            ) : (
-              <button onClick={() => openEdit(it)} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">수정</button>
-            )}
+            {/* 📌 상품 편집은 관리 화면 하나(2026-10-17 — 상점 안 인라인 폼을 걷었다). 그 상품의 편집기가 열린다 */}
+            <Link href={`/admin/shop?edit=${it._id}`} className="text-[#8a8a8a] hover:text-[#131313] transition-colors">관리에서 수정</Link>
             <button onClick={() => setDeleteTarget(it)} className="text-[#e91e3f] hover:text-[#d01634] transition-colors">삭제</button>
           </div>
         )}
       </ProductCard>
     );
   };
-
-  // 접힌 묶음에서도 값을 알 수 있게 만드는 한 줄 요약 (editForm 이 없으면 폼도 안 그린다)
-  // 할인 종료 시각이 이미 지났으면 저장해도 할인이 붙지 않는다 — 요약 · 판매가 미리보기도 할인 없이
-  const efUntilPast = !!editForm?.discountUntil && new Date(`${editForm.discountUntil}:00+09:00`).getTime() <= Date.now();
-  const efDiscount = efUntilPast ? 0 : Math.min(100, Math.max(0, Number(editForm?.discountPct) || 0));
-  // 📌 판매 종료 시각(KST 입력값) — 지났으면 저장해도 상점에서 빠진다(lib/saleWindow). 요약 · 미리보기 딱지가 같이 본다
-  const efSaleAt = editForm?.saleUntil ? `${editForm.saleUntil}:00+09:00` : "";
-  const efSaleEnded = saleEnded({ saleUntil: efSaleAt });
-  const efSaleLabel = saleUntilLabel({ saleUntil: efSaleAt });
-  // 입력칸 단위 그대로(빙옥 전용이면 빙옥)
-  //    기간제는 정가 칸이 없다 — 저장될 기준가(무제한, 없으면 가장 긴 기간)로 요약 · 미리보기를 그린다
-  const efBase = editForm ? basePriceOf(editForm) : "";
-  const efSale = formSalePrice(editForm, efBase, efDiscount);
-  const efUnit = formUnit(editForm);
-  const efDurations = buildDurations(editForm);
-  const efMode = saleModeOf(editForm);
-  const efRoleName = guildRoles.find((r) => r.id === editForm?.roleId)?.name || editForm?.roleName || "";
-  const efLinked = isLinked(editForm);
-  const efKey = editForm?.id || "new";
-  const efPicking = efLinked || efLinkPick === efKey;
-  const efBasicSummary = [efLinked ? "등록된 아이템" : "", editForm?.name || "이름 없음", itemTypeLabel(editForm?.type), efRoleName].filter(Boolean).join(" · ");
-  const efPriceSummary = Number(efBase) > 0
-    ? `${efSale.toLocaleString()} ${efUnit}${efDiscount > 0 ? ` (-${efDiscount}%)` : ""}${editForm?.pointOnly ? " · 빙옥 전용" : ""}${efMode === "both" ? ` · 기간제 + 무제한 ${efDurations.length}종` : efMode === "timed" ? ` · 기간제 ${efDurations.length}종` : ""}${editForm?.unitSale ? " · 1개 단위" : ""}${efSaleEnded ? " · 판매 종료" : efSaleLabel ? ` · ~${efSaleLabel}` : ""}`
-    : "가격 미입력";
-  const efStockSummary = `${editForm?.stock === "" ? "재고 무제한" : `재고 ${editForm?.stock}`}${editForm?.unitSale ? ` · 1회 최대 ${clampPerOrder(editForm?.maxPerOrder)}` : ""} · 추천 ${editForm?.sortOrder || 0} · ${editForm?.active ? (efSaleEnded ? "판매 종료" : "판매 중") : "숨김"}${editForm?.theme ? ` · ${themeNameOf(themes, editForm.theme) || "지운 테마"}` : ""}`;
-  const efSeasonSummary = editForm?.detachOnSeason ? "시즌 바뀌면 디스코드 표기 뗌" : "디스코드 역할 계속 유지";
 
   // ── 스토어 줄 부품 (PC 두 줄 · 모바일 한 줄이 같이 쓴다) ──
   const tabOn = (v: string) => (v === "home" ? showing === "home" : showing === "products" && typeFilter === v);
@@ -1052,27 +882,14 @@ export default function ArcticShopBody({
           items={items} isLoading={isLoading} isAdmin={isAdmin} isLoggedIn={isLoggedIn}
           myXp={myXp} myPoint={myPoint} myLevel={myLevel} ownedItemIds={ownedItemIds}
           banners={homeBanner.banners} bannersLoaded={homeBanner.loaded} bannerIdx={homeBanner.idx} setBannerIdx={homeBanner.setIdx} bannerRatio={homeBanner.ratio} fitRatio={homeBanner.fitRatio}
-          renderCard={renderCard} goProducts={goProducts} openEdit={() => openEdit()}
+          renderCard={renderCard} goProducts={goProducts} openEdit={() => router.push("/admin/shop?tab=products&new=1")}
           adminTools={
-            <>
-              {realAdmin && (
-                <button onClick={() => setUserPreview((v) => !v)}
-                  className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-[12px] font-bold border transition-colors ${
-                    userPreview ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:text-[#131313] hover:border-[#a3a3a3]"
-                  }`}>
-                  <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" strokeLinejoin="round" />
-                    <circle cx="10" cy="10" r="2.6" />
-                  </svg>
-                  {userPreview ? "미리보기 중" : "유저 화면"}
-                </button>
-              )}
-              {!shopPublic && isAdmin && (
-                <Link href="/admin/bot?tab=policy&sec=mute" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#d01634] underline underline-offset-4 transition-colors">
-                  비공개 · 공개로 바꾸기
-                </Link>
-              )}
-            </>
+            // 📌 「유저 화면」 미리보기 토글은 계정 메뉴 「유저 화면으로 보기」로 옮겼다(사이트 전체 · 새로고침해도 유지)
+            !shopPublic && isAdmin ? (
+              <Link href="/admin/shop?open=settings" className="text-[12px] font-bold text-[#e91e3f] hover:text-[#d01634] underline underline-offset-4 transition-colors">
+                비공개 · 공개로 바꾸기
+              </Link>
+            ) : null
           }
         />
       )}
@@ -1160,7 +977,7 @@ export default function ArcticShopBody({
 
             <h2 className="text-base font-black text-[#131313] mb-1.5">이미 장바구니에 있는 상품입니다</h2>
             {/* 무엇을 고르는지는 아래 두 버튼이 말한다 — 여기는 어떤 상품인지만 */}
-            <p className="text-[13px] font-bold text-[#131313] mb-6 break-keep">{cartConflict.name}</p>
+            <p className="text-[13px] font-bold text-[#131313] mb-6 break-keep">{itemShortName(cartConflict)}</p>
 
             <div className="space-y-2">
               <Link href="/arctic/cart"
@@ -1228,18 +1045,6 @@ export default function ArcticShopBody({
           </div>
         </div>
       )}
-      {editNote && (
-        <div key={editNote} className="fixed top-20 left-1/2 z-[150] pointer-events-none" style={{ animation: "toastPop 0.42s cubic-bezier(0.16,1,0.3,1)" }}>
-          {/* 문구가 길어 폰 폭을 넘으면 줄을 바꾼다(가로 넘침 없이) */}
-          <div className="-translate-x-1/2 w-max max-w-[calc(100vw-32px)] flex items-center gap-2.5 px-5 py-3 bg-[#131313] text-white rounded-full shadow-[0_14px_36px_rgba(0,0,0,0.32)]">
-            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-            <span className="text-[12px] font-bold break-keep">{editNote}</span>
-          </div>
-        </div>
-      )}
-
       {/* 상점 전용 마이크로 애니메이션 */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes toastPop {
@@ -1296,8 +1101,8 @@ export default function ArcticShopBody({
                     <CardArt it={buyTarget} iconSize={36} />
                   </div>
                   <div className="min-w-0">
-                    <TypeBadge type={buyTarget.type} label={splitItemName(buyTarget.name).kind} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
-                    <h2 className="text-base font-black text-[#131313] truncate">{splitItemName(buyTarget.name).short}</h2>
+                    <TypeBadge type={buyTarget.type} label={categoryLabelOf(buyTarget)} className="inline-block px-2 py-0.5 text-[10px] mb-1.5" />
+                    <h2 className="text-base font-black text-[#131313] truncate">{itemShortName(buyTarget)}</h2>
                     <p className="text-sm font-black text-[#e91e3f] tabular-nums mt-0.5">
                       {priceText(buyTarget, salePrice(buyTarget, buyTarget._days))}
                       {isTimed(buyTarget) && <span className="text-[11px] font-bold text-[#8a8a8a] ml-1.5">/ {durationLabel(buyTarget._days)}</span>}
@@ -1405,376 +1210,8 @@ export default function ArcticShopBody({
         </div>
       )}
 
-      {/* ── 상품 추가·수정 (관리자, 상점 내 인라인) ── */}
-      {editForm && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setEditForm(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[88vh] overflow-hidden shadow-2xl border border-[#ededed] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-[#ededed] flex items-center justify-between shrink-0">
-              <h2 className="text-base font-black text-[#131313]">{editForm.id ? "상품 수정" : "상품 추가"}</h2>
-              <button onClick={() => setEditForm(null)} className="p-1.5 text-[#8a8a8a] hover:text-[#131313] transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
-              </button>
-            </div>
-
-            <div className="overflow-y-auto grid grid-cols-1 md:grid-cols-2">
-              {/* 좌 — 입력 폼 */}
-              <div className="p-6 md:border-r border-[#ededed]">
-                <div className="border-t border-black/[0.08]">
-
-                  {/* ── 기본 정보 ── */}
-                  <FormGroup title="기본 정보" summary={efBasicSummary} open={openGroups.basic} onToggle={() => toggleGroup("basic")}>
-                    {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다 */}
-                    <div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {SOURCE_OPTIONS.map((o) => {
-                          const on = (efPicking ? "item" : sourceOf(editForm)) === o.v;
-                          return (
-                            <button key={o.v} type="button"
-                              onClick={() => {
-                                if (on) return; // 이미 그 상태
-                                if (o.v === "custom") {
-                                  setEfLinkPick(null);
-                                  const sn = efSnap.current;
-                                  if (efLinked) setEditForm(unlinkItem(editForm, sn && sn.key === efKey ? sn.snap : null));
-                                  efSnap.current = null;
-                                  return;
-                                }
-                                // 아이템은 저절로 고르지 않는다 — 고르기 칸만 연다(이름 · 설명이 미리 채워지지 않게)
-                                if (regItems.length) setEfLinkPick(efKey);
-                                else setEditError("등록된 아이템이 없습니다. 아이템 등록에서 먼저 만들어 주세요.");
-                              }}
-                              className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-[#131313] text-white border-[#131313]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"}`}>
-                              {o.l}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {efPicking && (
-                        <div className="mt-3">
-                          <Dropdown
-                            theme="light"
-                            value={editForm.itemId}
-                            onChange={(v) => {
-                              const it = regItems.find((x) => x._id === v);
-                              if (!it) return;
-                              if (!efLinked && efSnap.current?.key !== efKey) efSnap.current = { key: efKey, snap: customSnapOf(editForm) };
-                              setEditForm(applyItem(editForm, it));
-                            }}
-                            placeholder="아이템을 선택하세요"
-                            options={regItems.map((x) => ({
-                              value: x._id, label: x.name, hint: (() => { const ls = itemEffectLines(x); return ls.length ? `${itemTypeLabel(x.type)} · ${ls[0]}${ls.length > 1 ? ` 외 ${ls.length - 1}` : ""}` : itemTypeLabel(x.type); })(),
-                              icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
-                            }))}
-                          />
-                        {/* 📌 고른 아이템의 효과 — 상품을 만들 때 무엇을 파는지 바로 보이게(인벤토리 · 상세와 같은 문장) */}
-                        {(() => {
-                          const itB = regItems.find((x) => x._id === editForm.itemId);
-                          if (!itB) return null;
-                          const lines = itemEffectLines(itB);
-                          return (
-                            <div className="mt-2 rounded-lg bg-[#f7f7f7] px-3 py-2.5">
-                              <p className="text-[11px] font-bold text-[#8a8a8a] mb-1">효과</p>
-                              {lines.length ? (
-                                <ul className="space-y-0.5">
-                                  {lines.map((l, i) => <li key={i} className="text-[12px] font-bold text-[#131313] leading-relaxed break-keep">{l}</li>)}
-                                </ul>
-                              ) : (
-                                <p className="text-[12px] text-[#a3a3a3]">효과 없음</p>
-                              )}
-                            </div>
-                          );
-                        })()}
-                          <p className={F_NOTE}>
-                            <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className={F_LABEL}>상품명 <span className="text-[#d01634]">*</span></label>
-                      <input type="text" value={editForm.name} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                        placeholder="예: [XP] Boost+" className={`${F_INPUT} disabled:bg-[#f2f2f2] disabled:text-[#8a8a8a]`} />
-                    </div>
-
-                    <div>
-                      <label className={F_LABEL}>상품 유형 <span className="text-[#d01634]">*</span></label>
-                      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                        {ITEM_TYPE_OPTIONS.map((o) => (
-                          <button key={o.v} type="button" disabled={efLinked} onClick={() => pickType(o.v)}
-                            className={`py-2.5 rounded-lg text-[12px] font-bold border transition-colors disabled:cursor-default ${editForm.type === o.v ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#5a5a5a] border-[#ededed] ${efLinked ? "opacity-40" : "hover:border-[#a3a3a3]"}`}`}>
-                            {o.l}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 아이템은 역할이 없어도 된다 — 사이트 인벤토리에만 두는 수집품도 판다 */}
-                    {(editForm.type === "role" || editForm.type === "perk" || editForm.type === "item") && (
-                      <div>
-                        <label className={F_LABEL}>
-                          지급할 역할 {editForm.type === "item" ? <span className="font-normal text-[#8a8a8a]">(선택)</span> : <span className="text-[#d01634]">*</span>}
-                        </label>
-                        {efLinked ? (
-                          <div className={`${F_INPUT} bg-[#f2f2f2] text-[#8a8a8a]`}>{efRoleName || "역할 없음"}</div>
-                        ) : (
-                          <Dropdown
-                            theme="light"
-                            value={editForm.roleId}
-                            onChange={(v) => setEditForm(pickRole(editForm, v))}
-                            placeholder="역할을 선택하세요"
-                            options={guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))}
-                          />
-                        )}
-                        {editForm.type === "item" && !efLinked && <p className={F_NOTE}>비우면 사이트 인벤토리에만 남습니다</p>}
-                      </div>
-                    )}
-
-                    <div>
-                      <label className={F_LABEL}>상품 설명</label>
-                      <textarea rows={2} value={editForm.description} disabled={efLinked} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        placeholder="카드에 표시될 설명" className={`${F_INPUT} resize-none disabled:bg-[#f2f2f2] disabled:text-[#8a8a8a]`} />
-                    </div>
-
-                    {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
-                    <div>
-                      <label className={F_LABEL}>상품 이미지 URL</label>
-                      <input type="text" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
-                        placeholder="https://..." className={F_INPUT} />
-                      <p className={F_NOTE}>비우면 아이템 이미지·아이콘</p>
-                    </div>
-
-                    <div>
-                      <label className={F_LABEL}>아이콘</label>
-                      <IconPicker value={editForm.icon} disabled={efLinked} onChange={(v) => setEditForm({ ...editForm, icon: v })}
-                        color={editForm.color || itemTypeColor(editForm.type)} inputClassName={`${F_INPUT_SM} disabled:bg-[#f2f2f2] disabled:text-[#8a8a8a]`} />
-                      <p className={F_NOTE}>이미지가 없을 때 카드에 크게</p>
-                    </div>
-
-                    <div>
-                      <label className={F_LABEL}>색상</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={editForm.color || itemTypeColor(editForm.type)} disabled={efLinked}
-                          onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-                          className="w-11 h-11 shrink-0 rounded-lg border border-[#ededed] bg-white p-1 disabled:opacity-50" />
-                        <input type="text" value={editForm.color} disabled={efLinked} maxLength={7} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
-                          placeholder={itemTypeColor(editForm.type)} className={`${F_INPUT_SM} disabled:bg-[#f2f2f2] disabled:text-[#8a8a8a]`} />
-                      </div>
-                      <p className={F_NOTE}>비우면 유형 기본색</p>
-                    </div>
-
-                    {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 오른쪽 미리보기에 바로 깔린다 */}
-                    <div>
-                      <label className={F_LABEL}>배경</label>
-                      <BackdropPicker value={editForm.backdrop || ""} onChange={(v) => setEditForm({ ...editForm, backdrop: v })}
-                        color={editForm.color || itemTypeColor(editForm.type)} buttonClassName={F_INPUT_SM} />
-                    </div>
-                  </FormGroup>
-
-                  {/* ── 가격 · 기간 ── */}
-                  <FormGroup title="가격 · 기간" summary={efPriceSummary} open={openGroups.price} onToggle={() => toggleGroup("price")}>
-                    {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×10,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
-                    <div>
-                      <label className={F_LABEL}>결제 수단</label>
-                      <FormToggle on={!!editForm.pointOnly} onClick={() => setEditForm(setPointOnly(editForm, !editForm.pointOnly))}
-                        onLabel="빙옥 전용" offLabel="XP · 빙옥" />
-                    </div>
-                    {/* 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매, lib/unitSale.js). 기프트카드는 기간 · 수량 개념이 없어 아예 감춘다.
-                           네 칸 고정 — 1개 단위를 못 고르는 상품(역할 · 권한 · 역할 있는 아이템)은 흐리게 두고 누르면 알린다. 고른 방식의 가격 칸만 아래에 나온다 */}
-                    {editForm.type !== "physical" && (
-                      <div>
-                        <label className={F_LABEL}>판매 방식</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {SALE_MODES.map((o) => {
-                            const on = efMode === o.v;
-                            const off = o.v === "unit" && !unitSaleOk(editForm);
-                            return (
-                              <button key={o.v} type="button" aria-pressed={on}
-                                onClick={() => {
-                                  // 못 고르는 칸은 누른 자리에서 보이게 토스트로 — 폼 맨 아래 오류 줄은 화면 밖이라 안 보이고, 저장 오류를 지우지도 않는다
-                                  if (off) { noteEdit("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다."); return; }
-                                  setEditForm(setSaleMode(editForm, o.v));
-                                }}
-                                className={`py-2.5 px-1 rounded-lg text-[12px] font-bold whitespace-nowrap border transition-colors ${on ? "bg-[#e91e3f] text-white border-[#e91e3f]" : `bg-white text-[#5a5a5a] border-[#ededed] ${off ? "opacity-40 cursor-default" : "hover:border-[#a3a3a3]"}`}`}>
-                                {o.l}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {!editForm.timed ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={F_LABEL}>정가 ({efUnit}) <span className="text-[#d01634]">*</span></label>
-                          <input type="number" min={1} value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                            placeholder={editForm.pointOnly ? "500" : "500000"} className={F_INPUT_SM} />
-                          {/* 가격 칸 바로 아래 계산 한 줄 — 사용자가 요청한 빙옥 계산 안내 */}
-                          {priceCalc(editForm, editForm.price) && <p className={F_NOTE}>{priceCalc(editForm, editForm.price)}</p>}
-                        </div>
-                        <div>
-                          <label className={F_LABEL}>할인율 (%)</label>
-                          <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
-                            placeholder="0" className={F_INPUT_SM} />
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* 기간제 — 7일 · 30일(+ 무제한). 값을 넣은 기간만 판다 */}
-                        <div className={`grid ${editForm.withInf ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
-                          {([{ k: "price7", l: "7일" }, { k: "price30", l: "30일" }, ...(editForm.withInf ? [{ k: "priceInf", l: "무제한" }] : [])] as { k: "price7" | "price30" | "priceInf"; l: string }[]).map(({ k, l }) => (
-                            <div key={k}>
-                              <label className="block text-[11px] font-bold text-[#5a5a5a] mb-1.5">{l} ({efUnit}){k === "priceInf" && <span className="text-[#d01634]"> *</span>}</label>
-                              {/* 세 칸이 나란히 서므로 좌우 여백·글자를 한 단계 줄인다
-                                  (v4 는 ! 접두 important 를 안 먹어 클래스를 따로 쓴다) */}
-                              <input type="number" min={0} value={editForm[k]}
-                                onChange={(e) => setEditForm({ ...editForm, [k]: e.target.value })}
-                                placeholder="0" className="w-full bg-white border border-[#ededed] rounded-lg px-2.5 py-3 text-[13px] text-[#131313] outline-none focus:border-[#e91e3f] placeholder:text-[#a3a3a3]" />
-                            </div>
-                          ))}
-                        </div>
-                        {/* 칸이 좁아 계산은 한 줄 요약으로 */}
-                        {durationsCalc(editForm) && <p className={F_NOTE}>{durationsCalc(editForm)}</p>}
-                        <p className={F_NOTE}>비운 기간은 팔지 않습니다. 기간이 끝나면 봇이 역할을 회수합니다.</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className={F_LABEL}>할인율 (%)</label>
-                            <input type="number" min={0} max={100} value={editForm.discountPct} onChange={(e) => setEditForm({ ...editForm, discountPct: e.target.value })}
-                              placeholder="0" className={F_INPUT_SM} />
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {efDiscount > 0 && !editForm.timed && Number(editForm.price) > 0 && (
-                      <p className="text-[11px] font-bold text-[#e91e3f]">판매가 {efSale.toLocaleString()} {efUnit}</p>
-                    )}
-                    {/* 📌 할인 종료 — 관리자 상점 관리와 같은 칸. 지난 시각이 남아 있으면 새 할인이 붙지 않으므로 여기서도 보이고 지울 수 있게 */}
-                    {Number(editForm.discountPct) > 0 && (
-                      <div>
-                        <label className={F_LABEL}>할인 종료</label>
-                        <div className="flex items-center gap-2">
-                          <input type="datetime-local" value={editForm.discountUntil || ""} onChange={(e) => setEditForm({ ...editForm, discountUntil: e.target.value })} className={F_INPUT_SM} />
-                          {editForm.discountUntil && (
-                            <button type="button" onClick={() => setEditForm({ ...editForm, discountUntil: "" })} className="shrink-0 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313]">지우기</button>
-                          )}
-                        </div>
-                        <p className={efUntilPast ? "text-[11px] font-bold text-[#d01634]" : F_NOTE}>{efUntilPast ? "이미 지난 시각입니다" : "비우면 계속"}</p>
-                      </div>
-                    )}
-                    {/* 📌 판매 종료 — 관리자 상점 관리와 같은 칸(할인 종료 옆). 그 시각(KST)이 지나면 상점에서 빠지고 구매가 막힌다(lib/saleWindow). 할인과 상관없이 늘 보인다 */}
-                    <div>
-                      <label className={F_LABEL}>판매 종료</label>
-                      <div className="flex items-center gap-2">
-                        <input type="datetime-local" value={editForm.saleUntil || ""} onChange={(e) => setEditForm({ ...editForm, saleUntil: e.target.value })} className={F_INPUT_SM} />
-                        {editForm.saleUntil && (
-                          <button type="button" onClick={() => setEditForm({ ...editForm, saleUntil: "" })} className="shrink-0 text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313]">지우기</button>
-                        )}
-                      </div>
-                      <p className={efSaleEnded ? "text-[11px] font-bold text-[#d01634]" : F_NOTE}>{efSaleEnded ? "이미 지난 시각입니다" : "비우면 계속"}</p>
-                    </div>
-
-                  </FormGroup>
-
-                  {/* ── 재고 · 노출 ── */}
-                  <FormGroup title="재고 · 노출" summary={efStockSummary} open={openGroups.stock} onToggle={() => toggleGroup("stock")}>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={F_LABEL}>재고</label>
-                        <input type="number" min={0} value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })}
-                          placeholder="무제한" className={F_INPUT_SM} />
-                        <p className={F_NOTE}>비우면 무제한</p>
-                      </div>
-                      <div>
-                        <label className={F_LABEL}>추천 순서</label>
-                        <input type="number" value={editForm.sortOrder} onChange={(e) => setEditForm({ ...editForm, sortOrder: e.target.value })}
-                          placeholder="0" className={F_INPUT_SM} />
-                        <p className={F_NOTE}>작을수록 상점 앞쪽</p>
-                      </div>
-                    </div>
-                    {/* 1개 단위 — 한 결제에서 살 수 있는 최대 개수 */}
-                    {editForm.unitSale && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={F_LABEL}>1회 최대</label>
-                          <input type="number" min={1} max={MAX_PER_ORDER} value={editForm.maxPerOrder} onChange={(e) => setEditForm({ ...editForm, maxPerOrder: e.target.value })}
-                            placeholder="10" className={F_INPUT_SM} />
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <label className={F_LABEL}>판매 상태</label>
-                      <FormToggle on={!!editForm.active} onClick={() => setEditForm({ ...editForm, active: !editForm.active })}
-                        onLabel="판매 중" offLabel="숨김" />
-                    </div>
-                    {/* 이벤트 테마 — 고른 테마의 탭에 모인다(관리 상품 폼과 같은 보기 — lib/shopThemes themePickOptions · 꺼진 테마도 고를 수 있다 「꺼짐」) */}
-                    <div>
-                      <label className={F_LABEL}>이벤트 테마</label>
-                      <Dropdown theme="light" value={editForm.theme || ""} options={themePickOptions(themes, editForm.theme || "")}
-                        onChange={(v) => setEditForm({ ...editForm, theme: v })} maxHeight={240} />
-                    </div>
-                  </FormGroup>
-
-                  {/* ── 시즌 동작 ── 기프트카드 · 꾸미기는 뗄 역할이 없고,
-                       권한은 역할이 곧 디스코드 기능이라 떼면 기능이 사라진다 — 모두 감춘다 */}
-                  {editForm.type !== "physical" && editForm.type !== "perk" && editForm.type !== "cosmetic" && (
-                    <FormGroup title="시즌 동작" summary={efSeasonSummary} open={openGroups.season} onToggle={() => toggleGroup("season")}>
-                      <FormToggle on={!!editForm.detachOnSeason} disabled={efLinked} onClick={() => setEditForm({ ...editForm, detachOnSeason: !editForm.detachOnSeason })}
-                        onLabel="시즌 바뀌면 디스코드 표기 뗌" offLabel="디스코드 역할 계속 유지" />
-                      <p className={F_NOTE}>{efLinked ? "등록된 아이템의 설정을 따릅니다." : "표기만 내려가고 인벤토리 소유는 남습니다."}</p>
-                    </FormGroup>
-                  )}
-                </div>
-
-                {editError && <p className="mt-4 text-[12px] font-bold text-[#d01634]">{editError}</p>}
-              </div>
-
-              {/* 우 — 실시간 카드 미리보기 */}
-              <div className="p-6 bg-[#f2f2f2]">
-                <div className="text-[12px] font-black text-[#131313] mb-3">카드 미리보기</div>
-                <div className="bg-white rounded-2xl border border-[#ededed] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col">
-                  <div className="relative aspect-[4/3] bg-[#f2f2f2] overflow-hidden">
-                    <CardArt it={editForm} stage />
-                    <TypeBadge type={editForm.type} className="absolute top-3 left-3 px-2.5 py-1 text-[10px] tracking-wide" />
-                    {(!editForm.active || efSaleEnded) && (
-                      <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-black bg-white/90 text-[#131313] border border-[#ededed]">{!editForm.active ? "숨김" : "판매 종료"}</span>
-                    )}
-                    {editForm.stock === "0" && (
-                      <div className="absolute inset-0 bg-[#131313]/55 flex items-center justify-center">
-                        <span className="text-sm font-black text-white tracking-wider">SOLD OUT</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5 flex flex-col flex-1">
-                    <h3 className="text-base font-black text-[#131313] tracking-tight mb-1.5 break-keep">{editForm.name || "상품명을 입력하세요"}</h3>
-                    {editForm.description && <p className="text-[12px] text-[#5a5a5a] leading-relaxed mb-3 line-clamp-2 break-keep whitespace-pre-line">{editForm.description}</p>}
-                    <div className="flex items-center gap-2 mb-4 text-[11px] font-bold text-[#8a8a8a]">
-                      <span>{Number(editForm.stock) > 0 && Number(editForm.stock) <= 5 ? `한정 수량 · ${editForm.stock}개 남음` : " "}</span>
-                    </div>
-                    <div className="mt-auto flex items-end justify-between gap-3">
-                      <div>
-                        <div className="text-xl font-black text-[#131313] tracking-tight tabular-nums">{(Number(efBase) || 0).toLocaleString()}</div>
-                        <div className="text-[10px] font-bold text-[#8a8a8a] tracking-wider">{efUnit}</div>
-                      </div>
-                      <span className="px-5 py-2.5 rounded-full text-[12px] font-bold bg-[#e91e3f] text-white shadow-[0_4px_12px_rgba(233,30,63,0.25)]">구매하기</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-[#ededed] flex gap-3 shrink-0">
-              <button onClick={() => setEditForm(null)} className="flex-1 py-3.5 bg-[#f2f2f2] text-[#5a5a5a] font-bold rounded-xl hover:bg-[#e0e0e0] transition-colors">취소</button>
-              <button onClick={saveItem} disabled={isSavingItem}
-                className="flex-1 py-3.5 bg-[#e91e3f] text-white font-bold rounded-xl hover:bg-[#d01634] disabled:opacity-40 transition-colors">
-                {isSavingItem ? "저장 중..." : editForm.id ? "수정 저장" : "상품 등록"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── 상품 삭제 확인 (관리자) ── */}
-      {deleteTarget && (
+      {deleteTarget && isAdmin && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl border border-[#ededed]">
             <h2 className="text-lg font-black text-[#131313] mb-2">상품 삭제</h2>

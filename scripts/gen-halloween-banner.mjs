@@ -21,6 +21,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CELL = 6; // 칸 한 개(px)
 const { Resvg } = createRequire(import.meta.url)("../bot/node_modules/@resvg/resvg-js");
 const FONT = join(ROOT, "assets", "fonts", "Pretendard-Black.otf");
+// 📌 2026-10-14 운영자 "폰트도 넘 구려" — 이벤트 배너 글은 송명(붓 느낌 명조 · OFL, assets/fonts/SongMyung-OFL.txt)
+const FONT_SONG = join(ROOT, "assets", "fonts", "SongMyung-Regular.ttf");
 // 📌 글씨 꼴(2026-10-11 운영자 "할로윈 글씨 너무 못 썼는데") — A 호박불 · B 유령 흰 + 초록 물약 방울 · C 흰 글씨 + 주황 테. 환경 변수 TITLE 로 고른다
 const TITLE = process.env.TITLE || "A"; // 10/11 운영자 A안(호박불 주황) 확정
 // 📌 판매 기간 — 제목 아래 작은 줄(2026-10-11 운영자 "~ 11. 5. 이것도 넣어 상품 판매 기간임"). 기간이 바뀌면 이 값만 고치고 다시 돌린다
@@ -1072,6 +1074,629 @@ function catDiscord() {
   fineLine(ft, "~ 11. 5.", 8 + hw + 5, 70, 6, DATE_BANDS, { sx: 1, track: 0.8, o: 2, sh: 2 });
   return { cv, ft };
 }
+// ───────────────────────── 유령 펭귄의 초대(핫타임) ─────────────────────────
+// 📌 2026-10-14 운영자 "유령 펭귄의 초대 < 타이틀로 하고 메인 컨셉으로" — 할로윈 핫타임(10/16 ~ 10/31 · 금토일 2배 · 평일 1.5배) 알림 배너.
+//    로고 펭귄을 반투명 유령으로(꼬리가 흩날리고 주황 목도리 · 초대장), 뒤에 호박불이 새어 나오는 유령 이글루
+// 📌 2026-10-14 운영자 "로고 펭귄은 좀 버려라" — 유령 펭귄을 새로: 후드 망토를 쓴 펭귄 유령(얼굴은 그늘, 눈만 빛남 · 부리 끝) · 망토 아래는 푸른 유령 꼬리로 흩어짐 ·
+//    앞발로 푸른 도깨비불 랜턴(아이템 「호박불 랜턴」과 같은 불). 빛 — 랜턴(왼쪽 아래 푸른빛) · 달(오른쪽 위 보랏빛 테두리 빛)
+const SP = {
+  out: "#0a0716", cloak: ["#5b48b0", "#3d2f84", "#2a2060", "#1a1340", "#110c2a"], rim: "#a493f2", lampRim: "#6fd6ef",
+  face: ["#07051a", "#100b28"], eye: ["#f4ffff", "#8ff6ff", "#2fb8d8"], beak: ["#f0a640", "#a8601a"],
+  tail: ["#eafcff", "#b4ecf9", "#72c3e6", "#3f86c4", "#2a5f9e"],
+  gold: ["#ffe08a", "#e2b04a", "#9c6a22", "#5a3a12"], glass: "#1a3a52", flame: ["#ffffff", "#9ff8ff", "#45b4ff", "#2a6fd6"],
+};
+const lerp = (a, b, t) => a + (b - a) * t;
+// 망토 · 후드 — 그림판 하나(밖 테두리 따로). 빛 방향으로 다섯 단 명암
+function spectreCloak() {
+  const g = grid();
+  const tone = (l) => SP.cloak[l > 0.62 ? 0 : l > 0.32 ? 1 : l > 0.02 ? 2 : l > -0.3 ? 3 : 4];
+  // 후드 — 둥근 머리(펭귄 머리처럼 크게) · 오른쪽으로 꺾인 뾰족 끝
+  const hcx = 20, hcy = 15, hrx = 11.5, hry = 12;
+  for (let y = 2; y <= 27; y++) for (let x = 6; x <= 34; x++) {
+    const nx = (x - hcx) / hrx, ny = (y - hcy) / hry;
+    if (nx * nx + ny * ny > 1) continue;
+    const l = -0.55 * nx - 0.55 * ny + 0.15; // 왼쪽 위가 밝게(랜턴 · 하늘)
+    g.set(x, y, tone(l));
+  }
+  for (let t = 0; t <= 8; t += 0.2) { // 뾰족 끝 — 머리 위에서 오른쪽 뒤로 처진다(속이 꽉 찬 원뿔)
+    const x = hcx + 2 + t * 0.9, y = hcy - hry + 2.5 - t * 0.35 + (t > 4 ? (t - 4) * 0.55 : 0);
+    const w = Math.max(0.7, 3.6 * (1 - t / 8));
+    for (let yy = Math.floor(y - w); yy <= Math.ceil(y + w); yy++) for (let xx = Math.floor(x - w); xx <= Math.ceil(x + w); xx++) if (Math.hypot(xx - x, yy - y) <= w) g.set(xx, yy, tone(0.2 - t * 0.06));
+  }
+  // 망토 — 어깨에서 아래로 퍼지고 아래 끝은 너덜너덜
+  for (let y = 22; y <= 42; y++) {
+    const half = 8.5 + (y - 22) * 0.48, cx = 20 + Math.sin((y - 22) / 7) * 0.8;
+    for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) {
+      const bottom = 40 + Math.round(1.6 * Math.sin(x * 1.1) + Math.sin(x * 0.37));
+      if (y > bottom) continue;
+      const nx = (x - cx) / half;
+      let l = -0.7 * nx + 0.05 - (y - 22) * 0.012;
+      if (((x * 7 + y * 3) % 17) === 0 && y > 27) l -= 0.35; // 옷 주름 결
+      g.set(x, y, tone(l));
+    }
+  }
+  // 앞섶이 벌어져 유령 펭귄의 흰 배가 보인다(위가 넓고 아래로 좁아짐) · 옆 주름
+  for (let y = 23; y <= 39; y++) for (let x = 14; x <= 26; x++) {
+    const nx = (x - 20) / 4.6, ny = (y - 30) / 7.6;
+    const d = nx * nx + ny * ny;
+    if (d > 1) continue;
+    const l = -0.6 * nx - 0.3 * ny; // 랜턴 쪽(왼쪽)이 밝게
+    g.set(x, y, d > 0.82 ? SP.tail[3] : l > 0.25 ? SP.tail[0] : l > -0.25 ? SP.tail[1] : SP.tail[2]);
+  }
+  // 오른쪽 망토 — 빛 받은 주름 한 줄 · 그늘 주름
+  for (let y = 27; y <= 39; y++) { g.set(28 + Math.round((y - 27) * 0.25), y, SP.cloak[2]); g.set(25 + Math.round((y - 27) * 0.1), y, SP.cloak[4]); }
+  return g;
+}
+// 얼굴 — 후드 안 그늘 · 매섭게 빛나는 두 눈(부리 없음)
+function spectreFace(g) {
+  const cx = 20, cy = 16.5;
+  for (let y = 9; y <= 24; y++) for (let x = 11; x <= 29; x++) {
+    const nx = (x - cx) / 7.6, ny = (y - cy) / 7;
+    if (nx * nx + ny * ny > 1) continue;
+    g.set(x, y, ny < -0.25 ? SP.face[0] : SP.face[1]);
+  }
+  // 눈빛 번짐(디더) → 눈 — 안쪽이 아래로 내려간 매서운 눈
+  for (const [ex, sgn] of [[16, 1], [24, -1]]) {
+    for (let y = 13; y <= 19; y++) for (let x = ex - 3; x <= ex + 3; x++) {
+      const d = Math.hypot(x - ex, (y - 16) * 1.3);
+      if (d < 3.2 && dith(x, y) < 0.45 && g.get(x, y) && SP.face.includes(g.get(x, y))) g.set(x, y, "#123a52");
+    }
+    const rows = [[-1, 0, 1], [-2, -1, 0, 1, 2], [-1, 0, 1, 2]];
+    rows.forEach((xs, i) => xs.forEach((dx) => g.set(ex + dx * sgn, 15 + i, i === 1 && Math.abs(dx) <= 1 ? SP.eye[0] : SP.eye[1])));
+    g.set(ex - 2 * sgn, 15, SP.eye[2]);
+  }
+  // 📌 부리 없음(2026-10-14 운영자 "유령 펭귄 부리 좀 없애라") — 그늘진 얼굴에 눈빛만
+}
+// 유령 꼬리 — 망토 아래에서 왼쪽 아래로 휘어 흩어진다(끝으로 갈수록 성기게)
+function spectreTail() {
+  const g = grid();
+  const wisps = [
+    { x0: 21, y0: 38, x1: 8, y1: 53, w: 5.6, bend: -4 },
+    { x0: 26, y0: 39, x1: 32, y1: 49, w: 2.6, bend: 2 },
+    { x0: 14, y0: 39, x1: 11, y1: 47, w: 2.2, bend: -1.5 },
+  ];
+  for (const wv of wisps) for (let t = 0; t <= 1; t += 0.02) {
+    const x = lerp(wv.x0, wv.x1, t) + Math.sin(t * Math.PI) * wv.bend, y = lerp(wv.y0, wv.y1, t);
+    const w = wv.w * (1 - t) + 0.4;
+    for (let yy = Math.floor(y - w); yy <= Math.ceil(y + w); yy++) for (let xx = Math.floor(x - w); xx <= Math.ceil(x + w); xx++) {
+      const d = Math.hypot(xx - x, yy - y) / w;
+      if (d > 1) continue;
+      if (t > 0.35 && dith(xx, yy) < (t - 0.35) * 1.5) continue; // 끝으로 갈수록 성기게 흩어짐
+      const k = d < 0.35 ? 0 : d < 0.6 ? 1 : d < 0.85 ? 2 : 3;
+      const prev = g.get(xx, yy);
+      const c = SP.tail[Math.min(4, k + (t > 0.7 ? 1 : 0))];
+      if (!prev || SP.tail.indexOf(prev) > SP.tail.indexOf(c)) g.set(xx, yy, c);
+    }
+  }
+  return g;
+}
+// 랜턴 — 금 틀 · 유리 · 푸른 불(7 × 11) + 손잡이 고리
+const LANTERN = [
+  "..GGG..",
+  ".G...G.",
+  "..ggg..",
+  ".dgggd.",
+  "dLFFFLd",
+  "dFFWFFd",
+  "dFWWWFd",
+  "dFWWWFd",
+  "dLFWFLd",
+  ".dgggd.",
+  "..ddd..",
+];
+const LANTERN_PAL = () => ({ G: SP.gold[1], g: SP.gold[1], d: SP.gold[3], L: SP.glass, f: SP.flame[2], F: SP.flame[1], W: SP.flame[0] });
+// 한 벌 — { g, lamp: [x, y] 불 자리(그림판 기준) }
+function spectre() {
+  const cloak = spectreCloak();
+  spectreFace(cloak);
+  // 앞발 — 왼쪽 앞으로 내밀어 랜턴을 든다
+  for (let y = 27; y <= 33; y++) for (let x = 9; x <= 15; x++) if (Math.hypot((x - 12) / 3.2, (y - 30) / 2.4) <= 1) cloak.set(x, y, y < 29 ? SP.cloak[1] : SP.cloak[2]);
+  cloak.outline(SP.out);
+  // 테두리 빛 — 오른쪽 가장자리(달) 보라 · 왼쪽 아래(랜턴) 푸른
+  for (const [key, c] of [...cloak.m]) {
+    if (c === SP.out) continue;
+    const [x, y] = key.split(",").map(Number);
+    if (cloak.get(x + 1, y) === SP.out && (y < 24 || (y < 36 && y % 3 === 0))) cloak.set(x, y, SP.rim);
+    else if (cloak.get(x - 1, y) === SP.out && y > 22 && y < 40) cloak.set(x, y, SP.lampRim);
+  }
+  const tail = spectreTail();
+  const g = grid();
+  for (const [key, c] of tail.m) { const [x, y] = key.split(",").map(Number); g.set(x, y, c); }
+  for (const [key, c] of cloak.m) { const [x, y] = key.split(",").map(Number); g.set(x, y, c); }
+  // 랜턴 — 앞발 아래에 매달림
+  sprite(LANTERN, LANTERN_PAL(), g, 7, 31);
+  return { g, lamp: [10, 37] };
+}
+// 랜턴 불빛 — 둘레 칸을 푸른빛으로 섞는다(세 단 · 디더). 장면을 다 그린 뒤 부른다
+const hexRgb = (h) => { const v = parseInt(h.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
+const rgbHex = (r, g, b) => "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+function lampLight(cv, lx, ly, r, color = "#7ff3ff", maxT = 0.42) {
+  const [cr, cg, cb] = hexRgb(color);
+  for (let y = Math.round(ly - r); y <= Math.round(ly + r); y++) for (let x = Math.round(lx - r); x <= Math.round(lx + r); x++) {
+    const c = cv.get(x, y);
+    if (!c) continue;
+    const d = Math.hypot(x - lx, y - ly) / r;
+    if (d >= 1) continue;
+    const raw = (1 - d) ** 1.6 * maxT;
+    const step = maxT / 3;
+    const lv = Math.floor(raw / step), frac = raw / step - lv;
+    const t = (lv + (frac > 0.65 && dith(x, y) < (frac - 0.65) / 0.35 ? 1 : 0)) * step; // 단 사이 경계만 디더
+    if (t <= 0) continue;
+    const [r0, g0, b0] = hexRgb(c);
+    cv.set(x, y, rgbHex(lerp(r0, cr, t), lerp(g0, cg, t), lerp(b0, cb, t)));
+  }
+}
+// 떠다니는 도깨비불(작은 푸른 불꽃 3 × 5)
+const WISP = [".f.", "fFf", "fWf", "fFf", ".f."];
+function wisps(cv, list) { for (const [x, y] of list) { cv.at(sprite(WISP, { f: SP.flame[2], F: SP.flame[1], W: SP.flame[0] }), x, y); } }
+// 2배 — 도트 한 칸을 2 × 2 로
+function x2g(g) { const n = grid(); for (const [key, c] of g.m) { const [x, y] = key.split(",").map(Number); for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) n.set(2 * x + a, 2 * y + b, c); } return n; }
+// 유령빛 — 몸 둘레 옅은 보라 빛(디더)
+function ghostAura(cv, cx, cy, rx, ry) {
+  for (let y = Math.round(cy - ry); y <= Math.round(cy + ry); y++) for (let x = Math.round(cx - rx); x <= Math.round(cx + rx); x++) {
+    const d = Math.hypot((x - cx) / rx, (y - cy) / ry);
+    if (d < 0.75 || (d < 0.9 && dith(x, y) < 0.5)) cv.set(x, y, "#4a3c86");
+    else if (d < 1 && dith(x, y) < 0.35) cv.set(x, y, "#3e3176");
+  }
+}
+function moonPlain(cv, cx, cy, r) {
+  for (let y = cy - r - 8; y <= cy + r + 8; y++) for (let x = cx - r - 8; x <= cx + r + 8; x++) {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < r + 3.5 || (d < r + 5 && dith(x, y) < 0.5)) cv.set(x, y, HALO[1]);
+    else if (d < r + 7 || (d < r + 8.5 && dith(x, y) < 0.5)) cv.set(x, y, HALO[0]);
+  }
+  cv.at(moon(r), cx - r, cy - r);
+}
+// 유령 이글루 — 얼음 벽돌 돔(엇갈린 줄눈 · 오른쪽 그늘 · 꼭대기 눈빛) + 왼쪽 앞 입구(안에서 호박불) + 거미줄
+const IG = { ice: "#6f86c2", hi: "#a3b8e6", sh: "#4c5f9a", line: "#3c4a80", out: "#121633", door: "#0b0b26", glow0: "#ffb04e", glow1: "#e2621a", icicle: "#cfe2ff" };
+function igloo(cv, cx, base, rx, ry) {
+  const inDome = (x, y, a, b) => ((x - cx) / a) ** 2 + ((y - base) / b) ** 2 <= 1 && y <= base;
+  for (let y = base - ry - 1; y <= base; y++) for (let x = cx - rx - 1; x <= cx + rx + 1; x++) {
+    if (!inDome(x, y, rx, ry)) { if (inDome(x, y, rx + 1, ry + 1)) cv.set(x, y, IG.out); continue; }
+    const row = base - y;
+    let c = (x - cx) / rx > 0.35 ? IG.sh : (x - cx) / rx < -0.55 ? IG.hi : IG.ice;
+    if (row > ry - 3) c = IG.hi; // 꼭대기 눈빛
+    if (row % 5 === 0) c = IG.line; // 가로 줄눈
+    else if (((x - cx + (Math.floor(row / 5) % 2) * 4) % 8 + 8) % 8 === 0) c = IG.line; // 세로 줄눈(엇갈림)
+    cv.set(x, y, c);
+  }
+  // 입구 — 왼쪽 앞 작은 반원(안은 어둡고 호박불)
+  const dx = cx - Math.round(rx * 0.32), drx = Math.round(rx * 0.3), dry = Math.round(ry * 0.5);
+  for (let y = base - dry - 1; y <= base; y++) for (let x = dx - drx - 1; x <= dx + drx + 1; x++) {
+    const d = ((x - dx) / drx) ** 2 + ((y - base) / dry) ** 2;
+    if (d <= 1) cv.set(x, y, d < 0.35 ? IG.glow0 : d < 0.6 ? IG.glow1 : IG.door);
+    else if (((x - dx) / (drx + 1)) ** 2 + ((y - base) / (dry + 1)) ** 2 <= 1) cv.set(x, y, IG.out);
+  }
+  // 입구 위 고드름 · 꼭대기 달빛 · 서리 반짝이
+  for (let i = -drx; i <= drx; i += 2) { const len = 1 + ((i + 9) % 3); for (let k = 1; k <= len; k++) cv.set(dx + i, base - dry - 1 + k, IG.icicle); }
+  for (let x = cx - Math.round(rx * 0.3); x <= cx + Math.round(rx * 0.55); x++) { const y = Math.round(base - ry * Math.sqrt(Math.max(0, 1 - ((x - cx) / rx) ** 2))); cv.set(x, y, "#d9cbff"); }
+  for (const [fx, fy] of [[0.45, 0.55], [0.7, 0.3], [-0.6, 0.45], [0.2, 0.8]]) cv.set(Math.round(cx + fx * rx), Math.round(base - fy * ry), "#ffffff");
+}
+const GP_TITLE = Object.assign([[1, "#ffffff"]], { under: "#d9cbff" });
+// 📌 2026-10-14 운영자 "그 글을 굳이 도트로 하지마" — 이벤트 배너 글은 도트 칸(fineLine)이 아니라 최종 해상도에서 글꼴 그대로 그린다.
+//    items: { str, x, y(글 윗선 · 칸), h(대문자 높이 · 칸), fill, stroke, sw(테두리 · 칸), shadow(아래로 · 칸), track(자간 em) } — 칸 → px 은 scale
+function smoothText(W, H, scale, items) {
+  const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/ {2,}/g, (m) => " ".repeat(m.length)); // 여러 칸 띄어쓰기 그대로
+  const parts = items.map((it) => {
+    const size = it.h * scale * (it.font === "song" ? 1.32 : 1.36); // 글자 윗선~아랫선 ≈ 0.75em
+    const x = it.x * scale, base = it.y * scale + it.h * scale;
+    const sw = (it.sw ?? 0.9) * scale, sh = (it.shadow ?? 0.9) * scale;
+    const fam = it.font === "song" ? "Song Myung" : "Pretendard";
+    const attrs = `font-family="${fam}" font-weight="${it.font === "song" ? 400 : 900}" font-size="${size.toFixed(1)}" letter-spacing="${((it.track ?? 0) * size).toFixed(2)}"${it.anchor ? ` text-anchor="${it.anchor}"` : ""}`;
+    const shadow = sh > 0 ? `<text x="${x}" y="${base + sh}" ${attrs} fill="${it.shade || "#0b0618"}" stroke="${it.shade || "#0b0618"}" stroke-width="${sw * 2}" stroke-linejoin="round">${esc(it.str)}</text>` : "";
+    const body = `<text x="${x}" y="${base}" ${attrs} fill="${it.fill}" stroke="${it.stroke || "#1a0d2e"}" stroke-width="${sw * 2}" stroke-linejoin="round" paint-order="stroke">${esc(it.str)}</text>`;
+    if (!it.glow) return shadow + body;
+    const id = `gl${Math.random().toString(36).slice(2, 8)}`;
+    const filt = `<filter id="${id}" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur in="SourceAlpha" stdDeviation="${(scale * 1.8).toFixed(1)}" result="b"/><feFlood flood-color="${it.glow}" flood-opacity="0.9"/><feComposite in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="g"/></feMerge></filter>`;
+    return `<defs>${filt}</defs><g filter="url(#${id})">${body}</g>` + shadow + body;
+  }).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W * scale}" height="${H * scale}">${parts}</svg>`;
+  return Buffer.from(new Resvg(svg, { font: { fontFiles: [FONT, FONT_SONG], loadSystemFonts: false, defaultFontFamily: "Pretendard" } }).render().asPng());
+}
+// 📌 운영자 "'초대' 니까 초대를 강조하는 느낌을 줘야지" — 「유령 펭귄의」는 작게 위, 「초대」는 크게 · 랜턴처럼 푸르게 빛나게
+const GP_TEXT_PC = [
+  { str: "HALLOWEEN HOT TIME", x: 22, y: 9, h: 4.6, fill: "#fff4e0", track: 0.12, sw: 0.6, shadow: 0.5 },
+  { str: "유령 펭귄의", x: 21, y: 18, h: 9, fill: "#e8e2ff", sw: 0.9, shadow: 0.9 },
+  { str: "초대", x: 19, y: 31, h: 25, fill: "#dffcff", stroke: "#0d1638", sw: 1.3, shadow: 1.6, glow: "#38c8ff", track: 0.04 },
+  { str: "XP 최대", x: 98, y: 41, h: 8, fill: "#ffffff", sw: 0.8, shadow: 0.8 },
+  { str: "2배", x: 136, y: 38, h: 11, fill: "#ffe066", sw: 0.9, shadow: 0.9 },
+  { str: "금 · 토 · 일 2배 · 평일 1.5배", x: 99, y: 54, h: 4.6, fill: "#fff4e0", sw: 0.55, shadow: 0.5 },
+  { str: "10. 16. ~ 10. 31.", x: 22, y: 66, h: 6.2, fill: "#fff1c2", sw: 0.7, shadow: 0.6, track: 0.03 },
+];
+const GP_TEXT_M = [
+  { str: "HALLOWEEN HOT TIME", x: 9, y: 7, h: 4.2, fill: "#fff4e0", track: 0.1, sw: 0.55, shadow: 0.5 },
+  { str: "유령 펭귄의", x: 8, y: 15, h: 8, fill: "#e8e2ff", sw: 0.8, shadow: 0.8 },
+  { str: "초대", x: 7, y: 27, h: 21, fill: "#dffcff", stroke: "#0d1638", sw: 1.1, shadow: 1.3, glow: "#38c8ff", track: 0.04 },
+  { str: "XP 최대", x: 9, y: 57, h: 6.8, fill: "#ffffff", sw: 0.7, shadow: 0.7 },
+  { str: "2배", x: 41, y: 55, h: 8.8, fill: "#ffe066", sw: 0.8, shadow: 0.8 },
+  { str: "10. 16. ~ 10. 31.", x: 9, y: 71, h: 5, fill: "#fff1c2", sw: 0.6, shadow: 0.5 },
+  { str: "금토일 2배 · 평일 1.5배", x: 9, y: 80, h: 4.2, fill: "#fff4e0", sw: 0.5, shadow: 0.4 },
+];
+// 초대장 — 크림 종이 · 금테 · 봉투 날개 선 · 보라 봉랍(가운데 호박 무늬). w × h 칸, 살짝 기울임
+const INV = { paper: "#f1e6cc", shade: "#d3c19a", gold: "#e2b04a", goldD: "#9c6a22", out: "#2a1830", seal: ["#a46ae6", "#7a3fc4", "#4e2290"], mark: "#ff9a3c" };
+function invitation(w = 26, h = 17, tilt = -0.12) {
+  const g = grid();
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const sx = Math.round(x + (y - h / 2) * tilt);
+    const edge = x === 0 || y === 0 || x === w - 1 || y === h - 1;
+    const gold = x === 1 || y === 1 || x === w - 2 || y === h - 2;
+    const flap = Math.abs(y - Math.round((Math.abs(x - (w - 1) / 2) * (h * 0.62)) / ((w - 1) / 2))) < 1 && y < h * 0.62; // 위 V 날개 선
+    g.set(sx, y, edge ? INV.out : gold ? INV.gold : flap ? INV.goldD : y > h * 0.6 ? INV.shade : INV.paper);
+  }
+  // 봉랍
+  const cx = Math.round((w - 1) / 2 + (Math.round(h * 0.6) - h / 2) * tilt), cy = Math.round(h * 0.6);
+  for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) {
+    const d = Math.hypot(x, y);
+    if (d > 3.3) continue;
+    g.set(cx + x, cy + y, d > 2.6 ? INV.seal[2] : x + y < -1 ? INV.seal[0] : INV.seal[1]);
+  }
+  g.set(cx, cy, INV.mark); g.set(cx - 1, cy, INV.mark); g.set(cx + 1, cy, INV.mark); g.set(cx, cy - 1, "#3f7a2f");
+  return g;
+}
+// ── 배경: 오로라 · 침엽수 · 눈 · 안개 ──
+const NIGHT = { aur0: "#4bffb4", aur1: "#3fd8ff", aur2: "#8a6bff", snow0: "#e6edff", snow1: "#a9b6e6", snow2: "#6f7cb8", snowSh: "#4a5590",
+  pine: ["#2b2a63", "#1f1d4a", "#141233"], pineSnow: ["#7d86c4", "#9aa6dd", "#c9d4f5"], fog: "#5b5aa0" };
+// 오로라 — 하늘에 흔들리는 커튼 두 줄(위가 진하고 아래로 옅게 · 띠마다 색이 다르다)
+function aurora(cv, ribbons) {
+  for (const r of ribbons) for (let x = r.x0; x <= r.x1; x++) {
+    const top = r.y + Math.sin(x / r.f + r.ph) * r.amp + Math.sin(x / (r.f * 0.37)) * 1.2;
+    const fade = Math.min(1, (x - r.x0) / 16, (r.x1 - x) / 16);
+    for (let k = 0; k < r.len; k++) {
+      const t = (1 - k / r.len) * r.alpha * fade;
+      if (t < 0.04) continue;
+      const y = Math.round(top + k);
+      const c = cv.get(x, y);
+      if (!c) continue;
+      const mix = k < r.len * 0.35 ? r.c0 : r.c1;
+      const step = Math.round((t / 0.12 + (dith(x, y) - 0.5) * 0.8)) * 0.12;
+      if (step <= 0) continue;
+      const [r0, g0, b0] = hexRgb(c), [r1, g1, b1] = hexRgb(mix);
+      cv.set(x, y, rgbHex(lerp(r0, r1, step), lerp(g0, g1, step), lerp(b0, b1, step)));
+    }
+  }
+}
+// 침엽수 한 그루 — 층층이 넓어지는 삼각 · 가지 끝에 눈(달빛 쪽 오른쪽 위가 밝게)
+function pine(cv, cx, base, h, layer) {
+  const col = NIGHT.pine[layer], snow = NIGHT.pineSnow[layer];
+  const tiers = Math.max(3, Math.round(h / 6));
+  for (let i = 0; i < tiers; i++) {
+    const ty = base - h + Math.round((i * h) / tiers), th = Math.round(h / tiers) + 3;
+    for (let y = 0; y < th; y++) {
+      const half = Math.round(((i + 1) / tiers) * (h * 0.28) * ((y + 1) / th) + 0.5);
+      for (let x = -half; x <= half; x++) cv.set(cx + x, ty + y, col);
+      if (layer > 0 && y === th - 1) for (let x = -half + 1; x <= half - 1; x += 3) cv.set(cx + x, ty + y - 1, snow);
+    }
+  }
+  cv.rect(cx, base - 1, 1, 2, col);
+}
+function forest(cv, layer, base, list) { for (const [x, h] of list) pine(cv, x, base(x), h, layer); }
+// 눈밭 — 위 끝 빛 · 결
+function snowField(cv, top) {
+  const { W, H } = cv;
+  for (let x = 0; x < W; x++) {
+    const t = Math.round(top(x));
+    for (let y = t; y < H; y++) cv.set(x, y, y === t ? NIGHT.snow1 : y < t + 3 ? NIGHT.snow2 : (x * 3 + y * 5) % 23 === 0 ? NIGHT.snow2 : NIGHT.snowSh);
+  }
+}
+// 안개 — 땅 위 옅은 띠(디더)
+function fogBand(cv, y0, y1, alpha = 0.35) {
+  const [fr, fg, fb] = hexRgb(NIGHT.fog);
+  for (let y = y0; y <= y1; y++) for (let x = 0; x < cv.W; x++) {
+    const t = alpha * Math.sin(((y - y0) / (y1 - y0)) * Math.PI) * (0.7 + 0.3 * Math.sin(x / 13 + y));
+    if (dith(x, y) > t * 2.2) continue;
+    const c = cv.get(x, y); if (!c) continue;
+    const [r, g, b] = hexRgb(c);
+    cv.set(x, y, rgbHex(lerp(r, fr, 0.45), lerp(g, fg, 0.45), lerp(b, fb, 0.45)));
+  }
+}
+function snowfall(cv, R, n, avoid = () => false) {
+  for (let i = 0; i < n; i++) { const x = Math.floor(R() * cv.W), y = Math.floor(R() * cv.H * 0.85); if (avoid(x, y)) continue; cv.set(x, y, R() < 0.5 ? "#ffffff" : NIGHT.snow0); }
+}
+// 먼 이글루 — 작은 돔 실루엣 · 따뜻한 창(브랜드 이글루를 숲 사이에 작게)
+function farIgloo(cv, cx, base, rx, ry) {
+  for (let y = base - ry; y <= base; y++) for (let x = cx - rx; x <= cx + rx; x++) if (((x - cx) / rx) ** 2 + ((y - base) / ry) ** 2 <= 1) cv.set(x, y, (base - y) % 3 === 0 ? "#3f4a86" : "#4f5c9c");
+  for (let y = base - 2; y <= base; y++) for (let x = cx - 2; x <= cx + 1; x++) cv.set(x, y, y === base - 2 && (x === cx - 2 || x === cx + 1) ? "#3f4a86" : "#ffb04e");
+}
+// ── 초대장 — 오래된 크림 종이(얼룩 결 · 가장자리 그을음) · 금 이중 테 · 모서리 박쥐 · 위 가운데 초승달 · 아래 보라 봉랍 + 리본 ──
+const CARD = { paper: "#efe2c4", paperL: "#f7eedb", paperD: "#e0cfa8", edge: "#cdb78a", burn: "#a88f62", out: "#2a1830", gold: "#c9993e", goldL: "#ffe08a", goldD: "#8a6324",
+  seal: ["#b07af0", "#7a3fc4", "#4e2290", "#2e1258"], ribbon: ["#8a2a4a", "#5a1630"], mark: "#ff9a3c", shadow: "#0c0a22" };
+function inviteCard(cv, x0, y0, w, h, R) {
+  // 그림자(오른쪽 아래)
+  cv.rect(x0 + 3, y0 + 3, w, h, CARD.shadow);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const X = x0 + x, Y = y0 + y;
+    const ex = Math.min(x, w - 1 - x), ey = Math.min(y, h - 1 - y), e = Math.min(ex, ey);
+    let c = CARD.paper;
+    if (e === 0) c = CARD.out;
+    else if (e === 1) c = CARD.burn;
+    else if (e === 2) c = CARD.edge;
+    else {
+      const r = R();
+      c = y < h * 0.18 ? CARD.paperL : CARD.paper;
+      if (y > h * 0.8 && dith(X, Y) < (y / h - 0.8) * 2.5) c = CARD.paperD; // 아래쪽 살짝 짙게
+      if (r < 0.025) c = CARD.paperD; else if (r > 0.985) c = CARD.paperL; // 고운 종이 결
+      if (e === 3 && dith(X, Y) < 0.35) c = CARD.paperD;
+    }
+    // 금 이중 테 — 바깥 굵은 줄(빛 · 그늘) · 안쪽 가는 줄
+    if (e === 4) c = x < w / 2 && y < h / 2 ? CARD.goldL : CARD.gold;
+    if (e === 5) c = CARD.goldD;
+    if (e === 8) c = (X + Y) % 2 ? CARD.gold : CARD.paperD;
+    cv.set(X, Y, c);
+  }
+  // 모서리 장식 — 금 사각 꼭지 + 박쥐(위) · 꼬마 호박(아래)
+  for (const [cx, cy] of [[x0 + 6, y0 + 6], [x0 + w - 7, y0 + 6], [x0 + 6, y0 + h - 7], [x0 + w - 7, y0 + h - 7]]) {
+    cv.rect(cx - 1, cy - 1, 3, 3, CARD.goldD); cv.set(cx, cy, CARD.goldL);
+  }
+  cv.at(sprite(BAT_SIL, { "#": "#3a1f52" }), x0 + 10, y0 + 9);
+  cv.at(sprite(BAT_SIL, { "#": "#3a1f52" }).flip(), x0 + w - 19, y0 + 9);
+  // 위 가운데 초승달(금)
+  const mx = x0 + Math.round(w / 2), my = y0 + 7;
+  for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (Math.hypot(x, y) <= 3.2 && Math.hypot(x + 1.6, y - 0.8) > 2.6) cv.set(mx + x, my + y, y < 0 ? CARD.goldL : CARD.gold);
+  // 아래 봉랍 + 리본 꼬리
+  const sx = x0 + Math.round(w / 2), sy = y0 + h - 2;
+  for (const [dx, len] of [[-3, 9], [3, 8]]) for (let k = 0; k < len; k++) { const xx = sx + dx + Math.round(k * (dx < 0 ? -0.35 : 0.35)); cv.rect(xx - 1, sy + k, 3, 1, k % 3 === 2 ? CARD.ribbon[1] : CARD.ribbon[0]); }
+  for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
+    const d = Math.hypot(x, y);
+    if (d > 6.3) continue;
+    const wobble = d > 5.2 && (Math.atan2(y, x) * 4 + 9) % 2 < 1;
+    cv.set(sx + x, sy + y, d > 5.6 || wobble ? CARD.seal[3] : d > 4.4 ? CARD.seal[2] : x + y < -3 ? CARD.seal[0] : CARD.seal[1]);
+  }
+  // 봉랍 무늬 — 작은 호박
+  for (const [dx, dy, c] of [[-1, 0, CARD.mark], [0, 0, CARD.mark], [1, 0, CARD.mark], [-1, 1, CARD.mark], [0, 1, CARD.mark], [1, 1, CARD.mark], [0, -1, "#3f7a2f"]]) cv.set(sx + dx, sy + dy, c);
+}
+// 📌 2026-10-14 운영자 "초대 글자가 좀 아쉬운데 · 진짜 약간 필기체? 느낌 · 도트로 해도 상관 없어" — 「초대」는 글꼴이 아니라 붓펜으로 흘려 쓴 도트(반 칸 = 3px).
+//    넓은 촉(각도 −38°)으로 획을 쓰고 압력으로 굵기를 바꾼다 → 높은 해상도에서 칠한 뒤 도트로 끊는다. 오른쪽으로 기울이고(SLANT),
+//    ㅗ 가로획이 「대」로 이어 올라가며 · ㅐ 끝 세로가 아래로 휘어 밑줄 꼬리가 된다. 단위: 글자 높이 100 · [x, y, 압력]
+const C_INK_V_ = "#4a1d6e";
+//    10/14 "짜치는데 · 너무 얇아" → 굵은 붓 → "영어 필기체 느낌 몰라?" — 영어 손글씨(캘리그라피)처럼: 크게 기울이고(SLANT 0.3), 굵기는 획 방향으로
+//    (아래로 내려 긋는 획 굵게 · 올라가는 · 가로 획 가늘게), 획을 이어 쓰고 ㅐ 세로는 'l' 처럼 왼쪽으로 감는 고리, 끝 세로는 아래 고리 돌아 밑줄.
+//    짙은 테두리 · 윗면 빛 · 아랫면 그늘 · 금 그림자 두 도트. 단위: 글자 높이 100(y 아래로) · [x, y, 최소 압력]
+const CHODAE = [
+  [[60, 0], [57, 6], [53, 13]], // ㅊ 꼭지
+  [[12, 40, 0.25], [16, 32, 0.3], [28, 26, 0.3], [56, 22, 0.3], [84, 18, 0.3], [104, 14, 0.15]], // ㅊ 가로
+  [[70, 22], [62, 30], [48, 46], [32, 62], [22, 74], [26, 78], [38, 66], [52, 52], [58, 50], [66, 58], [80, 70], [92, 78], [102, 74]], // ㅅ 왼 내림 → 고리 → 오른 내림
+  [[58, 76], [57, 84], [56, 90]], // ㅗ 세로
+  [[2, 102, 0.15], [20, 99, 0.32], [60, 96, 0.36], [100, 93, 0.3], [126, 88, 0.15], [140, 76], [150, 56], [158, 36], [166, 26], [184, 21, 0.25], [198, 19, 0.2], [202, 20]], // ㅗ 가로 → 올라가는 이음 → ㄷ 위
+  [[176, 28], [172, 42], [170, 58], [170, 70], [176, 79], [194, 80, 0.3], [212, 75], [219, 58], [221, 34], [224, 10], [230, -5], [238, -8], [243, -1], [240, 24], [237, 54], [234, 86], [233, 96], [237, 99]], // ㄷ 아래 → 'l' 고리 → ㅐ 첫 세로
+  [[240, 50, 0.45], [254, 48, 0.45], [266, 46, 0.3], [268, 26], [272, 6], [279, -7], [287, -8], [290, 2], [287, 30], [284, 62], [280, 92], [272, 108], [258, 116, 0.3], [232, 120, 0.32], [190, 120, 0.3], [148, 117, 0.22], [118, 113, 0.1], [98, 110]], // ㅐ 가운데 → 'l' 고리 → 끝 세로 → 밑줄
+];
+const SCRIPT = { slant: 0.3, wmax: 15, wmin: 3.6, top: -12, bottom: 124, wide: 330, hi: "#a97be0", body: "#521f7a", low: "#3a1358", line: "#22093a", gold: "#d7a94a" };
+function catmull(pts, step = 0.25) {
+  const out = [], P = [pts[0], ...pts, pts[pts.length - 1]];
+  for (let i = 1; i < P.length - 2; i++) {
+    const [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]];
+    const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / step));
+    for (let k = 0; k < n; k++) {
+      const t = k / n, t2 = t * t, t3 = t2 * t;
+      const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+    }
+  }
+  out.push(pts[pts.length - 1].slice(0, 2));
+  return out;
+}
+// 획 → 도트 지도(글자 높이 dotsH 도트). 둥근 붓 · 굵기 = 아래로 긋는 정도(앞뒤 고르게) · 획 끝은 가늘게, 8 × 8 로 칠해 45% 넘게 덮인 도트만 · 가운데 선은 늘 찍는다
+function scriptMask(strokes, dotsH) {
+  const S = SCRIPT, ss = 8, u = dotsH / 100, pad = 3;
+  const W = Math.ceil(S.wide * u) + pad * 2, H = Math.ceil((S.bottom - S.top) * u) + pad * 2;
+  const SW = W * ss, SH = H * ss, cov = new Uint8Array(SW * SH), on = new Uint8Array(W * H);
+  for (const st of strokes) {
+    const P = catmull(st).map(([x, y]) => [x + (100 - y) * S.slant, y]);
+    const minAt = (i) => { const f = (i / (P.length - 1)) * (st.length - 1), k = Math.floor(f), t = f - k; return (st[k][2] ?? 0) * (1 - t) + (st[Math.min(k + 1, st.length - 1)][2] ?? 0) * t; };
+    const raw = P.map((p, i) => {
+      const a = P[Math.max(0, i - 2)], b = P[Math.min(P.length - 1, i + 2)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      return Math.max(minAt(i), Math.min(1, 0.1 + Math.max(0, (b[1] - a[1]) / l - 0.25) / 0.75));
+    });
+    const pr = raw.map((_, i) => { let sum = 0, n = 0; for (let j = Math.max(0, i - 6); j <= Math.min(raw.length - 1, i + 6); j++) { sum += raw[j]; n++; } return sum / n; });
+    let L = 0;
+    const acc = P.map((p, i) => (L += i ? Math.hypot(p[0] - P[i - 1][0], p[1] - P[i - 1][1]) : 0));
+    P.forEach(([x, y], i) => {
+      const p = pr[i] * (0.35 + 0.65 * Math.min(1, acc[i] / 10, (L - acc[i]) / 12));
+      const cx = (x * u + pad) * ss, cy = ((y - S.top) * u + pad) * ss;
+      if (cx < 0 || cy < 0 || cx >= SW || cy >= SH) return;
+      on[Math.floor(cy / ss) * W + Math.floor(cx / ss)] = 1;
+      const r = ((S.wmin + (S.wmax - S.wmin) * p) * u * ss) / 2, rr = Math.ceil(r);
+      for (let yy = Math.max(0, Math.floor(cy - rr)); yy <= Math.min(SH - 1, cy + rr); yy++) for (let xx = Math.max(0, Math.floor(cx - rr)); xx <= Math.min(SW - 1, cx + rr); xx++)
+        if ((xx - cx) ** 2 + (yy - cy) ** 2 <= r * r) cov[yy * SW + xx] = 1;
+    });
+  }
+  let bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let n = 0;
+    for (let j = 0; j < ss; j++) for (let i = 0; i < ss; i++) n += cov[(y * ss + j) * SW + x * ss + i];
+    if (n / (ss * ss) >= 0.45) on[y * W + x] = 1;
+    if (on[y * W + x]) { bx0 = Math.min(bx0, x); by0 = Math.min(by0, y); bx1 = Math.max(bx1, x); by1 = Math.max(by1, y); }
+  }
+  return { W, H, box: { x0: bx0, y0: by0, x1: bx1, y1: by1 }, at: (x, y) => x >= 0 && y >= 0 && x < W && y < H && on[y * W + x] === 1 };
+}
+// 도트 지도 → 그림판(반 칸 층) — 몸 · 윗면 빛 · 아랫면 그늘 · 짙은 테두리(4이웃) · 오른쪽 아래 금 그림자 두 도트
+function drawScript(layer, m, x0, y0) {
+  const S = SCRIPT, at = m.at;
+  const near = (x, y) => at(x + 1, y) || at(x - 1, y) || at(x, y + 1) || at(x, y - 1);
+  for (let y = -3; y <= m.H + 3; y++) for (let x = -3; x <= m.W + 3; x++) {
+    let c = null;
+    if (at(x, y)) c = !at(x, y + 1) || !at(x + 1, y + 1) ? S.low : !at(x, y - 1) || !at(x - 1, y - 1) ? S.hi : S.body;
+    else if (near(x, y)) c = S.line;
+    else if (at(x - 2, y - 2) || at(x - 1, y - 2) || at(x - 2, y - 1)) c = S.gold;
+    if (c) layer.set(x0 + x, y0 + y, c);
+  }
+}
+// 초대장 위 「초대」 — 가운데 cx · 윗선 top(칸), 글자 높이 h(칸) → 반 칸 층 그림판
+function chodaeLayer(W, H, cx, top, h) {
+  const layer = canvas(W * 2, H * 2), m = scriptMask(CHODAE, Math.round(h * 2)), b = m.box;
+  drawScript(layer, m, Math.round(cx * 2 - (b.x0 + b.x1) / 2), Math.round(top * 2) - b.y0);
+  return layer;
+}
+// ── 글(송명) — 초대장 위 잉크 · 「초대」는 크게 보랏빛 잉크에 금 그림자 ──
+const C_INK = "#2a1830";
+function cardText(x0, y0, w, sc) {
+  const cx = x0 + w / 2;
+  return [
+    { str: "HALLOWEEN  HOT  TIME", x: cx, y: y0 + 13 * sc, h: 3.6 * sc, fill: "#8a6324", stroke: "#8a6324", sw: 0.12, shadow: 0, track: 0.18, font: "song", anchor: "middle" },
+    { str: "유령 펭귄의", x: cx, y: y0 + 20 * sc, h: 7.4 * sc, fill: C_INK, stroke: C_INK, sw: 0.22, shadow: 0, font: "song", anchor: "middle" },
+    { str: "XP 최대 2배", x: cx, y: y0 + 58 * sc, h: 6.6 * sc, fill: "#a3360f", stroke: "#a3360f", sw: 0.2, shadow: 0, font: "song", anchor: "middle" },
+    { str: "금 · 토 · 일 2배    평일 1.5배", x: cx, y: y0 + 67.5 * sc, h: 3.9 * sc, fill: C_INK, stroke: C_INK, sw: 0.1, shadow: 0, font: "song", anchor: "middle" },
+    { str: "10. 16.  ~  10. 31.", x: cx, y: y0 + 74.5 * sc, h: 3.9 * sc, fill: "#6b4a2a", stroke: "#6b4a2a", sw: 0.1, shadow: 0, font: "song", anchor: "middle", track: 0.05 },
+  ];
+}
+// 📌 10/14 운영자 "초대장 빼버리고 · 유령 펭귄 중앙에 두고 그 아래에 타이틀 내용 적어" — 초대장 · 필기체 「초대」 없이, 가운데 유령 펭귄 + 아래 글(송명)
+// 📌 10/14 배수 줄(금토일 2배 · 평일 1.5배)은 글 · 판 둘 다 "별로" → 운영자 "XP 최대 2배랑 이벤트 패스" — 한 줄에 두 문구를 나란히, 가운데 도깨비불로 나눈다
+function titleText(cx, y0, k, { big = 9.4 } = {}) {
+  const line = (str, y, h, fill, o = {}) => ({ str, x: cx, y: y0 + y * k, h: h * k, fill, stroke: "#0d0820", sw: 0.55 * k, shadow: 0.7 * k, font: "song", anchor: "middle", ...o });
+  // 10/14 "핫타임 글자 내려 · 아니다 그냥 기간만 표기해" — 「HALLOWEEN HOT TIME」 빼고 기간만, 맨 아래로
+  const gap = 6 * k, hy = big + 3;
+  const text = [
+    line("유령 펭귄의 초대", 0, big, "#f3efff", { glow: "#3fb6ff", sw: 0.8 * k, shadow: 1 * k, track: 0.03 }),
+    line("XP 최대 2배", hy, 5.8, "#ffb347", { x: cx - gap, anchor: "end", sw: 0.65 * k, glow: "#ff6a1a" }),
+    line("이벤트 패스", hy, 5.8, "#bff4ff", { x: cx + gap, anchor: "start", sw: 0.65 * k, glow: "#2fa8ff" }),
+    // 10/18 운영자 "날짜 10.19부터라고 · 지금 올라가있는 배너들 다 바꿔라" — 10. 16. → 10. 19.(끝 10. 31. 은 그대로)
+    line("10. 19.  ~  10. 31.", hy + 8.6, 3.6, "#ffd98a", { track: 0.08, sw: 0.45 * k, shadow: 0.5 * k }),
+  ];
+  return { text, wisp: [Math.round(cx) - 1, Math.round(y0 + (hy + 0.2) * k)] };
+}
+function ghostPc() {
+  const W = 400, H = 100;
+  const cv = canvas(W, H);
+  const R = rng(1016);
+  const moonC = [362, 18], mr = 11;
+  sky(cv, R, { stops: [0, 14, 27, 39, 50, 60, 70, 80], avoid: [[moonC[0] - mr - 9, moonC[1] - mr - 9, 2 * mr + 18, 2 * mr + 18]] });
+  aurora(cv, [
+    { x0: 0, x1: 399, y: 6, len: 26, amp: 5, f: 19, ph: 0.4, alpha: 0.5, c0: NIGHT.aur0, c1: NIGHT.aur1 },
+    { x0: 40, x1: 360, y: 20, len: 18, amp: 4, f: 13, ph: 2.1, alpha: 0.32, c0: NIGHT.aur1, c1: NIGHT.aur2 },
+  ]);
+  moonPlain(cv, moonC[0], moonC[1], mr);
+  sparkles(cv, [[300, 6, true], [392, 40, false], [250, 12, false], [70, 10, true], [120, 30, false], [24, 36, false]]);
+  // 숲 — 양옆은 촘촘 · 가운데(글 자리)는 먼 줄만
+  const farB = (x) => 74 + Math.round(Math.sin(x / 23) * 2), midB = (x) => 82 + Math.round(Math.sin(x / 17 + 1) * 2);
+  forest(cv, 0, farB, Array.from({ length: 36 }, (_, i) => [4 + i * 11 + ((i * 5) % 4), 13 + ((i * 7) % 8)]));
+  farIgloo(cv, 334, farB(334) + 1, 9, 6);
+  forest(cv, 1, midB, [...Array.from({ length: 6 }, (_, i) => [8 + i * 22 + ((i * 3) % 7), 20 + ((i * 11) % 10)]), ...Array.from({ length: 6 }, (_, i) => [272 + i * 22 + ((i * 3) % 7), 20 + ((i * 11) % 10)])]);
+  snowField(cv, (x) => 90 - 2 * Math.sin(x / 31) - bump(x, 300, 50, 2));
+  fogBand(cv, 74, 94, 0.28);
+  forest(cv, 2, (x) => 101, [[10, 46], [28, 32], [392, 52], [374, 34]]);
+  snowfall(cv, R, 90, () => true);
+  // 유령 펭귄 — 가운데
+  const sp = spectre(), b = sp.g.box();
+  const ox = Math.round(W / 2 - b.w / 2), oy = 2;
+  lampLight(cv, ox + 20, oy + 24, 34, "#6b5bd6", 0.3);
+  cv.at(sp.g, ox, oy);
+  wisps(cv, [[ox - 16, oy + 10], [ox + b.w + 10, oy + 6], [ox + b.w + 18, oy + 32], [ox - 26, oy + 34]]);
+  lampLight(cv, ox + sp.lamp[0] - b.x0, oy + sp.lamp[1] - b.y0, 40, "#7ff3ff", 0.42);
+  const t = titleText(W / 2, oy + b.h + 2, 1, { big: 11 });
+  wisps(cv, [t.wisp]);
+  return { cv, text: t.text };
+}
+function ghostMobile() {
+  const W = 180, H = 120;
+  const cv = canvas(W, H);
+  const R = rng(1016);
+  const moonC = [154, 16], mr = 8;
+  sky(cv, R, { stops: [0, 16, 32, 46, 60, 72, 84, 96], avoid: [[moonC[0] - mr - 9, moonC[1] - mr - 9, 2 * mr + 18, 2 * mr + 18]] });
+  aurora(cv, [{ x0: 0, x1: 179, y: 4, len: 24, amp: 4, f: 15, ph: 1, alpha: 0.48, c0: NIGHT.aur0, c1: NIGHT.aur1 }]);
+  moonPlain(cv, moonC[0], moonC[1], mr);
+  sparkles(cv, [[20, 10, true], [40, 30, false], [140, 40, false]]);
+  const farB = (x) => 100 + Math.round(Math.sin(x / 19) * 2);
+  forest(cv, 0, farB, Array.from({ length: 17 }, (_, i) => [4 + i * 11 + ((i * 5) % 3), 12 + ((i * 7) % 8)]));
+  forest(cv, 1, (x) => 108, [[8, 24], [26, 18], [156, 22], [174, 26]]);
+  snowField(cv, (x) => 112 - 2 * Math.sin(x / 23));
+  fogBand(cv, 96, 114, 0.3);
+  snowfall(cv, R, 46, () => true);
+  const sp = spectre(), b = sp.g.box();
+  const ox = Math.round(W / 2 - b.w / 2), oy = 5;
+  lampLight(cv, ox + 20, oy + 24, 26, "#6b5bd6", 0.3);
+  cv.at(sp.g, ox, oy);
+  wisps(cv, [[ox - 14, oy + 10], [ox + b.w + 8, oy + 8], [ox + b.w + 12, oy + 34]]);
+  lampLight(cv, ox + sp.lamp[0] - b.x0, oy + sp.lamp[1] - b.y0, 30, "#7ff3ff", 0.42);
+  const t = titleText(W / 2, oy + b.h + 4, 1.12);
+  wisps(cv, [t.wisp]);
+  return { cv, text: t.text };
+}
+
+// 이벤트 꾸미기 시안 — 배지(16 칸) · 아바타 테두리(64 칸) · 카드 스킨(200 × 64 칸)
+const GP_BADGE = [
+  "................",
+  ".....OOOOOO.....",
+  "....OKKKKKKO....",
+  "...OKGKKKKKKO...",
+  "...OKWWKKWWKO...",
+  "...OWWWWWWWWO...",
+  "...OWEWWWWEWO...",
+  "...OWBWYYWBWO...",
+  "...ORRRRRRRRO...",
+  "..OTWWWWWWWWTO..",
+  "..OTWWWWWWWWTO..",
+  "...OWWWWWWWWO...",
+  "...OWWWWWWWWO...",
+  "...OWWOWWOWWO...",
+  "....OO.OO.OO....",
+  "................",
+];
+// 테두리 — 유령 날개(바깥 깃털 흰빛 → 푸른빛) · 보라 고리 · 네 방향 호박불 · 위 가운데 유령 펭귄 · 아래 초대장 문장
+function ghostFrame() {
+  const N = 72, cv = canvas(N, N);
+  const c = (N - 1) / 2, r0 = 24, r1 = 29;
+  // 유령 날개 — 양옆 깃털 네 장(고리 옆에서 뻗어 위로 휘며 끝이 가늘어진다 · 끝으로 갈수록 흰빛) · 짙은 남색 테
+  const wing = grid();
+  for (const side of [-1, 1]) for (let k = 0; k < 4; k++) {
+    const L = 15 - k * 2.5, base = 0.25 - k * 0.38; // 시작 각(라디안, 0 = 옆 · 음수 = 위)
+    for (let t = 0; t <= L; t += 0.25) {
+      const ang = base - (t / L) * 0.55;
+      const rr = r1 - 2 + t;
+      const px = c + side * rr * Math.cos(ang), py = c + rr * Math.sin(ang);
+      const w = 3.2 * (1 - t / L) + 0.6;
+      for (let yy = Math.floor(py - w); yy <= Math.ceil(py + w); yy++) for (let xx = Math.floor(px - w); xx <= Math.ceil(px + w); xx++) {
+        if (Math.hypot(xx - px, yy - py) > w) continue;
+        if (Math.hypot(xx - c, yy - c) < r1) continue; // 고리 안쪽은 비운다
+        const col = t > L * 0.8 ? "#ffffff" : t > L * 0.45 ? "#dce8fb" : "#a9bbe8";
+        const prev = wing.get(xx, yy);
+        if (!prev || prev === "#a9bbe8" || (prev === "#dce8fb" && col === "#ffffff")) wing.set(xx, yy, col);
+      }
+    }
+  }
+  wing.outline("#2a2f5e");
+  for (const [key, col] of wing.m) { const [x, y] = key.split(",").map(Number); cv.set(x, y, col); }
+  // 고리 — 금 테두리 · 짙은 보라 · 주황 점(룬)
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const d = Math.hypot(x - c, y - c);
+    if (d >= r0 - 0.5 && d <= r1 + 0.5) {
+      const edge = d < r0 + 0.6 || d > r1 - 0.6;
+      const ang = Math.atan2(y - c, x - c);
+      const rune = !edge && Math.abs(d - (r0 + r1) / 2) < 0.8 && Math.round((ang + Math.PI) / (Math.PI / 12)) % 2 === 0;
+      cv.set(x, y, edge ? "#ffd447" : rune ? "#ff8a24" : "#4a2785");
+    } else if (d < r0 - 0.5) cv.set(x, y, "#e9edf5"); // 사진 자리(시안)
+  }
+  // 아래 양옆 꼬마 호박
+  cv.stand(pumpkinSmall(), Math.round(c - 18), Math.round(c + 26));
+  cv.stand(pumpkinSmall(), Math.round(c + 18), Math.round(c + 26));
+  // 위 가운데 유령 펭귄(고리에 걸터앉음) · 아래 초대장 문장
+  cv.at(sprite(GP_BADGE, GP_PAL), Math.round(c) - 8, Math.round(c - r1) - 11);
+  cv.at(sprite(ENVELOPE, ENV_PAL), Math.round(c) - 4, Math.round(c + r1) - 3);
+  return cv;
+}
+// 카드 스킨 — 밤하늘 · 오른쪽 유령 이글루 · 레벨 막대 끝에 유령 펭귄이 앉아 있고 꼬리가 막대를 따라 흩날림
+function ghostCard() {
+  const W = 200, H = 64, cv = canvas(W, H);
+  const R = rng(1031);
+  sky(cv, R, { stops: [0, 8, 16, 24, 32, 40, 48, 56], avoid: [[4, 4, 110, 56]] });
+  sparkles(cv, [[120, 6, true], [150, 14, false], [96, 4, false]]);
+  moonPlain(cv, 186, 12, 8);
+  const fore = (x) => 58 - bump(x, 170, 30, 3);
+  ground(cv, R, { far: (x) => 52 - bump(x, 160, 24, 2), mid: (x) => 55, fore });
+  igloo(cv, 172, Math.round(fore(172)), 20, 15);
+  // 카드 칸(시안) — 아바타 · 이름 · 레벨 막대
+  for (let y = 10; y < 34; y++) for (let x = 8; x < 32; x++) if (Math.hypot(x - 19.5, y - 21.5) < 12) cv.set(x, y, "#e9edf5");
+  cv.rect(38, 14, 52, 5, "#ffffff"); // 이름 자리
+  cv.rect(38, 22, 30, 3, "#c9c2e6");
+  // 레벨 막대 — 칸 · 채움(호박색)
+  cv.rect(8, 42, 150, 7, "#1a1030");
+  cv.rect(9, 43, 148, 5, "#2d2350");
+  cv.rect(9, 43, 96, 5, "#ff8a24");
+  cv.rect(9, 43, 96, 1, "#ffc46e");
+  // 막대 끝 유령 펭귄 + 꼬리빛
+  for (let x = 60; x < 104; x++) if (dith(x, 40) < (x - 60) / 44) cv.set(x, 40, "#9fb0e0");
+  cv.at(sprite(GP_BADGE, GP_PAL), 98, 27);
+  return cv;
+}
 
 // ───────────────────────── 내보내기 ─────────────────────────
 const outDir = join(ROOT, "public", "banners");
@@ -1098,6 +1723,137 @@ if (process.env.BANNER === "cat") {
     .composite([{ input: await sharp(cp).resize(1200, 300, { kernel: "nearest" }).toBuffer(), left: 20, top: 20 }, { input: await sharp(cm).resize(540, 360, { kernel: "nearest" }).toBuffer(), left: 1240, top: 20 }])
     .png().toFile(join(prevDir, "cat-preview.png"));
   console.log("halloween-cat-pc.png · halloween-cat-mobile.png · cat-preview.png");
+  process.exit(0);
+}
+if (process.env.BANNER === "spectre") {
+  const dir = join(ROOT, ".claude", "mockups", "ghost-event");
+  mkdirSync(dir, { recursive: true });
+  const cv = canvas(48, 60);
+  for (let y = 0; y < 60; y++) for (let x = 0; x < 48; x++) cv.set(x, y, y < 30 ? "#1c1440" : "#241a52");
+  const sp = spectre();
+  cv.at(sp.g, 4, 3);
+  lampLight(cv, 4 + sp.lamp[0], 3 + sp.lamp[1], 22, "#7ff3ff", 0.42);
+  await sharp(await cv.png(10)).toFile(join(dir, "spectre.png"));
+  console.log("ghost-event/spectre.png");
+  process.exit(0);
+}
+if (process.env.BANNER === "ghostcos") {
+  const dir = join(ROOT, ".claude", "mockups", "ghost-event");
+  mkdirSync(dir, { recursive: true });
+  const badge = canvas(16, 16); badge.at(sprite(GP_BADGE, GP_PAL), 0, 0);
+  const bBuf = await badge.png(12, true); // 192
+  const fBuf = await ghostFrame().png(5, true); // 360
+  const cBuf = await ghostCard().png(5); // 1000 × 320
+  await sharp({ create: { width: 1000 + 40, height: 360 + 320 + 60, channels: 4, background: "#f2f2f2" } })
+    .composite([{ input: bBuf, left: 40, top: 60 }, { input: fBuf, left: 320, top: 0 }, { input: cBuf, left: 20, top: 400 }])
+    .png().toFile(join(dir, "cosmetics-preview.png"));
+  console.log("ghost-event/cosmetics-preview.png");
+  process.exit(0);
+}
+// 📌 10/14 운영자 "진짜 카드 스킨은 모든 게 바뀌는 게 스킨" — 첫 카드 스킨 「유령 펭귄의 초대」 바탕 장면 시안(레벨 카드 360 × 556 = 120 × 186칸 · 칸 3px).
+//    글 자리(이름 · LEVEL · 막대 · 스탯)는 어둡게 두고, 오른쪽 빈자리(LEVEL 숫자 옆)에 유령 펭귄 · 아래는 숲 · 눈밭
+function ghostCardScene() {
+  const W = 120, H = 186;
+  const cv = canvas(W, H);
+  const R = rng(1031);
+  const moonC = [106, 13], mr = 7;
+  // 글 자리(칸) — 이름 · LEVEL 숫자 · 등급 · 막대 · 스탯. 별 · 눈송이 · 반짝이를 두지 않는다
+  const TEXT = [[45, 13, 62, 25], [6, 56, 38, 32], [6, 87, 64, 17], [6, 108, 108, 18], [6, 133, 108, 42]];
+  const onText = (x, y) => TEXT.some(([ax, ay, aw, ah]) => x >= ax && y >= ay && x < ax + aw && y < ay + ah);
+  sky(cv, R, { stops: [0, 26, 52, 78, 102, 124, 144, 162], avoid: [[moonC[0] - mr - 8, moonC[1] - mr - 8, 2 * mr + 16, 2 * mr + 16], ...TEXT] });
+  aurora(cv, [
+    { x0: 0, x1: 119, y: 6, len: 16, amp: 3, f: 13, ph: 0.8, alpha: 0.32, c0: NIGHT.aur0, c1: NIGHT.aur1 },
+    { x0: 10, x1: 119, y: 18, len: 12, amp: 3, f: 9, ph: 2.4, alpha: 0.22, c0: NIGHT.aur1, c1: NIGHT.aur2 },
+  ]);
+  moonPlain(cv, moonC[0], moonC[1], mr);
+  sparkles(cv, [[60, 44, false], [114, 40, true]]);
+  const farB = (x) => 168 + Math.round(Math.sin(x / 13) * 2);
+  forest(cv, 0, farB, Array.from({ length: 12 }, (_, i) => [3 + i * 10 + ((i * 5) % 4), 14 + ((i * 7) % 8)]));
+  farIgloo(cv, 104, farB(104) + 3, 8, 5);
+  forest(cv, 1, (x) => 179, [[4, 26], [16, 18], [112, 28], [100, 18]]);
+  snowField(cv, (x) => 180 - 1.5 * Math.sin(x / 17));
+  fogBand(cv, 158, 182, 0.24);
+  snowfall(cv, R, 34, onText);
+  // 📌 10/14 운영자 "배경에 있는 유령 펭귄을 제거하고, 카드 테두리에 동일한 위치에 유령 펭귄을 넣자" — 장면엔 도깨비불만
+  wisps(cv, [[64, 56], [110, 82], [52, 62]]);
+  return cv;
+}
+// 카드 테두리 「유령 펭귄의 초대」 — 테 · 네 모서리 보석 · 유령 펭귄(스킨 때와 같은 자리, LEVEL 숫자 오른쪽)
+const GC_SPECTRE = [76, 52];
+// 📌 10/14 운영자 "테두리가 좀 더 예쁘면 좋겠어" — 가는 선 · 점선 → 볼록 몰딩 테 · 푸른 불꽃 장식(꼬마전구처럼) · 모서리 금 메달 + 유령 날개 깃털 · 아래 안개 자락
+function ghostCardBorder() {
+  const W = 120, H = 186, cv = canvas(W, H);
+  const x0 = 3, y0 = 3, x1 = 116, y1 = 182; // 테 바깥선(칸)
+  const MOLD = ["#0a0716", "#8a76e6", "#4b3a9a", "#2a2068", "#0a0716"]; // 바깥선 · 빛 · 몸 · 그늘 · 안선
+  for (let i = 0; i < 5; i++) {
+    for (let x = x0 + i; x <= x1 - i; x++) { cv.set(x, y0 + i, MOLD[i]); cv.set(x, y1 - i, MOLD[i === 1 ? 3 : i === 3 ? 1 : i]); }
+    for (let y = y0 + i; y <= y1 - i; y++) { cv.set(x0 + i, y, MOLD[i]); cv.set(x1 - i, y, MOLD[i === 1 ? 3 : i === 3 ? 1 : i]); }
+  }
+  // 안쪽 푸른 빛 한 줄(성기게)
+  for (let x = x0 + 5; x <= x1 - 5; x++) { if (x % 2) { cv.set(x, y0 + 5, "#2f5fb0"); cv.set(x, y1 - 5, "#2f5fb0"); } }
+  for (let y = y0 + 5; y <= y1 - 5; y++) { if (y % 2) { cv.set(x0 + 5, y, "#2f5fb0"); cv.set(x1 - 5, y, "#2f5fb0"); } }
+  // 푸른 불꽃 장식 — 테 몸 가운데 줄에 촘촘히(밝은 것 · 어두운 것 번갈아)
+  const stud = (x, y, on) => { cv.set(x, y, on ? "#ffffff" : "#9ff8ff"); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) cv.set(x + dx, y + dy, on ? "#7ff3ff" : "#3f86c4"); cv.set(x, y - 2, on ? "#45b4ff" : null); };
+  let n = 0;
+  for (let x = x0 + 16; x <= x1 - 16; x += 9) { stud(x, y0 + 2, n % 2 === 0); stud(x, y1 - 2, n % 2 === 1); n++; }
+  n = 0;
+  for (let y = y0 + 16; y <= y1 - 16; y += 9) { stud(x0 + 2, y, n % 2 === 0); stud(x1 - 2, y, n % 2 === 1); n++; }
+  // 모서리 — 유령 날개 깃털(테를 따라 두 장씩) + 금 메달 · 푸른 불꽃
+  const FEATHER = ["..ooooo...", ".oWWWbbo..", "oWWbbbvvoo", ".obbvvvo..", "..ooo....."];
+  const fp = { o: "#1d3d78", W: "#eafcff", b: "#b4ecf9", v: "#72c3e6" };
+  const fg = (rows) => sprite(rows, fp);
+  const rotate = (g) => { const n2 = grid(); for (const [key, c] of g.m) { const [x, y] = key.split(",").map(Number); n2.set(-y, x, c); } return n2; };
+  const flipX = (g) => g.flip();
+  const flipY = (g) => { const b2 = g.box(); const n2 = grid(); for (const [key, c] of g.m) { const [x, y] = key.split(",").map(Number); n2.set(x, b2.y0 + b2.y1 - y, c); } return n2; };
+  const MED = ["...ooooo...", "..oGggggGo.", ".oGgddddgGo", "oGgddfdddgGo".slice(0, 11), "oGdddFfdddG", "oGddfWFdddG".slice(0, 11), "oGdddFfdddG", "oGgdddddgGo", ".oGgddddgGo", "..oGggggGo.", "...ooooo..."];
+  const mp = { o: "#0a0716", G: "#9c6a22", g: "#e2b04a", d: "#150f36", f: "#2a6fd6", F: "#45b4ff", W: "#ffffff" };
+  const corners = [[x0 + 2, y0 + 2, 1, 1], [x1 - 2, y0 + 2, -1, 1], [x0 + 2, y1 - 2, 1, -1], [x1 - 2, y1 - 2, -1, -1]];
+  for (const [cx, cy, sx, sy] of corners) {
+    // 가로 깃털(테 따라) · 세로 깃털
+    let h = fg(FEATHER); if (sx < 0) h = flipX(h); if (sy < 0) h = flipY(h);
+    const hb = h.box(); cv.at(h, sx > 0 ? cx + 4 : cx - 4 - hb.w + 1, cy - 2);
+    let v = rotate(fg(FEATHER)); if (sx < 0) v = flipX(v); if (sy < 0) v = flipY(v);
+    const vb = v.box(); cv.at(v, cx - 2, sy > 0 ? cy + 4 : cy - 4 - vb.h + 1);
+    cv.at(sprite(MED, mp), cx - 5, cy - 5);
+  }
+  // 아래 안개 자락 — 테 안쪽 아래를 따라 옅은 유령 꼬리 빛(위로 갈수록 성기게)
+  for (let x = x0 + 6; x <= x1 - 6; x++) {
+    const top = y1 - 6 - Math.round(2.5 + 2 * Math.sin(x / 7) + Math.sin(x / 3.1));
+    for (let y = top; y <= y1 - 6; y++) {
+      const t = (y - top) / Math.max(1, y1 - 6 - top);
+      if (dith(x, y) > 0.25 + t * 0.6) continue;
+      cv.set(x, y, t > 0.6 ? "#b4ecf9" : "#72c3e6");
+    }
+  }
+  // 유령 펭귄(스킨 때와 같은 자리)
+  const [ox, oy] = GC_SPECTRE;
+  const sp = spectre();
+  cv.at(sp.g, ox, oy);
+  wisps(cv, [[ox - 12, oy + 4], [ox + 34, oy + 26]]);
+  return cv;
+}
+if (process.env.BANNER === "ghostcard") {
+  const dir = join(ROOT, ".claude", "mockups", "ghost-event", "cos");
+  mkdirSync(dir, { recursive: true });
+  await sharp(await ghostCardScene().png(3)).toFile(join(dir, "card-bg.png")); // 360 × 558
+  await sharp(await ghostCardBorder().png(3, true)).toFile(join(dir, "card-border.png")); // 투명 바탕
+  console.log("ghost-event/cos/card-bg.png");
+  process.exit(0);
+}
+if (process.env.BANNER === "ghost") {
+  const flat = async ({ cv, text }) => sharp(await cv.png(CELL)).composite([{ input: smoothText(cv.W, cv.H, CELL, text) }]).png({ compressionLevel: 9 }).toBuffer();
+  const gp = await flat(ghostPc()), gm = await flat(ghostMobile());
+  const dir = join(ROOT, ".claude", "mockups", "ghost-event");
+  mkdirSync(dir, { recursive: true });
+  await sharp(gp).toFile(join(dir, "ghost-invite-pc.png"));
+  await sharp(gm).toFile(join(dir, "ghost-invite-mobile.png"));
+  // 📌 10/14 운영자 "이대로 ㄱㄱ" — 할로윈 탭 기본 배너 네 번째(app/arctic/ArcticShopBody HW_BANNERS · 관리 상점 HW_DEFAULT_BANNERS)
+  await sharp(gp).toFile(join(outDir, "ghost-invite-pc.png")); // 2400 × 600
+  await sharp(gm).toFile(join(outDir, "ghost-invite-mobile.png")); // 1080 × 720
+  await sharp({ create: { width: 1200 + 540 + 60, height: 400, channels: 4, background: "#f2f2f2" } })
+    .composite([{ input: await sharp(gp).resize(1200, 300, { kernel: "nearest" }).toBuffer(), left: 20, top: 20 }, { input: await sharp(gm).resize(540, 360, { kernel: "nearest" }).toBuffer(), left: 1240, top: 20 }])
+    .png().toFile(join(dir, "preview.png"));
+  console.log("ghost-event/preview.png");
   process.exit(0);
 }
 if (process.env.BANNER === "catdiscord") {

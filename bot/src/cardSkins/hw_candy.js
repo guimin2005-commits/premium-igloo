@@ -301,7 +301,7 @@ export function deco(w, h, S, site, ctx = {}) {
       ? `<style>@keyframes ${id}Tw{0%,100%{opacity:.2}50%{opacity:1}}.${id}-tw{animation:${id}Tw 4s ease-in-out infinite}` +
         `@media (prefers-reduced-motion:reduce){.${id}-tw{animation:none}}</style>`
       : "");
-  const under = site ? `<rect width="${w}" height="${h}" fill="url(#${id}-dt)"/>` : "";
+  const under = site && !ctx.onScene ? `<rect width="${w}" height="${h}" fill="url(#${id}-dt)"/>` : "";
   const over = `<g shape-rendering="crispEdges">${draw(fr, 0, 0, P)}${plates}${sunkG.svg}${heap}${tw}</g>`;
   return { defs: defs + sunkG.defs, under, over };
 }

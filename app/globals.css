@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* 📌 시안 · 작업 폴더(.claude — 봇 카드 시안 복사본이 bot/node_modules 에 연결돼 있다)는 클래스를 훑지 않는다.
+   훑으면 Tailwind 가 그 연결을 따라 수만 개 파일을 읽느라 빌드가 시간 초과로 깨졌다(2026-10-18) */
+@source not "../.claude";
 
 :root {
   --background: #090909;

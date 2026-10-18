@@ -3,10 +3,9 @@
 import React, { useState, useEffect } from "react";
 import BackLink from "../../components/BackLink";
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { Reveal } from "../../components/Lux";
 import { RenderFormattedText } from "../../components/FormattedText";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../../components/AdminView";
 
 /* 📌 소식 공지 한 건 = 한 페이지 (이동 규칙 1). 화이트 & 블랙. */
 
@@ -21,8 +20,7 @@ const fmt = (v: string) => {
 export default function NoticeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: session } = useSession();
-  const isAdmin = !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { admin: isAdmin } = useAdminView(); // 📌 「유저 화면으로 보기」 켜면 수정 단추 없음
 
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);

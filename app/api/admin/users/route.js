@@ -16,7 +16,7 @@ import SeasonResult from "@/models/SeasonResult";
 import Inquiry from "@/app/models/Inquiry";
 import Apply from "@/app/models/Apply";
 import { unitStacksOf } from "@/lib/itemConsume";
-import { xpStopState } from "@/lib/xpStop";
+import { xpStopRecord } from "@/lib/xpStop";
 
 // 📌 관리자 '유저 조회' — 한 유저의 지갑 · 구매 · 지급 · 쿠폰 · 알림 · 문의 · 지원서를 한 번에 묶어 준다.
 //    GET ?q=      검색 — 디스코드 ID 는 정확히, 이름(username · displayName)은 부분 일치. 최대 20명
@@ -117,11 +117,14 @@ async function detail(userId) {
           lastAttendDate: user.lastAttendDate || "",
           voiceSeconds: user.voiceSeconds || 0,
           needsRoleSync: !!user.needsRoleSync,
-          // 음성 XP 정지(./voice-stop) — 정지 중인지 · 정지한 시각
+          // 음성 XP 정지(./voice-stop) — 정지 중인지 · 정지한 시각 · 세운 관리자
           voiceXpOff: !!user.voiceXpOff,
           voiceXpOffAt: user.voiceXpOffAt || null,
-          // XP 획득 중단(./xp-stop) — 끝나지 않은 것만 { from, until, by, reason, active(false = 예약) }, 없거나 끝났으면 null
-          xpStop: xpStopState(user),
+          voiceXpOffBy: String(user.voiceXpOffBy || ""),
+          // XP 획득 중단(./xp-stop) — { from, until, by, reason, active, status: active · reserved · ended }, 기록이 없으면 null.
+          //    📌 ended(기간이 끝났지만 해제하지 않은 것)도 준다 — 봇 잠수 확인은 이 유저를 계속 제재 중으로 본다(lib/afkCheck.js SANCTIONED_QUERY).
+          //       예전엔 끝난 중단을 null 로 줘서 유저 조회에 [해제]가 안 떴고, 어디서도 풀 수 없었다
+          xpStop: xpStopRecord(user),
           updatedAt: user.updatedAt || null,
           // 패스 — 지난 시즌에 멈춘 문서면 진행도 대신 그 시즌 번호만(다음 조회 때 사이트가 새 시즌으로 넘긴다)
           pass: {

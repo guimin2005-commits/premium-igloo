@@ -6,8 +6,8 @@ import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
-import { isSupporterSession } from "@/lib/supporters";
-import { isAdminName } from "@/lib/admins";
+import { isSupporterViewer } from "@/lib/adminViewServer";
+import { isAdminViewer } from "@/lib/adminViewServer";
 import { kstDayStart } from "@/lib/kst";
 import SupporterComment from "@/models/SupporterComment";
 import Post from "@/models/Post";
@@ -23,10 +23,11 @@ async function gate() {
   if (!session?.user?.name || !session.user.id) {
     return { deny: NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 }) };
   }
-  if (!isSupporterSession(session)) {
+  if (!(await isSupporterViewer(session))) {
     return { deny: NextResponse.json({ success: false, error: "서포터즈 전용입니다." }, { status: 403 }) };
   }
-  return { session, admin: isAdminName(session.user.name) };
+  // 📌 관리자로 보는 중일 때만(「유저 화면으로 보기」 켜면 가린 · 예약 글 댓글 · 남의 댓글 지우기 없이 유저와 같게)
+  return { session, admin: await isAdminViewer(session) };
 }
 
 const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");

@@ -2,15 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { STRING_SKINS } from "@/lib/cardSkins";
-
-// 📌 카드 스킨 장식 — 레벨 페이지 프로필 카드(잉크 판)에 착용한 카드 스킨을 얹는다.
-//    "'카드' 스킨인 만큼 좀 꾸며 달라"(테두리만으론 심심) — 스킨마다 액자 + 장식 요소:
-//      골드   금박 결 무늬 · 이중 테 · 네 모서리 장식 · 위아래 문장 · 반짝임
-//      오로라 밤하늘 별 · 위에서 드리우는 빛 커튼(가는 세로 빛줄) · 물결 선 · 빛 테
-//    아이스 · 크림슨(2026-10-05 도트로 다시 그림)과 시즌 2(새로운 세계 · 항해도 · 비공정)는 lib/cardSkins 의 SVG 문자열 함수를 그대로 쓴다 — 봇 카드와 한 벌
-//    등급 색(카드 오른쪽 위 번지는 빛 · 링 · 문장)과 헷갈리지 않게 카드를 넓게 번지는 빛으로 칠하지 않는다 — 선 · 점 · 무늬 · 작은 장식만.
-//    아바타(왼쪽 위)와 글자 뒤에는 옅게, 진한 장식은 가장자리 · 모서리(오른쪽 위 · 아래쪽)에. 봇 이미지 카드(lib/botCards.js SKIN_DECO)와 같은 말.
-//    부모는 relative overflow-hidden 이어야 한다. 크기를 재서 그리므로 처음 한 번은 비어 있다가 나타난다(자리를 차지하지 않아 아무것도 밀지 않는다)
+import { sceneMetaOf } from "@/lib/cardScenes";
 const dia = (x, y, r) => `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`;
 // 네 갈래 반짝임(오목한 별)
 const star4 = (x, y, r) => `M${x} ${y - r}Q${x} ${y} ${x + r} ${y}Q${x} ${y} ${x} ${y + r}Q${x} ${y} ${x - r} ${y}Q${x} ${y} ${x} ${y - r}Z`;
@@ -34,6 +26,8 @@ const inAvatar = (x, y) => x < 120 && y < 118;
 //   barY · barBottom: 레벨 막대(data-skin-bar) 가운데 · 아래 — 항해도 항로가 이 막대를 넘어간다
 //   goalY: 등급 줄(data-skin-goal) 위 — LEVEL 큰 숫자와 등급 사이 높이, 항해도 도착 ✕ 자리
 //   avoidLeft · avoidBottom: 등급 줄 오른쪽 단추(data-skin-avoid, 레벨 페이지 '등급 안내') — ✕ 가 단추 뒤에 숨지 않게
+//   goalLeft: 등급 줄 왼쪽 끝(글자 시작) — 스탯 선을 접은 폰에서도 테가 글자에 닿지 않게(유령 펭귄의 초대)
+//   onScene: 카드 배경을 낀 카드(부르는 쪽이 SceneBack 으로 바탕을 깐다) — 테두리는 카드 전체 바탕 결(무늬 rect)을 빼고 테 · 장식만
 export function deco(skin, w, h, ctx = {}) {
   // 📌 시즌 2 스킨 — 문자열 함수(lib/cardSkins)가 그린 SVG 를 그대로 얹는다(그림은 목록에 있는 key 로만 만든다 — 사용자 입력이 섞이지 않음)
   const s2 = Object.prototype.hasOwnProperty.call(STRING_SKINS, skin) ? STRING_SKINS[skin] : null;
@@ -69,7 +63,7 @@ export function deco(skin, w, h, ctx = {}) {
             <rect width="0.7" height="7" fill="#f0cf7e" fillOpacity="0.05" />
           </pattern>
         </defs>
-        <rect width={w} height={h} fill="url(#sf-foil)" />
+        {!ctx.onScene && <rect width={w} height={h} fill="url(#sf-foil)" />}
         <rect x={o} y={o} width={w - o * 2} height={h - o * 2} fill="none" stroke="url(#sf-gd)" strokeOpacity="0.8" strokeWidth="2" />
         <rect x={i} y={i} width={w - i * 2} height={h - i * 2} fill="none" stroke="#f0cf7e" strokeOpacity="0.22" strokeWidth="1" />
         {corners.map(([x, y, sx, sy]) => (
@@ -157,7 +151,10 @@ export function deco(skin, w, h, ctx = {}) {
   return null;
 }
 
-export default function SkinFrame({ skin }) {
+// 📌 skin — 카드 테두리 키(예전 「카드 스킨」 전부). scene — 카드 배경 키(2026-10-15 — 카드 바탕 그림 전체, 테두리는 그 위).
+//    부르는 쪽(레벨 페이지 카드 · 인벤토리 장착 판 · 적용 미리보기)은 둘 다 넘긴다. 배경 그림은 부르는 쪽이 맨 아래 겹에 깐다(SceneBack) —
+//    여기서는 배경을 꼈는지만 테두리 그림에 알린다(ctx.onScene — 카드 전체 바탕 결을 빼고 테 · 장식만, lib/cardSkins)
+export default function SkinFrame({ skin, scene = "" }) {
   const ref = useRef(null);
   const [box, setBox] = useState(null);
   useEffect(() => {
@@ -180,7 +177,7 @@ export default function SkinFrame({ skin }) {
         w, h,
         lineY: ln ? ln.top : null, lineX0: ln ? ln.left : null, lineX1: ln ? ln.right : null,
         barY: bar ? Math.round((bar.top + bar.bottom) / 2) : null, barBottom: bar ? bar.bottom : null,
-        goalY: goal ? goal.top : null,
+        goalY: goal ? goal.top : null, goalLeft: goal ? goal.left : null,
         avoidLeft: avoid ? avoid.left : null, avoidBottom: avoid ? avoid.bottom : null,
       };
       setBox((b) => (b && Object.keys(next).every((k) => b[k] === next[k]) ? b : next));
@@ -189,11 +186,12 @@ export default function SkinFrame({ skin }) {
     return () => ro.disconnect();
   }, []);
   // 📌 그림은 스킨 · 카드 크기 · 자리가 바뀔 때만 다시 만든다 — 등급 카드 스킨(랭크 깃발)은 한 번에 수십 ms 라 부모가 다시 그릴 때마다 만들면 화면이 버벅인다
-  const body = useMemo(() => (box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h, box) : null), [skin, box]);
+  const onScene = !!sceneMetaOf(scene);
+  const body = useMemo(() => (box && box.w > 60 && box.h > 60 ? deco(skin, box.w, box.h, onScene ? { ...box, onScene } : box) : null), [skin, box, onScene]);
   const split = body && !React.isValidElement(body) && body.base ? body : null;
   return (
     <>
-      <div ref={ref} aria-hidden className="absolute inset-0 pointer-events-none">
+      <div ref={ref} aria-hidden data-scene={scene || undefined} className="absolute inset-0 pointer-events-none">
         {body && (
           <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} className="absolute inset-0 block">
             {split ? split.base : body}

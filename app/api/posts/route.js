@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
-import { isSupporterSession } from "@/lib/supporters";
+import { isAdminViewer } from "@/lib/adminViewServer";
+import { isSupporterViewer } from "@/lib/adminViewServer";
 import { bracketVisible } from "@/lib/tournamentPhase";
 import Post from "@/models/Post";
 import { readDiscordInput, queueNotice, announceView } from "@/lib/noticeAnnounce";
@@ -25,13 +25,16 @@ export async function GET(request) {
     // 세션은 필요한 요청에서만, 한 번만 읽는다
     let session;
     const getSession = async () => (session === undefined ? (session = await getServerSession(authOptions)) : session);
+    // 📌 관리자로 보는 중인지 — 「유저 화면으로 보기」 켜면 ?all=1 · 비공개 대진표 원문 · 작성자 없이 유저와 같게(관리 콘솔 fetch 는 늘 관리자)
+    let viewer;
+    const isViewer = async () => (viewer === undefined ? (viewer = await isAdminViewer(await getSession())) : viewer);
 
     // 📌 서포터즈 글은 역할 보유자(와 관리자)만 — 화면에서 메뉴를 감추는 것만으로는 막은 게 아니다
-    if (category === "서포터즈" && !isSupporterSession(await getSession())) {
+    if (category === "서포터즈" && !(await isSupporterViewer(await getSession()))) {
       return NextResponse.json({ error: "서포터즈 전용입니다." }, { status: 403 });
     }
     // 카테고리 없이 전부 볼 때도 서포터즈 글은 같은 기준으로 가린다
-    if (!category && !isSupporterSession(await getSession())) {
+    if (!category && !(await isSupporterViewer(await getSession()))) {
       query.category = { $ne: "서포터즈" };
     }
 
@@ -39,7 +42,7 @@ export async function GET(request) {
        ?all=1 로 전부 보는 건 관리자만 — 화면에서 안 부르는 것만으로는 막은 게 아니다. */
     let wantAll = searchParams.get("all") === "1";
     if (wantAll) {
-      if (!isAdminName((await getSession())?.user?.name)) wantAll = false;
+      if (!(await isViewer())) wantAll = false;
     }
     if (!wantAll) {
       query.$or = [{ publishAt: null }, { publishAt: { $lte: new Date() } }];
@@ -50,7 +53,7 @@ export async function GET(request) {
 
     // 📌 비공개 대진표는 API 에서도 뺀다 — 화면에서 안 그리는 것만으로는 막은 게 아니다. 관리자는 원문을 받는다.
     let data = posts;
-    if (posts.some((p) => p.tournamentBracket && !bracketVisible(p)) && !isAdminName((await getSession())?.user?.name)) {
+    if (posts.some((p) => p.tournamentBracket && !bracketVisible(p)) && !(await isViewer())) {
       data = posts.map((p) => {
         if (!p.tournamentBracket || bracketVisible(p)) return p;
         const o = p.toObject();
@@ -60,7 +63,7 @@ export async function GET(request) {
     }
 
     // 📌 2026-10-04 "공지사항에 elahw.06 적혀있는 거 좀 빼" — 작성자(관리자 디스코드 이름)는 관리자 요청에만 싣는다. 화면에도 그리지 않는다
-    if (!isAdminName((await getSession())?.user?.name)) {
+    if (!(await isViewer())) {
       data = data.map((p) => {
         const o = typeof p.toObject === "function" ? p.toObject() : { ...p };
         delete o.author;

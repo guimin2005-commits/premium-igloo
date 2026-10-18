@@ -598,7 +598,7 @@ export function deco(w, h, S, site, ctx = {}) {
       BALL_KEYS.map((_, i) => `.${K}-y${i}{animation:${K}-y${i} ${PLAY_MS}ms infinite}`).join("") +
       `@media (prefers-reduced-motion:reduce){.${K}-bl,.${K}-ta,.${K}-tb,.${K}-tc,${[0, 1, 2].map((i) => `.${K}-p${i}`).join(",")},${BALL_KEYS.map((_, i) => `.${K}-y${i}`).join(",")}{animation:none}}</style>`
     : "";
-  const under = site ? `<rect width="${w}" height="${h}" fill="url(#${K}-dt)"/>` : "";
+  const under = site && !ctx.onScene ? `<rect width="${w}" height="${h}" fill="url(#${K}-dt)"/>` : "";
   // 두 번째 · 세 번째 장면은 처음엔 숨김(움직임이 꺼져 있거나 CSS 를 모르는 곳에서는 꼬리 A · 뜬 눈). alt = 꼬리 C · 감은 눈
   const hide = ` opacity="0"`;
   const tails = site ? tA.svg(`${K}-ta`, alt ? hide : "") + tB.svg(`${K}-tb`, hide) + tC.svg(`${K}-tc`, alt ? "" : hide) : "";

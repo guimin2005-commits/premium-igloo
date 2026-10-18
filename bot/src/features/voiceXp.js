@@ -3,11 +3,12 @@
 //       한 번, 그 순간 음성에 있는 사람 전원에게 1회분을 통째로 줬다(들어온 지 10초여도 1회분, 4분 50초 있다 나가면 0, 봇 재시작 때 진행 중인 몇 분은 사라짐).
 //       이제 features/voiceTime.js 가 사람마다 실제 접속 초를 재 각자 5분(voiceIntervalSec)을 채울 때마다 1회분을 주고,
 //       다 못 채우고 나가거나 다른 채널로 옮기면 그때 머문 시간만큼(1회분 × 머문 초 / 5분) 준다. 진행 중인 시간은 20초마다 DB 에 적어 재시작에도 이어 간다.
-//    📌 1회분(voiceRate) = 기본 음성 XP + 등급 가산 + 강화 + 역할 · 채널 · 이벤트 부스트 + 아이템 효과("음성 1회당" · "음성 파티").
+//    📌 1회분(voiceRate) = 기본 음성 XP + 등급 가산 + 강화 + 역할 · 채널 · 이벤트 부스트 + 아이템 효과("음성 1회당" · "음성 파티" · "머물수록 증가" — 2026-10-18).
 //       음소거 감소(완화 효과 반영)는 그 구간에 곱한다 — 마이크를 켰다 껐다 하거나 채널을 옮기면 구간마다 그때 상태로 따로 계산해 더한다.
 //    📌 아이템 효과: "하루 음성 N분"은 오늘 누적 분이 N 이상이 되면 하루 1번 따로, "출석 · 출석 N번째"는 출석 지급에 더한다.
 //       "음성 파티"는 그 채널 인원(봇 제외)이 효과의 기준 이상일 때, "음소거 감소 완화"는 감소율에서 %p 를 뺀다(막기 모드는 그대로).
 //       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
+//    📌 2026-10-14 할로윈 「사탕 바구니」(voiceCandy) — 음성 XP 를 실제로 받은 바퀴의 초만 쌓아 N분마다 사탕(100~5,000 XP)을 따로 준다(giveVoiceCandy).
 //    📌 레벨 비공개면 바퀴를 받아도 아무것도 하지 않는다 — XP · 오늘 누적 분 · 자동 출석 · 하루 음성 효과 전부(payVoiceCycle 맨 위).
 //       음성 시간(voiceSeconds — 랭킹)은 voiceTime.js 가 따로 쌓는다.
 //    📌 음성 XP 정지(UserXp.voiceXpOff — 관리자)인 사람은 통째로 건너뛴다: 지급 · 오늘 누적 분 · 자동 출석 · 하루 음성 효과 · 음성 시간(voiceTime.js).
@@ -18,9 +19,10 @@ import { PermissionFlagsBits } from "discord.js";
 import { UserXp } from "../db.js";
 import { getVoiceBracketBonus, kstToday } from "../leveling.js";
 import { getBuffXp } from "../roleConfigs.js";
-import { effectXp, voicePartyXp, perksOf } from "../itemEffects.js";
+import { effectXp, voicePartyXp, voiceStayXp, perksOf, voiceCandyMinutes, voiceCandyTiers, pickCandyXp } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, isLevelOpen } from "../botSettings.js";
+import { hotTimeMult } from "../hotTime.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
 import { claimAttendance, streakBonusText } from "../attend.js";
 import { isXpStopped } from "../xpStop.js";
@@ -70,18 +72,53 @@ export function relieveMute(multiplier, member, s) {
 }
 
 // 📌 1회분(5분) XP — 음소거 배율을 곱하기 전. 채널이 없으면(지워진 채널) 채널에 붙는 가산 · 효과는 뺀다
-//    doc: 그 사람의 UserXp(level · voiceEnhance), count: 그 채널의 봇 아닌 사람 수(본인 포함)
-export function voiceRate(member, channel, doc, s, count) {
+//    doc: 그 사람의 UserXp(level · voiceEnhance), count: 그 채널의 봇 아닌 사람 수(본인 포함),
+//    staySec: 같은 채널에 이어서 머문 초(그 구간 시작 때 — features/voiceTime.js · 머물수록 증가 voiceStay 효과)
+export function voiceRate(member, channel, doc, s, count, staySec = 0) {
   const base = Math.max(0, Number(s.voiceXp) || 0);
   const enhanceXp = Math.max(0, Math.floor(Number(doc?.voiceEnhance) || 0)) * Math.max(0, Number(s.voiceEnhanceStep) || 0);
   const channelXp = channel ? getChannelPolicy(channel).boostXp || 0 : 0;
-  // 📌 2026-10-04 "강화 포함이지. 강화는 '기본 XP'를 강화하는 개념" — % 효과("음성 1회당" · "음성 파티")는 강화로 늘어난 기본 XP 에 붙인다(채팅과 같은 기준)
+  // 📌 2026-10-04 "강화 포함이지. 강화는 '기본 XP'를 강화하는 개념" — % 효과("음성 1회당" · "음성 파티" · "머물수록 증가")는 강화로 늘어난 기본 XP 에 붙인다(채팅과 같은 기준)
   const pctBase = base + enhanceXp;
-  const itemXp = effectXp(member, "voice", { base: pctBase, channel }) + voicePartyXp(member, { base: pctBase, channel, count });
-  return base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp + getBuffXp(member) + channelXp + getActiveBoostXp(member, channel) + itemXp;
+  const itemXp = effectXp(member, "voice", { base: pctBase, channel }) + voicePartyXp(member, { base: pctBase, channel, count })
+    + voiceStayXp(member, { base: pctBase, staySec, channel });
+  // 📌 핫타임(hotTime.js) — 기본 + 등급 가산 + 강화에만 배수(운영자 "강화는 기본 경험치의 개념" · 등급 가산도 같이). 역할 버프 · 채널 · 부스트 · 아이템 효과는 그대로
+  const core = (base + getVoiceBracketBonus(doc?.level || 0) + enhanceXp) * hotTimeMult(s);
+  return core + getBuffXp(member) + channelXp + getActiveBoostXp(member, channel) + itemXp;
 }
 
-// 📌 한 바퀴(5분을 채웠거나 · 다 못 채우고 나감 · 옮김) 지급 — XP · 오늘 누적 분 · 자동 출석 · 하루 음성 효과.
+// 📌 사탕 바구니(아이템 효과 voiceCandy — 2026-10-14 할로윈 「유령 펭귄의 초대」) — 음성 XP 를 받은 바퀴의 실제 초를 UserXp.voiceCandySec 에 쌓고,
+//    효과의 N분(여러 개면 가장 짧은 것 — 쌓는 칸은 하나)이 찰 때마다 무작위 XP 하나(그 효과의 구간 표 — itemEffects.js candyTiersOf · 기본 100~3,000)를 주고 그만큼 뺀다.
+//    나머지는 남겨 둔다(재시작에도 이어 간다). 잠수 · 제외 채널 · 음소거 막기 · 레벨 비공개 · 음성 XP 정지 · XP 획득 중단처럼 음성 XP 가 없는 시간은
+//    바퀴가 없거나 지급이 막혀 여기까지 오지 않는다. 효과가 없거나 그 바퀴에 조건(요일 · 시간대 · 음성 채널)이 안 맞으면 쌓지 않는다.
+//    핫타임 배수 없음(운영자 "아이템에는 핫타임 효과가 적용되지 않음"). 지급은 grantXp(reason "effect") — XpLog · 레벨업 · 패스가 그대로 돈다
+async function giveVoiceCandy(member, c) {
+  const sec = Math.max(0, Number(c.sec) || 0);
+  if (!(sec > 0)) return;
+  const channel = c.ch ? member.guild.channels.cache.get(c.ch) || null : null;
+  const minutes = voiceCandyMinutes(member, { channel });
+  if (!(minutes > 0)) return;
+  // 📌 2026-10-18 보상 구간 표는 효과마다(그 간격을 정한 효과 — 없으면 기본 표 100~3,000)
+  const tiers = voiceCandyTiers(member, { channel });
+  const need = minutes * 60;
+  const doc = await UserXp.findOneAndUpdate({ userId: member.id }, { $inc: { voiceCandySec: sec } }, { new: true, projection: { voiceCandySec: 1 } }).lean();
+  // 소수 초를 더해 온 값이라 아주 작은 오차는 찬 것으로 본다
+  const n = Math.floor((Math.max(0, Number(doc?.voiceCandySec) || 0) + 1e-6) / need);
+  if (n < 1) return;
+  // 뺄 만큼 남아 있을 때만 뺀다 — 겹쳐 불려도 같은 초로 두 번 주지 않게
+  const take = n * need;
+  const r = await UserXp.updateOne({ userId: member.id, voiceCandySec: { $gte: take - 1e-6 } }, { $inc: { voiceCandySec: -take } });
+  if (r.modifiedCount !== 1) return;
+  const where = { channelId: c.ch || "", channelName: c.chName || "", pc: c.pc || "" };
+  for (let i = 0; i < n; i++) {
+    const xp = pickCandyXp(Math.random, tiers);
+    await grantXp(member, xp, { reason: "effect", ...where })
+      .then((d) => d && console.log(`✨ 아이템 효과(voiceCandy): ${member.displayName} +${xp.toLocaleString()}`))
+      .catch((e) => console.error(`아이템 효과 지급 오류 (voiceCandy / ${member.displayName}):`, e?.message || e));
+  }
+}
+
+// 📌 한 바퀴(5분을 채웠거나 · 다 못 채우고 나감 · 옮김) 지급 — XP · 사탕 바구니 · 오늘 누적 분 · 자동 출석 · 하루 음성 효과.
 //    c: { ch, chName, pc, sec(실제 초), amount(줄 XP — 부르는 쪽이 1 XP 미만을 사람마다 이월해 정수로 맞춘다), ctx }. 1초 미만은 부르는 쪽이 버린다
 export async function payVoiceCycle(member, c) {
   // 📌 2026-10-04 "다 막아" — 레벨 비공개 동안 머문 시간은 그날 출석에도 치지 않는다. 예전엔 XP · 출석만 막고 오늘 누적 분은 계속 쌓아,
@@ -96,7 +133,7 @@ export async function payVoiceCycle(member, c) {
   const today = kstToday();
   const attendMin = Math.max(1, s.attendVoiceMin || 60);
 
-  await grantXp(member, Math.max(0, Math.floor(Number(c.amount) || 0)), {
+  const paid = await grantXp(member, Math.max(0, Math.floor(Number(c.amount) || 0)), {
     reason: "voice",
     channelId: c.ch,
     channelName: c.chName || "",
@@ -105,6 +142,9 @@ export async function payVoiceCycle(member, c) {
     logSec: Math.max(0.1, Math.round(c.sec * 10) / 10),
     ctx: c.ctx,
   });
+
+  // 사탕 바구니 — 이 바퀴가 음성 XP 를 실제로 받았을 때만(grantXp 가 문서를 돌려줌 = 1 XP 이상 · 중단 아님). 오류가 출석 · 하루 음성 효과를 막지 않게 따로 잡는다
+  if (paid) await giveVoiceCandy(member, c).catch((e) => console.error(`아이템 효과 지급 오류 (voiceCandy / ${member.displayName}):`, e?.message || e));
 
   // ── 출석 자동 지급 ──
   //    유저가 눌러서 받는 방식이 아니라, 기준 시간을 채우면 그 자리에서 준다.

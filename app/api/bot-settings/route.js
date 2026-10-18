@@ -16,6 +16,18 @@ const num = (v, def, { min = 0, max = 10_000_000 } = {}) => {
 
 // 📌 새로 붙은 칸은 본문에 없으면(이 칸을 모르는 옛 화면이 저장) 저장된 값을 그대로 둔다 — 기본값으로 덮지 않게
 const bool = (v, cur, def) => (typeof v === "boolean" ? v : typeof cur === "boolean" ? cur : def);
+// 핫타임 — 배수는 1~5 · 소수 첫째 자리, 날짜는 본문에 없으면 저장값 유지 · ""/null 이면 비움
+const hotMult = (v, def) => {
+  if (v == null || String(v).trim() === "") return def;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(5, Math.max(1, Math.round(n * 10) / 10)) : def;
+};
+const dateOr = (v, cur) => {
+  if (v === undefined) return cur ?? null;
+  if (v === null || v === "") return null;
+  const d = new Date(v);
+  return Number.isFinite(d.getTime()) ? d : cur ?? null;
+};
 
 // 연속 출석 보너스 규칙 정리 — days 1~365 정수 · xp/point 0~10,000,000 · 보상 없는 줄과 같은 일수 중복은 버림 · 최대 10줄
 const MAX_STREAK_RULES = 10;
@@ -98,6 +110,13 @@ export async function POST(request) {
         afkCheckMinMin: num(b.afkCheckMinMin, 20, { min: 1, max: 1440 }),
         afkCheckMaxMin: Math.max(num(b.afkCheckMinMin, 20, { min: 1, max: 1440 }), num(b.afkCheckMaxMin, 60, { min: 1, max: 1440 })),
         afkCheckReplyMin: num(b.afkCheckReplyMin, 5, { min: 1, max: 60 }),
+        // 📌 핫타임(lib/hotTime.js) — 본문에 없으면(이 칸을 모르는 옛 화면) 저장값 유지
+        hotTimeOn: bool(b.hotTimeOn, cur?.hotTimeOn, false),
+        hotTimeName: typeof b.hotTimeName === "string" ? b.hotTimeName.trim().slice(0, 40) : cur?.hotTimeName || "",
+        hotTimeFrom: dateOr(b.hotTimeFrom, cur?.hotTimeFrom),
+        hotTimeUntil: dateOr(b.hotTimeUntil, cur?.hotTimeUntil),
+        hotTimeWeekdayMult: hotMult(b.hotTimeWeekdayMult, cur?.hotTimeWeekdayMult ?? 1.5),
+        hotTimeWeekendMult: hotMult(b.hotTimeWeekendMult, cur?.hotTimeWeekendMult ?? 2),
         muteMode: ["off", "reduce", "block"].includes(b.muteMode) ? b.muteMode : "reduce",
         muteReducePct: num(b.muteReducePct, 90, { min: 0, max: 100 }),
         muteTarget: ["both", "any"].includes(b.muteTarget) ? b.muteTarget : "both",
@@ -112,36 +131,21 @@ export async function POST(request) {
         ...Object.fromEntries([["questRerollPriceDaily", 1], ["questRerollPriceWeekly", 2], ["questRerollPriceMonthly", 3]].map(([k, def]) => [
           k, b[k] !== undefined && b[k] !== null && b[k] !== "" ? num(b[k], def, { min: 0, max: 100 }) : cur?.[k] ?? def,
         ])),
-        shopPublic: !!b.shopPublic,
         levelPublic: !!b.levelPublic,
         // 시즌 전환 보호 역할 — 화이트리스트에 없으면 조용히 무시되어 detach 쪽 안전장치가 항상 빈 배열이 된다.
         // 역할 ID 문자열만 남기고 개수도 제한한다 (관리자 실수·비정상 입력으로 문서가 부풀지 않게)
         protectedRoleIds: Array.isArray(b.protectedRoleIds)
           ? b.protectedRoleIds.filter((s) => typeof s === "string" && s.trim()).slice(0, 50)
           : [],
-        levelupChannelId: (b.levelupChannelId || "").trim(),
-        levelupMessage: (b.levelupMessage || "").trim() || "🎉 {user} 님이 **Lv.{level}** 에 도달했습니다!",
-        roleGrantChannelId: (b.roleGrantChannelId || "").trim(),
-        roleGrantMessage: (b.roleGrantMessage || "").trim() || "🎖 {user} 님에게 **{role}** 역할이 지급되었습니다! (Lv.{level})",
-        roleGrantEnabled: b.roleGrantEnabled !== false,
-        // 자동 출석 알림 채널 — "" 는 레벨업 채널과 동일. 본문에 없으면(이 칸을 모르는 옛 화면) 저장값 유지
-        attendChannelId: typeof b.attendChannelId === "string" ? b.attendChannelId.trim().slice(0, 32) : cur?.attendChannelId || "",
-        // 공지 채널 — "" 는 보내지 않음(봇이 실패로 남긴다). 본문에 없으면 저장값 유지
-        noticeChannelId: typeof b.noticeChannelId === "string" ? b.noticeChannelId.trim().slice(0, 32) : cur?.noticeChannelId || "",
-        // 서포터즈 — 화이트리스트에 없으면 조용히 무시되어 역할 탭에서 저장해도 안 남는다
-        supporterRoleId: typeof b.supporterRoleId === "string" ? b.supporterRoleId.trim() : "",
-        // 📌 2026-10-04 서포터즈 평가 XP 상한 없앰(app/api/admin/supporters EVAL_NUM_MAX) — 평가 칸의 기본값인 이 칸도 같은 끝(1조, 숫자가 깨지지 않는 한도)만
-        supporterBaseXp: num(b.supporterBaseXp, 150000, { max: 1_000_000_000_000 }),
-        supporterGoalChat: num(b.supporterGoalChat, 0),
-        supporterGoalVoiceMin: num(b.supporterGoalVoiceMin, 0),
-        // 시즌 결산 RANKER 역할 — "" 는 '역할 주지 않음'. 본문에 없으면 저장값 유지
-        rankerRoleId: typeof b.rankerRoleId === "string" ? b.rankerRoleId.trim().slice(0, 32) : cur?.rankerRoleId || "",
         // 연속 출석 보너스 — 본문에 배열이 없으면 저장된 규칙 유지
         attendStreakEnabled: bool(b.attendStreakEnabled, cur?.attendStreakEnabled, false),
         attendStreakRules: cleanStreakRules(Array.isArray(b.attendStreakRules) ? b.attendStreakRules : cur?.attendStreakRules),
-        // 만료 임박 DM — 1~168시간 전
-        expiryReminderEnabled: bool(b.expiryReminderEnabled, cur?.expiryReminderEnabled, true),
-        expiryReminderHours: num(b.expiryReminderHours, cur?.expiryReminderHours ?? 24, { min: 1, max: 168 }),
+        // 📌 2026-10-17 관리 화면 정리 — 아래 칸은 POST 가 쓰지 않는다(다른 화면으로 옮겼다 · 본문에 와도 무시). 바꾸기는 PATCH 로만:
+        //    shopPublic(상점 관리 › 설정) · supporterRoleId · supporterBaseXp · supporterGoalChat · supporterGoalVoiceMin(서포터즈 › 설정) ·
+        //    levelupChannelId · roleGrantChannelId · attendChannelId · noticeChannelId · expiryReminderHours(봇 메시지 › 보내는 곳) · rankerRoleId(시즌 전환 › RANKER).
+        //    레벨 설정 화면은 GET 으로 받은 문서 전체를 되돌려 보낸다 — 여기서 쓰면 그 화면을 연 뒤 다른 화면에서 바꾼 값을 옛 값으로 되돌린다(예: 상점 공개).
+        //    옛 한 줄 문구(levelupMessage · roleGrantMessage)와 옛 알림 스위치(roleGrantEnabled · expiryReminderEnabled)도 쓰지 않는다 —
+        //    문구 · 켜고 끄기는 봇 메시지(BotMessage)의 「보내기」 하나다. 저장된 값은 그대로 남는다(봇 메시지 legacyKey 반영용)
         updatedAt: new Date(),
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -153,25 +157,70 @@ export async function POST(request) {
   }
 }
 
-// 📌 상점 설정만 바꾸기 — 상점 관리 › 설정(app/admin/shop)이 부른다. 본문에 온 칸만 $set 한다(나머지 봇 설정은 건드리지 않는다).
-//    POST 는 화면이 보낸 전체 값으로 칸마다 다시 쓰므로, 다른 화면이 일부만 보내면 나머지가 기본값으로 덮인다 — 그래서 따로 둔다.
-//    POST 는 이 칸들을 받지 않는다(레벨 설정 저장이 상점 설정을 되돌리지 않게)
-//      shopCashbackCap: 캐시백 합 상한 %(0~100 정수) · cashbackOnPoint: 빙옥으로 낸 몫에도 캐시백(true/false)
+// ── [칸만 바꾸기] PATCH ──
+//    📌 본문에 온 칸 중 아래 표(PATCH_FIELDS)에 있는 칸만 $set 한다 — 나머지 봇 설정은 건드리지 않는다.
+//       POST 는 레벨 설정 화면이 보낸 문서 전체로 칸마다 다시 쓴다. 다른 화면이 일부만 POST 하면 나머지가 기본값으로 덮이므로,
+//       레벨 설정 밖으로 옮긴 칸은 이 길로만 바꾼다(POST 는 이 칸들을 쓰지 않는다 — 레벨 설정 저장이 되돌리지 않게).
+//       부르는 곳: 상점 관리 › 설정(캐시백 · 상점 공개) · 서포터즈 › 설정 · 봇 메시지 › 보내는 곳 · 시즌 전환 › RANKER
+//    값 검사는 POST 와 같은 규칙(숫자 범위 · 자르기). 빈 칸("" · null)은 "안 바꿈"으로 건너뛴다(채널 · 역할 ID 의 "" 는 '지정 안 함' 으로 저장)
+//    표에 없는 칸은 조용히 무시한다. 쓸 칸이 하나도 없으면 400. 잘못된 값이 하나라도 있으면 아무것도 쓰지 않고 400(어느 칸인지 message)
+const badValue = (message) => ({ error: message });
+const isEmpty = (v) => v == null || String(v).trim() === "";
+// 디스코드 ID(역할 · 채널) — "" 는 '지정 안 함'. 숫자만 · 32자까지
+const snowflake = (label) => (v) => {
+  if (typeof v !== "string") return badValue(`${label} 값이 올바르지 않습니다.`);
+  const s = v.trim();
+  return /^\d{0,32}$/.test(s) ? { value: s } : badValue(`${label} 값이 올바르지 않습니다.`);
+};
+// 정수 칸 — POST 의 num 과 같은 범위(소수는 버림). 빈 칸은 건너뜀
+const intIn = (label, min, max) => (v) => {
+  if (isEmpty(v)) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < min || n > max) return badValue(`${label}은(는) ${min.toLocaleString()}~${max.toLocaleString()} 사이로 입력해 주세요.`);
+  return { value: Math.floor(n) };
+};
+const boolOnly = (label) => (v) => (typeof v === "boolean" ? { value: v } : badValue(`${label} 값이 올바르지 않습니다.`));
+const PATCH_FIELDS = {
+  // 상점 관리 › 설정 — 캐시백 합 상한 %(0~100 정수) · 빙옥으로 낸 몫에도 캐시백 · ARCTIC 상점 공개
+  shopCashbackCap: (v) => {
+    if (isEmpty(v)) return null;
+    const n = Number(v);
+    return !Number.isFinite(n) || n < 0 || n > 100 ? badValue("캐시백 상한은 0~100% 사이로 입력해 주세요.") : { value: Math.floor(n) };
+  },
+  cashbackOnPoint: boolOnly("빙옥 결제분 캐시백"),
+  shopPublic: boolOnly("ARCTIC 상점 공개"),
+  // 서포터즈 › 설정 — 📌 2026-10-04 서포터즈 평가 XP 상한 없앰(app/api/admin/supporters EVAL_NUM_MAX) — 월 기본 XP 도 같은 끝(1조)
+  supporterRoleId: snowflake("서포터즈 역할"),
+  supporterBaseXp: intIn("월 기본 XP", 0, 1_000_000_000_000),
+  supporterGoalChat: intIn("월 목표 채팅", 0, 10_000_000),
+  supporterGoalVoiceMin: intIn("월 목표 음성", 0, 10_000_000),
+  // 봇 메시지 › 보내는 곳 — 레벨업("" = 알림 끄기) · 역할 지급 · 자동 출석("" = 레벨업 채널과 동일) · 공지("" = 보내지 않음) · 만료 임박 DM 시점(1~168시간 전)
+  levelupChannelId: snowflake("레벨업 채널"),
+  roleGrantChannelId: snowflake("역할 지급 채널"),
+  attendChannelId: snowflake("자동 출석 채널"),
+  noticeChannelId: snowflake("공지 채널"),
+  expiryReminderHours: intIn("만료 알림 시점", 1, 168),
+  // 시즌 전환 › RANKER — 시즌 결산 RANKER 역할("" = 역할 주지 않음)
+  rankerRoleId: snowflake("RANKER 역할"),
+};
+
 export async function PATCH(request) {
   try {
     const deny = await denyIfNotAdmin();
     if (deny) return deny;
     await connectToDatabase();
     const b = await request.json().catch(() => ({}));
-    const set = {};
-    if (b?.shopCashbackCap != null && String(b.shopCashbackCap).trim() !== "") {
-      const n = Number(b.shopCashbackCap);
-      if (!Number.isFinite(n) || n < 0 || n > 100) {
-        return NextResponse.json({ success: false, message: "캐시백 상한은 0~100% 사이로 입력해 주세요." }, { status: 400 });
-      }
-      set.shopCashbackCap = Math.floor(n);
+    if (!b || typeof b !== "object" || Array.isArray(b)) {
+      return NextResponse.json({ success: false, message: "바꿀 값이 없습니다." }, { status: 400 });
     }
-    if (typeof b?.cashbackOnPoint === "boolean") set.cashbackOnPoint = b.cashbackOnPoint;
+    const set = {};
+    for (const [k, check] of Object.entries(PATCH_FIELDS)) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) continue;
+      const r = check(b[k]);
+      if (!r) continue;
+      if (r.error) return NextResponse.json({ success: false, message: r.error }, { status: 400 });
+      set[k] = r.value;
+    }
     if (!Object.keys(set).length) {
       return NextResponse.json({ success: false, message: "바꿀 값이 없습니다." }, { status: 400 });
     }
@@ -182,7 +231,7 @@ export async function PATCH(request) {
     );
     return NextResponse.json({ success: true, data: doc });
   } catch (e) {
-    console.error("상점 설정 저장 오류:", e);
+    console.error("봇 설정 칸 저장 오류:", e);
     return NextResponse.json({ success: false, message: "저장에 실패했습니다." }, { status: 500 });
   }
 }

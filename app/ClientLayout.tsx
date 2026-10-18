@@ -11,7 +11,8 @@ import ScrollLock from "./components/ScrollLock";
 import { LoginSheet, GuestInquirySheet, onLoginRequest, type LoginContext } from "./components/LoginPrompt";
 import { useArcticFromLevel, ARCTIC_FROM_KEY, ARCTIC_ORIGIN_KEY } from "./arctic/fromLevel";
 import { agoLabel } from "@/lib/ago";
-import { ADMIN_USERS } from "@/lib/admins";
+import { isConsolePath } from "@/lib/adminView";
+import { AdminViewProvider, useAdminView, useAdminToolList, AdminToolRow, UserViewSwitchRow } from "./components/AdminView";
 
 // 서버에서는 layout effect 가 돌지 않으므로 경고 없이 effect 로 대신한다
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -74,8 +75,11 @@ const DOCK_POLICY_KEY = "igloo:dock-policy";
 const ADMIN_QUERY_PATHS = ["/support", "/recruit", "/auction"];
 
 // 관리자 패널(좌측)을 붙일 화면인지 — 관리자 전용 화면에서만
-const isAdminSurfaceOf = (isAdmin: boolean, pathname: string, adminParam: string | null) =>
-  isAdmin && (pathname.startsWith("/admin") || ADMIN_SURFACE_PATHS.includes(pathname) || (ADMIN_QUERY_PATHS.includes(pathname) && adminParam === "1"));
+//    📌 관리 콘솔(/admin · /write)은 「유저 화면으로 보기」와 상관없이 관리자 틀(realAdmin). ?admin=1 화면은 관리자로 보는 중(admin)일 때만 —
+//       유저 화면에서는 쿼리를 무시한 일반 레이아웃
+const isAdminSurfaceOf = (realAdmin: boolean, admin: boolean, pathname: string, adminParam: string | null) =>
+  (realAdmin && (pathname.startsWith("/admin") || ADMIN_SURFACE_PATHS.includes(pathname)))
+  || (admin && ADMIN_QUERY_PATHS.includes(pathname) && adminParam === "1");
 
 // 📌 로그인 오류(next-auth ?error=코드) → 한국어 안내. 로그인 · 오류 화면을 "/" 로 돌려 두었다(lib/authOptions.js pages)
 //    디스코드에서 취소하면 Callback, 상태 확인 · 토큰 교환이 실패하면 OAuthCallback 으로 온다
@@ -121,11 +125,12 @@ type RouteQuery = { qs: string; fromLevel: boolean };
 //    크롬(헤더 · 독 · 푸터)이 쓰는 쿼리 값은 onQuery 로 부모에 알린다. 페이지 틀(관리자 패널 여부)은 여기서 같은 렌더로 정해
 //    쿼리가 한 박자 늦게 도착해도 페이지가 다시 마운트되지 않게 한다.
 function RouteBody({
-  children, mounted, isAdmin, maintenance, onQuery, onAuthLanding,
+  children, mounted, realAdmin, admin, maintenance, onQuery, onAuthLanding,
 }: {
   children: ReactNode;
   mounted: boolean;
-  isAdmin: boolean;
+  realAdmin: boolean;
+  admin: boolean;
   maintenance: ReactNode;
   onQuery: (q: RouteQuery) => void;
   onAuthLanding: (code: string | null) => void;
@@ -178,7 +183,7 @@ function RouteBody({
   if (!mounted || authLanding) return <PagePlaceholder />;
   if (maintenance) return <>{maintenance}</>;
   // 📌 관리자 화면 — 좌측 메뉴(PC) / 페이지 단추 + 메뉴 판(모바일) + 전체 폭 본문. 사이트 푸터는 숨긴다
-  if (isAdminSurfaceOf(isAdmin, pathname, searchParams.get("admin"))) {
+  if (isAdminSurfaceOf(realAdmin, admin, pathname, searchParams.get("admin"))) {
     return (
       <div className="w-full flex-1 flex flex-col lg:flex-row">
         <AdminNav />
@@ -214,7 +219,16 @@ function RouteProgress({ pathname }: { pathname: string }) {
   );
 }
 
+// 📌 사이트 전체를 「유저 화면으로 보기」 · 「관리 도구」 판(app/components/AdminView)으로 감싼다 — 상단 바 · 메뉴(아래)와 페이지가 같은 값을 읽는다
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminViewProvider>
+      <SiteChrome>{children}</SiteChrome>
+    </AdminViewProvider>
+  );
+}
+
+function SiteChrome({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   // 상단 카테고리 줄에서 마지막으로 올린 큰 분류 — 아래 패널은 이 분류의 세부만 보여 준다
   const [gnbGroup, setGnbGroup] = useState("");
@@ -378,7 +392,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const hasScrimRole = userSession?.hasScrimRole;
   const isBooster = userSession?.isBooster || false;
   const isSupporter = userSession?.isSupporter || false;
-  const isAdmin = status === "authenticated" && userSession?.name && ADMIN_USERS.includes(userSession.name);
+  // 📌 관리자 판정은 한 곳(app/components/AdminView) — realAdmin: 관리자 계정 · isAdmin: 관리자로 보는 중(「유저 화면으로 보기」 꺼짐).
+  //    아래 메뉴 · 독 · 점검 화면 · 서포터즈 줄은 isAdmin 을 따른다 — 켜면 같은 계정의 일반 유저와 똑같다
+  const { realAdmin, admin: isAdmin, userView, setUserView } = useAdminView();
+  const adminTools = useAdminToolList();
 
   // 📌 ARCTIC 공개 여부 — 비공개면 관리자에게만 메뉴에 노출한다
   //    📌 새로고침 때 독이 "닫힌 세계" 칸(대회 · 소식 · 이벤트)으로 잠깐 그려졌다가 바뀌던 것 — 모르는 동안은 null.
@@ -402,7 +419,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const levelPublic = !!policy?.level;
 
   // 📌 관리자 패널 표시 여부 — 관리자 전용 화면에서만 좌측 패널을 붙인다 (여기선 상단 바 폭 · 푸터만, 본문 틀은 RouteBody)
-  const isAdminSurface = isAdminSurfaceOf(!!isAdmin, pathname || "", searchParams.get("admin"));
+  const isAdminSurface = isAdminSurfaceOf(realAdmin, isAdmin, pathname || "", searchParams.get("admin"));
 
 
   // 📌 카테고리 그룹화: 큰 카테고리 → 세부 카테고리 (메가 메뉴)
@@ -617,7 +634,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   // 📌 점검 모드 화면 (관리자는 정상 이용 가능) — 페이지 자리에 대신 그린다
-  const maintenanceScreen = isMaintenance && mounted && !isAdmin && status !== "loading" ? (
+  //    「유저 화면으로 보기」 중이면 관리자도 점검 화면을 본다. 관리 콘솔(/admin · /write)은 스위치와 상관없이 연다
+  const maintenanceScreen = isMaintenance && mounted && !isAdmin && !(realAdmin && isConsolePath(pathname)) && status !== "loading" ? (
     <div className="flex-1 flex items-center justify-center px-6 py-32 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[#e91e3f]/[0.06] blur-[120px] rounded-full pointer-events-none"></div>
       <div className="relative z-10 text-center max-w-md">
@@ -677,11 +695,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
           </div>
           
-<div className="order-3 flex flex-1 md:basis-0 min-w-0 justify-end items-center gap-3 md:gap-4 relative z-10 h-full">
+{/* 「유저 화면」 칩이 있을 때만 폰 간격을 한 단 좁혀 한 줄에 들어가게 한다 */}
+<div className={`order-3 flex flex-1 md:basis-0 min-w-0 justify-end items-center ${userView ? "gap-2" : "gap-3"} md:gap-4 relative z-10 h-full`}>
             {!mounted || status === "loading" ? (
                <div className="w-20 h-8"></div>
             ) : status === "authenticated" && session ? (
               <>
+              {/* 📌 「유저 화면」 칩 — 켜져 있는 동안만. 누르면(×) 끈다. 상단 바 한 줄 안에 들어가게 작게 */}
+              {userView && (
+                <button type="button" onClick={() => setUserView(false)} aria-label="유저 화면 끄기"
+                  className={`shrink-0 inline-flex items-center gap-0.5 h-6 pl-2 pr-1.5 rounded-full text-[10px] font-black whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${isLightPage ? "bg-[#131313] text-white hover:bg-[#2a2a2a]" : "bg-white text-[#131313] hover:bg-white/85"}`}>
+                  유저 화면
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS.close} /></svg>
+                </button>
+              )}
               {/* 📌 쿠폰 등록 — 알림 옆에 두어 어디서든 바로 쓸 수 있게 (미인증 유저는 숨김) */}
               {isVerified && (
                 <Link href="/profile/coupons" aria-label="쿠폰함" title="쿠폰함"
@@ -785,7 +812,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                           관리자 페이지
                         </Link>
                       )}
+                      {/* 📌 「유저 화면으로 보기」 — 관리자 계정만(켜져 있어도 보인다 — 여기서 끈다) */}
+                      <UserViewSwitchRow light={!!isLightPage} />
                     </div>
+                    {/* 📌 관리 도구 — 지금 화면이 올린 테스트 도구만(없으면 칸째 없음). 관리자로 보는 중일 때만 */}
+                    {isAdmin && adminTools.length > 0 && (
+                      <div className={`border-t px-2 py-2 ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
+                        <p className={`px-3 pt-1 pb-1.5 text-[11px] font-black tracking-[0.08em] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>관리 도구</p>
+                        {adminTools.map((t) => <AdminToolRow key={t.key} tool={t} light={!!isLightPage} />)}
+                      </div>
+                    )}
                     <div className={`border-t px-2 py-2 ${isLightPage ? "border-[#ededed]" : "border-white/[0.07]"}`}>
                       <button type="button" onClick={() => { setIsProfileOpen(false); signOut(); }} className={`w-full h-10 px-3 rounded-xl text-left text-[13px] font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${isLightPage ? "text-[#d01634] hover:bg-[#e91e3f]/[0.06]" : "text-[#ff5c77] hover:bg-[#e91e3f]/10"}`}>로그아웃</button>
                     </div>
@@ -869,7 +905,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <Suspense fallback={<PagePlaceholder />}>
           <RouteBody
             mounted={mounted}
-            isAdmin={!!isAdmin}
+            realAdmin={realAdmin}
+            admin={isAdmin}
             onQuery={onQuery}
             onAuthLanding={onAuthLanding}
             maintenance={maintenanceScreen}
@@ -964,6 +1001,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           if (isVerified) accountItems.push({ name: "쿠폰함", path: "/profile/coupons", icon: ICON_PATHS.ticket });
           if (isAdmin) accountItems.push({ name: "관리자 페이지", path: "/admin", icon: ICON_PATHS.key });
         }
+        // 「유저 화면으로 보기」 스위치는 관리자 계정만 — 계정 묶음 끝 한 줄
+        const showViewSwitch = status === "authenticated" && !!session && realAdmin;
         const showCategories = !isVerifyPage && (status !== "authenticated" || isVerified);
         // 메뉴 줄 아이콘 — 프로필 창처럼 아이콘 + 이름 한 줄
         const NAV_ICON: Record<string, string> = {
@@ -1051,10 +1090,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </div>
               ))}
 
-              {accountItems.length > 0 && (
+              {(accountItems.length > 0 || showViewSwitch) && (
                 <div className={groupGap}>
                   <p className={groupHead}>계정</p>
                   {accountItems.map((item) => row(item.path, item.icon, item.name))}
+                  {showViewSwitch && <UserViewSwitchRow light={!!L} size="mobile" />}
+                </div>
+              )}
+
+              {/* 📌 관리 도구 — 지금 화면이 올린 테스트 도구만(없으면 묶음째 없음). 관리자로 보는 중일 때만 */}
+              {isAdmin && adminTools.length > 0 && (
+                <div className={groupGap}>
+                  <p className={groupHead}>관리 도구</p>
+                  {adminTools.map((t) => <AdminToolRow key={t.key} tool={t} light={!!L} size="mobile" />)}
                 </div>
               )}
             </div>

@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { connectToDatabase } from "@/lib/mongodb";
 import { authOptions } from "@/lib/authOptions";
-import { isSupporterSession, monthKeyKST, prevMonthKey, shiftMonthKey, getActivity, getActivityDaily, getSupporterSettings } from "@/lib/supporters";
+import { isSupporterViewer } from "@/lib/adminViewServer";
+import { monthKeyKST, prevMonthKey, shiftMonthKey, getActivity, getActivityDaily, getSupporterSettings } from "@/lib/supporters";
 import SupporterEval from "@/models/SupporterEval";
 import UserXp from "@/models/UserXp";
 
@@ -16,7 +17,7 @@ export async function GET() {
     if (!session?.user?.name) {
       return NextResponse.json({ success: false, error: "로그인이 필요합니다." }, { status: 401 });
     }
-    if (!isSupporterSession(session)) {
+    if (!(await isSupporterViewer(session))) {
       return NextResponse.json({ success: false, error: "서포터즈 전용입니다." }, { status: 403 });
     }
     await connectToDatabase();

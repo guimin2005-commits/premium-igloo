@@ -12,8 +12,10 @@ import { DiscordIdInput } from "../components/DiscordIds";
 import { findTableAt, spliceBlock, type Grid } from "../components/mdTable";
 import PostPreview from "./PostPreview";
 import RichEditor, { applyEdit } from "./RichEditor";
-import { insertBlockAt } from "./mdEdit";
+import { insertBlockAt, insertAt } from "./mdEdit";
 import TableDialog from "./TableDialog";
+import ItemTagDialog, { type TagMode } from "./ItemTagDialog";
+import { itemTagOf } from "@/lib/itemTag";
 import {
   AdminPage,
   AdminTabs,
@@ -30,7 +32,9 @@ import {
   labelClass,
   fieldNote,
   useAdminGuard,
+  useLeaveGuard,
 } from "../admin/ui";
+import { ItemTagLinkCtx } from "../components/ItemTag";
 
 // 개인정보 수집·이용 안내 기본 문구 (관리자가 "기본 문구 넣기"로 채운 뒤 자유롭게 수정)
 const DEFAULT_PRIVACY_TITLE = "[중요] 개인정보 수집 및 이용 안내";
@@ -158,6 +162,9 @@ export default function AdminWritePage() {
   const [imageOpen, setImageOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [imageCap, setImageCap] = useState("");
+  // 📌 본문 아이템 태그 넣기 창(2026-10-18 — ./ItemTagDialog · lib/itemTag). 알약 · 카드 고른 것은 이 화면에서 기억한다
+  const [itemTagOpen, setItemTagOpen] = useState(false);
+  const [itemTagMode, setItemTagMode] = useState<TagMode>("card");
   // 📌 본문 [작성 · 미리보기] — 미리보기는 편집 칸 자리를 그대로 덮는다(칸 높이 · 편집 칸 스크롤 그대로)
   const [editorView, setEditorView] = useState("write");
   const [previewAt, setPreviewAt] = useState(""); // 미리보기를 연 시각(날짜 · 예약 판정)
@@ -411,12 +418,21 @@ export default function AdminWritePage() {
     savedAt: new Date().toISOString(),
   });
 
-  const saveDraft = () => {
+  // 보류 저장만(알림 없이) — 성공하면 true. 나가기 묻기 「보류하고 이동」 · 뒤로 가기 · 창 닫기도 이 길
+  const storeDraft = () => {
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(collectDraft()));
+      keptWritten.current = written;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const saveDraft = () => {
+    if (storeDraft()) {
       setHasDraft(true);
       setPopupConfig({ isOpen: true, message: "작성 중인 글이 보류되었습니다.\n다음에 글쓰기 페이지에 들어오면 이어서 작성할 수 있습니다.", isError: false });
-    } catch {
+    } else {
       setPopupConfig({ isOpen: true, message: "보류 저장에 실패했습니다.", isError: true });
     }
   };
@@ -456,6 +472,102 @@ export default function AdminWritePage() {
       if (!params.get("id") && localStorage.getItem(DRAFT_KEY)) setHasDraft(true);
     } catch {}
   }, []);
+
+  // 📌 나가기 전 보류 묻기(2026-10-18 운영자 "이동하기 전에 글 보류 할 거냐고 물어봐" — 미리보기의 아이템을 눌러 쓴 글이 날아갔다)
+  //    쓴 것(written — 글 종류 · 디스코드 칸 빼고)이 남았으면: 새 글은 쓴 글자가 있고 보류한 때와 다를 때, 수정 글은 불러온 때와 다를 때.
+  //    다른 화면으로 가는 링크(관리 메뉴 · 머리 · 본문 링크) · 기능 검색(useLeaveGuard) · 「취소」 → 묻기 창.
+  //      새 글: [계속 작성] [보류 안 함] [보류하고 이동] · 수정 글: [계속 수정] [나가기](보류는 새 글만 — 이어 쓰면 새 글이 된다).
+  //    새로 고침 · 창 닫기는 브라우저 확인(beforeunload), 뒤로 가기 · 창 닫기로 정말 나가면 새 글은 말없이 보류해 둔다(남은 보류 글이 없을 때만 — 덮어쓰지 않게).
+  //    등록 · 수정이 끝난 뒤의 이동은 묻지 않는다(done)
+  const written = JSON.stringify([
+    title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl, eventTag, eventStartDate, eventEndDate, isEventAlways,
+    recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
+    tournamentGame, tournamentPrize, tournamentLink, serializeBracket(bracketRounds), bracketPublic, tournamentWinner, tournamentWinnerId,
+    tournamentStartDate, tournamentEndDate, tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay, tournamentSchedule, survey,
+  ]);
+  const keptWritten = useRef<string | null>(null); // 보류한 때(새 글) · 불러온 때(수정 글)의 written
+  const [loadedTick, setLoadedTick] = useState(0); // 수정 글을 불러와 칸을 채운 횟수
+  const isNewPost = !editId; // 수정 글은 불러오기 전(기준 없음)엔 묻지 않는다
+  const hasWriting = !!(title.trim() || content.trim() || recruitRole.trim() || recruitQual.trim() || recruitTasks.trim() || recruitExtra.trim()
+    || tournamentGame.trim() || tournamentPrize.trim() || survey.questions.length || tournamentSchedule.length);
+  const leaveDirty = isNewPost ? hasWriting && written !== keptWritten.current : keptWritten.current !== null && written !== keptWritten.current;
+  const [leaveAsk, setLeaveAsk] = useState<{ href: string | null } | null>(null); // href null = 「취소」(뒤로)
+  const leftRef = useRef(false); // 나가기로 답했거나 등록 · 수정을 마쳤다 — 더 묻거나 보류하지 않는다
+  const live = useRef({ dirty: false, isNew: true, hasDraft: false, collect: collectDraft });
+  live.current = { dirty: leaveDirty, isNew: isNewPost, hasDraft, collect: collectDraft };
+  const latestWritten = useRef(written);
+  latestWritten.current = written;
+  // 수정 글 — 불러와 채운 뒤 잠시 기다렸다 그때의 written 을 기준으로(채운 뒤 맞추는 효과가 한 번 더 바꿔도 묻지 않게)
+  useEffect(() => {
+    if (!loadedTick) return;
+    const t = window.setTimeout(() => { keptWritten.current = latestWritten.current; }, 400);
+    return () => window.clearTimeout(t);
+  }, [loadedTick]);
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!live.current.dirty || leftRef.current || e.defaultPrevented) return;
+      // 새 탭 · 새 창으로 여는 누르기(가운데 단추 · Ctrl · ⌘ · Shift)는 이 화면이 남는다
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      let url: URL;
+      try { url = new URL(a.href, window.location.href); } catch { return; }
+      if (url.origin !== window.location.origin) return; // 바깥 주소 — beforeunload 가 묻는다
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return; // 같은 화면(# 자리)
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveAsk({ href: url.pathname + url.search + url.hash });
+    };
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (!live.current.dirty || leftRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    // 정말 나갈 때(창 닫기 · 새로 고침 · 바깥 주소) — 새 글은 말없이 보류
+    const onHide = () => keepOnExit();
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("pagehide", onHide);
+      // 화면을 떠남(뒤로 가기 등 묻지 못한 길) — 새 글은 말없이 보류
+      keepOnExit();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  function keepOnExit() {
+    const l = live.current;
+    if (leftRef.current || !l.dirty || !l.isNew || l.hasDraft) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(l.collect())); } catch {}
+  }
+  useLeaveGuard(leaveDirty, (href) => {
+    if (leftRef.current) return true;
+    setLeaveAsk({ href });
+    return false;
+  });
+  // 묻기 창의 답 — go: 옮기기(href null 이면 뒤로)
+  const leaveTo = (href: string | null) => {
+    leftRef.current = true;
+    setLeaveAsk(null);
+    if (href === null) router.back();
+    else router.push(href);
+  };
+  const leaveKeep = () => {
+    if (!leaveAsk) return;
+    if (!storeDraft()) {
+      setLeaveAsk(null);
+      setPopupConfig({ isOpen: true, message: "보류 저장에 실패했습니다.", isError: true });
+      return;
+    }
+    sfxOk();
+    leaveTo(leaveAsk.href);
+  };
+  const askBack = () => {
+    if (leaveDirty && !leftRef.current) setLeaveAsk({ href: null });
+    else router.back();
+  };
 
 
   const categories = ["공지사항", "이벤트", "구인", "대회", "서포터즈"];
@@ -533,6 +645,8 @@ export default function AdminWritePage() {
               else setEventEndDate(end.replace(/\./g, "-"));
             }
           }
+          // 나가기 묻기의 기준 — 채운 뒤의 값(위 useEffect loadedTick)
+          setLoadedTick((n) => n + 1);
         }
       });
     }
@@ -595,6 +709,17 @@ export default function AdminWritePage() {
     const scrollY = window.scrollY;
     const start = textarea.selectionStart;
     applyEdit(textarea, insertBlockAt(textarea.value, start, start, `![${caption.trim()}](${src})`));
+    window.scrollTo({ top: scrollY });
+  };
+
+  // 📌 아이템 태그 — 「알약」은 커서 자리(고른 글은 바꾼다), 「카드」는 한 줄을 통째로(insertBlockAt — 앞뒤 줄바꿈). 되돌리기가 되게 applyEdit 로
+  const insertItemTag = (id: string, name: string, mode: TagMode) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const scrollY = window.scrollY;
+    const { selectionStart: s, selectionEnd: e, value } = textarea;
+    const tag = itemTagOf(id, name);
+    applyEdit(textarea, mode === "card" ? insertBlockAt(value, s, e, tag) : insertAt(s, e, tag));
     window.scrollTo({ top: scrollY });
   };
 
@@ -759,7 +884,10 @@ export default function AdminWritePage() {
       const res = await fetch(editId ? `/api/posts/${editId}` : "/api/posts", { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(postData) });
       const d = await res.json().catch(() => null);
       const dcLine = category === "공지사항" ? dcResultLine(d?.discord, !!dcInfo?.botOnline) : "";
-      if (res.ok) setPopupConfig({ isOpen: true, message: `${editId ? "수정되었습니다." : "등록되었습니다."}${dcLine ? `\n${dcLine}` : ""}`, isError: false });
+      if (res.ok) {
+        leftRef.current = true; // 다 올렸다 — 이 뒤 이동은 묻지도 보류하지도 않는다
+        setPopupConfig({ isOpen: true, message: `${editId ? "수정되었습니다." : "등록되었습니다."}${dcLine ? `\n${dcLine}` : ""}`, isError: false });
+      }
       else setPopupConfig({ isOpen: true, message: d?.message || "등록 실패", isError: true });
     } catch { setPopupConfig({ isOpen: true, message: "서버 통신 오류", isError: true }); }
     finally { setIsSubmitting(false); }
@@ -849,6 +977,8 @@ export default function AdminWritePage() {
   const kindTabs = (editId ? [category] : categories).map((c) => ({ id: c, short: c }));
 
   return (
+    // 📌 이 화면(미리보기 · 표 창)의 아이템 태그는 누르지 않는다 — 상품 상세로 가 쓰던 글이 날아갔다(components/ItemTag ItemTagLinkCtx)
+    <ItemTagLinkCtx.Provider value={false}>
     <AdminPage
       section="작성"
       title={editId ? "글 수정" : "글쓰기"}
@@ -885,6 +1015,7 @@ export default function AdminWritePage() {
                 previewing={previewing}
                 onTable={openTable}
                 onImage={() => setImageOpen(true)}
+                onItem={() => setItemTagOpen(true)}
                 viewToggle={<Segmented options={[{ v: "write", l: "작성" }, { v: "preview", l: "미리보기" }]} value={editorView} onChange={switchView} />}
                 overlay={<PostPreview post={previewPost} boxRef={previewRef} className="absolute inset-0 overflow-auto no-bar" />}
               />
@@ -1392,7 +1523,7 @@ export default function AdminWritePage() {
 
             {/* 제출 — 등록/수정 조건(isFormValid)은 그대로. 보류는 새 글에서만 */}
             <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-              <Btn variant="ghost" onClick={() => router.back()}>취소</Btn>
+              <Btn variant="ghost" onClick={askBack}>취소</Btn>
               {!editId && <Btn variant="secondary" onClick={saveDraft}>보류</Btn>}
               <Btn type="submit" disabled={isSubmitting || !isFormValid()} className="ml-auto">
                 {/* 📌 두 글자를 한 칸에 겹쳐 폭을 긴 쪽에 고정 — "처리 중..."으로 바뀔 때 단추 폭이 바뀌지 않게 */}
@@ -1500,6 +1631,12 @@ export default function AdminWritePage() {
         </div>
       )}
 
+      {/* 본문 아이템 태그 넣기 — 고르면 커서 자리(알약) · 한 줄(카드)에 넣고 닫는다 */}
+      {itemTagOpen && (
+        <ItemTagDialog mode={itemTagMode} onMode={setItemTagMode} onClose={() => setItemTagOpen(false)}
+          onPick={(id, name, mode) => { setItemTagOpen(false); insertItemTag(id, name, mode); }} />
+      )}
+
       {/* 본문 표 그리기 — 칸 격자 + 실제 모양 미리보기, 넣으면 커서 자리(표 안이면 그 표를 바꾼다) */}
       {tableDlg && (
         <TableDialog initial={tableDlg.grid} replace={!!tableDlg.range} category={category} onClose={() => setTableDlg(null)} onApply={applyTable} />
@@ -1540,6 +1677,32 @@ export default function AdminWritePage() {
           </div>
         </div>
       )}
+
+      {/* 📌 나가기 전 보류 묻기 — 바깥 · Esc 는 「계속 작성」 */}
+      {leaveAsk && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-4 overlay-in" onClick={() => setLeaveAsk(null)}>
+          <div role="alertdialog" aria-modal="true" aria-label={isNewPost ? "작성 중인 글을 보류할까요?" : "수정한 내용을 버리고 나갈까요?"} onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setLeaveAsk(null); } }}
+            className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
+            <h2 className="text-[17px] font-black tracking-tight break-keep">{isNewPost ? "작성 중인 글을 보류할까요?" : "수정한 내용을 버리고 나갈까요?"}</h2>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              {isNewPost ? (
+                <>
+                  <Btn variant="ghost" onClick={() => setLeaveAsk(null)}>계속 작성</Btn>
+                  <Btn variant="secondary" onClick={() => leaveTo(leaveAsk.href)}>보류 안 함</Btn>
+                  <Btn onClick={leaveKeep} autoFocus>보류하고 이동</Btn>
+                </>
+              ) : (
+                <>
+                  <Btn variant="ghost" onClick={() => setLeaveAsk(null)} autoFocus>계속 수정</Btn>
+                  <Btn variant="danger" onClick={() => leaveTo(leaveAsk.href)}>나가기</Btn>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AdminPage>
+    </ItemTagLinkCtx.Provider>
   );
 }

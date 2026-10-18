@@ -9,7 +9,7 @@ import { RenderFormattedText } from "../../components/FormattedText";
 import { BracketView } from "../../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../../components/Esports";
 import { PHASES, phaseOf, phaseMeta, phaseShows, bracketVisible, statusOf } from "@/lib/tournamentPhase";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../../components/AdminView";
 
 /* 📌 대회 상세 — 팝업이 아니라 페이지.
    대진표를 팝업 안에 넣으면 좁아서 '크게 보기' 전체화면을 또 띄워야 했다.
@@ -21,8 +21,9 @@ const fmtDate = (v: string) => (v || "").replace(/-/g, ".");
 export default function TournamentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: session } = useSession();
-  const isAdmin = !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { status } = useSession();
+  // 📌 관리자로 보는 중일 때만 — 수정 · 설문 결과 · 숨김 띠 · 공개 전 대진표(「유저 화면으로 보기」를 켜면 일반 유저와 같다)
+  const { admin: isAdmin } = useAdminView();
 
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -48,8 +49,10 @@ export default function TournamentDetailPage() {
       .catch(() => {});
   }, []);
 
-  if (loading) return <div className="min-h-[60vh] flex items-center justify-center text-gray-500 text-sm">로딩 중...</div>;
-  if (!post) {
+  if (loading || status === "loading") return <div className="min-h-[60vh] flex items-center justify-center text-gray-500 text-sm">로딩 중...</div>;
+  // 📌 가린 글 · 공개 전 예약 글은 관리자로 볼 때만 열린다(서버는 관리자 계정에 원문을 주므로 유저 화면에선 여기서 막는다)
+  const closedPost = !!post && (post.hidden || (!!post.publishAt && new Date(post.publishAt) > new Date()));
+  if (!post || (closedPost && !isAdmin)) {
     return (
       <main className="w-full max-w-lg mx-auto px-6 py-40 text-center">
         <EsportsStyles />
@@ -201,7 +204,7 @@ export default function TournamentDetailPage() {
             {/* 지금 할 일 — 단계에 따라 하나만 */}
             {show.survey && (
               <button
-                onClick={() => router.push(post.survey?.enabled ? `/tournament/survey/${post._id}` : post.tournamentLink || "/tournament")}
+                onClick={() => router.push(post.survey?.enabled ? (isAdmin ? `/tournament/survey/${post._id}` : `/tournament?apply=${post._id}`) : post.tournamentLink || "/tournament")}
                 disabled={!!post.survey?.closed}
                 className="w-full esp-cut-sm py-4 text-[13px] font-black transition-all active:scale-[.99] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: G, color: "#04120b" }}>

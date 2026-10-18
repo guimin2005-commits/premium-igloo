@@ -3,18 +3,16 @@
 import React, { useState, useEffect } from "react";
 import BackLink from "../../components/BackLink";
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { Reveal } from "../../components/Lux";
 import { RenderFormattedText } from "../../components/FormattedText";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../../components/AdminView";
 
 /* 📌 이벤트 한 건 = 한 페이지 (규칙 1: 읽는 것은 페이지). 화이트 & 블랙 — 소식 상세와 같은 껍데기. */
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: session } = useSession();
-  const isAdmin = !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { admin: isAdmin } = useAdminView(); // 📌 「유저 화면으로 보기」 켜면 수정 단추 없음
 
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);

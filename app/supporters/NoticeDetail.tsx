@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 
 // 📌 서포터즈 공지 한 건 = 한 페이지 (/supporters/notice/[id]).
 //    창(overlay)으로 띄우면 새로고침·링크 공유·뒤로 가기가 어긋나서 제 주소를 갖는 페이지로 뺐다.
@@ -191,7 +191,8 @@ export default function NoticeDetail({ postId }: { postId: string }) {
   useEffect(() => setMounted(true), []);
   const authReady = mounted && authStatus !== "loading";
 
-  const isAdmin = isAdminName(user?.name);
+  // 📌 관리자로 보는 중일 때만 — 「유저 화면으로 보기」 켜면 수정 · 삭제 · 확인 현황 · 남의 댓글 삭제 · 예약 · 가림 글 없이 유저와 같게(「확인했습니다」 단추가 보인다)
+  const { admin: isAdmin } = useAdminView();
   const allowed = !!user && (!!user.isSupporter || isAdmin);
   const ready = authReady && allowed;
 

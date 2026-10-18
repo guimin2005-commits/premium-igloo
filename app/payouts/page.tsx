@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 import { openLogin } from "../components/LoginPrompt";
 
 // 📌 XP 지급은 봇 큐가 30초마다 자동으로 한다 — 이 화면은 기록 조회와 아직 지급되지 않은 건의 취소만.
@@ -12,9 +12,10 @@ import { openLogin } from "../components/LoginPrompt";
 //    📌 2026-10-04 "아직 대기 중인 건만 지울 수 있게(=지급 취소) 하고, 완료 기록은 남김" — 취소는 대기 · 실패한 XP 건만(app/api/payout DELETE)
 
 export default function PayoutAdminPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
-  const isAdmin = status === "authenticated" && isAdminName(session?.user?.name);
+  // 📌 관리자로 볼 때만 — 「유저 화면으로 보기」를 켜면 유저와 같은 「권한 없음」
+  const { admin: isAdmin } = useAdminView();
 
   const [payouts, setPayouts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

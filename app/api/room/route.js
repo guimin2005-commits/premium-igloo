@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAdmin, denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
+// 📌 유저 화면에서 부르는 조회 · 우회(예약 공지 · 재촉 이력 · 대신 제출 · 재촉)는 「유저 화면으로 보기」를 따른다. 관리 쓰기는 requireAdmin 그대로
+import { isAdminViewer } from "@/lib/adminViewServer";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
 import Auction from "@/models/Auction";
 import {
@@ -75,7 +76,7 @@ export async function GET() {
     const season = await ensureSeason();
     const sid = String(season._id);
 
-    const admin = isAdminName(session?.user?.name);
+    const admin = await isAdminViewer(session);
     // 재촉 이력은 운영용이라 관리자에게만 (실패 사유까지 보여야 대처가 된다)
     const nudges = admin
       ? (await ScrimNudge.find({ seasonId: sid }).sort({ createdAt: -1 }).limit(60).lean()).map((n) => ({ ...n, _id: String(n._id) }))
@@ -203,7 +204,7 @@ export async function POST(request) {
         const session = await getServerSession(authOptions);
         const uid = session?.user?.id;
         if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
-        const admin = isAdminName(session?.user?.name);
+        const admin = await isAdminViewer(session);
         const t = body.teamId ? await ScrimTeam.findById(body.teamId) : null;
         const leader = t ? t.members.some((m) => m.discordId === uid && m.leader) : false;
         if (!admin && !leader) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
@@ -320,7 +321,7 @@ export async function POST(request) {
         const session = await getServerSession(authOptions);
         const uid = session?.user?.id;
         if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
-        const admin = isAdminName(session?.user?.name);
+        const admin = await isAdminViewer(session);
         const sendAt = sendAtOf(body.sendAt);
         if (sendAt === false) return badSendAt();
 
@@ -515,7 +516,7 @@ export async function POST(request) {
         const session = await getServerSession(authOptions);
         const uid = session?.user?.id;
         if (!uid) return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
-        const admin = isAdminName(session?.user?.name);
+        const admin = await isAdminViewer(session);
         const t = await ScrimTeam.findById(body.teamId);
         if (!t) return NextResponse.json({ success: false, message: "팀을 찾을 수 없습니다." }, { status: 404 });
         const mine = t.members.some((m) => m.discordId === uid);

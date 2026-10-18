@@ -12,6 +12,7 @@ import { unitThingSet, MAX_PER_ORDER } from "@/lib/unitSale";
 import { revokeFreeRows } from "@/lib/itemRevoke";
 import { parseTargetKeys, resolveTargets, unresolvedMessage, MAX_TARGETS } from "@/lib/adminTargets";
 import { isDraftMode, catalogFindById } from "@/lib/catalogDraft";
+import { withPurchaseCategories } from "@/lib/itemCategoryServer";
 
 // 📌 아이템 수동 지급 — 관리자가 등록된 아이템을 유저에게 바로 준다.
 //    상점 구매와 같은 Purchase 행(itemId "grant")을 만들어 인벤토리·봇 지급 큐가 그대로 처리한다.
@@ -39,6 +40,7 @@ const olderThan = (c) => ({ $or: [{ createdAt: { $lt: c.at } }, { createdAt: c.a
 
 // ── [조회] 최근 수동 아이템 지급 — 여러 개 지급은 1개가 한 건이라 넉넉히 읽고, 화면이 orderId 로 한 줄에 묶는다 ──
 //    ?before=<next>&limit=<n> — 응답: { data, hasMore, next }
+//    📌 data 건마다 categoryLabel · shortName(2026-10-17 lib/itemCategoryServer.js — 지급한 아이템(itemRef)의 분류, 이름은 지급 때 스냅샷에서 옛 머리말만 뗀 것)
 export async function GET(request) {
   try {
     const { deny } = await requireAdmin();
@@ -62,7 +64,7 @@ export async function GET(request) {
       rows.push(...rest);
     }
     const next = hasMore && tail ? `${new Date(tail.createdAt || 0).getTime()}_${tail._id}` : "";
-    return NextResponse.json({ success: true, data: rows, hasMore, next });
+    return NextResponse.json({ success: true, data: await withPurchaseCategories(rows), hasMore, next });
   } catch (e) {
     console.error("아이템 지급 내역 조회 오류:", e);
     return NextResponse.json({ success: false, data: [], message: "조회 중 오류가 발생했습니다." }, { status: 500 });

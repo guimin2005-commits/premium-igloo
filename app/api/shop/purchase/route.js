@@ -19,13 +19,15 @@ import { cashbackOf, cashbackRuleOf, cashbackBaseOf } from "@/lib/itemEffects";
 import { activeXpStopUntil } from "@/lib/xpStop";
 import { logWallet } from "@/lib/wallet";
 import { liveHoldings, planPurchase, timingOf, kstStamp } from "../_lib/renewal";
-import { stripAdminTag, isAdminName } from "@/lib/admins";
+import { stripAdminTag } from "@/lib/admins";
+import { isAdminViewer } from "@/lib/adminViewServer";
 import { REFUND_MARK_RE, CLEANUP_MARK_RE } from "@/lib/roleMigrationTerms";
 import mongoose from "mongoose";
 import { isBundle, bundleUnits, splitAmount } from "@/lib/bundle";
 import { bundleStateFor } from "@/lib/bundleServer";
 import { isDraftMode, draftBlockedProducts } from "@/lib/catalogDraft";
 import { saleEnded, SALE_ENDED_MSG } from "@/lib/saleWindow";
+import { withPurchaseCategories } from "@/lib/itemCategoryServer";
 
 // 캐시백 % · 설정 · XP 획득 중단 — 이번 결제 전에 가진 것으로 정한다(아래 POST 와 같은 규칙). 읽지 못하면 캐시백 없이
 async function cashbackPlan(userId) {
@@ -222,9 +224,9 @@ export async function POST(request) {
     if (!userId) {
       return NextResponse.json({ success: false, message: "로그인이 필요합니다." }, { status: 401 });
     }
-    // 📌 서버 인증(디스코드 인증 역할 — lib/authOptions isVerified) 회원만 구매한다(약관 'ARCTIC 서버 인증 회원만'). 관리자는 통과.
+    // 📌 서버 인증(디스코드 인증 역할 — lib/authOptions isVerified) 회원만 구매한다(약관 'ARCTIC 서버 인증 회원만'). 관리자는 통과(「유저 화면으로 보기」 중이면 유저처럼 — lib/adminViewServer).
     //    화면은 인증 전 유저를 /verify 로 보내지만(app/ClientLayout) API 를 직접 부르면 그대로 사졌다 — 장바구니 결제와 같은 검사
-    if (session.user.isVerified !== true && !isAdminName(session.user.name)) {
+    if (session.user.isVerified !== true && !(await isAdminViewer(session))) {
       return NextResponse.json({ success: false, message: "서버 인증 후 이용할 수 있습니다." }, { status: 403 });
     }
     // 📌 점검 중에는 구매를 서버에서 막는다 (관리자는 통과)
@@ -519,7 +521,8 @@ export async function GET() {
     const rows = [...recent, ...live.filter((r) => !seen.has(String(r._id)))].map((r) =>
       r.adminNote ? { ...r, adminNote: stripAdminTag(r.adminNote) } : r
     );
-    return NextResponse.json({ success: true, data: rows });
+    // 📌 분류 · 짧은 이름(2026-10-17 lib/itemCategoryServer.js) — 건마다 categoryLabel · shortName(세트 구성 건은 bundleCategoryLabel 도)
+    return NextResponse.json({ success: true, data: await withPurchaseCategories(rows) });
   } catch (e) {
     return NextResponse.json({ success: false, data: [] }, { status: 500 });
   }

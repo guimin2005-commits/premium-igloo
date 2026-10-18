@@ -1,17 +1,39 @@
 "use client";
 
-// 📌 재화 통계 — 기간 동안 XP · 빙옥이 어디서 생기고(발행) 어디로 빠졌는지(사용). 읽기 전용
-//    (app/api/admin/economy · 출처 분류는 lib/adminEconomy.js — 원장 app/api/xp/ledger 와 같다)
-//    머리 → 기간 한 줄 → 숫자 4칸(발행 · 사용 · 순증 · 빙옥 유통) → 일별 막대 → XP · 빙옥 출처 / 사용처 → 일별 표 → 상품별 판매
-//    일별 막대 · 표의 하루를 누르면 그날 출처별 칸(DetailPane)이 열린다.
-//    막대는 차트 라이브러리 없이 div — 발행은 잉크(#131313), 사용은 강조(#e91e3f). 둘 다 같은 눈금(한 축)
-//    주소에 ?period= 를 실어 새로고침해도 같은 기간이 열린다.
+// 📌 통계 — 탭 두 개: 재화 · 서버 활동(?tab=server). 읽기 전용
+//    · 재화 — 기간 동안 XP · 빙옥이 어디서 생기고(발행) 어디로 빠졌는지(사용)
+//      (app/api/admin/economy · 출처 분류는 lib/adminEconomy.js — 원장 app/api/xp/ledger 와 같다)
+//      기간 한 줄 → 숫자 4칸(발행 · 사용 · 순증 · 빙옥 유통) → 일별(XP | 빙옥 막대 + 접는 표) → XP · 빙옥 출처 / 사용처 → 상품별 판매
+//      일별 막대 · 표의 하루를 누르면 그날 출처별 칸(DetailPane)이 열린다.
+//      막대는 차트 라이브러리 없이 div — 발행은 잉크(#131313), 사용은 강조(#e91e3f). 둘 다 같은 눈금(한 축)
+//      📌 2026-10-17 — 「일별」 표가 막대와 같은 날별 데이터라 막대 판 하나로 합쳤다. 막대는 XP | 빙옥 전환, 표는 판 아래 접힘(펼침은 이 브라우저에 기억)
+//    · 서버 활동 — 대시보드에서 옮긴 분석 판(./ServerActivity.tsx)
+//    주소: ?tab=server · ?period=30d|60d(재화) · ?sec=<패널>(id="sec-<패널>" 로 한 번 내려간다 — 기능 검색 바로가기, 예: sec=sales)
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AdminPage, Toolbar, Segmented, StatRow, Panel, PanelGrid, DataTable, DetailPane, DefRow, EmptyRow, useAdminGuard, useNotice, type Column } from "../ui";
+import {
+  AdminPage,
+  AdminTabs,
+  Toolbar,
+  Segmented,
+  StatRow,
+  Panel,
+  PanelGrid,
+  DataTable,
+  DetailPane,
+  DefRow,
+  EmptyRow,
+  SwapLabel,
+  useAdminGuard,
+  useNotice,
+  useStoredState,
+  type Column,
+} from "../ui";
+import ServerActivity from "./ServerActivity";
 
 type Period = "7d" | "30d" | "60d";
+type Cur = "xp" | "point";
 type Part = { l: string; v: number };
 type Flow = { in: number; out: number; inBy: Part[]; outBy: Part[] };
 type Day = { d: string; xp: Flow; point: Flow };
@@ -23,12 +45,21 @@ type Data = {
   sales: Sale[];
 };
 
+const TABS = [
+  { id: "money", short: "재화" },
+  { id: "server", short: "서버 활동" },
+];
+
 const PERIODS: { v: Period; l: string }[] = [
   { v: "7d", l: "7일" },
   { v: "30d", l: "30일" },
   { v: "60d", l: "60일" },
 ];
 const isPeriod = (v: string | null): v is Period => !!v && PERIODS.some((p) => p.v === v);
+const CURS: { v: Cur; l: string }[] = [
+  { v: "xp", l: "XP" },
+  { v: "point", l: "빙옥" },
+];
 
 // 📌 두 색만 — 발행 잉크 · 사용 강조 (관리자 디자인 기준 값, app/admin/ui.tsx 머리 주석)
 const INK = "#131313";
@@ -37,7 +68,7 @@ const META = "text-[12px] text-[#8a8a8a] tabular-nums";
 const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 const KST = 9 * 60 * 60 * 1000;
 // 숫자 칸 아래 줄 자리 — 읽기 전에도 줄 높이를 잡아 두어 읽은 뒤 아래 판이 밀리지 않게
-const NBSP = "\u00a0";
+const NBSP = " ";
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 const dayLabel = (d: string) => `${md(d)} (${WEEK[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
@@ -63,15 +94,17 @@ const sinceLabel = (iso: string) => {
 const ml = (l: string) => <span className="md:hidden">{l} </span>;
 
 // 📌 history.replaceState 는 Next 라우터가 받아 useSearchParams 를 바로 바꾼다(서버 왕복 없음). 기본값(7일)은 싣지 않는다
+//    재화 탭에서만 부른다(재화가 기본 탭이라 tab 은 싣지 않는다)
 const syncUrl = (period: Period) => {
   window.history.replaceState(null, "", period === "7d" ? "/admin/economy" : `/admin/economy?period=${period}`);
 };
 
 // ── 일별 막대 — 하루에 발행 · 사용 두 막대, 같은 눈금. 마우스를 올리면 그날 값, 누르면 그날 칸 ──
-function DailyBars({ days, onPick }: { days: Day[]; onPick: (d: Day) => void }) {
+//    cur — XP | 빙옥 중 무엇을 그릴지(눈금도 그 재화 기준)
+function DailyBars({ days, cur, onPick }: { days: Day[]; cur: Cur; onPick: (d: Day) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const n = days.length;
-  const max = Math.max(1, ...days.map((d) => Math.max(d.xp.in, d.xp.out)));
+  const max = Math.max(1, ...days.map((d) => Math.max(d[cur].in, d[cur].out)));
   // 날짜 글자는 듬성듬성 — 첫날 · 끝날은 늘
   const every = n <= 10 ? 1 : n <= 31 ? 5 : 10;
   const h = (v: number) => (v > 0 ? `max(2px, ${(v / max) * 100}%)` : "0px");
@@ -79,6 +112,7 @@ function DailyBars({ days, onPick }: { days: Day[]; onPick: (d: Day) => void }) 
   // 말풍선 — 왼쪽 · 오른쪽 끝에서는 판 밖으로 나가지 않게 기준을 바꾼다
   const tipX = hover != null ? ((hover + 0.5) / n) * 100 : 0;
   const tipShift = hover == null ? "" : hover < n / 4 ? "translateX(-12px)" : hover >= (n * 3) / 4 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)";
+  const unit = cur === "xp" ? "XP" : "빙옥";
 
   return (
     // 좁은 화면에서는 페이지가 아니라 이 판만 가로로 스크롤 — 하루 최소 14px
@@ -98,11 +132,11 @@ function DailyBars({ days, onPick }: { days: Day[]; onPick: (d: Day) => void }) 
                 onMouseLeave={() => setHover((x) => (x === i ? null : x))}
                 onFocus={() => setHover(i)}
                 onBlur={() => setHover((x) => (x === i ? null : x))}
-                aria-label={`${dayLabel(d.d)} · 발행 ${num(d.xp.in)} · 사용 ${num(d.xp.out)}`}
+                aria-label={`${dayLabel(d.d)} · ${unit} 발행 ${num(d[cur].in)} · 사용 ${num(d[cur].out)}`}
                 className={`flex-1 min-w-0 h-full flex items-end justify-center gap-[2px] px-px outline-none transition-colors ${hover === i ? "bg-[#f2f2f2]" : ""}`}
               >
-                <span className="flex-1 max-w-[12px]" style={{ height: h(d.xp.in), background: INK }} />
-                <span className="flex-1 max-w-[12px]" style={{ height: h(d.xp.out), background: ACCENT }} />
+                <span className="flex-1 max-w-[12px]" style={{ height: h(d[cur].in), background: INK }} />
+                <span className="flex-1 max-w-[12px]" style={{ height: h(d[cur].out), background: ACCENT }} />
               </button>
             ))}
           </div>
@@ -118,17 +152,17 @@ function DailyBars({ days, onPick }: { days: Day[]; onPick: (d: Day) => void }) 
             className="pointer-events-none absolute top-0 z-10 min-w-[150px] px-3 py-2.5 bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[12px]"
             style={{ left: `${tipX}%`, transform: tipShift }}
           >
-            <p className="font-black text-[#131313]">{dayLabel(hd.d)}</p>
+            <p className="font-black text-[#131313]">{dayLabel(hd.d)} · {unit}</p>
             <p className="mt-1 flex items-center gap-1.5 text-[#5a5a5a]">
               <span aria-hidden className="w-2 h-2 shrink-0" style={{ background: INK }} />발행
-              <span className="ml-auto pl-3 font-bold text-[#131313] tabular-nums">{num(hd.xp.in)}</span>
+              <span className="ml-auto pl-3 font-bold text-[#131313] tabular-nums">{num(hd[cur].in)}</span>
             </p>
             <p className="mt-0.5 flex items-center gap-1.5 text-[#5a5a5a]">
               <span aria-hidden className="w-2 h-2 shrink-0" style={{ background: ACCENT }} />사용
-              <span className="ml-auto pl-3 font-bold text-[#131313] tabular-nums">{num(hd.xp.out)}</span>
+              <span className="ml-auto pl-3 font-bold text-[#131313] tabular-nums">{num(hd[cur].out)}</span>
             </p>
             <p className="mt-0.5 flex items-center text-[#5a5a5a]">
-              순증<span className="ml-auto pl-3 font-bold text-[#131313] tabular-nums">{signed(hd.xp.in - hd.xp.out)}</span>
+              순증<span className="ml-auto pl-3 font-bold text-[#131313] tabular-nums">{signed(hd[cur].in - hd[cur].out)}</span>
             </p>
           </div>
         )}
@@ -182,23 +216,39 @@ export default function AdminEconomyPage() {
   const { isAdmin, gate } = useAdminGuard();
   const { notify, noticeEl } = useNotice();
 
-  // 📌 기간은 주소가 원본 — 새로고침 · 뒤로가기가 같은 기간을 연다
-  const pq = useSearchParams().get("period");
+  // 📌 탭 · 기간 · 패널은 주소가 원본 — 새로고침 · 뒤로가기 · 기능 검색 바로가기가 같은 화면을 연다
+  const sp = useSearchParams();
+  const tab = sp.get("tab") === "server" ? "server" : "money";
+  const pq = sp.get("period");
   const period: Period = isPeriod(pq) ? pq : "7d";
+  const sec = sp.get("sec");
   const [dayKey, setDayKey] = useState<string | null>(null); // 상세 칸에 연 날
+  // 일별 막대의 재화 · 표 펼침 — 이 브라우저에 기억(다음에 와도 같은 보기)
+  const [curRaw, setCur] = useStoredState<Cur>("economy:cur", "xp");
+  const [tableRaw, setTableOpen] = useStoredState<boolean>("economy:dayTable", false);
+  // 기억한 값이 깨져 있어도(다른 모양) 화면은 기본값으로 돈다
+  const cur: Cur = curRaw === "point" ? "point" : "xp";
+  const tableOpen = tableRaw === true;
+
+  // 📌 서버 활동은 처음 열 때 그린 뒤 탭을 떠나도 숨겨 둔다 — 다시 와도 목록을 또 받지 않게(렌더 중 조정)
+  const [serverSeen, setServerSeen] = useState(tab === "server");
+  if (tab === "server" && !serverSeen) setServerSeen(true);
 
   // 받은 결과는 어느 기간의 것인지와 함께 둔다 — 다른 기간을 읽는 동안에는 앞 결과를 흐리게 보여 준다
   const [shown, setShown] = useState<{ period: Period; data: Data } | null>(null);
   const [failed, setFailed] = useState(""); // 읽지 못한 기간 — 그 기간에서는 "불러오는 중"을 끈다
+  // 이미 받은 기간 — 탭을 오가도 같은 기간은 다시 받지 않는다
+  const loadedRef = useRef<Period | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || tab !== "money" || loadedRef.current === period) return;
     let alive = true; // 빠르게 바꾸면 늦게 온 이전 응답을 버린다
     fetch(`/api/admin/economy?period=${period}`, { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json().catch(() => null);
         if (!r.ok || !d?.success) throw new Error(d?.error || "불러오지 못했습니다.");
         if (!alive) return;
+        loadedRef.current = period;
         setShown({ period, data: d.data });
         // 📌 연 날이 새 기간에 없으면 닫는다 — 남겨 두면 그날이 있는 기간으로 돌아올 때 누르지 않아도 칸이 다시 열린다
         const days: Day[] = Array.isArray(d.data?.daily) ? d.data.daily : [];
@@ -211,20 +261,37 @@ export default function AdminEconomyPage() {
         notify(e instanceof Error ? e.message : "불러오지 못했습니다.", true);
       });
     return () => { alive = false; };
-  }, [isAdmin, period, notify]);
+  }, [isAdmin, tab, period, notify]);
 
   const data = shown?.data ?? null;
   const loading = shown?.period !== period && failed !== period;
+
+  // 📌 ?sec=<id> — 그 패널로 한 번 내려간다(재화 패널은 읽은 뒤에 생긴다). 같은 sec 로 다시 그려져도 다시 움직이지 않는다
+  const secDone = useRef<string | null>(null);
+  const secReady = !gate && (tab === "server" || !!data);
+  useEffect(() => {
+    if (!sec) { secDone.current = null; return; }
+    if (!secReady || secDone.current === sec) return;
+    const el = document.getElementById(`sec-${sec}`);
+    if (!el) return;
+    secDone.current = sec;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sec, secReady, tab]);
 
   const closeDay = useCallback(() => setDayKey(null), []);
 
   if (gate) return gate;
 
+  // 탭 주소 — 고른 기간은 두 탭을 오가도 그대로 싣는다(재화로 돌아오면 같은 기간)
+  const pp = period === "7d" ? "" : `period=${period}`;
+  const hrefTab = (id: string) =>
+    id === "server" ? `/admin/economy?tab=server${pp ? `&${pp}` : ""}` : `/admin/economy${pp ? `?${pp}` : ""}`;
+
   const t = data?.total;
   const c = data?.circulation;
   const net = t ? t.xp.in - t.xp.out : 0;
-  // 상세 칸의 날 — 기간을 바꿔 그날이 목록에 없으면 닫힌 것으로 본다
-  const day = dayKey && data ? data.daily.find((d) => d.d === dayKey) || null : null;
+  // 상세 칸의 날 — 기간을 바꿔 그날이 목록에 없으면 닫힌 것으로 본다. 서버 활동 탭에서는 닫는다
+  const day = tab === "money" && dayKey && data ? data.daily.find((d) => d.d === dayKey) || null : null;
   const dim = `transition-opacity ${loading ? "opacity-60" : ""}`;
 
   const dayColumns: Column<Day>[] = [
@@ -259,73 +326,113 @@ export default function AdminEconomyPage() {
   );
 
   return (
-    <AdminPage section="허브" title="재화 통계">
-      {/* 📌 판 사이 간격은 이 묶음 안에서만 — 상세 칸 · 알림(fixed)이 space-y 의 여백을 받아 칸 아래가 뜨지 않게 */}
-      <div className="space-y-5">
-        <Toolbar className="!mb-0">
-          <Segmented options={PERIODS} value={period} onChange={(v) => syncUrl(v as Period)} />
-          {/* 기간 시작 — 내역 기준 시각보다 이르면 그 시각부터 센다 */}
-          <span className={`ml-auto ${META}`}>{data ? `${sinceLabel(data.since)} 부터` : ""}</span>
-        </Toolbar>
+    <AdminPage
+      section="허브"
+      // 📌 제목은 탭과 무관하게 고정 · 머리 오른쪽 동작 없음 — 탭마다 머리가 달라지면 탭 줄이 밀린다(메모: tabs-never-move)
+      title="통계"
+      tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={hrefTab} />}
+    >
+      {tab === "money" && (
+        // 📌 판 사이 간격은 이 묶음 안에서만 — 상세 칸 · 알림(fixed)이 space-y 의 여백을 받아 칸 아래가 뜨지 않게
+        <div className="space-y-5">
+          <Toolbar className="!mb-0">
+            <Segmented options={PERIODS} value={period} onChange={(v) => syncUrl(v as Period)} />
+            {/* 기간 시작 — 내역 기준 시각보다 이르면 그 시각부터 센다 */}
+            <span className={`ml-auto ${META}`}>{data ? `${sinceLabel(data.since)} 부터` : ""}</span>
+          </Toolbar>
 
-        <div className={dim}>
-          <StatRow
-            items={[
-              { label: "XP 발행", value: t ? short(t.xp.in) : "—", sub: t ? `${num(t.xp.in)} XP` : NBSP },
-              { label: "XP 사용", value: t ? short(t.xp.out) : "—", sub: t ? `${num(t.xp.out)} XP` : NBSP },
-              { label: "XP 순증", value: t ? `${net > 0 ? "+" : ""}${short(net)}` : "—", sub: c ? `보유 합 ${num(c.xp)}` : NBSP, tone: net < 0 ? "bad" : undefined },
-              { label: "빙옥 유통", value: c ? num(c.point) : "—", sub: t ? `기간 +${num(t.point.in)} · −${num(t.point.out)}` : NBSP },
-            ]}
-          />
-        </div>
-
-        {data ? (
-          <div className={`${dim} space-y-5`} aria-busy={loading || undefined}>
-            <Panel title="일별 XP" right={legend}>
-              <DailyBars days={data.daily} onPick={(d) => setDayKey(d.d)} />
-            </Panel>
-
-            <PanelGrid>
-              <Panel title="XP 발행" right={<span className={META}>{num(data.total.xp.in)}</span>} flush className="h-full">
-                <FlowList parts={data.total.xp.inBy} total={data.total.xp.in} color={INK} />
-              </Panel>
-              <Panel title="XP 사용" right={<span className={META}>{num(data.total.xp.out)}</span>} flush className="h-full">
-                <FlowList parts={data.total.xp.outBy} total={data.total.xp.out} color={ACCENT} />
-              </Panel>
-            </PanelGrid>
-
-            <PanelGrid>
-              <Panel title="빙옥 발행" right={<span className={META}>{num(data.total.point.in)}</span>} flush className="h-full">
-                <FlowList parts={data.total.point.inBy} total={data.total.point.in} color={INK} />
-              </Panel>
-              <Panel title="빙옥 사용" right={<span className={META}>{num(data.total.point.out)}</span>} flush className="h-full">
-                <FlowList parts={data.total.point.outBy} total={data.total.point.out} color={ACCENT} />
-              </Panel>
-            </PanelGrid>
-
-            <Panel title="일별" flush>
-              <DataTable
-                columns={dayColumns}
-                rows={data.daily.slice().reverse()}
-                rowKey={(d) => d.d}
-                onRowClick={(d) => setDayKey(d.d)}
-                selectedKey={day ? day.d : null}
-                className="!rounded-none !border-0"
-              />
-            </Panel>
-
-            <Panel title="상품별 판매" right={<span className={META}>{num(data.sales.reduce((s, x) => s + x.n, 0))}건</span>} flush>
-              {data.sales.length ? (
-                <DataTable columns={saleColumns} rows={data.sales} rowKey={(s) => s.itemId || s.name} className="!rounded-none !border-0" />
-              ) : (
-                <p className="px-5 py-10 text-center text-[13px] text-[#5a5a5a]">없음</p>
-              )}
-            </Panel>
+          <div className={dim}>
+            <StatRow
+              items={[
+                { label: "XP 발행", value: t ? short(t.xp.in) : "—", sub: t ? `${num(t.xp.in)} XP` : NBSP },
+                { label: "XP 사용", value: t ? short(t.xp.out) : "—", sub: t ? `${num(t.xp.out)} XP` : NBSP },
+                { label: "XP 순증", value: t ? `${net > 0 ? "+" : ""}${short(net)}` : "—", sub: c ? `보유 합 ${num(c.xp)}` : NBSP, tone: net < 0 ? "bad" : undefined },
+                { label: "빙옥 유통", value: c ? num(c.point) : "—", sub: t ? `기간 +${num(t.point.in)} · −${num(t.point.out)}` : NBSP },
+              ]}
+            />
           </div>
-        ) : (
-          <EmptyRow>{loading ? "불러오는 중…" : "기록이 없습니다."}</EmptyRow>
-        )}
-      </div>
+
+          {data ? (
+            <div className={`${dim} space-y-5`} aria-busy={loading || undefined}>
+              {/* 📌 일별 — 막대(XP | 빙옥) + 판 아래 접는 표(XP · 빙옥 열 모두 — 막대로 합치며 잃는 값이 없게) */}
+              <Panel
+                id="sec-daily"
+                title="일별"
+                className="scroll-mt-24"
+                right={
+                  <>
+                    {legend}
+                    <Segmented options={CURS} value={cur} onChange={(v) => setCur(v === "point" ? "point" : "xp")} />
+                  </>
+                }
+                flush
+              >
+                <div className="p-5">
+                  <DailyBars days={data.daily} cur={cur} onPick={(d) => setDayKey(d.d)} />
+                </div>
+                <div className={`px-3 py-2 border-t border-[#ededed] ${tableOpen ? "border-b" : ""}`}>
+                  <button
+                    type="button"
+                    aria-expanded={tableOpen}
+                    onClick={() => setTableOpen(!tableOpen)}
+                    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] hover:bg-[#f2f2f2] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30"
+                  >
+                    <svg aria-hidden viewBox="0 0 20 20" className={`w-3.5 h-3.5 transition-transform ${tableOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 8l5 5 5-5" />
+                    </svg>
+                    <SwapLabel swap={tableOpen} to="표 접기">표 펼치기</SwapLabel>
+                  </button>
+                </div>
+                {tableOpen && (
+                  <DataTable
+                    columns={dayColumns}
+                    rows={data.daily.slice().reverse()}
+                    rowKey={(d) => d.d}
+                    onRowClick={(d) => setDayKey(d.d)}
+                    selectedKey={day ? day.d : null}
+                    className="!rounded-none !border-0"
+                  />
+                )}
+              </Panel>
+
+              <PanelGrid>
+                <Panel title="XP 발행" right={<span className={META}>{num(data.total.xp.in)}</span>} flush className="h-full">
+                  <FlowList parts={data.total.xp.inBy} total={data.total.xp.in} color={INK} />
+                </Panel>
+                <Panel title="XP 사용" right={<span className={META}>{num(data.total.xp.out)}</span>} flush className="h-full">
+                  <FlowList parts={data.total.xp.outBy} total={data.total.xp.out} color={ACCENT} />
+                </Panel>
+              </PanelGrid>
+
+              <PanelGrid>
+                <Panel title="빙옥 발행" right={<span className={META}>{num(data.total.point.in)}</span>} flush className="h-full">
+                  <FlowList parts={data.total.point.inBy} total={data.total.point.in} color={INK} />
+                </Panel>
+                <Panel title="빙옥 사용" right={<span className={META}>{num(data.total.point.out)}</span>} flush className="h-full">
+                  <FlowList parts={data.total.point.outBy} total={data.total.point.out} color={ACCENT} />
+                </Panel>
+              </PanelGrid>
+
+              <Panel id="sec-sales" className="scroll-mt-24" title="상품별 판매" right={<span className={META}>{num(data.sales.reduce((s, x) => s + x.n, 0))}건</span>} flush>
+                {data.sales.length ? (
+                  <DataTable columns={saleColumns} rows={data.sales} rowKey={(s) => s.itemId || s.name} className="!rounded-none !border-0" />
+                ) : (
+                  <p className="px-5 py-10 text-center text-[13px] text-[#5a5a5a]">없음</p>
+                )}
+              </Panel>
+            </div>
+          ) : (
+            <EmptyRow>{loading ? "불러오는 중…" : "기록이 없습니다."}</EmptyRow>
+          )}
+        </div>
+      )}
+
+      {/* 서버 활동 — 처음 연 뒤로는 숨겨 둔 채 남긴다(다시 와도 다시 받지 않는다) */}
+      {serverSeen && (
+        <div hidden={tab !== "server"}>
+          <ServerActivity />
+        </div>
+      )}
 
       <DetailPane
         open={!!day}

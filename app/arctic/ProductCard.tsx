@@ -10,6 +10,7 @@ import { isTimed, durationOptions, durationLabel, cardPick, cardFrom, discountPc
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { isBundle, BUNDLE_TYPE } from "@/lib/bundle";
 import { splitItemName } from "@/lib/itemName";
+import { resolveCategory } from "@/lib/itemCategory";
 import { saleEnded } from "@/lib/saleWindow";
 import { playTone } from "@/lib/sfx";
 import CardArt from "./CardArt";
@@ -41,6 +42,13 @@ export const BUNDLE_LABEL = "세트";
 export const BUNDLE_COLOR = "#b0701b";
 export const typeLabelOf = (type: string) => (type === BUNDLE_TYPE ? BUNDLE_LABEL : itemTypeLabel(type));
 export const typeColorOf = (type: string) => (type === BUNDLE_TYPE ? BUNDLE_COLOR : itemTypeColor(type));
+// 📌 2026-10-17 분류 · 이름(lib/itemCategory.js 「자동 + 바꾸기」) — 상점 API 가 행마다 categoryLabel(칩 글자 — 직접 정한 분류 > 옛 이름 머리말 > 자동) · shortName(보일 이름)을 싣는다.
+//    그 칸이 없는 행(옛 응답 · 관리자 카드 미리보기)만 그 자리에서 같은 규칙으로 정한다(resolveCategory — 직접 정한 분류 > 이름 머리말 > 자동).
+//    상점 카드 · 상세 · 구매 창 · 장바구니 · 결제 · ARCTIC 홈이 같이 쓴다
+type Named = { name?: unknown; type?: unknown; categoryLabel?: unknown; shortName?: unknown } | null | undefined;
+export const categoryLabelOf = (it: Named) =>
+  (typeof it?.categoryLabel === "string" && it.categoryLabel) || (it ? String(resolveCategory(it) || "") : "") || typeLabelOf(String(it?.type || ""));
+export const itemShortName = (it: Named) => (typeof it?.shortName === "string" && it.shortName) || splitItemName(String(it?.name || "")).short;
 // 세트 구성 수 — 목록 API 의 bundleItems(없으면 저장값 bundle)
 export const bundleCountOf = (it: { bundleItems?: unknown; bundle?: unknown } | null | undefined) =>
   Array.isArray(it?.bundleItems) ? it.bundleItems.length : Array.isArray(it?.bundle) ? it.bundle.length : 0;
@@ -49,7 +57,7 @@ export const bundleCountOf = (it: { bundleItems?: unknown; bundle?: unknown } | 
 const NEW_MS = 7 * 86400e3;
 export const isNewProduct = (it: any) => { const t = Date.parse(String(it?.createdAt || "")); return Number.isFinite(t) && Date.now() - t < NEW_MS; };
 
-// 📌 label — 이름 머리말에서 뗀 분류(「카드 스킨」 · 「프로필 배지」 …, lib/itemName). 없으면 유형 이름(「꾸미기」 …)
+// 📌 label — 분류(categoryLabelOf — 「카드 테두리」 · 「프로필 배지」 …). 없으면 유형 이름(「꾸미기」 …). 색은 유형 색 그대로
 export function TypeBadge({ type, label = "", className = "" }: { type: string; label?: string; className?: string }) {
   return (
     <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: typeColorOf(type) }}>
@@ -80,8 +88,8 @@ export default function ProductCard({
   // 📌 세트 — 가진 구성만큼 깎은 값(pick — owned.ts bundlePickOf)에도 정가 취소선을 단다. 할인율은 할인 중일 때만(할인 표기 그대로)
   const bundle = isBundle(it);
   const struck = bundle ? pick.price < pick.list : pct > 0;
-  // 📌 「카드 스킨 · 새로운 세계」 → 칩 「카드 스킨」 + 이름 「새로운 세계」(분류를 칩과 이름에 두 번 쓰지 않게 — 2026-10-11 운영자)
-  const nm = splitItemName(it.name);
+  // 📌 칩 = 분류 · 이름 = 짧은 이름(분류를 칩과 이름에 두 번 쓰지 않게 — 2026-10-11 운영자). 옛 이름 「카드 스킨 · 새로운 세계」도 칩 「카드 테두리」 + 「새로운 세계」
+  const nm = { kind: categoryLabelOf(it), short: itemShortName(it) };
 
   // 📌 장바구니 단추 — 담을 수 있는 상품만. 관리자 카드 미리보기(href "#")는 모양만(누를 수 없는 판 · 저장소 · 구매 목록을 안 본다)
   const pathname = usePathname();
@@ -110,10 +118,10 @@ export default function ProductCard({
     const days = isTimed(it) ? (pick.days ?? durationOptions(it)[0]?.days ?? 0) : 0;
     if (toggleCartRow(uid, { itemId: String(it._id), qty: 1, days })) {
       sfxCartIn();
-      flashCartToast(toastOwner, `${it.name}${days > 0 ? ` (${durationLabel(days)})` : ""} ${days > 0 && ownState === "timed" ? "연장을" : "상품을"} 장바구니에 담았습니다`);
+      flashCartToast(toastOwner, `${nm.short}${days > 0 ? ` (${durationLabel(days)})` : ""} ${days > 0 && ownState === "timed" ? "연장을" : "상품을"} 장바구니에 담았습니다`);
     } else {
       sfxCartOut();
-      flashCartToast(toastOwner, `${it.name} 상품을 장바구니에서 삭제했습니다`);
+      flashCartToast(toastOwner, `${nm.short} 상품을 장바구니에서 삭제했습니다`);
     }
   };
 
@@ -163,8 +171,8 @@ export default function ProductCard({
       <Link href={href} className="block mt-2.5 @min-[180px]:mt-3">
         {/* 이름 앞에 분류 — 무엇을 사는 것인지 이름만으로는 모른다 */}
         {/* 세트는 유형 옆에 구성 수 — 이름 · 가격 자리는 다른 카드와 같다. 한 줄 flex 로 세로 가운데를 맞춘다(글자 크기가 달라 align-middle 로는 어긋났다) */}
-        <span className="flex items-center gap-1.5 mb-1.5">
-          <TypeBadge type={it.type} label={nm.kind} className="inline-flex items-center h-[18px] px-2 text-[10px] leading-none" />
+        <span className="flex items-center gap-1.5 mb-1.5 min-w-0">
+          <TypeBadge type={it.type} label={nm.kind} className="inline-block max-w-full truncate whitespace-nowrap h-[18px] px-2 text-[10px] leading-[18px]" />
           {bundle && <span className="text-[10.5px] font-bold text-[#8a8a8a] leading-none whitespace-nowrap">아이템 {bundleCountOf(it)}개</span>}
         </span>
         {/* 이름은 작고 가볍게, 가격이 주인공 — 둘이 같은 크기면 값이 안 읽힌다 */}

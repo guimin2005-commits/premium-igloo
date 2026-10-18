@@ -7,6 +7,9 @@
 //    줄 앞 서식은 한 줄을 통째로 차지하는 덩어리(block)라 그 뒤 줄바꿈(\n)을 붙이지 않는다 — 붙이면 빈 줄이 하나 더 생긴다(실측).
 //    표는 예전 그대로(뒤에 \n — 이미 쓴 글 간격이 바뀌지 않게)
 //  · dark — 어두운 바탕(대회 글). 제목 글자색만 다르다(밝은 바탕은 짙은 잉크, 어두운 바탕은 흰색)
+//  · 📌 아이템 태그 [[item:<id>:<이름>]](2026-10-18 — lib/itemTag) — 여기서는 자리(<span class='itag' data-itag …>)만 그린다. 안의 글자는 이름(읽기 전 · JS 없을 때).
+//    그 줄에 태그만 있으면 큰 카드 자리(data-solo — 한 줄 덩어리), 문장 안이면 작은 알약 자리. 실제 모양은 FormattedText 가 아이템 값을 읽어 채운다(./ItemTag)
+import { itemTagRe, soloItemTagOf } from "@/lib/itemTag";
 
 const safeUrl = (u: string) => (/^https?:\/\/[^"'<>\s]+$/i.test(String(u).trim()) ? String(u).trim() : "");
 // 본문의 꺾쇠·따옴표를 먼저 글자로 바꿔 둔다 (a<b 가 태그로 먹히거나 속성이 깨지지 않게)
@@ -16,9 +19,23 @@ const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 //    이미 escapeHtml 이 만든 &#39; 같은 참조는 그대로 — getAttribute 가 원래 글자로 돌려준다
 const copyAttr = (code: string) => code.replace(/<[^>]*>/g, "").replace(/['"<>`*_~=\[\]()!]/g, (c) => `&#${c.charCodeAt(0)};`);
 
+// 📌 아이템 태그 자리 — name 은 이미 글자 처리(escapeHtml)된 이름. solo 면 한 줄 카드 자리(block)
+const itemTagSlot = (id: string, name: string, solo: boolean) => {
+  const label = name.trim() || "아이템";
+  return solo
+    ? `<span class='itag block my-3' data-itag='${id}' data-iname='${label}' data-solo='1'><span class='font-bold'>${label}</span></span>`
+    : `<span class='itag' data-itag='${id}' data-iname='${label}'><span class='font-bold'>${label}</span></span>`;
+};
+
 // 줄 안 글자 서식 — cell: 표 칸(칸 머리 "* " 는 예전처럼 점 글자로)
 export function formatInline(t: string, cell = false): string {
+  // 📌 아이템 태그는 맨 먼저 자리표(\u0001n\u0001)로 빼 두었다가 끝에 넣는다 — 뒤 서식(링크 · 굵게 · 복사 칸 …)이 이름 · 속성을 건드리지 않게
+  const tags: string[] = [];
   let s = escapeHtml(t)
+    .replace(itemTagRe(), (_m: string, id: string, name?: string) => {
+      tags.push(itemTagSlot(id, name || "", false));
+      return `\u0001${tags.length - 1}\u0001`;
+    })
     // 이미지 — 링크보다 먼저 걸러야 한다 (뒤에 두면 링크로 잡히고 ! 만 남는다)
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m: string, alt: string, url: string) => {
       const src = safeUrl(url);
@@ -39,6 +56,7 @@ export function formatInline(t: string, cell = false): string {
     .replace(/~~(.*?)~~/g, "<span class='line-through'>$1</span>")
     .replace(/==(.*?)==/g, "<span class='text-[#e91e3f] font-bold'>$1</span>");
   if (cell) s = s.replace(/^(\s*)\*[ \t]+/, "$1<span class='text-[#e91e3f]'>·</span> ");
+  if (tags.length) s = s.replace(/\u0001(\d+)\u0001/g, (_m: string, n: string) => tags[Number(n)] ?? "");
   return s;
 }
 
@@ -125,6 +143,13 @@ export function renderMarkdownHtml(input: string, { dark = false }: { dark?: boo
       const table = parseTable(tableLines);
       if (table) parts.push({ html: table, block: false });
       else parts.push(...tableLines.map((l) => ({ html: formatInline(l), block: false })));
+      continue;
+    }
+    // 📌 태그만 있는 줄 — 큰 카드 자리(한 줄 덩어리)
+    const solo = soloItemTagOf(line);
+    if (solo) {
+      parts.push({ html: itemTagSlot(solo.id, escapeHtml(solo.name), true), block: true });
+      i++;
       continue;
     }
     const b = blockHtml(line, dark);

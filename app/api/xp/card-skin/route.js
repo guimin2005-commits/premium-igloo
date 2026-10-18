@@ -23,14 +23,14 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const skin = String(body?.skin ?? "").trim().toLowerCase();
     if (skin !== SKIN_NONE && !SKIN_OF[skin]) {
-      return NextResponse.json({ success: false, error: "알 수 없는 스킨입니다." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "알 수 없는 카드 테두리입니다." }, { status: 400 });
     }
 
     await connectToDatabase();
     const [perks, mine] = await Promise.all([getPerks(auth.userId), UserXp.findOne({ userId: auth.userId }, { seasonFrame: 1 }).lean()]);
     const cardSkins = withSeasonSkin(perks.cardSkins, mine);
     if (skin !== SKIN_NONE && !cardSkins.includes(skin)) {
-      return NextResponse.json({ success: false, error: "가지고 있지 않은 스킨입니다." }, { status: 403 });
+      return NextResponse.json({ success: false, error: "가지고 있지 않은 카드 테두리입니다." }, { status: 403 });
     }
 
     // XP 문서가 없는 유저(채팅 한 번 안 함 · 지급으로만 받음)는 쓰기인 여기서 만든다(시즌 패스 수령과 같은 규칙 — 조회 경로는 만들지 않는다)
@@ -41,7 +41,7 @@ export async function POST(request) {
     });
     return NextResponse.json({ success: true, data: { cardSkin: pickCardSkin(cardSkins, skin) } });
   } catch (error) {
-    console.error("카드 스킨 저장 실패:", error);
+    console.error("카드 테두리 저장 실패:", error);
     return NextResponse.json({ success: false, error: "저장하지 못했습니다." }, { status: 500 });
   }
 }

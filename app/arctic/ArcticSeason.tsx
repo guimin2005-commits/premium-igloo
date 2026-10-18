@@ -33,7 +33,7 @@ type Pick = { title: string; items: any[] };
 
 // 📌 두 갈래 고르기 — list 는 목록 화면이 이미 거른 시즌 상품(추천순 · 카드 값 _pick 포함).
 //    왼쪽: 꾸미기(시즌 꾸미기 상품이 2개 이상일 때) → 없으면 잘 나가는(판매 수) → 팔린 게 없으면 추천순 앞 2개.
-//    오른쪽: 새로 들어온(등록 최신순, 왼쪽과 겹치지 않게). 숨김 상품(관리자만 보는 것)은 빼고 고른다.
+//    오른쪽: 새로 들어온(등록 최신순, 왼쪽과 겹치지 않게). 숨김 · 판매 종료 상품(관리자 목록 ?all=1 에만 실린다)은 빼고 고른다 — 홈 큐레이션(ArcticHome)과 같은 기준.
 export function seasonPicks(list: any[]): [Pick, Pick] | null {
   const on = list.filter((it) => it.active !== false);
   if (on.length < PICKS_MIN) return null;

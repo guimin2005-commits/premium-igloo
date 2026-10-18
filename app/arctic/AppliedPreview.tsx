@@ -17,15 +17,17 @@ import { playTone } from "@/lib/sfx";
 //    아바타 테두리는 디스코드 카드에도 같이 낀다(&frame= — 봇 /레벨 카드가 테두리를 그린다, 세트는 고른 테두리). 디스코드 카드는 스킨이 있을 때만 — 테두리만 있으면 프로필 카드 한 칸
 const DISCORD_BG = "#313338"; // 디스코드 채팅 바탕 — 봇 카드가 실제로 놓이는 자리
 
-type Cos = { skin?: string; frame?: string; frames?: string[]; badge?: boolean; botCard?: boolean };
+//    📌 2026-10-15 카드 배경(scene) — 카드 테두리(skin)와 따로 고르고 함께 입는다. 프로필 카드엔 둘 다(배경 위에 테두리), 디스코드 카드엔 &scene= 도 실어 보낸다
+type Cos = { skin?: string; scene?: string; frame?: string; frames?: string[]; badge?: boolean; botCard?: boolean };
 // 세트 구성 한 칸(상세 API bundleItems — 구성 아이템의 이름 · 아이콘 · 꾸미기)
-type Part = { itemId?: string; name?: string; icon?: string; imageUrl?: string; color?: string; type?: string; cosmetic?: Cos | null };
-type Item = ShopItemLike & { cosmetic?: Cos | null; bundleItems?: Part[] };
+type Part = { itemId?: string; name?: string; shortName?: string; icon?: string; imageUrl?: string; color?: string; type?: string; cosmetic?: Cos | null };
+type Item = ShopItemLike & { shortName?: string; cosmetic?: Cos | null; bundleItems?: Part[] };
 // 📌 세트 상품(2026-10-11 운영자 "세트 상품에 카드 스킨 · 아바타 테두리 · 배지가 있는데도 미리보기가 안 돼") — 상품 자체엔 꾸미기가 없고 구성마다 있다.
 //    구성의 카드 스킨 · 테두리 · 배지를 한 벌로 모아 같은 칸에 입혀 보인다(산 뒤 한꺼번에 입은 모습). 카드 스킨이 둘 이상이면 위에 이름 칩으로 고른다(테두리 · 배지는 아래 줄)
 const cosOf = (p: Part | null | undefined) => (p?.cosmetic && typeof p.cosmetic === "object" ? p.cosmetic : null);
 const partBadge = (p: Part) => badgeOfItem({ itemId: p.itemId, name: p.name, icon: p.icon, itemImageUrl: p.imageUrl, color: p.color, type: p.type || "cosmetic" });
-const shortOf = (p: Part) => splitItemName(String(p.name || "")).short || String(p.name || "");
+// 📌 칩 · 칸 이름 — 짧은 이름(2026-10-17 API shortName — 상품 · 구성 bundleItems[]). 그 칸이 없는 옛 응답은 이름 머리말을 떼어
+const shortOf = (p: { name?: string; shortName?: string }) => p.shortName || splitItemName(String(p.name || "")).short || String(p.name || "");
 // 고르기 소리 — 칩 · 테두리 칸 · 배지 칸을 누르면 짧게 한 번
 const tick = () => playTone(660, 0.05, "sine", 0.025);
 function PickChips({ label, parts, at, onPick }: { label: string; parts: Part[]; at: number; onPick: (i: number) => void }) {
@@ -73,7 +75,7 @@ function FrameStrip({ who, opts, at, onPick }: { who: ReturnType<typeof whoOf>; 
     c.scrollTo({ left: c.scrollLeft + (er.left - cr.left) - (cr.width - er.width) / 2, behavior: "smooth" });
   }, [at]);
   return (
-    <Strip title={`아바타 테두리 ${opts.length}종`} boxRef={box}>
+    <Strip title={`프로필 테두리 ${opts.length}종`} boxRef={box}>
       {opts.map((o, i) => (
         <button key={o.key} type="button" onClick={() => onPick(i)} aria-pressed={i === at} aria-label={o.label} className={tileCls(i === at)}>
           <span className="relative flex items-center justify-center w-full flex-1">
@@ -124,19 +126,22 @@ export default function AppliedPreview({ item, user, me }: {
   // 세트면 구성의 꾸미기를 종류별로 모은다(구성 차례 그대로)
   const parts = Array.isArray(item?.bundleItems) ? item.bundleItems.filter((p) => cosOf(p)) : [];
   const skinParts = parts.filter((p) => typeof cosOf(p)?.skin === "string" && cosOf(p)?.skin);
+  const sceneParts = parts.filter((p) => typeof cosOf(p)?.scene === "string" && cosOf(p)?.scene);
   const frameParts = parts.filter((p) => typeof cosOf(p)?.frame === "string" && cosOf(p)?.frame);
   const badgeParts = parts.filter((p) => !!cosOf(p)?.badge);
   const [si, setSi] = useState(0);
+  const [ci, setCi] = useState(0); // 세트의 카드 배경 고르기
   const [fi, setFi] = useState(-1); // -1 = 처음 칸(아래 startAt)
   const [bFront, setBFront] = useState<number[]>([]); // 배지 줄에서 누른 차례(맨 앞 = 마지막에 누른 것)
   const [framePicked, setFramePicked] = useState(false);
   const [autoDone, setAutoDone] = useState(false); // 자동 넘김 한 바퀴를 다 돌았다
   const set = parts.length > 0;
   const skinPart = set ? skinParts[Math.min(si, skinParts.length - 1)] || null : null;
+  const scenePart = set ? sceneParts[Math.min(ci, sceneParts.length - 1)] || null : null;
   const own: Cos | null = item?.cosmetic && typeof item.cosmetic === "object" ? item.cosmetic : null;
   // 📌 배지 — 세트면 구성의 배지 전부(구성 차례 · 같은 아이템은 한 번), 단품이면 그 배지 하나. 셋까지는 다 이름 옆에, 넷 이상이면 배지 줄에서 고른 차례로 앞의 셋
   const badgeOpts: BadgeOpt[] = [];
-  for (const [b, label] of set ? badgeParts.map((p) => [partBadge(p), shortOf(p)] as const) : own?.badge ? [[badgeOfItem(item), ""] as const] : []) {
+  for (const [b, label] of set ? badgeParts.map((p) => [partBadge(p), shortOf(p)] as const) : own?.badge ? [[badgeOfItem(item), shortOf(item)] as const] : []) {
     if (!b.itemId || !badgeOpts.some((o) => o.badge.itemId === b.itemId)) badgeOpts.push({ badge: b, label: label || b.name });
   }
   const badgeN = badgeOpts.length;
@@ -151,10 +156,15 @@ export default function AppliedPreview({ item, user, me }: {
   }
   const startAt = Math.max(0, !set && own?.frame ? frameOpts.findIndex((o) => o.key === own.frame) : 0);
   const fAt = fi < 0 ? Math.min(startAt, Math.max(0, frameOpts.length - 1)) : Math.min(fi, Math.max(0, frameOpts.length - 1));
+  // 디스코드 카드는 구성 중 봇이 그릴 수 있는 꾸미기가 하나라도 있으면(카드 테두리 · 카드 배경)
   const cos: Cos | null = set
-    ? { skin: cosOf(skinPart)?.skin || "", frame: frameOpts[fAt]?.key || "", badge: badgeN > 0, botCard: !!cosOf(skinPart)?.botCard }
+    ? {
+        skin: cosOf(skinPart)?.skin || "", scene: cosOf(scenePart)?.scene || "", frame: frameOpts[fAt]?.key || "", badge: badgeN > 0,
+        botCard: !!cosOf(skinPart)?.botCard || !!cosOf(scenePart)?.botCard,
+      }
     : own ? { ...own, frame: frameOpts[fAt]?.key || own.frame } : null;
   const skin = typeof cos?.skin === "string" ? cos.skin : "";
+  const scene = typeof cos?.scene === "string" ? cos.scene : "";
   const frame = typeof cos?.frame === "string" ? cos.frame : "";
   const [discordFail, setDiscordFail] = useState(false);
   // 자동 넘김 — 테두리가 둘 이상이고 아직 안 골랐을 때 한 바퀴만(다 돌면 처음 칸). 움직임 줄이기 설정이면 넘기지 않는다
@@ -170,23 +180,31 @@ export default function AppliedPreview({ item, user, me }: {
     }, FRAME_TURN);
     return () => window.clearInterval(t);
   }, [turnN, startAt]);
-  // 오늘 획득 XP 는 프로필 카드에만 — 카드를 그릴 때(스킨 · 테두리)만 받는다(배지만 있는 상품은 부르지 않는다)
-  const today = useTodayXp(!!user && !!me && (!!skin || !!frame));
-  if (!cos || (!skin && !frame && !cos.badge)) return null;
+  // 오늘 획득 XP 는 프로필 카드에만 — 카드를 그릴 때(카드 배경 · 카드 테두리 · 프로필 테두리)만 받는다(배지만 있는 상품은 부르지 않는다)
+  const card = !!skin || !!scene || !!frame;
+  const today = useTodayXp(!!user && !!me && card);
+  if (!cos || (!card && !cos.badge)) return null;
   const badges = shownBadges.map((i) => badgeOpts[i].badge);
   const chips = skinParts.length > 1; // 테두리 · 배지는 아래 줄(FrameStrip · BadgeStrip)이 맡는다
+  const sceneChips = sceneParts.length > 1;
   const who = whoOf(user, me, today);
-  const showDiscord = !!skin && !!cos.botCard && !discordFail;
-  // 로그인했으면 본인 카드(me=1 — 세션으로만 판단, 남의 값을 그릴 길은 없다), 아니면 예시 카드(공개 캐시). 테두리가 있으면 같이 낀다(서버가 아는 키만 받는다)
-  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`;
+  const wantDiscord = (!!skin || !!scene) && !!cos.botCard;
+  const showDiscord = wantDiscord && !discordFail;
+  // 로그인했으면 본인 카드(me=1 — 세션으로만 판단, 남의 값을 그릴 길은 없다), 아니면 예시 카드(공개 캐시). 카드 배경 · 프로필 테두리가 있으면 같이 낀다(서버가 아는 키만 받는다)
+  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`;
 
   return (
     <div className="mt-14 pt-10 border-t border-[#ededed]">
       <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">적용 미리보기</h2>
-      {/* 세트 — 카드 스킨이 둘 이상일 때만 고르기 칩(하나뿐이면 칩 없이 그것) */}
+      {/* 세트 — 카드 배경 · 카드 테두리가 둘 이상일 때만 고르기 칩(하나뿐이면 칩 없이 그것) */}
+      {sceneChips && (
+        <div className="mb-5">
+          <PickChips label="카드 배경" parts={sceneParts} at={Math.min(ci, sceneParts.length - 1)} onPick={(i) => { setCi(i); setDiscordFail(false); tick(); }} />
+        </div>
+      )}
       {chips && (
         <div className="mb-5">
-          <PickChips label="카드 스킨" parts={skinParts} at={Math.min(si, skinParts.length - 1)} onPick={(i) => { setSi(i); setDiscordFail(false); tick(); }} />
+          <PickChips label="카드 테두리" parts={skinParts} at={Math.min(si, skinParts.length - 1)} onPick={(i) => { setSi(i); setDiscordFail(false); tick(); }} />
         </div>
       )}
       {frameOpts.length > 1 && (
@@ -195,14 +213,14 @@ export default function AppliedPreview({ item, user, me }: {
       {badgeN > MAX_BADGES && (
         <BadgeStrip opts={badgeOpts} shown={shownBadges} onPick={(i) => { setBFront((f) => [i, ...f.filter((x) => x !== i)]); tick(); }} />
       )}
-      <div className={`grid grid-cols-1 gap-4 ${skin || (frame && cos.badge) ? "md:grid-cols-2" : ""}`}>
-        {(skin || frame) && (
+      <div className={`grid grid-cols-1 gap-4 ${card && (wantDiscord || cos.badge) ? "md:grid-cols-2" : ""}`}>
+        {card && (
           <div>
             <Label>프로필 카드</Label>
             {/* 레벨 페이지 카드(360 폭)를 제 크기 이하로 — 폰은 칸 폭에 맞춰 줄인다 */}
             <div className="relative w-full aspect-[4/5] md:aspect-auto md:h-[600px] rounded-2xl bg-[#f2f2f2] overflow-hidden">
               <FitBox pad={0.92} max={1}>
-                <ProfileCardPreview who={who} skin={skin} frame={frame} />
+                <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
               </FitBox>
             </div>
           </div>

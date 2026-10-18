@@ -5,15 +5,18 @@
 //       "하루 첫 채팅"은 XP 를 받은 메시지에 한해 하루 1번 따로 준다(XpLog reason "effect").
 //       "채팅 잭팟"은 XP 를 받은 메시지에서 효과마다 확률로 따로, "채팅 쿨타임 단축"은 이 유저의 쿨타임에서 초를 뺀다(상한 절반).
 //       "새 멤버 첫 답장"은 쿨타임과 무관하게 — 입장 14일 이내 멤버의 메시지에 답장하면 그 멤버당 한 번(WelcomeReply 로 잠금).
+//       📌 2026-10-14 할로윈 "호박불 랜턴"(wispHunt)은 XP 를 받은 메시지에서 효과마다 확률로 그 채널에 도깨비불을 띄운다(features/wispHunt.js).
 //       효과는 디스코드 역할이 아니라 인벤토리 보유 아이템 기준이다(itemEffects.js — 아이템 기본 효과 포함).
 import { Events, MessageType } from "discord.js";
 import { UserXp, WelcomeReply, isDuplicateKeyError } from "../db.js";
 import { getBuffXp } from "../roleConfigs.js";
-import { effectXp, jackpotXp, welcomeReplyXp, perksOf } from "../itemEffects.js";
+import { effectXp, jackpotXp, welcomeReplyXp, wispHuntXp, perksOf } from "../itemEffects.js";
 import { getChannelPolicy } from "../channelConfigs.js";
 import { getSettings, getActiveBoostXp, isLevelOpen } from "../botSettings.js";
+import { hotTimeMult } from "../hotTime.js";
 import { grantXp, grantOnceEffects } from "../xp.js";
 import { isXpStopped, notStopped } from "../xpStop.js";
+import { spawnWisp } from "./wispHunt.js";
 import { config } from "../config.js";
 
 const WELCOME_DAYS = 14; // 새 멤버 — 서버 입장 뒤 이 기간 안 (📌 2026-10-04 7일 → "14일")
@@ -100,14 +103,15 @@ export function registerChatXp(client) {
       const max = Math.max(min, Math.floor(Number(s.chatXpMax) || 0) + lvl * step);
       const rolled = min + Math.floor(Math.random() * (max - min + 1));
 
+      // 📌 핫타임(hotTime.js) — 굴린 값(기본 + 강화)에만 배수. 아이템 % 효과는 배수 전 값에 붙는다(운영자 "아이템에는 핫타임 효과가 적용되지 않음")
       const amount =
-        rolled +
+        Math.round(rolled * hotTimeMult(s)) +
         getBuffXp(message.member) +
         channelPolicy.boostXp +
         getActiveBoostXp(message.member, message.channel) +
         effectXp(message.member, "chat", { base: rolled, channel: message.channel });
 
-      await grantXp(message.member, amount, { reason: "chat", ...where });
+      const got = await grantXp(message.member, amount, { reason: "chat", ...where });
 
       // 채팅 잭팟 — XP 를 받은 메시지에서만, 터지면 따로 지급(XpLog "effect")
       const jackpot = jackpotXp(message.member, { channel: message.channel });
@@ -115,6 +119,13 @@ export function registerChatXp(client) {
         await grantXp(message.member, jackpot, { reason: "effect", ...where })
           .then(() => console.log(`✨ 아이템 효과(chatJackpot): ${message.member.displayName} +${jackpot.toLocaleString()}`))
           .catch((e) => console.error("아이템 효과 지급 오류 (chatJackpot):", e.message));
+      }
+
+      // 도깨비불(호박불 랜턴 wispHunt) — 채팅 XP 가 실제로 들어간 메시지에서만(got), 효과마다 확률. 터지면 그 채널에 [잡기] 버튼
+      //    (features/wispHunt.js — 채널 · 주인마다 10분에 하나). 핫타임 배수 없음 · 기다리지 않는다(오류는 삼킨다)
+      if (got) {
+        const wisp = wispHuntXp(message.member, { channel: message.channel });
+        if (wisp > 0) spawnWisp(message, wisp, where).catch((e) => console.error("아이템 효과 오류 (wispHunt):", e?.message || e));
       }
 
       // 하루 첫 채팅 효과 — 쿨타임을 통과해 XP 를 받은 메시지에서만 (오류는 안에서 삼킨다)

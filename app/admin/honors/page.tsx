@@ -1,20 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DiscordIdInput, parseIds, useDiscordProfiles } from "../../components/DiscordIds";
 import {
   useAdminGuard,
   AdminPage,
-  StatRow,
+  AdminTabs,
   Toolbar,
   Segmented,
   SearchInput,
+  ChoiceChip,
   Btn,
   DataTable,
   DetailPane,
   StatusChip,
   ConfirmDialog,
+  useToast,
   inputClass,
   labelClass,
   type Column,
@@ -24,13 +27,26 @@ import { statusOf } from "@/lib/tournamentPhase";
 
 /* 📌 명예의 전당 관리 — 등재·수정·삭제를 이 한 곳에서 처리한다.
    (예전에는 공개 페이지 위에서 수정·삭제를 했는데, 관리 동선이 두 군데로 갈라져 있었다)
-   📌 2026-09 개편 — 목록 화면 틀: 머리 → 요약 → 한 줄 도구(수동/대회 토글 · 검색 · 등재) → 전체 폭 표 → 줄을 누르면 상세 칸.
-      가운데 모달 두 개(등재·수정 / 우승 정보)를 상세 칸 하나로 합쳐, 목록을 보면서 다른 줄로 바로 옮겨 가게 했다. */
+   📌 2026-09 개편 — 목록 화면 틀: 머리 → 한 줄 도구(검색 · 등재) → 전체 폭 표 → 줄을 누르면 상세 칸.
+      가운데 모달 두 개(등재·수정 / 우승 정보)를 상세 칸 하나로 합쳐, 목록을 보면서 다른 줄로 바로 옮겨 가게 했다.
+   📌 2026-10-17 정리
+      · 수동 기록 / 대회 우승은 머리 탭(?tab=tournament) — 링크 · 뒤로가기 · 기능 검색 바로가기가 산다
+      · 요약 숫자 4칸은 아래 탭 · 표와 겹쳐(「대회 우승」은 기준도 달랐다) 「우승자 미기재」 하나만 — 도구 줄 칩. 누르면 대회 우승 탭에서 미기재만(&missing=1)
+      · 목록 아래 안내 두 줄은 뺐다(설명 문장 금지)
+      · 결과 알림 · 효과음은 공용 토스트(useToast)
+      · ?new=1 — 새 기록 등재 칸을 연다(연 뒤 주소에서 지운다) */
 
 type Honor = { _id: string; category: string; title: string; winner: string; winnerId: string; detail: string; dateLabel: string; createdAt?: string };
 type TournamentRow = { _id: string; title: string; game: string; winner: string; winnerId: string; dateLabel: string; prize: string; status: string };
 
 const EMPTY: Omit<Honor, "_id"> = { category: "SYSTEM : LEVEL", title: "", winner: "", winnerId: "", detail: "", dateLabel: "" };
+
+const TABS = [
+  { id: "manual", short: "수동 기록" },
+  { id: "tournament", short: "대회 우승" },
+];
+const BASE = "/admin/honors";
+const hrefTab = (id: string) => (id === "tournament" ? `${BASE}?tab=tournament` : BASE);
 
 // 📌 링크를 Btn(secondary) 과 같은 알약으로 — 공개 페이지 · 대회 글처럼 다른 화면으로 가는 것
 const linkBtn = (size: "sm" | "md") =>
@@ -56,45 +72,45 @@ export default function AdminHonorsPage() {
   const [honors, setHonors] = useState<Honor[]>([]);
   const [tournaments, setTournaments] = useState<TournamentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [tab, setTab] = useState<"manual" | "tournament">("manual");
   const [query, setQuery] = useState("");
+
+  // 📌 탭 · 미기재 거르기는 주소가 원본(?tab=tournament · &missing=1)
+  const router = useRouter();
+  const sp = useSearchParams();
+  const tab: "manual" | "tournament" = sp.get("tab") === "tournament" ? "tournament" : "manual";
+  const missingOnly = tab === "tournament" && sp.get("missing") === "1";
+  const wantNew = sp.get("new") === "1";
 
   const [form, setForm] = useState<{ mode: "create" | "edit"; data: any } | null>(null);
   const [winnerEdit, setWinnerEdit] = useState<TournamentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Honor | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
 
   const { profiles, load } = useDiscordProfiles();
 
-  // ── 소리 (짧은 신스 톤) ──
-  const audioCtx = useRef<AudioContext | null>(null);
-  const playTone = useCallback((freq: number, dur = 0.09, gainBase = 0.035, type: OscillatorType = "sine") => {
-    try {
-      if (!audioCtx.current) audioCtx.current = new AudioContext();
-      const ctx = audioCtx.current;
-      if (ctx.state === "suspended") ctx.resume();
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(gainBase, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-      osc.connect(g).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + dur);
-    } catch {}
-  }, []);
-  const sfxOk = useCallback(() => { [523, 659, 880].forEach((f, i) => setTimeout(() => playTone(f, 0.11, 0.035), i * 85)); }, [playTone]);
-  const sfxErr = useCallback(() => { playTone(300, 0.14, 0.04, "square"); setTimeout(() => playTone(220, 0.2, 0.04, "square"), 130); }, [playTone]);
+  // 📌 결과 알림 — 공용 토스트(성공 · 실패 효과음 포함). 예전엔 이 화면이 소리 · 토스트를 따로 만들었다
+  const { toast: notify, toastEl } = useToast();
 
-  const toastTimer = useRef<any>(null);
-  const notify = useCallback((msg: string, error = false) => {
-    setToast({ msg, error });
-    error ? sfxErr() : sfxOk();
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2800);
-  }, [sfxOk, sfxErr]);
+  // 📌 탭을 바꾸면 열린 칸을 닫는다 · ?new=1 이 오면 새 기록 칸을 연다 — 렌더 중 조정(앞 탭의 칸이 한 번 그려지지 않게).
+  //    권한 확인 화면보다 앞에 둔다 — 주소의 new 를 지우는 일(아래 효과)이 먼저 끝나도 칸 열기를 놓치지 않게
+  const [seenTab, setSeenTab] = useState(tab);
+  const [seenNew, setSeenNew] = useState(false);
+  if (seenTab !== tab) {
+    setSeenTab(tab);
+    setForm(null);
+    setWinnerEdit(null);
+  }
+  if (seenNew !== wantNew) {
+    setSeenNew(wantNew);
+    if (wantNew) {
+      setWinnerEdit(null);
+      setForm({ mode: "create", data: { ...EMPTY } });
+    }
+  }
+  // 열었으면 주소에서 new 를 지운다 — 새로고침에 또 열리지 않고, 같은 바로가기를 다시 누르면 또 열린다
+  useEffect(() => {
+    if (wantNew) router.replace(BASE, { scroll: false });
+  }, [wantNew, router]);
 
   // ── 불러오기 ──
   const fetchAll = useCallback(() => {
@@ -211,6 +227,12 @@ export default function AdminHonorsPage() {
     [tournaments, query]
   );
   const missingWinner = tournaments.filter((t) => !t.winner.trim()).length;
+  const tournamentShown = missingOnly ? tournamentRows.filter((t) => !t.winner.trim()) : tournamentRows;
+  // 「우승자 미기재」 칩 — 수동 기록 탭에서 누르면 대회 우승 탭의 미기재만으로, 대회 우승 탭에서는 켜고 끈다
+  const toggleMissing = () => {
+    if (tab !== "tournament") router.push(`${BASE}?tab=tournament&missing=1`, { scroll: false });
+    else router.replace(missingOnly ? `${BASE}?tab=tournament` : `${BASE}?tab=tournament&missing=1`, { scroll: false });
+  };
 
   // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (관리자 화면마다 복사돼 있던 것)
   if (gate) return gate;
@@ -232,7 +254,6 @@ export default function AdminHonorsPage() {
   // 등재 · 수정 칸과 우승 정보 칸은 같은 자리를 쓴다 — 하나를 열면 다른 하나는 닫는다
   const openForm = (next: { mode: "create" | "edit"; data: any }) => { setWinnerEdit(null); setForm(next); };
   const openWinner = (t: TournamentRow) => { setForm(null); setWinnerEdit({ ...t }); };
-  const paneOpen = !!form || !!winnerEdit;
 
   // ── 표 열 ──
   const manualCols: Column<Honor>[] = [
@@ -267,35 +288,23 @@ export default function AdminHonorsPage() {
 
   return (
     <AdminPage
-      section="운영"
+      section="콘텐츠"
       title="명예의 전당"
       actions={<Link href="/hall-of-fame" className={linkBtn("sm")}>공개 페이지 보기 ↗</Link>}
-      // PC 넓은 화면에서 상세 칸(440px)이 열리면 표가 그 밑에 깔리지 않게 오른쪽을 비운다
+      tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={hrefTab} />}
     >
-      {/* ── 요약 ── */}
-      <StatRow
-        className="mb-5"
-        items={[
-          { label: "전체 기록", value: honors.length + tournaments.filter((t) => t.winner.trim()).length },
-          { label: "수동 기록", value: honors.length },
-          { label: "대회 우승", value: tournaments.filter((t) => t.winner.trim()).length },
-          { label: "우승자 미기재", value: missingWinner, tone: missingWinner > 0 ? "bad" : undefined },
-        ]}
-      />
-
-      {/* ── 수동/대회 토글 · 검색 · 등재 ── */}
+      {/* ── 검색 · 우승자 미기재 · 등재 — 두 탭이 같은 줄(칩은 늘 같은 자리) ── */}
       <Toolbar
         right={tab === "manual" && <Btn onClick={() => openForm({ mode: "create", data: { ...EMPTY } })}>+ 새 기록 등재</Btn>}
       >
-        <Segmented
-          options={[
-            { v: "manual", l: "수동 기록", n: honors.length },
-            { v: "tournament", l: "대회 우승", n: tournaments.length },
-          ]}
-          value={tab}
-          onChange={(v) => { setTab(v as "manual" | "tournament"); setForm(null); setWinnerEdit(null); }}
-        />
         <SearchInput value={query} onChange={setQuery} placeholder="제목·우승자 검색" />
+        <ChoiceChip on={missingOnly} onClick={toggleMissing}>
+          우승자 미기재
+          {/* 남은 게 있으면 빨간 숫자 — 처리할 일 표시(켜면 흰 글자) */}
+          <span className={`text-[12px] tabular-nums ${missingOnly ? "text-white/70" : missingWinner > 0 ? "font-black text-[#d01634]" : "text-[#a3a3a3]"}`}>
+            {isLoading ? "–" : missingWinner}
+          </span>
+        </ChoiceChip>
       </Toolbar>
 
       {/* ── 목록 ── */}
@@ -313,19 +322,13 @@ export default function AdminHonorsPage() {
       ) : (
         <DataTable
           columns={tournamentCols}
-          rows={tournamentRows}
+          rows={tournamentShown}
           rowKey={(t) => t._id}
           onRowClick={(t) => { if (isSaving || winnerEdit?._id === t._id) return; openWinner(t); }}
           selectedKey={winnerEdit?._id ?? null}
-          empty={query.trim() ? "검색 결과가 없습니다." : "종료된 대회가 없습니다."}
+          empty={query.trim() ? "검색 결과가 없습니다." : missingOnly ? "우승자 미기재 대회가 없습니다." : "종료된 대회가 없습니다."}
         />
       )}
-
-      <p className="mt-3 text-[12px] text-[#5a5a5a] break-keep">
-        {tab === "manual"
-          ? "수동 기록은 SYSTEM : LEVEL 시즌 1등 · 이벤트 우승 등 대회 외 기록입니다."
-          : "대회 우승은 대회 글에 저장된 값이라 여기서 고치면 공개 페이지에 그대로 반영됩니다."}
-      </p>
 
       {/* 📌 등재 / 수정 — 상세 칸 */}
       <DetailPane
@@ -441,15 +444,7 @@ export default function AdminHonorsPage() {
         onCancel={() => setDeleteTarget(null)}
       />
 
-      {/* 📌 결과 토스트 — 모바일은 하단 독 위로 */}
-      {toast && (
-        <div
-          role="status"
-          className={`fixed bottom-[96px] md:bottom-6 left-1/2 -translate-x-1/2 z-[130] w-max max-w-[calc(100vw-2rem)] px-5 py-3 rounded-full border text-[13px] font-bold break-keep shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${toast.error ? "bg-white border-[#e91e3f] text-[#d01634]" : "bg-[#131313] border-[#131313] text-white"}`}
-        >
-          {toast.error ? "⚠ " : "✓ "}{toast.msg}
-        </div>
-      )}
+      {toastEl}
     </AdminPage>
   );
 }

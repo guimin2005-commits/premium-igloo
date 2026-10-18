@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import { Reveal, LuxStyles, CountUp } from "../components/Lux";
 import { parseIds, useDiscordProfiles } from "../components/DiscordIds";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 import { HONOR_GROUPS, GROUP_LABEL_EN, groupOf, rankLabelOf } from "@/lib/honors";
 import { statusOf } from "@/lib/tournamentPhase";
 
@@ -15,8 +14,8 @@ const GOLD = "#d4af37";
    (최신 기록만 크게 그리던 예전 방식은 목록이 들쭉날쭉해 보여서, 강조는 마우스를 올린 줄로 옮겼다) */
 
 export default function HallOfFamePage() {
-  const { data: session, status } = useSession();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 「기록 관리」 링크는 관리자로 볼 때만 — 「유저 화면으로 보기」를 켜면 유저와 같다
+  const { admin: isAdmin } = useAdminView();
 
   const [champions, setChampions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

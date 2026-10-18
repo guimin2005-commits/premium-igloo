@@ -15,7 +15,7 @@ import BotSetting from "@/models/BotSetting";
 import { fetchMemberRoles } from "@/lib/discordMember";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickCardScene, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin, normalizeEffects } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
 import { VOICE_TIERS, getTier } from "@/lib/voiceTiers";
 
@@ -42,6 +42,24 @@ const seasonHistoryOf = (doc) => {
     .sort((a, b) => b.season - a.season)
     .slice(0, 20);
 };
+
+// 📌 아이템 하나의 고정 가산(채팅 1회당 · 음성 1회당 · 출석 시) — 봇 itemEffectList · effectXp 와 같은 규칙.
+//    기본 효과 세 칸(봇 basic-chat · basic-voice · basic-attend — 정수 · 0 ~ 1,000,000) + 추가 효과 중 조건 없는 add 줄(「추가 효과로 옮기기」가 만드는 모양).
+//    두 쪽에 같은 값이 있으면 봇도 둘 다 더하므로 여기도 둘 다 더한다. percent 줄 · 요일 · 시간대 · 채널 조건 줄은 상황마다 달라 뺀다
+const FLAT_ON = ["chat", "voice", "attend"];
+const basicXpOf = (v) => {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) ? Math.min(1_000_000, Math.max(0, n)) : 0;
+};
+function flatItemXp(it) {
+  const out = { chat: basicXpOf(it.chatBuffXp), voice: basicXpOf(it.voiceBuffXp), attend: basicXpOf(it.attendBuffXp) };
+  for (const e of normalizeEffects(it.effects)) {
+    if (!FLAT_ON.includes(e.on) || e.mode !== "add") continue;
+    if (e.days?.length || e.hourFrom != null || e.channelIds?.length) continue;
+    out[e.on] += e.amount;
+  }
+  return out;
+}
 
 // ── [조회] 로그인한 유저 본인의 XP·레벨·순위 ──────────────────
 export async function GET() {
@@ -84,17 +102,16 @@ export async function GET() {
     const buffs = heldCfgs.filter((c) => c.buffXp > 0).map((c) => ({ name: c.roleName || "역할", xp: c.buffXp }));
     // 출석 1회에만 붙는 역할 가산 (봇 getAttendBuffXp 와 같은 값) — 시뮬레이터 출석 줄이 읽는다
     let attendBuffXp = heldCfgs.reduce((s, c) => s + Math.max(0, Number(c.attendBuffXp) || 0), 0);
-    // 📌 보유 아이템의 기본 효과 — 디스코드 역할과 무관하게 인벤토리에 가진 아이템(lib/ownedItems.js, 봇과 같은 판정).
-    //    같은 아이템은 몇 번 사도 한 번. 역할 조회에 실패하면(null) 구매 건(A)만 본다. 조건 효과는 상황마다 달라 뺀다
+    // 📌 보유 아이템의 고정 가산 — 디스코드 역할과 무관하게 인벤토리에 가진 아이템(lib/ownedItems.js, 봇과 같은 판정).
+    //    같은 아이템은 몇 번 사도 한 번. 역할 조회에 실패하면(null) 구매 건(A)만 본다. 기본 효과 세 칸 + 조건 없는 추가 효과 add 줄(flatItemXp)
     //    채팅 · 음성을 따로 정하므로 역할 버프(buffs — 둘 다에 붙는다)와 나눠 준다
     const itemBuffs = [];
     let attendItemXp = 0; // 출석 가산 중 보유 아이템 몫 — 세부 효과 창이 역할 · 아이템을 나눠 적는다
     for (const it of owned) {
       if (it.type === "physical") continue;
-      const chat = Math.max(0, Number(it.chatBuffXp) || 0);
-      const voice = Math.max(0, Number(it.voiceBuffXp) || 0);
+      const { chat, voice, attend } = flatItemXp(it);
       if (chat > 0 || voice > 0) itemBuffs.push({ name: it.name || "아이템", chat, voice });
-      attendItemXp += Math.max(0, Number(it.attendBuffXp) || 0);
+      attendItemXp += attend;
     }
     attendBuffXp += attendItemXp;
     const boosts = boostRows
@@ -118,6 +135,8 @@ export async function GET() {
     perkSums.shopCashback = Math.min(perkSums.shopCashback || 0, cashbackRuleOf(setting).cap);
     // 📌 카드 스킨 — 유저가 인벤토리에서 고른 것(cardSkinPick)만. 안 골랐거나 끔이거나 더 이상 없으면 "" (기본 카드 — 봇 카드와 같은 규칙, 2026-10-04 자동 착용 없음)
     const cardSkin = pickCardSkin(withSeasonSkin(cardSkins, doc), doc?.cardSkinPick || ""); // 시즌 등급 카드 스킨(seasonFrame 등급)도 가진 것
+    // 📌 카드 배경 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 ""). 카드 테두리와 따로 고르고 함께 입는다
+    const cardScene = pickCardScene(perks.cardScenes, doc?.cardScenePick || "");
     // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick) 중 지금 가진 것만(최대 3). 안 골랐거나 전부 뗐으면 [] (2026-10-04 자동으로 달지 않음)
     const badges = pickBadges(allBadges, doc?.badgePick);
     // 📌 아바타 테두리 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 "")
@@ -141,7 +160,7 @@ export async function GET() {
         // 지금 내 역할 버프·부스트 — 채팅·음성 1회 지급에 더해지는 가산 (획득 XP 줄)
         buffXp: buffs.reduce((s, b) => s + b.xp, 0),
         buffs,
-        // 보유 아이템의 기본 효과 — 채팅 1회당 · 음성 1회당 따로
+        // 보유 아이템의 고정 가산(기본 효과 + 조건 없는 추가 효과) — 채팅 1회당 · 음성 1회당 따로
         itemChatXp: itemBuffs.reduce((s, b) => s + b.chat, 0),
         itemVoiceXp: itemBuffs.reduce((s, b) => s + b.voice, 0),
         itemBuffs,
@@ -157,6 +176,8 @@ export async function GET() {
         // 단 프로필 배지(최대 3, 유저가 정한 순서) [{ itemId, name, icon, imageUrl, color, type }] · 카드 스킨 키("" 이면 기본)
         badges,
         cardSkin,
+        // 지금 쓰는 카드 배경 키("" 이면 없음 — 카드 테두리 cardSkin 과 함께 입는다)
+        cardScene,
         // 지금 쓰는 아바타 테두리 키("" 이면 없음) — public/avatar-borders/<키>.svg
         avatarFrame,
         // 승급 화면을 마지막으로 본 등급 인덱스(null = 아직 안 적음) — app/level/PromoOverlay

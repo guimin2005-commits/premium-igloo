@@ -6,8 +6,12 @@
 //    · 목록 — 검색 · 상태 토글 → 전체 폭 표 → 줄을 누르면 오른쪽 상세 칸(제목 수정 · 비공개 · 입장 · 삭제)
 //    · 개최 — 왼쪽 넓은 칸에 입력 패널들, 오른쪽 좁은 칸(xl 에서 따라옴)에 방 설정 · 요약 · 제출
 //    요청 주소 · 본문 · 검증 · 결과 문구는 공개 화면에 있던 그대로다. 화면만 관리자 틀(../ui)로 바꿨다.
+//    📌 2026-10-17 정리 — 좌측 메뉴는 「경매」 한 칸(목록 · 개최는 머리 탭). 목록 도구 줄의 [경매 개최] 단추는 바로 위 개최 탭과 같은 일이라 뺐다.
+//      · 성공 결과(제목 · 비공개 · 리더로 · 테스트 데이터 · 설문 불러오기 · 삭제)는 토스트(효과음 포함), 실패만 [확인] 모달
+//      · 「테스트 데이터 자동 입력」은 「테스트 방」을 켰을 때만 보인다
+//      · 상세 칸은 PC 칸 · 모바일 판 두 벌로 그려진다 — 입력칸 id 는 칸마다 useId 로(고정 id 가 겹쳐 모바일 라벨이 숨은 칸을 가리키던 것)
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { GAME_PRESETS, GAME_LIST } from "@/lib/auctionGames";
@@ -16,6 +20,7 @@ import {
   AdminPage,
   AdminTabs,
   Segmented,
+  ChoiceChip,
   Toolbar,
   SearchInput,
   DataTable,
@@ -31,7 +36,9 @@ import {
   labelClass,
   fieldNote,
   useNotice,
+  useToast,
   ConfirmDialog,
+  FormSheet,
   useAdminGuard,
 } from "../ui";
 import type { Column } from "../ui";
@@ -108,9 +115,49 @@ const pillCls = (on: boolean) => `${PILL} ${on ? "bg-[#131313] border-[#131313] 
 const subPillCls = (on: boolean) => `${PILL} ${on ? "bg-white border-[#131313] text-[#131313] ring-1 ring-[#131313]" : "bg-white border-[#a3a3a3] text-[#5a5a5a] hover:border-[#131313] hover:text-[#131313]"}`;
 const miniLabel = "block text-[12px] font-bold text-[#5a5a5a] mb-1.5";
 
+// 📌 상세 칸의 제목 입력 — 칸(PC) · 판(모바일) 두 벌로 그려지므로 id 를 칸마다 따로(useId) 받는다
+function TitleField({
+  value,
+  saved,
+  saving,
+  onChange,
+  onSave,
+}: {
+  value: string;
+  saved: string;
+  saving: boolean;
+  onChange: (v: string) => void;
+  onSave: () => void;
+}) {
+  const id = useId();
+  return (
+    <div className="mt-6">
+      <label htmlFor={id} className={labelClass}>제목</label>
+      <div className="flex items-start gap-2">
+        <input
+          id={id}
+          value={value}
+          maxLength={60}
+          onChange={(e) => onChange(e.target.value.slice(0, 60))}
+          // 한글 조합 중 Enter 는 마지막 글자가 빠진 채 저장되므로 건너뛴다
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) onSave(); }}
+          placeholder="경매 제목"
+          className={`${inputClass} flex-1 min-w-0`}
+        />
+        <Btn onClick={onSave} disabled={!value.trim() || value.trim() === saved || saving}>
+          {saving ? "저장 중…" : "저장"}
+        </Btn>
+      </div>
+      <p className="mt-1.5 text-right text-[12px] text-[#8a8a8a] tabular-nums">{value.length}/60</p>
+    </div>
+  );
+}
+
 export default function AdminAuctionPage() {
   const { isAdmin, gate } = useAdminGuard();
+  // 실패 · 막힘은 [확인] 모달(notify(…, true)), 성공은 토스트 — 가벼운 조작마다 모달을 닫지 않게
   const { notify, noticeEl } = useNotice();
+  const { toast, toastEl } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") === "new" ? "new" : "list";
@@ -190,7 +237,7 @@ export default function AdminAuctionPage() {
         isAllPos: golden,
       };
     }));
-    notify(`테스트 데이터를 입력했습니다.\n리더 ${teamCount}명 · 선수 ${total}명 (테스트 방으로 표시)`);
+    toast(`테스트 데이터를 입력했습니다. 리더 ${teamCount}명 · 선수 ${total}명`);
   };
   const updateRole = (i: number, key: string, value: any) => setRoles((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
 
@@ -234,7 +281,7 @@ export default function AdminAuctionPage() {
       return empty >= 0 ? prev.map((l, idx) => (idx === empty ? next : l)) : [...prev, next];
     });
     setPlayers((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : [emptyPlayer()]));
-    notify(`${p.alias}님을 리더로 올렸습니다.${pos ? ` (${pos})` : ""}`);
+    toast(`${p.alias}님을 리더로 올렸습니다.${pos ? ` (${pos})` : ""}`);
   };
 
   // 📌 대회 참가 설문 → 선수 명단 자동 채우기
@@ -266,7 +313,7 @@ export default function AdminAuctionPage() {
         setPlayers(list);
         setShowSurveyPicker(false);
         const skipped = d?.meta?.skipped || 0;
-        notify(`선수 ${list.length}명을 불러왔습니다.${skipped ? `\n닉네임을 찾지 못한 ${skipped}명은 제외했습니다.` : ""}`);
+        toast(`선수 ${list.length}명을 불러왔습니다.${skipped ? ` 닉네임 없는 ${skipped}명 제외` : ""}`);
       }
     } catch {
       notify("설문을 불러오지 못했습니다.", true);
@@ -274,18 +321,6 @@ export default function AdminAuctionPage() {
       setIsImporting(false);
     }
   };
-
-  // 설문 고르기 창 — Esc 로 닫는다 (결과 알림이 위에 떠 있으면 그 창 차례)
-  useEffect(() => {
-    if (!showSurveyPicker) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (document.querySelector('[role="alertdialog"]')) return;
-      setShowSurveyPicker(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showSurveyPicker]);
 
   // 공개 ↔ 비공개 전환
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -300,7 +335,7 @@ export default function AdminAuctionPage() {
       const d = await res.json();
       if (res.ok && d.success) {
         setAuctions((prev) => prev.map((a) => (a._id === id ? { ...a, isPrivate: next } : a)));
-        notify(d.message || "전환했습니다.");
+        toast(d.message || "전환했습니다.");
       } else {
         notify(d.message || "전환에 실패했습니다.", true);
       }
@@ -328,7 +363,7 @@ export default function AdminAuctionPage() {
         setAuctions((prev) => prev.map((a) => (a._id === renameTarget.id ? { ...a, title: t } : a)));
         // 칸은 열어 둔 채 저장된 제목으로 맞춘다 (예전 모달은 닫혔다)
         setRenameTarget({ id: renameTarget.id, title: t });
-        notify("제목을 변경했습니다.");
+        toast("제목을 변경했습니다.");
       } else notify(d.message || "제목 변경에 실패했습니다.", true);
     } catch {
       notify("서버와 통신 중 오류가 발생했습니다.", true);
@@ -393,7 +428,7 @@ export default function AdminAuctionPage() {
     setIsDeleting(false);
     if (res?.ok) {
       if (selId === deleteId) setSelId(null);
-      notify("삭제했습니다.");
+      toast("삭제했습니다.");
     } else {
       notify("삭제에 실패했습니다.", true);
     }
@@ -455,7 +490,7 @@ export default function AdminAuctionPage() {
   return (
     <>
       <AdminPage
-        section="운영"
+        section="콘텐츠"
         // 📌 제목은 탭과 무관하게 고정 — 탭마다 글자 수가 달라지면 머리가 흔들려 탭 줄이 밀린다(메모: tabs-never-move)
         title="경매"
         tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={hrefTab} />}
@@ -463,7 +498,7 @@ export default function AdminAuctionPage() {
         {/* ═══ 목록 ═══ */}
         {tab === "list" && (
           <>
-            <Toolbar right={<Btn onClick={() => router.push(hrefTab("new"))}>경매 개최</Btn>}>
+            <Toolbar>
               <SearchInput value={q} onChange={setQ} placeholder="제목 · 종목" />
               <Segmented
                 options={[
@@ -523,25 +558,13 @@ export default function AdminAuctionPage() {
                   </dl>
 
                   {renameTarget && renameTarget.id === sel._id && (
-                    <div className="mt-6">
-                      <label htmlFor="auction-rename" className={labelClass}>제목</label>
-                      <div className="flex items-start gap-2">
-                        <input
-                          id="auction-rename"
-                          value={renameTarget.title}
-                          maxLength={60}
-                          onChange={(e) => setRenameTarget({ ...renameTarget, title: e.target.value.slice(0, 60) })}
-                          // 한글 조합 중 Enter 는 마지막 글자가 빠진 채 저장되므로 건너뛴다
-                          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) renameAuction(); }}
-                          placeholder="경매 제목"
-                          className={`${inputClass} flex-1 min-w-0`}
-                        />
-                        <Btn onClick={renameAuction} disabled={!renameTarget.title.trim() || renameTarget.title.trim() === sel.title || isRenaming}>
-                          {isRenaming ? "저장 중…" : "저장"}
-                        </Btn>
-                      </div>
-                      <p className="mt-1.5 text-right text-[12px] text-[#8a8a8a] tabular-nums">{renameTarget.title.length}/60</p>
-                    </div>
+                    <TitleField
+                      value={renameTarget.title}
+                      saved={sel.title}
+                      saving={isRenaming}
+                      onChange={(title) => setRenameTarget({ ...renameTarget, title })}
+                      onSave={renameAuction}
+                    />
                   )}
 
                   <div className="mt-4 pt-4 border-t border-[#ededed] flex items-center justify-between gap-4">
@@ -566,7 +589,12 @@ export default function AdminAuctionPage() {
                     <input type="text" required placeholder="예: 제 1회 종합 e스포츠 대회 경매" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
                   </FieldRow>
                   <FieldRow label={<>종목<Req /></>}>
-                    <Segmented options={GAME_LIST.map((g) => ({ v: g, l: g }))} value={game} onChange={selectGame} />
+                    {/* 📌 칩 줄은 감싸 내린다 — 알약 토글(옆 스크롤)이면 375 폭에서 뒤 종목이 화면 밖으로 숨는다 */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {GAME_LIST.map((g) => (
+                        <ChoiceChip key={g} on={game === g} onClick={() => selectGame(g)}>{g}</ChoiceChip>
+                      ))}
+                    </div>
                   </FieldRow>
                   <FieldRow label={<>경매 방식<Req /></>} top>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -611,11 +639,12 @@ export default function AdminAuctionPage() {
                     </div>
                   </FieldRow>
                   <FieldRow label="선경매 포지션" hint="1페이즈에 먼저 경매합니다. 없음이면 단일 페이즈로 진행합니다.">
-                    <Segmented
-                      options={[{ v: "", l: "없음(단일)" }, ...roleNamesList().map((n: string) => ({ v: n, l: n }))]}
-                      value={phase1Role}
-                      onChange={setPhase1Role}
-                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {[{ v: "", l: "없음(단일)" }, ...roleNamesList().map((n: string) => ({ v: n, l: n }))].map((o, i) => (
+                        // 역할 이름은 손으로 적어 겹칠 수 있어 자리 번호를 키에 섞는다
+                        <ChoiceChip key={`${i}:${o.v}`} on={phase1Role === o.v} onClick={() => setPhase1Role(o.v)}>{o.l}</ChoiceChip>
+                      ))}
+                    </div>
                   </FieldRow>
                 </Panel>
 
@@ -761,7 +790,8 @@ export default function AdminAuctionPage() {
                     <DefRow k="선수"><span className="tabular-nums">{playerN}명</span></DefRow>
                     <DefRow k="포지션"><span className="tabular-nums">{roleSummary || "—"}</span></DefRow>
                   </dl>
-                  <Btn variant="secondary" className="w-full mb-2" onClick={fillTestData}>테스트 데이터 자동 입력</Btn>
+                  {/* 테스트 방에서만 — 실제 개최 화면에 더미 채우기 단추가 늘 떠 있지 않게 */}
+                  {isTest && <Btn variant="secondary" className="w-full mb-2" onClick={fillTestData}>테스트 데이터 자동 입력</Btn>}
                   <Btn type="submit" className="w-full" disabled={isSubmitting}>{isSubmitting ? "생성 중…" : "경매장 생성"}</Btn>
                 </Panel>
               </div>
@@ -781,48 +811,44 @@ export default function AdminAuctionPage() {
         onCancel={() => setDeleteId(null)}
       />
 
-      {/* ── 설문에서 선수 불러오기 ── */}
-      {showSurveyPicker && (
-        <div className="fixed inset-0 z-[115] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={() => setShowSurveyPicker(false)}>
-          <div role="dialog" aria-modal="true" aria-label="설문에서 선수 불러오기" onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-[#ededed] rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[85dvh] flex flex-col overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
-            <div className="shrink-0 px-5 py-4 border-b border-[#ededed]">
-              <h2 className="text-[17px] font-black tracking-tight">설문에서 선수 불러오기</h2>
-              <p className="mt-1 text-[12px] text-[#5a5a5a] break-keep">고른 대회의 참가 응답으로 선수 명단을 채웁니다.</p>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto no-bar divide-y divide-[#ededed]">
-              {surveyLoading ? (
-                <p className="px-5 py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
-              ) : surveyPosts.length === 0 ? (
-                <p className="px-5 py-12 text-center text-[13px] text-[#5a5a5a] break-keep">참가 설문을 받은 대회가 없습니다.</p>
-              ) : (
-                surveyPosts.map((p) => (
-                  <button key={p._id} type="button" disabled={isImporting || p.responses === 0}
-                    onClick={() => importSurvey(p._id)}
-                    className={`w-full text-left px-5 py-3.5 flex items-center gap-3 transition-colors outline-none focus-visible:bg-[#f2f2f2] ${p.responses === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-[#f7f7f7]"}`}>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-bold truncate">{p.title}</p>
-                      <p className="mt-0.5 text-[12px] text-[#8a8a8a] tabular-nums">
-                        {new Date(p.createdAt).toLocaleDateString("ko-KR")} · 응답 {p.responses}건
-                      </p>
-                    </div>
-                    <span className="text-[12px] font-bold text-[#d01634] shrink-0">
-                      {isImporting ? "불러오는 중" : "불러오기"}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-
-            <div className="shrink-0 px-5 py-3 border-t border-[#ededed] flex justify-end">
-              <Btn variant="secondary" size="sm" onClick={() => setShowSurveyPicker(false)}>닫기</Btn>
-            </div>
-          </div>
+      {/* ── 설문에서 선수 불러오기 — 공용 입력 창(PC 가운데 · 모바일 아래 판, Esc · 바깥 · × 로 닫힘) ── */}
+      <FormSheet
+        open={showSurveyPicker}
+        onClose={() => setShowSurveyPicker(false)}
+        title="설문에서 선수 불러오기"
+        busy={isImporting}
+        width={560}
+        footer={<Btn variant="secondary" size="sm" onClick={() => setShowSurveyPicker(false)}>닫기</Btn>}
+      >
+        <div className="-my-4 divide-y divide-[#ededed]">
+          {surveyLoading ? (
+            <p className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
+          ) : surveyPosts.length === 0 ? (
+            <p className="py-12 text-center text-[13px] text-[#5a5a5a] break-keep">참가 설문을 받은 대회가 없습니다.</p>
+          ) : (
+            surveyPosts.map((p) => (
+              <button key={p._id} type="button" disabled={isImporting || p.responses === 0}
+                onClick={() => importSurvey(p._id)}
+                // 줄 바탕(눌림 · 올림)이 창 안쪽 여백까지 닿게 — 좌우 -mx-3 만큼 넓힌다(button 은 폭이 내용에 맞춰 줄어서 직접 준다)
+                style={{ width: "calc(100% + 1.5rem)" }}
+                className={`text-left px-3 -mx-3 py-3.5 flex items-center gap-3 rounded-lg transition-colors outline-none focus-visible:bg-[#f2f2f2] ${p.responses === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-[#f7f7f7]"}`}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-bold truncate">{p.title}</p>
+                  <p className="mt-0.5 text-[12px] text-[#8a8a8a] tabular-nums">
+                    {new Date(p.createdAt).toLocaleDateString("ko-KR")} · 응답 {p.responses}건
+                  </p>
+                </div>
+                <span className="text-[12px] font-bold text-[#d01634] shrink-0">
+                  {isImporting ? "불러오는 중" : "불러오기"}
+                </span>
+              </button>
+            ))
+          )}
         </div>
-      )}
+      </FormSheet>
 
       {noticeEl}
+      {toastEl}
     </>
   );
 }

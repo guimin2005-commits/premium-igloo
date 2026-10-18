@@ -25,6 +25,12 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 진행 중인 음성 XP 바퀴 — 봇이 20초마다 적고 다 주면 지운다(features/voiceTime.js). 재시작 뒤 이어 가거나 그 사이 나갔으면 머문 만큼 준다.
   //    { ch, chName, pc, sec, xp, muS, dfS, lvS, nS, idle(분 — null 모름), at, pend? } (models/UserXp.js 와 같은 칸)
   voiceCycle: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  // 📌 사탕 바구니(아이템 효과 voiceCandy — 2026-10-14 할로윈 「유령 펭귄의 초대」) — 음성 XP 를 받은 시간(초)을 쌓는 칸. 봇만 쓴다(bot/src/features/voiceXp.js payVoiceCycle).
+  //    효과의 N분이 찰 때마다 사탕 하나(100~5,000 XP)를 주고 그만큼 뺀다 — 나머지는 남겨 재시작에도 이어 간다. models/UserXp.js · bot/src/db.js 와 같은 칸
+  voiceCandySec: { type: Number, default: 0 },
+  // 📌 머물수록 증가(아이템 효과 voiceStay — 2026-10-18 마녀의 모래시계) — 같은 음성 채널에 이어서 머문 초 { ch, sec, at }. 봇만 쓴다(bot/src/features/voiceTime.js).
+  //    나가거나 옮기면 지운다. 재시작 때 같은 채널에 그대로 있고 10분 안의 기록이면 이어 간다. models/UserXp.js · bot/src/db.js 와 같은 칸
+  voiceStay: { type: mongoose.Schema.Types.Mixed, default: undefined },
   // 📌 마지막 활동 시각 — 음성에 있는 동안의 마지막 채팅 · 음성 상태 바뀜 · 명령 · 버튼. features/activity.js 가 20초마다 적고 음성에서 나가면 비운다.
   //    재시작 뒤 읽어 음성 XP 로그의 무활동(ctx.idle)을 이어 센다 (models/UserXp.js 와 같은 칸)
   lastActiveAt: { type: Date, default: null },
@@ -49,8 +55,9 @@ const UserXpSchema = new mongoose.Schema({
   //    하루 첫 채팅 · 하루 음성 N분 효과가 itemEffects.js claimDaily 로 조건부 갱신해 하루 한 번만 지급한다.
   //    (Map 키에 점 · $ 가 들어가면 안 되므로 claimDaily 가 키를 정리해서 쓴다)
   effectDaily: { type: Map, of: String, default: {} },
-  // 지금까지 도달한 최고 레벨 — 기록으로만 둔다(xp.js · grantQueue.js 가 $max 로 적는다). 사이트 models/UserXp.js 와 같이
-  //    📌 2026-10-04 레벨 업 퀘스트는 이 값을 보지 않는다 — XP 를 써서 내려갔다가 다시 오른 레벨도 매번 센다(시작 레벨 0 → 1 은 제외)
+  // 이번 시즌 도달한 최고 레벨 — xp.js · grantQueue.js 가 레벨 쓰기와 같은 쓰기에서 $max 로 적는다. 사이트 models/UserXp.js 와 같이
+  //    📌 2026-10-17 레벨업 아이템 효과는 이 값을 넘은 레벨만 준다(다시 오른 레벨엔 안 줌). 관리자 초기화가 0 으로 비운다 — 시즌 XP 초기화 때도 같이 비울 것
+  //    레벨 업 퀘스트 · 레벨업 알림은 이 값을 보지 않는다 — 다시 오른 레벨도 매번 센다(시작 레벨 0 → 1 은 제외). 업적 레벨(lib/achievements)은 max(level, 이 값)
   maxLevel: { type: Number, default: 0 },
 
   // 사이트에서 XP·레벨을 바꿨을 때 레벨 역할을 다시 맞추도록 세우는 표시
@@ -75,6 +82,8 @@ const UserXpSchema = new mongoose.Schema({
   passUnlocked: { type: Boolean, default: false }, // 프리미엄 트랙 해금 여부 (시즌마다 초기화)
   // 고른 카드 스킨 — "" 안 고름 · "none" 끔 · 스킨 키 (models/UserXp.js 와 같은 칸). 이미지 카드 그릴 때 읽는다(botMessages withSkin)
   cardSkinPick: { type: String, default: "" },
+  // 고른 카드 배경 — "" 안 고름 · "none" 끔 · 배경 키 sc_* (models/UserXp.js 와 같은 칸). 카드 스킨과 따로 고르고 함께 입는다 — 이미지 카드 그릴 때 읽는다(botMessages withSkin)
+  cardScenePick: { type: String, default: "" },
   // 고른 아바타 테두리 — "" 안 고름 · "none" 끔 · 테두리 키(등급 키) (models/UserXp.js 와 같은 칸). /인벤토리 '착용' 표시에 읽는다
   avatarFramePick: { type: String, default: "" },
   // 시즌 티어 테두리 — 시즌 결산(features/seasonSettle.js settleFrames)이 「시즌 끝 순간 등급」을 적는다(아이언은 ""). 다음 결산이 덮어쓴다 (models/UserXp.js 와 같은 칸)

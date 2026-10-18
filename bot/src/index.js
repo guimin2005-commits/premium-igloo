@@ -20,6 +20,7 @@ import { registerChatXp } from "./features/chatXp.js";
 import { startVoiceTime, flushVoiceTime } from "./features/voiceTime.js";
 import { startActivityStats, flushActivity } from "./features/activityStats.js";
 import { startAfkCheck } from "./features/afkCheck.js";
+import { registerWispHunt } from "./features/wispHunt.js";
 import { registerActivity, startActivity, flushLastActive } from "./features/activity.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
@@ -48,6 +49,7 @@ const client = new Client({
 if (!nudgeOnly) {
   registerActivity(client); // 마지막 활동 시각(채팅 · 음성 상태 · 명령 · 버튼) — 음성 XP 로그 ctx.idle 용
   registerChatXp(client);
+  registerWispHunt(client); // 📌 2026-10-14 할로윈 호박불 랜턴 — 채팅이 띄운 도깨비불의 [잡기] 버튼(features/wispHunt.js)
   registerLeaveReset(client);
   registerCommandHandlers(client);
 }

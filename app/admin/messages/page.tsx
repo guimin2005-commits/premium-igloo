@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Dropdown from "../../components/Dropdown";
 import {
   MESSAGE_GROUPS,
   MESSAGE_DEFS,
@@ -15,9 +16,10 @@ import {
   sanitizeTemplate,
   progressBar,
 } from "@/lib/botMessages";
-import { CARD_SIZE, CARD_TIERS, sampleCardData } from "@/lib/botCards";
+import { CARD_SIZE, CARD_TIERS, SKIN_CARD_KINDS, sampleCardData } from "@/lib/botCards";
+import { SKINS, SCENES, FRAMES, SKIN_RANK_ALL, FRAME_ALL } from "@/lib/itemEffects";
 import { NOTICE_KEY, NOTICE_BUTTON_LABEL } from "@/lib/noticeDiscord";
-import { AdminPage, Panel, Btn, Switch, SaveBar, StatusChip, ConfirmDialog, Segmented, useAdminGuard } from "../ui";
+import { AdminPage, Panel, Btn, Switch, SaveBar, StatusChip, ConfirmDialog, useAdminGuard, useToast, inputClass } from "../ui";
 import {
   type Embed,
   type Tpl,
@@ -47,8 +49,6 @@ import {
   Dot,
   Blk,
   count,
-  sfxOk,
-  sfxErr,
   useClock,
   useVarInsert,
   VarChips,
@@ -59,7 +59,8 @@ import {
 //    왼쪽(모바일은 위) 키 목록 → 편집 → 디스코드처럼 그린 미리보기. 넓은 화면(xl)에서는 세 칸이 나란히.
 //    · 초안은 키마다 따로 들고 있어 다른 키로 옮겨도 고치던 것이 남는다(목록에 빨간 점). 저장은 지금 키만.
 //    · 미리보기는 lib/botMessages.js 의 renderTemplate(봇과 같은 규칙)에 예시 값(sampleVars)을 넣은 결과를 그린다.
-//    · 채널은 레벨 설정에서 고른다 — 여기서는 '보내는 곳' 한 줄만.
+//    · 📌 2026-10-17 보내는 곳(채널 · 만료 알림 시점)도 여기서 고른다 — 레벨 설정의 알림 채널 패널 5개를 옮겼다.
+//      그 값은 BotSetting 의 칸이라 저장 줄의 저장이 PATCH /api/bot-settings(그 칸만)로 함께 보낸다. 켜고 끄기는 「보내기」 하나.
 //    · 카드 키(CARD_KEYS)는 이미지 카드 켜기/끄기 — 켜지면 미리보기의 큰 이미지 자리에 카드(등급 칩으로 바꿔 보기).
 //    API: /api/admin/bot-messages (GET 목록 · PUT 저장 · DELETE 기본값으로 · POST 테스트 발송) · /card?key=&tier= (카드 PNG)
 //    편집 부품 · 미리보기는 ./BotMessageEditor.tsx — 글쓰기 › 디스코드 공지 팝업도 같은 부품을 쓴다
@@ -70,6 +71,11 @@ const CARD_API = "/api/admin/bot-messages/card";
 const TIER_CARD_KEYS = new Set(["levelUp", "roleGrant", "cmdLevel", "cmdRank"]);
 const TIER_OPTIONS = (CARD_TIERS as { name: string }[]).map((t, i) => ({ v: String(i), l: t.name }));
 const DEFAULT_CARD_TIER = 1; // 브론즈 — 예시 레벨(128)의 등급
+// 📌 미리보기에 끼워 볼 꾸미기(2026-10-16 "디코 메시지 창에 스킨 껴서 확인 가능하게") — 카드 배경 · 카드 테두리 · 프로필 테두리. "" = 없음
+const SCENE_OPTIONS = [{ v: "", l: "없음" }, ...SCENES.map((s: { v: string; l: string }) => ({ v: s.v, l: s.l }))];
+const SKIN_OPTIONS = [{ v: "", l: "없음" }, ...SKINS.filter((s: { v: string }) => s.v !== SKIN_RANK_ALL).map((s: { v: string; l: string }) => ({ v: s.v, l: s.l }))];
+const FRAME_OPTIONS = [{ v: "", l: "없음" }, ...FRAMES.filter((f: { v: string }) => f.v !== FRAME_ALL).map((f: { v: string; l: string }) => ({ v: f.v, l: f.l }))];
+const DRESS_KEYS = new Set<string>(SKIN_CARD_KINDS as string[]);
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 type Item = { key: string; custom: boolean; template: Tpl; updatedAt: string | null; updatedBy: string };
@@ -79,17 +85,36 @@ const DEFS = MESSAGE_DEFS as unknown as Record<string, Def>;
 const KEYS = MESSAGE_KEYS as string[];
 const GROUPS = MESSAGE_GROUPS as { key: string; label: string }[];
 
-// 보내는 곳 — 채널은 레벨 설정(/admin/bot)에서 고른다
+// 보내는 곳 — 고를 수 있는 키(DEST_FIELD)는 BotSetting 칸, 나머지는 정해진 곳(글자만)
+//    채널 칸의 "" 뜻은 봇과 같다: 레벨업 = 알림 끄기(봇 환경변수 채널이 있으면 그곳) · 역할 지급 · 자동 출석 = 레벨업 채널 · 공지 = 보내지 않음
+type DestField = { field: string; kind: "channel"; empty: string } | { field: string; kind: "hours" };
+const DEST_FIELD: Record<string, DestField> = {
+  levelUp: { field: "levelupChannelId", kind: "channel", empty: "알림 끄기" },
+  roleGrant: { field: "roleGrantChannelId", kind: "channel", empty: "레벨업 채널과 동일" },
+  autoAttend: { field: "attendChannelId", kind: "channel", empty: "레벨업 채널과 동일" },
+  noticePost: { field: "noticeChannelId", kind: "channel", empty: "보내지 않음" },
+  expiryReminder: { field: "expiryReminderHours", kind: "hours" },
+};
+const DEST_FIELDS = Object.values(DEST_FIELD).map((f) => f.field);
 const DEST: Record<string, string> = {
+  // 고르는 칸이 있는 키 — 봇 설정을 못 읽었을 때만 이 글자로
   levelUp: "레벨업 채널",
   roleGrant: "역할 지급 채널",
   autoAttend: "출석 알림 채널",
+  noticePost: "공지 채널",
   rankerAnnounce: "레벨업 채널",
+  afkCheck: "그 음성 채널 채팅",
   cmdAttendAlready: "명령어를 쓴 채널 · 나만 보기",
   levelClosed: "명령어를 쓴 채널 · 나만 보기",
   passUnclaimed: "유저 DM",
-  noticePost: "공지 채널",
+  expiryReminder: "구매자 DM",
 };
+// 만료 알림 시점 — 1~168시간 전(app/api/bot-settings PATCH 와 같은 범위)
+const HOURS_MIN = 1;
+const HOURS_MAX = 168;
+const hoursOk = (v: string) => /^\d+$/.test(v.trim()) && Number(v) >= HOURS_MIN && Number(v) <= HOURS_MAX;
+// 공용 Dropdown(라이트)을 입력칸과 같은 높이로 — 보내는 곳 줄은 키마다 같은 높이(아래 단추 줄이 키를 바꿔도 움직이지 않게)
+const DD = "!px-3 !py-1.5 min-h-10 !text-[13px] !border-[#a3a3a3]";
 // 📌 DEFS[k] 로만 보면 ?key=constructor 같은 이름도 통과해 빈 화면이 된다 — 자기 키만
 const isKey = (k: string | null): k is string => !!k && KEYS.includes(k);
 const destOf = (key: string) => {
@@ -142,43 +167,41 @@ export default function AdminBotMessagesPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [items, setItems] = useState<Record<string, Item>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [sel, setSel] = useState<string>(KEYS[0]);
+  // 📌 주소의 ?key= 로 연 키 — 새로고침해도 보던 메시지에 머문다. 기능 검색이 같은 화면에서 다른 키로 보내도(router.push) 따라간다
+  const searchParams = useSearchParams();
+  const keyParam = searchParams.get("key");
+  const [sel, setSel] = useState<string>(() => (isKey(keyParam) ? keyParam : KEYS[0]));
+  const [seenKey, setSeenKey] = useState(keyParam);
+  if (keyParam !== seenKey) {
+    setSeenKey(keyParam);
+    if (isKey(keyParam) && keyParam !== sel) setSel(keyParam);
+  }
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [testing, setTesting] = useState(false);
   // 미리보기의 "오늘 오후 9:41"
   const clock = useClock();
-  const [toast, setToast] = useState<{ msg: string; error: boolean } | null>(null);
+  // 결과 알림 — 관리 화면 공용 토스트(성공 · 실패 효과음 포함)
+  const { toast, toastEl } = useToast();
+  // 보내는 곳 — 저장된 값(dest · BotSetting 에서 읽은 글자) · 고친 값(destDraft · 칸 이름 → 글자) · 고를 채널(텍스트 채널)
+  const [dest, setDest] = useState<Record<string, string> | null>(null);
+  const [destDraft, setDestDraft] = useState<Record<string, string>>({});
+  const [channels, setChannels] = useState<{ id: string; name: string }[]>([]);
   // 카드 미리보기 등급 — 키를 옮겨도 그대로 (레벨업 · /레벨 · /랭크 공통)
   const [cardTier, setCardTier] = useState(DEFAULT_CARD_TIER);
+  const [dress, setDress] = useState({ scene: "", skin: "", frame: "" }); // 미리보기에 끼운 꾸미기
 
   const alive = useRef(true);
   const editorRef = useRef<HTMLDivElement | null>(null);
   // 마지막으로 누른 글 칸과 커서 자리 — 변수 칩이 여기에 넣는다
   const { onCaret, resetCaret, insertVar: insertVarAt } = useVarInsert(editorRef);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
-      if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, []);
-
-  const showToast = useCallback((msg: string, error = false) => {
-    setToast({ msg, error });
-    if (error) sfxErr();
-    else sfxOk();
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
-  }, []);
-
-  // 주소의 ?key= 로 연 키 — 새로고침해도 보던 메시지에 머문다
-  useEffect(() => {
-    const k = new URLSearchParams(window.location.search).get("key");
-    if (isKey(k)) setSel(k);
   }, []);
 
   const load = useCallback(async () => {
@@ -209,17 +232,46 @@ export default function AdminBotMessagesPage() {
     if (isAdmin) load();
   }, [isAdmin, load]);
 
+  // 보내는 곳 — 봇 설정의 채널 · 만료 시점 칸과 디스코드 텍스트 채널 목록. 못 읽으면 글자만 보인다(고를 수 없다)
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/bot-settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive.current || !d?.success || !d.data) return;
+        setDest(Object.fromEntries(DEST_FIELDS.map((f) => [f, d.data[f] == null ? "" : String(d.data[f])])));
+      })
+      .catch(() => {});
+    fetch("/api/discord-channels", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive.current) return;
+        const list: { id: string; name: string; type: string }[] = Array.isArray(d?.data) ? d.data : [];
+        setChannels(list.filter((c) => c.type === "text").map((c) => ({ id: String(c.id), name: String(c.name || "") })));
+      })
+      .catch(() => {});
+  }, [isAdmin]);
   const item = items[sel] || null;
   const draft = drafts[sel] || null;
   const def = DEFS[sel];
 
+  // 보내는 곳이 바뀐 키 — 그 키의 칸(DEST_FIELD)에 저장값과 다른 고친 값이 있으면
+  const destDirtyOf = useCallback((k: string) => {
+    const f = DEST_FIELD[k];
+    if (!f || !dest || !(f.field in destDraft)) return false;
+    return destDraft[f.field].trim() !== (dest[f.field] || "").trim();
+  }, [dest, destDraft]);
   const dirtyKeys = useMemo(() => {
     const s = new Set<string>();
-    for (const k of KEYS) if (items[k] && drafts[k] && sigOf(fromDraft(drafts[k])) !== sigOf(items[k].template)) s.add(k);
+    for (const k of KEYS) {
+      if ((items[k] && drafts[k] && sigOf(fromDraft(drafts[k])) !== sigOf(items[k].template)) || destDirtyOf(k)) s.add(k);
+    }
     return s;
-  }, [items, drafts]);
-  const dirty = dirtyKeys.has(sel);
-  const chg = useMemo(() => new Set(item && draft && dirty ? changedParts(item.template, fromDraft(draft)) : []), [item, draft, dirty]);
+  }, [items, drafts, destDirtyOf]);
+  const destDirty = destDirtyOf(sel);
+  const tplDirty = !!items[sel] && !!drafts[sel] && sigOf(fromDraft(drafts[sel])) !== sigOf(items[sel].template);
+  const dirty = tplDirty || destDirty;
+  const chg = useMemo(() => new Set(item && draft && tplDirty ? changedParts(item.template, fromDraft(draft)) : []), [item, draft, tplDirty]);
   const problems = useMemo<Partial<Record<EmbedText, string>>>(() => (draft ? problemsOf(draft, sel) : {}), [draft, sel]);
 
   // 저장 안 한 초안이 있으면 창을 닫기 전에 묻는다
@@ -246,8 +298,10 @@ export default function AdminBotMessagesPage() {
     const size = (CARD_SIZE as Record<string, { width: number; height: number }>)[sel];
     const q = new URLSearchParams({ key: sel });
     if (tierCard) q.set("tier", String(cardTier));
+    if (DRESS_KEYS.has(sel)) { if (dress.scene) q.set("scene", dress.scene); if (dress.skin) q.set("skin", dress.skin); }
+    if (dress.frame) q.set("frame", dress.frame);
     return { src: `${CARD_API}?${q}`, ratio: size ? size.width / size.height : 1200 / 630 };
-  }, [cardOn, tierCard, sel, cardTier]);
+  }, [cardOn, tierCard, sel, cardTier, dress]);
   // 📌 디스코드는 임베드 하나의 글자 합 6,000 을 넘으면 거절한다 — 봇은 뒤 필드부터 빼서 보낸다
   const overTotal = useMemo(() => {
     if (!draft || !draft.embed.on) return false;
@@ -272,7 +326,7 @@ export default function AdminBotMessagesPage() {
     });
 
   // 변수 칩 — 마지막으로 누른 칸의 커서 자리에 {이름} (BotMessageEditor useVarInsert)
-  const insertVar = (name: string) => insertVarAt(draft, name, setText, (m) => showToast(m, true));
+  const insertVar = (name: string) => insertVarAt(draft, name, setText, (m) => toast(m, true));
 
   const pick = (k: string) => {
     if (k === sel) return;
@@ -292,11 +346,44 @@ export default function AdminBotMessagesPage() {
     // 📌 바뀐 게 없으면 보내지 않는다 — Ctrl+S 로 기본 디자인 키를 저장하면 '저장한 디자인'이 되어 옛 문구 반영이 끊긴다
     if (!draft || !item || saving || !dirty) return;
     const key = sel;
-    const p = firstProblem(problemsOf(draft, key));
-    if (p) return showToast(p, true);
+    if (tplDirty) {
+      const p = firstProblem(problemsOf(draft, key));
+      if (p) return toast(p, true);
+    }
+    // 보내는 곳 — 그 칸만 PATCH(app/api/bot-settings — 다른 봇 설정은 건드리지 않는다)
+    const df = destDirty ? DEST_FIELD[key] : null;
+    const dv = df ? (destDraft[df.field] || "").trim() : "";
+    if (df && df.kind === "hours" && !hoursOk(dv)) return toast(`만료 알림 시점은 ${HOURS_MIN}~${HOURS_MAX}시간 사이로 입력해 주세요.`, true);
+    setSaving(true);
+    if (df) {
+      const res = await fetch("/api/bot-settings", {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ [df.field]: df.kind === "hours" ? Number(dv) : dv }),
+      }).catch(() => null);
+      const d = await res?.json().catch(() => null);
+      if (!alive.current) return;
+      if (!res?.ok || !d?.success) {
+        setSaving(false);
+        return toast(d?.message || "보내는 곳을 저장하지 못했습니다.", true);
+      }
+      const savedVal = d.data?.[df.field] == null ? dv : String(d.data[df.field]);
+      setDest((m) => ({ ...(m || {}), [df.field]: savedVal }));
+      // 저장하는 사이 더 고쳤으면 그 값은 그대로 둔다
+      setDestDraft((m) => {
+        if ((m[df.field] || "").trim() !== dv) return m;
+        const next = { ...m };
+        delete next[df.field];
+        return next;
+      });
+      if (!tplDirty) {
+        setSaving(false);
+        toast("저장했습니다.");
+        return;
+      }
+    }
     const tpl = fromDraft(draft);
     const sent = sigOf(tpl);
-    setSaving(true);
     const res = await fetch(API, {
       method: "PUT",
       headers: JSON_HEADERS,
@@ -310,12 +397,12 @@ export default function AdminBotMessagesPage() {
       setItems((m) => ({ ...m, [key]: saved }));
       // 저장하는 사이 더 고쳤으면 그 초안은 그대로 둔다
       setDrafts((m) => (m[key] && sigOf(fromDraft(m[key])) === sent ? { ...m, [key]: toDraft(saved.template, m[key]) } : m));
-      showToast("저장했습니다.");
+      toast("저장했습니다.");
       return;
     }
     // 409 — 다른 관리자가 먼저 바꿨다. 기준만 최신으로 바꾸고 초안은 둔다(한 번 더 저장하면 덮어쓴다)
     if (res?.status === 409 && d?.data) setItems((m) => ({ ...m, [key]: normItem(d.data) }));
-    showToast(d?.message || "저장하지 못했습니다.", true);
+    toast(d?.message || "저장하지 못했습니다.", true);
   };
   // Ctrl/⌘ + S — 저장 줄의 저장과 같다
   const saveRef = useRef(save);
@@ -333,19 +420,27 @@ export default function AdminBotMessagesPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // 되돌리기 — 불러온(저장된) 값으로
+  // 되돌리기 — 불러온(저장된) 값으로(보내는 곳도)
   const revert = () => {
     if (!item) return;
     resetCaret();
     setDrafts((m) => ({ ...m, [sel]: toDraft(item.template) }));
+    const f = DEST_FIELD[sel];
+    if (f) setDestDraft((m) => {
+      if (!(f.field in m)) return m;
+      const next = { ...m };
+      delete next[f.field];
+      return next;
+    });
   };
 
   // ── 기본값으로 ── 저장한 디자인이 있으면 지운다(확인 모달), 없으면 초안만 되돌린다
   const askReset = () => {
     if (!item) return;
     if (!item.custom) {
-      revert();
-      showToast("기본값으로 되돌렸습니다.");
+      resetCaret();
+      setDrafts((m) => ({ ...m, [sel]: toDraft(item.template) }));
+      toast("기본값으로 되돌렸습니다.");
       return;
     }
     setConfirmReset(true);
@@ -363,9 +458,9 @@ export default function AdminBotMessagesPage() {
       resetCaret();
       setItems((m) => ({ ...m, [key]: it }));
       setDrafts((m) => ({ ...m, [key]: toDraft(it.template) }));
-      showToast("기본값으로 되돌렸습니다.");
+      toast("기본값으로 되돌렸습니다.");
     } else {
-      showToast(d?.message || "되돌리지 못했습니다.", true);
+      toast(d?.message || "되돌리지 못했습니다.", true);
     }
   };
 
@@ -373,24 +468,24 @@ export default function AdminBotMessagesPage() {
   const sendTest = async () => {
     if (!draft || !item || testing) return;
     const key = sel;
-    if (dirty) {
+    if (tplDirty) {
       const p = firstProblem(problemsOf(draft, key));
-      if (p) return showToast(p, true);
+      if (p) return toast(p, true);
     }
     setTesting(true);
     const res = await fetch(API, {
       method: "POST",
       headers: JSON_HEADERS,
-      body: JSON.stringify(dirty ? { action: "test", key, template: fromDraft(draft) } : { action: "test", key }),
+      body: JSON.stringify(tplDirty ? { action: "test", key, template: fromDraft(draft) } : { action: "test", key }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     if (!alive.current) return;
     const id = d?.data?.id;
     if (!res?.ok || !d?.success || !id) {
       setTesting(false);
-      return showToast(d?.message || "테스트 요청에 실패했습니다.", true);
+      return toast(d?.message || "테스트 요청에 실패했습니다.", true);
     }
-    showToast("내 DM 으로 보내는 중입니다.");
+    toast("내 DM 으로 보내는 중입니다.");
     const started = Date.now();
     while (alive.current && Date.now() - started < 60_000) {
       await new Promise((r) => setTimeout(r, 2000));
@@ -401,16 +496,16 @@ export default function AdminBotMessagesPage() {
       const st = s?.data?.status;
       if (st === "sent") {
         setTesting(false);
-        return showToast("DM 으로 보냈습니다.");
+        return toast("DM 으로 보냈습니다.");
       }
       if (st === "failed") {
         setTesting(false);
-        return showToast(s?.data?.error || "보내지 못했습니다.", true);
+        return toast(s?.data?.error || "보내지 못했습니다.", true);
       }
     }
     if (!alive.current) return;
     setTesting(false);
-    showToast("봇이 아직 보내지 않았습니다. 봇이 켜지면 보냅니다.", true);
+    toast("봇이 아직 보내지 않았습니다. 봇이 켜지면 보냅니다.", true);
   };
 
   if (gate) return gate;
@@ -423,15 +518,32 @@ export default function AdminBotMessagesPage() {
       ? `저장 ${formatUntil(item.updatedAt)}${item.updatedBy ? ` · ${item.updatedBy}` : ""}`
       : "기본 디자인"
     : "";
-  const dest = destOf(sel);
+  const destText = destOf(sel);
+  const destField = DEST_FIELD[sel];
   const e = draft?.embed;
+  const channelName = (id: string) => channels.find((c) => c.id === id)?.name || "";
+  // 채널 고르기 목록 — 저장된 채널이 목록에 없으면(지운 채널) 그 ID 로 한 줄 남긴다(조용히 사라지면 무엇이 빠졌는지 모른다)
+  const channelOptions = (cur: string, empty: string) => [
+    { value: "", label: empty },
+    ...channels.map((c) => ({ value: c.id, label: `# ${c.name}` })),
+    ...(cur && !channels.some((c) => c.id === cur) ? [{ value: cur, label: `삭제된 채널 (${cur})` }] : []),
+  ];
+  const destValue = destField && dest ? (destField.field in destDraft ? destDraft[destField.field] : dest[destField.field] || "") : "";
+  const setDestValue = (v: string) => { if (destField) setDestDraft((m) => ({ ...m, [destField.field]: v })); };
+  // 저장 줄의 바뀐 것 — 디자인 칸 + 보내는 곳(있으면)
+  const destLabel = (v: string) =>
+    !destField ? v : destField.kind === "hours" ? `만료 ${v || "—"}시간 전` : v ? `#${channelName(v) || v}` : destField.empty;
+  const saveChanges = [
+    ...(destDirty && destField && dest ? [`보내는 곳 ${destLabel(dest[destField.field] || "")} → ${destLabel(destValue)}`] : []),
+    ...chg,
+  ];
 
   return (
     <>
       <AdminPage
         section="SYSTEM : LEVEL"
         title="봇 메시지"
-        footer={<SaveBar dirty={!loading && dirty} changes={[...chg]} onSave={save} onReset={revert} saving={saving} />}
+        footer={<SaveBar dirty={!loading && dirty} changes={saveChanges} onSave={save} onReset={revert} saving={saving} />}
       >
         {loadFailed && !loading && (
           <div role="alert" className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 bg-[#e91e3f]/[0.08] text-[#d01634] text-[13px] font-bold">
@@ -489,15 +601,45 @@ export default function AdminBotMessagesPage() {
                 <Panel flush className="mb-5">
                   <div className="px-5 pt-4 pb-3 border-b border-[#ededed]">
                     <h2 className="text-[17px] font-black tracking-tight truncate">{def.label}</h2>
-                    <p className="mt-1 text-[12px] text-[#5a5a5a] truncate">
-                      보내는 곳 ·{" "}
-                      {def.group === "channel" ? (
-                        <Link href="/admin/bot" className="font-bold text-[#131313] hover:underline">{dest}</Link>
+                    {/* 📌 보내는 곳 — 키마다 같은 높이(h-10)로: 고르는 칸(채널 · 만료 시점)이든 글자든 아래 단추 줄이 움직이지 않게 */}
+                    <div className="mt-2 flex items-center gap-3 min-h-10 min-w-0">
+                      <span className="shrink-0 inline-flex items-center text-[12px] font-bold text-[#5a5a5a]">
+                        보내는 곳{destDirty && <Dot />}
+                      </span>
+                      {destField?.kind === "channel" && dest ? (
+                        <Dropdown
+                          theme="light"
+                          className="min-w-0 flex-1 max-w-[320px]"
+                          buttonClassName={DD}
+                          value={destValue}
+                          onChange={setDestValue}
+                          options={channelOptions(destValue, destField.empty)}
+                        />
+                      ) : destField?.kind === "hours" && dest ? (
+                        // 한 줄에 — 375 폭에서도 「DM · 만료 [24] 시간 전」이 접히지 않게(머리 높이가 키마다 같게)
+                        <span className="min-w-0 inline-flex flex-nowrap items-center gap-2 whitespace-nowrap text-[13px] text-[#5a5a5a]">
+                          <span className="font-bold text-[#131313]">DM</span>
+                          · 만료
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={HOURS_MIN}
+                            max={HOURS_MAX}
+                            aria-label="만료 몇 시간 전"
+                            value={destValue}
+                            onChange={(ev) => setDestValue(ev.target.value)}
+                            className={`${inputClass} !w-16 h-10 tabular-nums ${destValue && !hoursOk(destValue) ? "!border-[#d01634]" : ""}`}
+                          />
+                          시간 전
+                        </span>
                       ) : (
-                        <span className="font-bold text-[#131313]">{dest}</span>
+                        <span className="min-w-0 truncate text-[13px] font-bold text-[#131313]">
+                          {destText}
+                          {sel === "rankerAnnounce" && dest?.levelupChannelId ? <span className="font-normal text-[#5a5a5a]"> · #{channelName(dest.levelupChannelId) || dest.levelupChannelId}</span> : null}
+                        </span>
                       )}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-[#8a8a8a] truncate tabular-nums">{meta}</p>
+                    </div>
+                    <p className="mt-1 text-[12px] text-[#8a8a8a] truncate tabular-nums">{meta}</p>
                   </div>
                   {/* 단추 줄 — 켜짐/꺼짐 글자는 고정 폭, 바뀜 점은 띄워 둬서 375px 에서도 한 줄 그대로 */}
                   <div className="flex items-center px-4 md:px-5 py-3">
@@ -539,7 +681,7 @@ export default function AdminBotMessagesPage() {
                 )}
 
                 {/* 공지는 레벨 변수가 없어 등급 색을 고를 수 없다 */}
-                <EmbedPanel draft={draft} patch={patch} onCaret={onCaret} problems={problems} chg={chg} cardOn={cardOn} tierColor={tierColor} tierChip={sel !== NOTICE_KEY} onLimit={(m) => showToast(m, true)} />
+                <EmbedPanel draft={draft} patch={patch} onCaret={onCaret} problems={problems} chg={chg} cardOn={cardOn} tierColor={tierColor} tierChip={sel !== NOTICE_KEY} onLimit={(m) => toast(m, true)} />
               </div>
 
               {/* ── 미리보기 — 예시 값으로 그린다. PC(xl)는 오른쪽에 붙어 따라온다 ── */}
@@ -557,13 +699,39 @@ export default function AdminBotMessagesPage() {
                     </span>
                   }
                 >
-                  {/* 등급 칩 — 등급 카드(레벨업 · 역할 지급 · /레벨 · /랭크)에서 카드가 켜져 있을 때만. 한 줄 가로 스크롤 */}
+                  {/* 등급 칩 — 등급 카드(레벨업 · 역할 지급 · /레벨 · /랭크)에서 카드가 켜져 있을 때만.
+                      📌 2026-10-16 운영자 "안 넘어가니까 · 이런 거 만들 때 신경 좀" — 한 줄 가로 스크롤(스크롤 막대 숨김)은 마우스로 넘길 수 없어 뒤 등급이 안 보였다 → 줄을 접어 다 보이게 */}
                   {tierCard && (
-                    <div className="flex items-center px-4 py-2.5 border-b border-[#ededed]">
-                      <span className="shrink-0 mr-3 text-[12px] font-bold text-[#5a5a5a]">등급</span>
-                      <div className="min-w-0 flex-1">
-                        <Segmented options={TIER_OPTIONS} value={String(cardTier)} onChange={(v) => setCardTier(Number(v))} />
+                    <div className="flex items-start px-4 py-2.5 border-b border-[#ededed]">
+                      <span className="shrink-0 mr-3 mt-1.5 text-[12px] font-bold text-[#5a5a5a]">등급</span>
+                      <div role="radiogroup" aria-label="등급" className="min-w-0 flex-1 flex flex-wrap gap-1">
+                        {TIER_OPTIONS.map((o) => {
+                          const on = String(cardTier) === o.v;
+                          return (
+                            <button key={o.v} type="button" role="radio" aria-checked={on} onClick={() => setCardTier(Number(o.v))}
+                              className={`h-8 px-3 rounded-full text-[12px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${on ? "bg-[#131313] text-white" : "bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313]"}`}>
+                              {o.l}
+                            </button>
+                          );
+                        })}
                       </div>
+                    </div>
+                  )}
+                  {/* 꾸미기 끼워 보기 — 카드가 켜져 있을 때. 카드 배경 · 카드 테두리는 꾸미기를 그리는 카드에서만(봇과 같다), 프로필 테두리는 어느 카드든 */}
+                  {cardOn && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 px-4 py-2.5 border-b border-[#ededed]">
+                      {([
+                        ["scene", "카드 배경", SCENE_OPTIONS, DRESS_KEYS.has(sel)],
+                        ["skin", "카드 테두리", SKIN_OPTIONS, DRESS_KEYS.has(sel)],
+                        ["frame", "프로필 테두리", FRAME_OPTIONS, true],
+                      ] as [keyof typeof dress, string, { v: string; l: string }[], boolean][]).map(([k, label, opts, ok]) => (
+                        <label key={k} className={`min-w-0 flex flex-col gap-1 ${ok ? "" : "opacity-40"}`}>
+                          <span className="text-[11px] font-bold text-[#5a5a5a]">{label}</span>
+                          <select value={dress[k]} disabled={!ok} onChange={(e) => setDress((d) => ({ ...d, [k]: e.target.value }))} className={`${inputClass} h-9 text-[12px]`}>
+                            {opts.map((o) => <option key={o.v || "none"} value={o.v}>{o.l}</option>)}
+                          </select>
+                        </label>
+                      ))}
                     </div>
                   )}
                   {/* 공지는 봇이 링크 버튼을 붙인다 — 글자는 글마다(글쓰기 › 디스코드 공지), 여기선 기본 글자로 */}
@@ -586,17 +754,8 @@ export default function AdminBotMessagesPage() {
         onConfirm={doReset}
       />
 
-      {/* 결과 토스트 — 저장 줄이 떠 있으면 그 위로 */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`fixed ${dirty ? "bottom-[180px] md:bottom-24" : "bottom-[96px] md:bottom-6"} left-1/2 -translate-x-1/2 z-[130] w-max max-w-[calc(100vw-2rem)] px-5 py-3 rounded-full border text-[13px] font-bold break-keep shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] ${toast.error ? "bg-white border-[#e91e3f] text-[#d01634]" : "bg-[#131313] border-[#131313] text-white"}`}
-        >
-          {toast.error ? "⚠ " : "✓ "}
-          {toast.msg}
-        </div>
-      )}
+      {/* 결과 토스트(공용 useToast) — 저장 줄이 떠 있으면 그 높이만큼 위로(SaveBar 가 --admin-bar 로 알린다) */}
+      {toastEl}
     </>
   );
 }

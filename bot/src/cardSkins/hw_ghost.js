@@ -400,7 +400,7 @@ export function deco(w, h, S, site, ctx = {}) {
       `.hw_ghost-a{animation:hwgA 1.6s infinite}.hw_ghost-b{animation:hwgB 1.6s infinite}` +
       `@media (prefers-reduced-motion:reduce){.hw_ghost-a,.hw_ghost-b{animation:none}}</style>`
     : "";
-  const under = site ? `<rect width="${w}" height="${h}" fill="url(#hw_ghost-dt)"/>` : "";
+  const under = site && !ctx.onScene ? `<rect width="${w}" height="${h}" fill="url(#hw_ghost-dt)"/>` : "";
   // 전구: 꺼진 판 위에 A · B 를 번갈아(움직임이 없거나 CSS 를 모르는 곳에서는 둘 다 켜진 채)
   const lights = site
     ? dim.svg(P) + bulbs[0].svg(P, 0, 0, ` class="hw_ghost-a"`) + bulbs[1].svg(P, 0, 0, ` class="hw_ghost-b"`)

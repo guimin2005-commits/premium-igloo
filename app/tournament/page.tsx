@@ -8,7 +8,7 @@ import { BracketView } from "../components/BracketView";
 import { EsportsStyles, STATUS_META } from "../components/Esports";
 import { PHASES, phaseOf, phaseMeta, phaseShows, statusOf } from "@/lib/tournamentPhase";
 
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 import { openLogin } from "../components/LoginPrompt";
 
 const RenderFormattedText = ({ text, onCopy }: { text: string; onCopy?: () => void }) => {
@@ -168,8 +168,9 @@ const ScheduleTimeline = ({ schedule }: { schedule: any[] }) => {
 
 export default function TournamentPage() {
   const router = useRouter();
-  const { data: session, status } = useSession() as any;
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { status } = useSession() as any;
+  // 📌 관리자로 보는 중일 때만(「유저 화면으로 보기」를 켜면 일반 유저와 같다) — 대회 등록 · 운영 카드 · 수정/삭제 · 숨김 대회(?all=1)
+  const { admin: isAdmin } = useAdminView();
 
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -225,7 +226,7 @@ export default function TournamentPage() {
       if (res.ok) {
         if (selected && selected._id === deleteConfirmId) setSelected(null);
         setPopup({ isOpen: true, message: "대회가 삭제되었습니다.", isError: false });
-        fetchTournaments();
+        fetchTournaments(isAdmin); // 가린 대회가 목록에서 잠깐 빠지지 않게 같은 기준으로
       }
     } catch { setPopup({ isOpen: true, message: "삭제 중 오류 발생", isError: true }); }
     finally { setDeleteConfirmId(null); }
@@ -280,6 +281,20 @@ export default function TournamentPage() {
       if (d?.success) { setSurveyMine(d.mine || null); setSurveyCount(d.count || 0); }
     } catch {}
   };
+
+  // 📌 상세 페이지 「참가 신청하기」(?apply=<id>) — 목록에 그 대회가 있으면 같은 신청(설문 창)을 연다. 주소는 바로 지운다
+  const applyParamDone = useRef(false);
+  useEffect(() => {
+    if (applyParamDone.current || isLoading || status === "loading") return;
+    applyParamDone.current = true;
+    const want = new URLSearchParams(window.location.search).get("apply");
+    if (!want) return;
+    window.history.replaceState(null, "", "/tournament");
+    const t = tournaments.find((x) => String(x._id) === want);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 주소로 들어온 신청 창은 목록을 받은 뒤 한 번만 연다
+    if (t) handleApply(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, status, tournaments]);
 
   // 📌 필수 문항 미작성 시 — 해당 문항으로 스크롤 + 흔들림으로 즉시 위치를 알려준다
   const flagInvalidQuestion = (qid: string) => {

@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import mongoose from "mongoose";
-import { normalizeItemPayload, itemCascadeSet, normalizeItemGroup } from "@/lib/items";
-import { normalizeEffects, hasConsumable } from "@/lib/itemEffects";
+import { normalizeItemPayload, itemCascadeSet, normalizeItemGroup, copyNameOf } from "@/lib/items";
+import { normalizeEffects, hasConsumable, effectDisplayOf, autoEffectLinesOf, autoScopeOf, normalizeEffectText, normalizeScope } from "@/lib/itemEffects";
+import { channelNamesFor } from "@/lib/channelNames";
 import { unitThingSet } from "@/lib/unitSale";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
@@ -17,11 +18,12 @@ import {
 import {
   normalizeOrder, sameOrder, changesOf, groupList, groupsInOrder,
   moveUnit, moveInGroup, moveToGroup, assignGroup, appendItem,
-  nestParents, orderParentBlocks, autoSortOrder, parentList, orderGroupsNested,
+  nestParents, orderParentBlocks, autoSortOrder, parentList, orderGroupsNested, itemUnitKey,
 } from "@/lib/itemOrder";
 import { ITEM_TYPES } from "@/lib/items";
 import { GROUPS_KEY, loadGroupMeta } from "@/lib/itemGroupsMeta";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
+import { categoryFieldsOf } from "@/lib/itemCategory";
 
 // 📌 아이템 효과 — 아이템 문서 자체에 저장한다(chatBuffXp · voiceBuffXp · attendBuffXp · effects). 디스코드 역할 연결과 무관하게
 //    이 아이템을 인벤토리에 가진 사람(lib/ownedItems.js)에게 봇이 적용한다. 기프트카드(physical)는 항상 0 / [].
@@ -44,6 +46,30 @@ function attachEffects(doc) {
   delete doc.attendBuffXp;
   return doc;
 }
+
+// 📌 분류(2026-10-17 — lib/itemCategory.js) — 응답 행마다 category(저장 칸 그대로 · "" = 자동) · categoryLabel(보일 분류) · categoryAuto(자동이면 보일 분류) · shortName(보일 이름).
+//    관리 폼은 category 만 돌려보낸다(categoryLabel 을 저장 칸으로 쓰지 않게). 효과 모양(배열 · { list })은 둘 다 읽는다 — attachEffects 앞뒤 어디서 불러도 같다
+const attachCategory = (doc) => Object.assign(doc, categoryFieldsOf(doc));
+
+// 📌 효과 문구 · 적용 범위(2026-10-18 — lib/itemEffects effectDisplayOf) — 응답 행마다
+//    effectText(저장 칸 그대로 · [] = 자동) · scope(저장 칸 그대로 · [] = 자동) — 관리 폼은 이 두 칸만 돌려보낸다
+//    effectLines(보일 효과 줄 — 직접 쓴 문구 > 자동, 꾸미기 문장 없음) · effectAuto(자동이면 보일 줄 — 「직접 쓰기」가 이 줄로 채워 연다) · effectCustom(직접 쓴 문구인가)
+//    isCosmetic · scopeLabel(보일 적용 범위 글자, 꾸미기가 아니면 "") · scopeAuto(자동 적용 범위 키)
+//    attachEffects 뒤에 부른다(효과 모양 { list }도 읽는다). nameOf — 채널 하나만 지정한 효과의 「#이름」(namesFor)
+const attachDisplay = (doc, nameOf) => {
+  doc.effectText = normalizeEffectText(doc.effectText);
+  doc.scope = normalizeScope(doc.scope);
+  const d = effectDisplayOf(doc, nameOf);
+  return Object.assign(doc, {
+    effectLines: d.effectLines, effectAuto: autoEffectLinesOf(doc, nameOf), effectCustom: d.effectCustom,
+    isCosmetic: d.isCosmetic, scopeLabel: d.scopeLabel, scopeAuto: autoScopeOf(doc),
+  });
+};
+// 채널 이름 — 채널 하나만 지정한 효과가 있을 때만 읽는다(lib/channelNames — 10분 캐시). 못 읽으면 이름 없이(「채널 1곳」)
+const namesFor = async (docs) => {
+  const names = await channelNamesFor(docs.map((d) => (Array.isArray(d?.effects) ? d.effects : d?.effects?.list))).catch(() => new Map());
+  return (cid) => names.get(String(cid));
+};
 
 // 본문 effects → 저장할 칸. 기프트카드는 항상 비운다.
 //    본문에 effects 객체가 없으면 null — 수정은 기존 효과를 그대로 두고(표시 토글 등), 새 등록은 스키마 기본값(0 / [])
@@ -143,7 +169,7 @@ const tierRankOf = (doc) => {
   let cosmetic = false;
   for (const e of Array.isArray(doc?.effects) ? doc.effects : []) {
     const skin = String(e?.skin || "");
-    const v = e?.on === "avatarFrame" ? String(e.frame || "") : e?.on === "cardSkin" ? (skin.startsWith("rank_") ? skin.slice(5) : "") : null;
+    const v = e?.on === "avatarFrame" ? String(e.frame || "") : e?.on === "cardSkin" ? (skin.startsWith("rank_") ? skin.slice(5) : "") : e?.on === "cardScene" ? "" : null; // 카드 배경은 등급 아이템이 아니다
     if (v === null) continue;
     cosmetic = true;
     const i = v ? VOICE_TIERS.findIndex((t) => t.key === v) : -1;
@@ -185,8 +211,11 @@ export async function GET(request) {
       r.stackable = units.has(`i:${r._id}`);
       // 그룹 — 칸이 생기기 전 문서는 비어 있다("" = 묶지 않음)
       r.group = typeof r.group === "string" ? r.group : "";
-      attachEffects(r);
+      attachCategory(attachEffects(r));
     }
+    // 효과 문구 · 적용 범위 — 보일 줄 · 글자(위 attachDisplay)
+    const nameOf = await namesFor(rows);
+    for (const r of rows) attachDisplay(r, nameOf);
 
     if (withUsage) {
       // 연결 상품 수(itemId) + 세트 구성(bundle.itemId)으로 쓰는 것도 '쓰는 상품'으로 센다(삭제 확인과 같은 기준) — 예전 집계 두 개와 같은 셈
@@ -295,7 +324,8 @@ export async function POST(request) {
     }
     // 자리 · 그룹 목록 — 실패해도 아이템 저장은 된 것이라 막지 않는다(다음 목록 조회가 덩어리를 다시 맞춘다)
     await placeSaved(String(doc._id), { created: !id, prevGroup }).catch((e) => console.error("아이템 순서 · 그룹 목록 저장 오류:", e));
-    return NextResponse.json({ success: true, data: attachEffects(doc) });
+    const out = attachCategory(attachEffects(doc));
+    return NextResponse.json({ success: true, data: attachDisplay(out, await namesFor([out])) });
   } catch (e) {
     console.error("아이템 저장 오류:", e);
     return NextResponse.json({ success: false, message: "저장 중 오류가 발생했습니다." }, { status: 500 });
@@ -329,17 +359,28 @@ export async function POST(request) {
 //                                   그룹 안은 등급 아이템만 등급 차례(lib/itemOrder.js autoSortOrder · tierRankOf). 응답 moved = 자리가 바뀐 아이템 수
 //    응답은 모두 { groups, parents, parentOf, order } — 화면은 이것으로 맞춘다
 // ── [순서 저장(옛 모양)] { order: [아이템 id, ...] } — 그 차례 + 빠진 아이템은 뒤에 지금 차례로, 덩어리 규칙으로 맞춰 쓴다
+// ── [일괄 편집] { batch: [{ id, set: { name?, description?, category?, rarity?, group?, visible?, type?, color?, icon? } }] } — 아래 batchOp
+// ── [일괄 복제] { duplicate: [{ id, name?, description? }] } — 아래 duplicateOp
 const MOVE_REF_MAX = 200;
 const refOf = (v) => (typeof v === "string" && v && v.length <= MOVE_REF_MAX ? v : null);
 const conflict = () => NextResponse.json({ success: false, message: "목록이 바뀌었습니다. 다시 불러온 뒤 옮겨 주세요." }, { status: 409 });
 
 export async function PATCH(request) {
   let grouping = false;
+  let failMsg = "";
   try {
     const deny = await denyIfNotAdmin();
     if (deny) return deny;
     if (catalogWriteBlocked()) return liveLockedResponse();
     const b = await request.json().catch(() => ({}));
+    if (Array.isArray(b?.batch)) {
+      failMsg = "일괄 저장 중 오류가 발생했습니다.";
+      return await batchOp(b.batch);
+    }
+    if (Array.isArray(b?.duplicate)) {
+      failMsg = "복제 중 오류가 발생했습니다.";
+      return await duplicateOp(b.duplicate);
+    }
     if (typeof b?.groupOp === "string") {
       grouping = true;
       return await groupOp(b);
@@ -369,8 +410,207 @@ export async function PATCH(request) {
     return NextResponse.json({ success: true, order: idsOf(next), ...sync });
   } catch (e) {
     console.error("아이템 순서 · 그룹 저장 오류:", e);
-    return NextResponse.json({ success: false, message: grouping ? "그룹을 저장하지 못했습니다." : "순서를 저장하지 못했습니다." }, { status: 500 });
+    return NextResponse.json({ success: false, message: failMsg || (grouping ? "그룹을 저장하지 못했습니다." : "순서를 저장하지 못했습니다.") }, { status: 500 });
   }
+}
+
+// ── 일괄 편집(2026-10-17 상점 관리 › 아이템 여러 개 고르기) — PATCH 가 권한을 본 뒤 부른다 ──
+//    { batch: [{ id, set }] } — 줄마다 지금 값에 set 을 덧씌워 POST 와 같은 정리(normalizeItemPayload)를 거친 뒤, set 이 건드린 칸만 쓴다
+//    (유형을 바꾸면 그에 딸린 역할 · 시즌 뗌 · 기프트카드 효과 비움 · 역할 검사도 POST 와 같이). 정리 · 검사에 걸린 줄은 이유와 함께 skipped 로 돌려주고 나머지는 쓴다.
+//    쓰기는 POST 와 같은 길 — forWrite(초안 모드면 초안) · 삭제 예정 초안은 못 고침 · 표기 칸(이름 · 설명 · 아이콘 · 색 · 유형)이 바뀌면 연결 상품 스냅샷도(itemCascadeSet).
+//    그룹은 순서 규칙(같은 그룹은 붙은 덩어리)이 있어 그룹 지정({ ids, group })과 같은 계산으로 — 새 그룹 덩어리 끝에(빼면 옛 덩어리 바로 뒤)
+//    응답: { success, updated, unchanged, skipped: [{ id, name, why }], data: [바뀐 아이템(화면 모양)], order?, groups?, parents?, parentOf? }
+const BATCH_MAX = 500;
+//    📌 description — 「설명 바꾸기」(고른 아이템 설명을 한 번에 — 같은 글을 줄마다 보내면 된다) · category — 「분류」("" = 자동, 2026-10-17 lib/itemCategory.js)
+const BATCH_KEYS = ["name", "description", "category", "rarity", "group", "visible", "type", "color", "icon"];
+// 연결 상품에 복사해 두는 표기 칸을 건드리는 키 — 바뀌면 연결 상품도 맞춘다(lib/items.js SNAPSHOT_FIELDS)
+const CASCADE_KEYS = ["name", "description", "icon", "color", "type"];
+// models/Item.js 기본값(비교용)
+const ITEM_DEFAULTS = { description: "", icon: "", imageUrl: "", color: "", type: "item", roleId: "", roleName: "", detachOnSeason: false, visible: true, group: "", rarity: "", category: "", effectText: [], scope: [] };
+const sameVal = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+async function batchOp(list) {
+  const bad = (message, status = 400) => NextResponse.json({ success: false, message }, { status });
+  // 같은 아이템이 여러 번 오면 앞에서부터 합친다(뒤 값이 이긴다)
+  const want = new Map();
+  for (const raw of list.slice(0, BATCH_MAX)) {
+    const id = String(raw?.id || "");
+    const set = raw?.set && typeof raw.set === "object" && !Array.isArray(raw.set) ? raw.set : null;
+    if (!mongoose.isValidObjectId(id) || !set) continue;
+    const pick = {};
+    for (const k of BATCH_KEYS) if (set[k] !== undefined) pick[k] = set[k];
+    if (Object.keys(pick).length) want.set(id, { ...(want.get(id) || {}), ...pick });
+  }
+  if (!want.size) return bad("바꿀 아이템을 골라 주세요.");
+  await connectToDatabase();
+  const ids = [...want.keys()];
+  const byId = new Map((await catalogFind(Item, { _id: { $in: ids } })).map((d) => [String(d._id), d]));
+
+  const skipped = [];
+  const plans = []; // { id, name, $set, cascade }
+  const regroup = new Map(); // 새 그룹 이름 → [아이템 id]
+  let unchanged = 0;
+  for (const id of ids) {
+    const doc = byId.get(id);
+    const set = want.get(id);
+    if (!doc) { skipped.push({ id, name: "", why: "아이템을 찾을 수 없습니다." }); continue; }
+    // 칸이 생기기 전 문서는 스키마 기본값으로 본다(비어 있는 칸을 같은 값으로 다시 쓰지 않게)
+    const cur = { ...ITEM_DEFAULTS, ...doc };
+    const name = String(cur.name || "");
+    // 지금 값 + 바꿀 값 → POST 와 같은 정리. 순서는 보내지 않는다(일괄 편집은 순서를 바꾸지 않는다 — 그룹만 아래에서)
+    const n = normalizeItemPayload({ ...cur, ...set, sortOrder: undefined });
+    if (!n.ok) { skipped.push({ id, name, why: n.error }); continue; }
+    const d = n.data;
+    const $set = {};
+    const put = (k) => { if (!sameVal(d[k], cur[k])) $set[k] = d[k]; };
+    for (const k of ["name", "description", "icon", "color", "visible", "rarity", "category"]) if (k in set) put(k);
+    if ("type" in set) {
+      for (const k of ["type", "roleId", "roleName", "detachOnSeason"]) put(k);
+      // 기프트카드가 되면 효과를 비운다(POST effectFields 와 같다) — 직접 쓴 효과 문구 · 적용 범위도(lib/items.js normalizeItemPayload 가 [] 로 둔다)
+      if (d.type === "physical") {
+        for (const [k, v] of Object.entries(effectFields("physical"))) if (!sameVal(v, cur[k])) $set[k] = v;
+        put("effectText");
+        put("scope");
+      }
+    }
+    // 📌 역할이 남는 유형으로 바꾸면 POST 와 같은 역할 검사 — 소모품은 여기서, 1개 단위 상품 · 2개 이상 든 세트는 아래에서 한 번에 센다
+    const roleCheck = !!d.roleId && "type" in $set;
+    if (roleCheck && hasConsumable({ effects: cur.effects })) { skipped.push({ id, name, why: "소모품에는 역할을 연결할 수 없습니다." }); continue; }
+    let regrouped = false;
+    if ("group" in set) {
+      const g = normalizeItemGroup(set.group);
+      if (g !== (typeof cur.group === "string" ? cur.group : "")) {
+        const arr = regroup.get(g);
+        if (arr) arr.push(id);
+        else regroup.set(g, [id]);
+        regrouped = true;
+      }
+    }
+    if (Object.keys($set).length) plans.push({ id, name, $set, cascade: CASCADE_KEYS.some((k) => k in $set), roleCheck });
+    else if (!regrouped) unchanged += 1;
+  }
+
+  // 역할 검사 나머지(POST 와 같은 문구) — 1개 단위로 파는 상품이 가리키거나 세트에 2개 이상 든 아이템. 초안 모드는 초안 상품까지 함께 본다
+  const roleIds = plans.filter((p) => p.roleCheck).map((p) => p.id);
+  const unitIds = new Set();
+  const multiIds = new Set();
+  if (roleIds.length) {
+    const [units, bundles] = await Promise.all([
+      catalogFind(ShopItem, { itemId: { $in: roleIds }, unitSale: true }, { select: { itemId: 1 } }),
+      catalogFind(ShopItem, { type: "bundle", bundle: { $elemMatch: { itemId: { $in: roleIds }, qty: { $gt: 1 } } } }, { select: { bundle: 1 } }),
+    ]);
+    for (const s of units) unitIds.add(String(s.itemId || ""));
+    for (const s of bundles) for (const c of Array.isArray(s.bundle) ? s.bundle : []) if (Number(c?.qty) > 1) multiIds.add(String(c?.itemId || ""));
+  }
+  const writes = [];
+  for (const p of plans) {
+    const why = !p.roleCheck ? ""
+      : unitIds.has(p.id) ? "1개 단위로 파는 상품이 있어 역할을 연결할 수 없습니다."
+      : multiIds.has(p.id) ? "여러 개를 넣은 세트가 있어 역할을 연결할 수 없습니다."
+      : "";
+    if (why) skipped.push({ id: p.id, name: p.name, why });
+    else writes.push(p);
+  }
+
+  // 칸 쓰기 — 바뀌는 아이템만 초안으로 옮긴다(초안 모드). POST 수정과 같은 호출
+  const done = new Set();
+  const data = [];
+  if (writes.length) {
+    const W = await forWrite(Item, { _id: { $in: writes.map((p) => p.id) } });
+    const cascaded = [];
+    for (const p of writes) {
+      const doc = await W.findOneAndUpdate(writable(W, { _id: p.id }), { $set: p.$set }, { new: true, runValidators: true }).lean();
+      if (!doc) { skipped.push({ id: p.id, name: p.name, why: "아이템을 찾을 수 없습니다." }); continue; }
+      const clean = stripDraft(doc);
+      done.add(p.id);
+      if (p.cascade) cascaded.push(clean);
+      data.push(clean);
+    }
+    if (cascaded.length) {
+      const S = await forWrite(ShopItem, { itemId: { $in: cascaded.map((x) => String(x._id)) } });
+      for (const doc of cascaded) await S.updateMany({ itemId: String(doc._id) }, { $set: itemCascadeSet(doc) });
+    }
+  }
+
+  // 그룹 — 그룹 지정과 같은 계산(새 그룹 덩어리 끝 · 빼면 옛 덩어리 바로 뒤)을 그룹마다 이어서, 바뀐 순서 · 그룹은 한 번에 쓴다
+  let orderOut = {};
+  const gone = new Set(skipped.map((s) => s.id));
+  if (regroup.size) {
+    const [before, meta] = await Promise.all([loadOrder(), loadGroupMeta()]);
+    let next = before;
+    for (const [g, gids] of regroup) {
+      const ok = gids.filter((id) => !gone.has(id) && before.some((r) => r.id === id));
+      if (!ok.length) continue;
+      next = assignGroup(next, ok, g);
+      for (const id of ok) done.add(id);
+    }
+    const fin = await writeOrder(before, next, meta.parentOf);
+    const sync = await syncGroups(groupsAfter(before, fin, meta.names), meta, { list: fin });
+    orderOut = { order: idsOf(fin), ...sync };
+  }
+  const shaped = data.map((d) => attachCategory(attachEffects(d)));
+  const nameOf = shaped.length ? await namesFor(shaped) : () => undefined;
+  return NextResponse.json({ success: true, updated: done.size, unchanged, skipped, data: shaped.map((d) => attachDisplay(d, nameOf)), ...orderOut });
+}
+
+// ── 일괄 복제 — PATCH 가 권한을 본 뒤 부른다 ──
+//    { duplicate: [{ id, name?, description? }] } — 같은 값의 새 아이템(효과 · 그룹 · 희귀도 · 분류 · 그림 · 표시 그대로). name 이 없으면 원래 이름 + 「 (복사)」(lib/items.js copyNameOf)
+//    정리 · 소모품 역할 검사는 POST 새 등록과 같다. 새 아이템은 원래 아이템 바로 뒤에(같은 그룹 덩어리 안 — 여러 개면 원래 차례대로 이어서)
+//    응답: { success, created: [{ from, id, name }], skipped: [{ id, name, why }], order, groups, parents, parentOf }
+const DUP_MAX = 100;
+async function duplicateOp(list) {
+  const bad = (message, status = 400) => NextResponse.json({ success: false, message }, { status });
+  const want = [];
+  for (const raw of list.slice(0, DUP_MAX)) {
+    const id = String((typeof raw === "string" ? raw : raw?.id) || "");
+    if (!mongoose.isValidObjectId(id)) continue;
+    want.push({
+      id,
+      name: typeof raw?.name === "string" ? raw.name : null,
+      description: typeof raw?.description === "string" ? raw.description : null,
+    });
+  }
+  if (!want.length) return bad("복제할 아이템을 골라 주세요.");
+  await connectToDatabase();
+  const byId = new Map((await catalogFind(Item, { _id: { $in: [...new Set(want.map((w) => w.id))] } })).map((d) => [String(d._id), d]));
+  const skipped = [];
+  const made = [];
+  for (const w of want) {
+    const src = byId.get(w.id);
+    if (!src) { skipped.push({ id: w.id, name: "", why: "아이템을 찾을 수 없습니다." }); continue; }
+    const n = normalizeItemPayload({
+      ...src,
+      name: w.name ?? copyNameOf(src.name),
+      description: w.description ?? src.description,
+      group: typeof src.group === "string" ? src.group : "",
+      rarity: src.rarity ?? "",
+      category: src.category ?? "",
+      sortOrder: undefined,
+    });
+    if (!n.ok) { skipped.push({ id: w.id, name: String(src.name || ""), why: n.error }); continue; }
+    const ef = effectFields(n.data.type, { chatBuffXp: src.chatBuffXp, voiceBuffXp: src.voiceBuffXp, attendBuffXp: src.attendBuffXp, list: src.effects });
+    const data = ef ? { ...n.data, ...ef } : n.data;
+    if (data.roleId && hasConsumable({ effects: data.effects })) {
+      skipped.push({ id: w.id, name: String(src.name || ""), why: "소모품에는 역할을 연결할 수 없습니다." });
+      continue;
+    }
+    data.sortOrder = await nextSortOrder(Item, 999);
+    const doc = stripDraft(await catalogCreate(Item, data));
+    made.push({ from: w.id, id: String(doc._id), name: doc.name, group: data.group || "" });
+  }
+  if (!made.length) return NextResponse.json({ success: true, created: [], skipped });
+  // 자리 — 원래 아이템 바로 뒤(같은 원본을 여러 번이면 앞 복제본 뒤). 기준을 못 찾으면 맨 뒤 그대로(다음 목록 조회가 덩어리를 맞춘다)
+  const [before, meta] = await Promise.all([loadOrder(), loadGroupMeta()]);
+  let cur = normalizeOrder(before);
+  const lastOf = new Map();
+  for (const m of made) {
+    const anchor = lastOf.get(m.from) || m.from;
+    const moved = m.group ? moveInGroup(cur, m.id, { after: anchor }) : moveUnit(cur, itemUnitKey(m.id), { after: itemUnitKey(anchor) });
+    if (moved) { cur = moved; lastOf.set(m.from, m.id); }
+  }
+  const fin = await writeOrder(before, cur, meta.parentOf);
+  const sync = await syncGroups(groupList(fin, meta.names), meta, { list: fin });
+  return NextResponse.json({ success: true, created: made.map(({ from, id, name }) => ({ from, id, name })), skipped, order: idsOf(fin), ...sync });
 }
 
 // 끌어 옮기기 한 건 — PATCH 가 권한을 본 뒤 부른다
@@ -517,13 +757,36 @@ async function groupOp(b) {
 }
 
 // ── [삭제] ?id= — 참조 상품이 있으면 409 ──
+// ── [일괄 삭제] ?ids=a,b,c — 한 건 삭제와 같은 검사를 줄마다(상품 · 세트 구성 · 시즌 패스가 쓰는 아이템은 남긴다).
+//    응답 { success, deleted: [id], blocked: [{ id, usage, passUsage }] } — 막힌 것만 남기고 나머지는 지운다(초안 모드는 삭제 예정 초안)
+const DELETE_MAX = 500;
 export async function DELETE(request) {
   try {
     const deny = await denyIfNotAdmin();
     if (deny) return deny;
     if (catalogWriteBlocked()) return liveLockedResponse();
     await connectToDatabase();
-    const id = String(new URL(request.url).searchParams.get("id") || "").trim();
+    const params = new URL(request.url).searchParams;
+    if (params.has("ids")) {
+      const ids = [...new Set(String(params.get("ids") || "").split(",").map((v) => v.trim()))].filter((v) => mongoose.isValidObjectId(v)).slice(0, DELETE_MAX);
+      if (!ids.length) return NextResponse.json({ success: false, message: "삭제할 아이템을 골라 주세요." }, { status: 400 });
+      // 쓰는 상품 수 — 한 건 삭제의 catalogCount({ $or: [itemId, bundle.itemId] })와 같은 셈(상품 하나는 한 번)
+      const [shops, passOf] = await Promise.all([
+        catalogFind(ShopItem, { $or: [{ itemId: { $in: ids } }, { "bundle.itemId": { $in: ids } }] }, { select: { itemId: 1, bundle: 1 } }),
+        passUsageOf(),
+      ]);
+      const usageOf = (id) => shops.filter((s) => String(s.itemId || "") === id || (Array.isArray(s.bundle) && s.bundle.some((c) => String(c?.itemId || "") === id))).length;
+      const deleted = [];
+      const blocked = [];
+      for (const id of ids) {
+        const usage = usageOf(id);
+        const passUsage = passOf.get(id) || 0;
+        if (usage > 0 || passUsage > 0) { blocked.push({ id, usage, passUsage }); continue; }
+        if (await catalogDelete(Item, id)) deleted.push(id);
+      }
+      return NextResponse.json({ success: true, deleted, blocked });
+    }
+    const id = String(params.get("id") || "").trim();
     if (!id) return NextResponse.json({ success: false, message: "삭제할 아이템을 지정해 주세요." }, { status: 400 });
 
     // 세트 구성(bundle.itemId)으로 쓰는 상품도 센다 — 지우면 그 세트는 "구성을 확인할 수 없습니다"로 팔리지 않는다.

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 import { priceText } from "@/lib/shopPricing";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { ICON_PATHS } from "../components/Icons";
@@ -90,7 +90,8 @@ const taClass =
 
 export default function SupportPage() {
   const { data: session, status } = useSession();
-  const isAdmin = !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 관리(?admin=1) · 「관리자 대시보드 열기」는 관리자로 볼 때만 — 「유저 화면으로 보기」를 켜면 유저처럼 문의 폼만
+  const { admin: isAdmin } = useAdminView();
 
   const [viewMode, setViewMode] = useState<"user" | "admin">("user");
   const [mainType, setMainType] = useState(""); // 고르기 전에는 아래 항목을 감춰둔다
@@ -559,9 +560,10 @@ export default function SupportPage() {
                                 >
                                   <PickDot on={picked} />
                                   <span className="min-w-0 flex-1">
-                                    <span className={`block text-[13px] font-extrabold truncate ${picked ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.itemName}</span>
+                                    <span className={`block text-[13px] font-extrabold truncate ${picked ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.shortName || o.itemName}</span>
                                     <span className="block text-[11px] text-[#8a8a8a] tabular-nums">
-                                      {ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {priceText(o, o.price)}
+                                      {/* 📌 분류 · 짧은 이름 — 구매 내역 API 의 categoryLabel · shortName(2026-10-17). 고른 값(문의 글)은 산 때 이름 그대로 */}
+                                      {o.categoryLabel || ORDER_TYPE_LABEL[o.itemType] || "상품"} · {new Date(o.createdAt).toLocaleDateString("ko-KR")} · {priceText(o, o.price)}
                                     </span>
                                   </span>
                                 </button>

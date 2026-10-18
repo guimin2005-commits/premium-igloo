@@ -9,26 +9,22 @@ import { basePrice, salePrice, durationLabel, isPointOnly, isTimed, priceText, s
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 import { pointToXp } from "@/lib/pointRate";
 import { planPayment } from "@/lib/shopPay";
-import { ITEM_TYPE_LABEL, itemTypeColor } from "@/lib/items";
+import { itemTypeColor } from "@/lib/items";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
 import { isRenewal } from "../owned";
 import { isBundle } from "@/lib/bundle";
-import { splitItemName } from "@/lib/itemName";
+import { categoryLabelOf, itemShortName } from "../ProductCard";
 import { CART_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
 import { saleEnded } from "@/lib/saleWindow";
-
-import { ADMIN_USERS } from "@/lib/admins";
-
-// 유형 라벨 · 색 — lib/items.js 가 단일 원천
-const TYPE_LABEL: Record<string, string> = ITEM_TYPE_LABEL;
+import { useAdminView } from "../../components/AdminView";
 
 // 📌 장바구니 페이지 — 담은 상품 확인·삭제 후 주문서로 이동
 export default function CartPage() {
-  const { data: session, status } = useSession();
-  const isLoggedIn = status === "authenticated";
-  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { status } = useSession();
+  // 📌 관리자로 보는 중일 때만 숨김 · 판매 종료 상품까지(?all=1) — 「유저 화면으로 보기」면 유저처럼 빠지고 토스트 한 번
+  const { admin: isAdmin } = useAdminView();
 
   const [cart, setCart] = useState<{ itemId: string; qty: number; days?: number }[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -280,11 +276,12 @@ export default function CartPage() {
                         <CardArt it={r.item} iconSize={36} />
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black text-white mb-1.5" style={{ backgroundColor: itemTypeColor(r.item.type) }}>
-                          {splitItemName(r.item.name).kind || TYPE_LABEL[r.item.type] || "상품"}
+                        {/* 📌 칩 = 분류(../ProductCard categoryLabelOf — API categoryLabel, 옛 행은 이름 머리말 → 유형 이름) · 색은 유형 색(lib/items.js) */}
+                        <span className="inline-block max-w-full truncate whitespace-nowrap align-top px-2 py-0.5 rounded-full text-[9px] font-black text-white mb-1.5" style={{ backgroundColor: itemTypeColor(r.item.type) }}>
+                          {categoryLabelOf(r.item)}
                         </span>
                         <h3 className="text-sm font-bold text-[#131313] truncate flex items-center gap-1.5">
-                        <Link href={itemHref} className="truncate hover:underline underline-offset-4">{splitItemName(r.item.name).short}</Link>
+                        <Link href={itemHref} className="truncate hover:underline underline-offset-4">{itemShortName(r.item)}</Link>
                         {/* 기간제를 가진 상품이면 "30일 연장" — 지금 만료 뒤에 이어 붙는다 */}
                         {(r.days ?? 0) > 0 && <span className={`shrink-0 px-1.5 py-0.5 rounded ${renew ? "bg-[#e91e3f]" : "bg-[#131313]"} text-white text-[10px] font-black`}>{durationLabel(r.days)}{renew ? " 연장" : ""}</span>}
                         {ended && <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#a3a3a3] text-white text-[10px] font-black">판매 종료</span>}

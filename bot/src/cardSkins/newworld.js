@@ -237,7 +237,7 @@ export function deco(w, h, S, site, ctx = {}) {
   const defs = site
     ? `<pattern id="${id}-gr" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M0 0h1v1h-1zM4 0h1v1h-1zM8 0h1v1h-1zM12 0h1v1h-1zM0 4h1v1h-1zM0 8h1v1h-1zM0 12h1v1h-1z" fill="#ffe3c4" fill-opacity="0.16"/></pattern>`
     : "";
-  let under = site ? `<rect width="${w}" height="${h}" fill="url(#${id}-gr)"/>` : "";
+  let under = site && !ctx.onScene ? `<rect width="${w}" height="${h}" fill="url(#${id}-gr)"/>` : "";
 
   // ── 구름 — 칸 단위 원(cx, cy, r) · cy 는 바닥(base) 기준 칸(양수 = 아래로 묻힘). 모서리는 높게 피어오르고 가운데는 낮게 ──
   const nC = Math.ceil(w / P);

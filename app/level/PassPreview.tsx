@@ -8,39 +8,44 @@ import { itemTypeColor, itemTypeLabel } from "@/lib/items";
 import { invShortName } from "../components/Inventory";
 import { FitBox, ProfileCardPreview, BadgePreview, whoOf, badgeOfItem, useTodayXp } from "../arctic/CosmeticPreview";
 
-// 📌 시즌 패스 꾸미기 보상(카드 스킨 · 아바타 테두리 · 프로필 배지)의 적용 미리보기 — 상점 상품 상세 '적용 미리보기'(app/arctic/AppliedPreview)와 같은 그림.
+// 📌 시즌 패스 꾸미기 보상(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지)의 적용 미리보기 — 상점 상품 상세 '적용 미리보기'(app/arctic/AppliedPreview)와 같은 그림.
 //    (2026-10-03 사용자: "시즌패스에 '꾸미기 - 카드' 가 들어갈 때가 있는데 상점과 달리 미리보기 시안이 없어서..")
 //    패스 창(app/level/page.js PassModal) 위에 겹쳐 뜨는 작은 판 — 폰은 아래에서 올라오는 판. 닫기 · 바깥 누르기 · Esc(Esc 는 PassModal 이 받아 이 판만 닫는다)
-//    데이터: /api/pass 보상 칸의 cosmetic { skin, frame, badge, botCard } (lib/itemCosmetic — 상점 상세와 같은 계산) · 아이콘 스냅샷.
+//    데이터: /api/pass 보상 칸의 cosmetic { skin, scene, frame, badge, botCard } (lib/itemCosmetic — 상점 상세와 같은 계산) · 아이콘 스냅샷.
 //    사람: 로그인했으면 내 이름 · 사진 · 레벨(/api/xp/me), 아니면 예시. 디스코드 /레벨 카드는 봇이 그 스킨을 그릴 수 있을 때만, 그림을 못 받으면 그 칸을 뺀다.
 //    칸 크기는 바깥이 정하고 그림은 FitBox 가 줄이기만 해서 그림이 늦게 와도 아무것도 밀리지 않는다(AppliedPreview 와 같은 방식).
 const DISCORD_BG = "#313338"; // 디스코드 채팅 바탕 — 봇 카드가 실제로 놓이는 자리
 const BOX_BG = "rgba(255,255,255,0.05)";
 
-type Cosmetic = { skin?: string; frame?: string; badge?: boolean; botCard?: boolean };
+// 📌 2026-10-15 카드 배경(scene) — 카드 테두리(skin)와 따로 입는 카드 바탕 그림. 프로필 카드엔 함께(배경 위에 테두리), 디스코드 카드엔 &scene=
+type Cosmetic = { skin?: string; scene?: string; frame?: string; badge?: boolean; botCard?: boolean };
 export type PassReward = {
   key?: string; kind?: string; itemId?: string; itemName?: string; roleName?: string; days?: number; icon?: string; imageUrl?: string; color?: string; itemType?: string;
   short?: string; label?: string; cosmetic?: Cosmetic | null;
+  categoryLabel?: string; shortName?: string; // 📌 2026-10-17 분류 · 짧은 이름(lib/itemCategory.js) — 보상 칸에 실려 오면 그것을 쓴다
 };
 
-// 미리보기를 띄울 보상인가 — 꾸미기 효과(카드 스킨 · 아바타 테두리 · 프로필 배지)가 실린 아이템 보상만
+// 미리보기를 띄울 보상인가 — 꾸미기 효과(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지)가 실린 아이템 보상만
 export const passCosmeticOf = (r: PassReward | null | undefined): Cosmetic | null => {
   const c = r?.cosmetic;
-  return c && typeof c === "object" && (c.skin || c.frame || c.badge) ? c : null;
+  return c && typeof c === "object" && (c.skin || c.scene || c.frame || c.badge) ? c : null;
 };
 
 // 📌 보상 분류 · 짧은 이름 · 기간 — 패스 창(트랙 칸 · 대표 보상 칸 · app/level/page.js)과 이 미리보기 머리가 같이 쓴다.
-//    인벤토리처럼 분류(카드 스킨 · 아바타 테두리 · 프로필 배지 · 아이템 · 역할)는 작게, 이름은 머리말("카드 스킨 · ")을 뗀 짧은 이름(2026-10-11 운영자 "카테고리는 작게").
+//    인벤토리처럼 분류(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지 · 아이템 · 역할)는 작게, 이름은 머리말("카드 스킨 · ")을 뗀 짧은 이름(2026-10-11 운영자 "카테고리는 작게").
 //    기간제(아이템 days > 0)는 이름 꼬리(" · 7일") 대신 금빛 시계 + "7일"로 따로(2026-10-11 운영자 "기간제도 표기를 다르게"). 전체 이름은 aria-label · 말풍선에 그대로
+//    📌 2026-10-17 분류는 따로(lib/itemCategory.js 「자동 + 바꾸기」) — 보상 칸에 categoryLabel · shortName 이 있으면 그것, 없으면 아래 차례(꾸미기 → 유형 이름 · 이름 머리말 떼기)
 export const passKindOf = (r: PassReward): string => {
+  if (r.categoryLabel) return r.categoryLabel;
   const c = passCosmeticOf(r);
-  if (c?.skin) return "카드 스킨";
-  if (c?.frame) return "아바타 테두리";
+  if (c?.scene) return "카드 배경";
+  if (c?.skin) return "카드 테두리";
+  if (c?.frame) return "프로필 테두리";
   if (c?.badge) return "프로필 배지";
   return r.kind === "role" ? "역할" : itemTypeLabel(r.itemType || "item");
 };
 export const passShortName = (r: PassReward): string =>
-  invShortName({ name: (r.kind === "item" && r.itemName) || (r.kind === "role" && r.roleName) || String(r.short || r.label || "").replace(/\s·\s[\d,]+일$/, "") });
+  r.shortName || invShortName({ name: (r.kind === "item" && r.itemName) || (r.kind === "role" && r.roleName) || String(r.short || r.label || "").replace(/\s·\s[\d,]+일$/, "") });
 export const passDays = (r: PassReward): number => (r.kind === "item" ? Math.max(0, Math.floor(Number(r.days) || 0)) : 0);
 export const PassClock = ({ className = "w-2.5 h-2.5" }: { className?: string }) => (
   <svg aria-hidden viewBox="0 0 24 24" className={`${className} shrink-0`} fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
@@ -64,17 +69,19 @@ export default function PassPreview({ r, user, me, onClose }: {
   if (!cos) return null;
 
   const skin = typeof cos.skin === "string" ? cos.skin : "";
+  const scene = typeof cos.scene === "string" ? cos.scene : "";
   const frame = typeof cos.frame === "string" ? cos.frame : "";
-  // 프로필 카드는 스킨이나 테두리가 있으면 — 테두리는 디스코드 카드엔 없다(옆 칸을 만들지 않는다)
-  const card = !!skin || !!frame;
+  // 프로필 카드는 카드 배경 · 카드 테두리 · 프로필 테두리 중 하나라도 있으면 — 프로필 테두리만이면 디스코드 카드 칸은 없다(옆 칸을 만들지 않는다)
+  const card = !!skin || !!scene || !!frame;
   const who = whoOf(user, me, today);
-  const showDiscord = !!skin && !!cos.botCard && !discordFail;
+  const wantDiscord = (!!skin || !!scene) && !!cos.botCard;
+  const showDiscord = wantDiscord && !discordFail;
   // PC 는 프로필 카드 | (디스코드 · 배지) 두 칸 — 한 칸뿐이면 판을 좁게
   // 📌 폭은 '받을 칸이 있는지'로 정한다 — 디스코드 그림이 실패해도 판 · 프로필 카드 폭은 처음 그대로, 오른쪽 내용만 빠진다(상점 AppliedPreview 와 같다)
-  const side = (!!skin && !!cos.botCard) || !!cos.badge;
+  const side = wantDiscord || !!cos.badge;
   const two = card && side;
   // 로그인했으면 본인 카드(me=1 — 세션으로만 판단), 아니면 예시 카드(공개 캐시)
-  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${user ? "&me=1" : ""}`;
+  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${user ? "&me=1" : ""}`;
   const name = r.short || r.label || r.itemName || "";
   const days = passDays(r);
   // 배지 그림 — 보상 칸에 실린 등록 아이템 스냅샷(상점 상세의 badgeOfItem 과 같은 칸 이름으로 옮겨 담는다)
@@ -133,7 +140,7 @@ export default function PassPreview({ r, user, me, onClose }: {
                 {/* 레벨 페이지 카드(360 폭)를 칸에 맞춰 줄인다 — 폰은 칸 비율(4:5), PC 는 고정 높이 */}
                 <div className="relative w-full aspect-[4/5] sm:aspect-auto sm:h-[440px] rounded-2xl overflow-hidden" style={{ background: BOX_BG }}>
                   <FitBox pad={0.92} max={1}>
-                    <ProfileCardPreview who={who} skin={skin} frame={frame} />
+                    <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
                   </FitBox>
                 </div>
               </div>

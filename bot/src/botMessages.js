@@ -9,7 +9,7 @@
 import mongoose from "mongoose";
 import { EmbedBuilder } from "discord.js";
 import { getSettings } from "./botSettings.js";
-import { perksOf, pickCardSkin, pickAvatarFrame, withSeasonFrame, withSeasonSkin } from "./itemEffects.js";
+import { perksOf, pickCardSkin, pickCardScene, pickAvatarFrame, withSeasonFrame, withSeasonSkin } from "./itemEffects.js";
 import { UserXp } from "./db.js";
 import { config } from "./config.js";
 
@@ -282,7 +282,7 @@ export const MESSAGE_DEFS = {
     desc: "사이트 공지를 공지 채널에 보냅니다.",
     vars: [
       { name: "title", label: "제목", sample: "SYSTEM : LEVEL 시즌 2 안내" },
-      { name: "summary", label: "본문 요약", sample: "시즌 2 **A New World** 가 시작됩니다.\n• 새 시즌 패스 · 스킨 3종\n• 출석 XP 조정" },
+      { name: "summary", label: "본문 요약", sample: "시즌 2 **A New World** 가 시작됩니다.\n• 새 시즌 패스 · 카드 테두리 3종\n• 출석 XP 조정" },
       { name: "url", label: "글 주소", sample: `${SITE_URL}/notice` },
       { name: "tag", label: "태그", sample: "업데이트" },
       { name: "banner", label: "배너 주소", sample: `${SITE_URL}/banners/season2-store-pc.png` },
@@ -523,6 +523,11 @@ export const MESSAGE_DEFS = {
       { name: "level", label: "레벨", sample: 128 },
       { name: "xp", label: "현재 XP", sample: 1079200 },
       { name: "tier", label: "등급", sample: "브론즈" },
+      // 📌 2026-10-18 /랭크 「기준」(현재 · 누적 · 이번 달 · 음성 시간 — rankBoards RANK_PERIODS). rank · total 은 그 기준의 순위 · 인원(순위가 없으면 rank "-")
+      //    rankLine: 순위 문장 — 현재는 예전 글 그대로 「1,284명 중 **12위**입니다.」, 다른 기준은 앞에 기준 이름(「이번 달 XP · 108명 중 **5위**입니다.」 · 순위 없으면 「이번 달 XP · 아직 기록이 없습니다.」)
+      { name: "mode", label: "기준", sample: "현재 XP" },
+      { name: "value", label: "기준 값", sample: "1,079,200 XP" },
+      { name: "rankLine", label: "순위 문장", sample: "1,284명 중 **12위**입니다." },
     ],
     defaults: {
       enabled: true,
@@ -530,7 +535,7 @@ export const MESSAGE_DEFS = {
       content: "",
       embed: embed({
         color: "tier",
-        description: "{total}명 중 **{rank}위**입니다.",
+        description: "{rankLine}",
       }),
     },
     plainEmbed: embed({
@@ -538,7 +543,7 @@ export const MESSAGE_DEFS = {
       authorName: "{name}",
       authorIcon: "{avatar}",
       title: "#{rank}",
-      description: "{total}명 중 **{rank}위**입니다.",
+      description: "{rankLine}",
       fields: [f("레벨", "Lv.{level}"), f("등급", "{tier}"), f("현재 XP", "{xp}")],
     }),
   },
@@ -1140,15 +1145,23 @@ export async function loadTemplate(key) {
 
 // 📌 정해 준 템플릿으로 만들기 — 글마다 고친 디자인(사이트 공지 noticePost 등). 꺼짐(enabled)은 부르는 쪽이 본다. 카드는 붙이지 않는다.
 //    멘션(allowedMentions)은 템플릿 본문 기준(mentionsFor) — 다르게 울려야 하면 부르는 쪽이 덮어쓴다. 던지지 않는다 → payload | null
-export function buildMessageFrom(key, template, vars = {}) {
+//    fallback: true — 저장된 디자인이 디스코드 검증에 걸리면 기본 디자인으로 한 번 더(buildMessage 와 같다 — 만료 임박 DM 이 쓴다)
+export function buildMessageFrom(key, template, vars = {}, { fallback = false } = {}) {
   if (!MESSAGE_DEFS[key]) return null;
+  const v = withDeclaredVars(key, vars);
   try {
     const tpl = mergeTemplate(key, template && typeof template === "object" ? template : null);
-    const payload = toPayload(tpl, withDeclaredVars(key, vars));
+    const payload = toPayload(tpl, v);
     return sendable(payload) ? payload : null;
   } catch (e) {
-    console.error(`봇 메시지 만들기 오류 (${key}):`, e.message);
-    return null;
+    console.error(`봇 메시지 만들기 오류 (${key})${fallback ? " — 기본 디자인으로 보냅니다" : ""}:`, e.message);
+    if (!fallback) return null;
+    try {
+      const payload = toPayload(defaultTemplate(key), v);
+      return sendable(payload) ? payload : null;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -1202,7 +1215,7 @@ function avatarOf(x) {
   }
 }
 
-// 📌 카드 스킨(아이템 효과 cardSkin) — commonVars 가 심볼 칸에 실어 둔 멤버로 스킨을 찾아 카드 data 에 넣는다.
+// 📌 카드 스킨(아이템 효과 cardSkin · 카드 배경 cardScene) — commonVars 가 심볼 칸에 실어 둔 멤버로 스킨 · 배경을 찾아 카드 data(skin · scene)에 넣는다.
 //    레벨업 · 역할 지급 · /레벨 · /랭크 · /출석체크 · 자동 출석 · /퀘스트 · /인벤토리 · /시즌패스만(RANKER 제외 — botCards.js SKIN_CARD_KINDS 와 같다).
 //    data 에 skin 이 이미 있으면 그대로 둔다. 부르는 쪽은 고칠 게 없다
 //    가진 스킨이 여럿이면 유저가 인벤토리에서 고른 것(UserXp.cardSkinPick — pickCardSkin), 못 읽으면 관리자 순서상 첫 스킨
@@ -1217,19 +1230,22 @@ function withSkin(key, vars, cardData) {
   return async (m) => {
     const data = typeof cardData === "function" ? await cardData(m) : cardData;
     if (!data) return data;
-    const wantSkin = data.skin === undefined, wantFrame = FRAME_KEYS.has(key) && data.frame === undefined;
-    if (!wantSkin && !wantFrame) return data;
-    const { cardSkins, avatarFrames = [] } = perksOf(member);
-    // 📌 스킨 · 테두리는 아이템이 없어도 시즌 보상(UserXp.seasonFrame — 등급 카드 스킨 · 티어 테두리)이 있을 수 있어 고른 값과 함께 읽는다
-    const needSkin = wantSkin, needFrame = wantFrame;
-    if (!needSkin && !needFrame) return data;
+    // 📌 카드 배경(data.scene — 2026-10-15)은 카드 스킨과 같은 카드 종류(SKIN_KEYS)에 따로 고른 값으로. 배경 위에 스킨(테두리)이 그려진다
+    const wantSkin = data.skin === undefined, wantScene = data.scene === undefined, wantFrame = FRAME_KEYS.has(key) && data.frame === undefined;
+    if (!wantSkin && !wantScene && !wantFrame) return data;
+    const { cardSkins, cardScenes = [], avatarFrames = [] } = perksOf(member);
+    // 📌 스킨 · 테두리는 아이템이 없어도 시즌 보상(UserXp.seasonFrame — 등급 카드 스킨 · 티어 테두리)이 있을 수 있어 고른 값과 함께 읽는다.
+    //    카드 배경은 시즌 보상이 없어 가진 배경이 없으면 읽지 않는다
+    const needSkin = wantSkin, needScene = wantScene && cardScenes.length > 0, needFrame = wantFrame;
+    if (!needSkin && !needScene && !needFrame) return data;
     let picks = null;
     try {
       const uid = member.id || member.user?.id;
-      if (uid) picks = await UserXp.findOne({ userId: uid }, { cardSkinPick: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
+      if (uid) picks = await UserXp.findOne({ userId: uid }, { cardSkinPick: 1, cardScenePick: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
     } catch {}
     const out = { ...data };
     if (needSkin) { const skin = pickCardSkin(withSeasonSkin(cardSkins, picks), picks?.cardSkinPick || ""); if (skin) out.skin = skin; }
+    if (needScene) { const scene = pickCardScene(cardScenes, picks?.cardScenePick || ""); if (scene) out.scene = scene; }
     if (needFrame) { const frame = pickAvatarFrame(withSeasonFrame(avatarFrames, picks), picks?.avatarFramePick || ""); if (frame) out.frame = frame; }
     return out;
   };

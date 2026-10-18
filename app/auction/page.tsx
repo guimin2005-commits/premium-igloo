@@ -9,19 +9,20 @@ import { AuctionStyles } from "../components/AuctionStyles";
 import { openLogin, LOGIN_CTX } from "../components/LoginPrompt";
 
 
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 
 // 📌 공개 경매 화면 — 보는 곳이다(티켓 무대 · 지난 경매). 경매 개최 · 제목 수정 · 공개 전환 · 삭제는
 //    관리자 화면(/admin/auction)으로 옮겼다. 옛 주소 ?admin=1 은 그리로 보낸다.
 export default function AuctionListPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   // 옛 개최 주소(?admin=1)는 관리자 경매 화면으로 — 개최 폼은 거기로 옮겼다
   useEffect(() => {
     if (searchParams.get("admin") === "1") router.replace("/admin/auction?tab=new");
   }, [searchParams, router]);
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 「경매 관리 →」는 관리자로 볼 때만 — 테스트 · 비공개 경매도 서버(/api/auction)가 같은 기준으로 뺀다
+  const { admin: isAdmin } = useAdminView();
 
   const [auctions, setAuctions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

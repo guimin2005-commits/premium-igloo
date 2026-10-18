@@ -432,7 +432,7 @@ export function deco(w, h, S, site, ctx = {}) {
         `.${id}-fa{animation:${id}A .7s infinite}.${id}-fb{animation:${id}B .7s infinite}.${id}-gh{animation:${id}Bob 2.4s infinite}` +
         `@media (prefers-reduced-motion:reduce){.${id}-fa,.${id}-fb,.${id}-gh{animation:none}}</style>`
       : "");
-  const under = `<rect width="${w}" height="${h}" fill="url(#${id}-st)"/>`;
+  const under = ctx.onScene ? "" : `<rect width="${w}" height="${h}" fill="url(#${id}-st)"/>`;
   const sunkG = behind(meta.key, w, h, floor, sunk);
   const over =
     `<g shape-rendering="crispEdges">${frame}${studs}${sky}${sunkG.svg}` +

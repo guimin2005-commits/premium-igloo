@@ -413,7 +413,7 @@ export function deco(w, h, S, site, ctx = {}) {
       `.hw_witch-a{animation:hwwA 1.2s infinite}.hw_witch-b{animation:hwwB 1.2s infinite}` +
       `@media (prefers-reduced-motion:reduce){.hw_witch-fly,.hw_witch-a,.hw_witch-b{animation:none}}</style>`
     : "") + `<clipPath id="${clipId}"><path d="${moonClip}"/></clipPath>`;
-  const under = site ? `<rect width="${w}" height="${h}" fill="url(#hw_witch-st)"/>` : "";
+  const under = site && !ctx.onScene ? `<rect width="${w}" height="${h}" fill="url(#hw_witch-st)"/>` : "";
   // 두 번째 장면은 처음엔 숨겨 둔다 — 움직임이 꺼져 있거나 CSS 를 모르는 곳에서는 첫 장면만
   const anim2 = (a, b) => (site ? `<g class="hw_witch-a">${a.svg(P)}</g><g class="hw_witch-b" opacity="0">${b.svg(P)}</g>` : a.svg(P));
   const layers = (L) => (Object.values(L).some((b) => b.m.size) ? L.floor.svg(P) + anim2(L.brewA, L.brewB) + L.pot.svg(P) + anim2(L.flA, L.flB) : "");

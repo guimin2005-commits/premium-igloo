@@ -1,24 +1,33 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { discountPctOf, discountUntilLabel, priceText, applyDiscount, COUPON_SCOPES, couponScopeTail } from "@/lib/shopPricing";
 import { saleEnded, saleUntilLabel } from "@/lib/saleWindow";
-import { POINT_RATE, pointToXp } from "@/lib/pointRate";
+import { POINT_RATE, pointToXp, xpToPoint } from "@/lib/pointRate";
 import Dropdown, { type DropdownOption } from "../../components/Dropdown";
 import ItemIcon, { ArtIcon } from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
-import { artOfSkin, artOfFrame, frameImageOf, cosmeticAutoOf, legacyFrameArtOf, cosmeticIconOf, cosmeticKeysOf } from "@/lib/cosmeticArt";
+import { artOfSkin, artOfScene, artOfFrame, frameImageOf, cosmeticAutoOf, legacyFrameArtOf, cosmeticIconOf, cosmeticKeysOf } from "@/lib/cosmeticArt";
 import BackdropPicker from "../../components/BackdropPicker";
 import ProductCard from "../../arctic/ProductCard";
 import StoreCardArt, { BundleArt, bundlePartsOf } from "../../arctic/CardArt";
-import { itemIndexOf, productGroupOf } from "@/lib/productOrder";
+import { itemIndexOf, productGroupOf, anchorItemOf, productRowsOf, normalizeProductOrder } from "@/lib/productOrder";
 import { InventoryItemPreview } from "../../components/Inventory";
-import { ITEM_TYPE_OPTIONS, itemTypeLabel, itemTypeColor, normalizeItemGroup, ITEM_GROUP_MAX } from "@/lib/items";
+import EffectTemplatesSheet, { useEffectTemplates } from "./EffectTemplatesSheet";
+import { useSession } from "next-auth/react";
+import { FitBox, ProfileCardPreview, whoOf, useTodayXp } from "../../arctic/CosmeticPreview";
+import { BACKDROP_OF } from "@/lib/itemBackdrops";
+import { ITEM_TYPE_OPTIONS, STORE_TYPE_OPTIONS, itemTypeLabel, itemTypeColor, normalizeItemGroup, ITEM_GROUP_MAX, ITEM_NAME_MAX, DESCRIPTION_MAX, copyNameOf } from "@/lib/items";
+import { CATEGORY_OPTIONS, CATEGORY_MAX, normalizeCategory, resolveCategory, shortNameOf } from "@/lib/itemCategory";
+import { RARITIES, normalizeRarity, rarityOf, rarityRank } from "@/lib/rarity";
 import {
-  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, FRAMES, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
-  normalizeEffects, describeEffect, describeItemBasic, describeRoleBuff, itemEffectLines, cashbackRuleOf, hasConsumable, skinsOf, framesOf,
+  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, SCENES, FRAMES, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
+  normalizeEffects, describeEffect, againXpOf, describeItemBasic, CANDY_TIERS, CANDY_TIER_MAX, CANDY_XP_MAX, normalizeCandyTiers, describeRoleBuff, cashbackRuleOf, hasConsumable, skinsOf, scenesOf, framesOf,
+  FRAME_ALL, SKIN_RANK_ALL,
+  effectLinesOf, autoEffectLinesOf, normalizeEffectText, EFFECT_TEXT_MAX, EFFECT_TEXT_LINE_MAX,
+  COSMETIC_SCOPES, normalizeScope, autoScopeOf, scopeLabelOf, scopeNotesOf, isCosmeticItem,
 } from "@/lib/itemEffects";
 import {
   EMPTY_PRODUCT_FORM, SOURCE_OPTIONS, sourceOf, isLinked, formFromShopItem,
@@ -31,7 +40,7 @@ import { isUnitSale, maxPerOrderOf, MAX_PER_ORDER } from "@/lib/unitSale";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
 import { BUNDLE_TYPE, BUNDLE_MAX, BUNDLE_QTY_MAX, BUNDLE_DAYS_MAX, isBundle } from "@/lib/bundle";
 import { groupList, moveUnit, moveInGroup, moveToGroup, groupUnitKey, itemUnitKey, nestParents, orderParentBlocks, parentList, orderGroupsNested } from "@/lib/itemOrder";
-import type { ProductForm, BundleRow } from "../../arctic/productForm";
+import type { ProductForm, BundleRow, SaleMode } from "../../arctic/productForm";
 import {
   AdminPage,
   AdminTabs,
@@ -40,13 +49,29 @@ import {
   SearchInput,
   DataTable,
   DetailPane,
+  PaneSection,
   DefRow,
   StatusChip,
-  Panel,
-  PanelGrid,
   FieldRow,
-  SaveBar,
-  ActionBar,
+  BatchBar,
+  PendingBar,
+  BarStack,
+  BarBtn,
+  MenuBtn,
+  MoreMenu,
+  FormSheet,
+  FilterButton,
+  FilterSection,
+  ChoiceChip,
+  PickBox,
+  ActiveFilters,
+  CardGrid,
+  ViewToggle,
+  useSelection,
+  useStoredState,
+  useMedia,
+  sortRows,
+  sfxTick,
   Inline,
   inputClass,
   numClass,
@@ -54,7 +79,6 @@ import {
   fieldNote,
   EmptyRow,
   Btn,
-  SwapLabel,
   Toggle,
   Switch,
   useNotice,
@@ -63,44 +87,46 @@ import {
   DragHandle,
   ConfirmDialog,
   useAdminGuard,
+  useLeaveGuard,
   tableGroupOfKey,
+  backdropClose,
 } from "../ui";
-import type { Column, TableRowDrop } from "../ui";
+import type { Column, TableRowDrop, SortState, ViewMode, ActiveFilter, MenuItem } from "../ui";
+import { ADMIN_COUNTS_EVENT } from "../adminIndex";
 import { THEME_NAME_MAX, THEME_ON_MAX, THEME_ON_LIMIT_MESSAGE, DEFAULT_THEMES, BUILTIN_BANNER_THEME, themeNameOf, themePickOptions, normalizeThemeName, themeNameError } from "@/lib/shopThemes";
 
-// 📌 탭 구성
-//    상품·배너·쿠폰·구매내역은 ARCTIC 상점을 채우고 굴리는 일상 작업이다.
-//    반면 '시즌 전환'은 길드 전체의 역할 표기를 한 번에 내리는 일회성 조작이라
-//    성격이 완전히 다르다. 상품 탭 03 섹션으로 얹혀 있으면 상품을 손보러 들어왔다가
-//    스크롤 끝에서 마주치게 된다 — 그래서 별도 탭으로 뺐다.
-// desc 에는 화면만 봐서는 모르는 것만 적는다 (지급 시점 · 자동 전환 주기 · 되돌릴 수 없음)
-//    '아이템'은 인벤토리·상품·시즌 패스 표기의 원천이라 맨 앞에 둔다 — 상품을 만들기 전에 먼저 등록한다.
-// 📌 2026-09 개편 — 목록 화면 틀 하나로 맞췄다.
-//    머리(ARCTIC · 상점 관리 · 탭 한 줄) → 검색 · 상태 토글 · 새로 만들기 한 줄 → 전체 폭 표 → 줄을 누르면 오른쪽 상세 칸.
-//    예전에는 탭마다 위에 긴 등록 폼 + 아래 목록이라, 목록을 보려면 폼을 지나 내려가야 했고 '수정'은 맨 위로 튀어 올랐다.
-//    이제 새로 만들기 · 수정은 같은 상세 칸 안의 같은 폼이다.
-const TAB_META: Record<string, { desc: string }> = {
-  items: { desc: "여기서 등록한 표기가 인벤토리 · 상점 상품 · 시즌 패스 보상에 그대로 쓰입니다." },
-  products: { desc: "역할 상품은 구매 시 봇이 자동 지급합니다." },
-  // 넘김 주기는 app/arctic/BannerSlider.tsx (2026-10-01 5초 → 8초, 10-03 → 7초). 노출 위치(홈 · 시즌 탭 · 할로윈 탭)마다 따로 돈다
-  banners: { desc: "같은 노출 위치의 배너가 여럿이면 7초마다 자동 전환됩니다." },
-  coupons: { desc: "" },
-  // 예전 목록 아래 한 줄 안내를 머리로 올렸다
-  orders: { desc: "역할 상품은 봇이 30초 주기로 자동 지급합니다. 취소하면 XP가 환불되고 재고가 복구됩니다." },
-  season: { desc: "되돌리려면 역할을 손으로 다시 붙여야 합니다." },
-  // 📌 2026-10-04 "관리자가 정하게 해" — 결제 캐시백 상한 · 빙옥 결제분 캐시백(BotSetting — app/api/bot-settings PATCH)
-  settings: { desc: "" },
-};
-
+// 📌 탭 구성 — '아이템'은 인벤토리 · 상품 · 시즌 패스 표기의 원천이라 맨 앞(상품을 만들기 전에 먼저 등록한다).
+//    📌 2026-09 개편 — 목록 화면 틀 하나: 머리(ARCTIC · 상점 관리 · 탭 한 줄) → 도구 줄 → 전체 폭 표 → 줄을 누르면 상세 칸(새로 만들기 · 수정 같은 폼).
+//    📌 2026-10-17 — 탭 아래 설명 줄(TAB_META.desc)은 걷었다(설명문 금지). 모든 탭이 도구 줄부터 같은 자리에서 시작한다.
+//       아이템 탭: 고르기 칸 + 아래 띠(일괄 편집) · 거르기 · 「표 | 카드」 · 열 고르기 · 넓은 화면(1280 이상) 붙는 편집기
+//    📌 2026-10-17 관리 화면 정리 — 탭 다섯(아이템 · 상품 · 배너 · 쿠폰 · 구매 내역).
+//       옛 「시즌 전환」 탭(디스코드 역할 떼기)은 SYSTEM : LEVEL › 시즌 전환(/admin/role-migration?tab=detach)으로 옮겼다 — 옛 주소 ?tab=season 은 그리로 넘긴다.
+//       옛 「설정」 탭(결제 캐시백)은 머리 「설정」 단추 → 창(ShopSettingsSheet — ARCTIC 상점 공개 · 캐시백 합 상한 · 빙옥 결제분).
+//       그 창을 여는 주소: ?open=settings(기능 검색 · 레벨 설정 옛 sec=mute) · ?settings=1 · 옛 ?tab=settings — 연 뒤 주소에서 걷는다(지금 탭은 그대로)
 const TAB_ORDER = [
   { id: "items", short: "아이템" },
   { id: "products", short: "상품" },
   { id: "banners", short: "배너" },
   { id: "coupons", short: "쿠폰" },
   { id: "orders", short: "구매 내역" },
-  { id: "season", short: "시즌 전환" },
-  { id: "settings", short: "설정" },
 ];
+const TAB_IDS = new Set(TAB_ORDER.map((t) => t.id));
+// 옮긴 탭의 옛 주소 → 새 자리(다른 화면)
+const MOVED_TAB: Record<string, string> = { season: "/admin/role-migration?tab=detach" };
+// 상점 설정 창을 여는 주소인가(?open=settings · ?settings=1 · 옛 ?tab=settings)
+const isSettingsLink = (sp: { get: (k: string) => string | null }) =>
+  sp.get("open") === "settings" || sp.get("settings") === "1" || sp.get("tab") === "settings";
+// 주소 → 탭 — ?edit=<id>(탭 없이)는 상품, 설정 창 · 효과 문구 창 주소(?open=fxtext)는 지금 탭(cur) 그대로, 모르는 탭은 아이템
+const tabOfParams = (sp: { get: (k: string) => string | null }, cur: string) => {
+  const raw = sp.get("tab") || "";
+  const keepTab = isSettingsLink(sp) || sp.get("open") === "fxtext";
+  const t = raw && raw !== "settings" ? raw : sp.get("edit") ? "products" : keepTab ? cur : "items";
+  return TAB_IDS.has(t) ? t : "items";
+};
+// 📌 따라간 뒤 주소에서 걷는 표시(기능 검색 · 다른 화면 링크 — ?new=1 · item= · edit= · open=preset|groups|themes)
+const DEEP_KEYS = ["new", "item", "edit"];
+const DEEP_OPENS = new Set(["preset", "groups", "themes", "fxtext"]);
+const hasDeepMark = (sp: { get: (k: string) => string | null }) => DEEP_KEYS.some((k) => sp.get(k) != null) || DEEP_OPENS.has(sp.get("open") || "");
 
 // expired — 기간제가 끝나 봇이 회수한 건 (bot/src/features/grantQueue.js)
 const STATUS_LABEL: Record<string, string> = { pending: "처리 대기", completed: "완료", cancelled: "취소", refunded: "환불", expired: "만료" };
@@ -108,10 +134,70 @@ const STATUS_TONE: Record<string, "warn" | "ok" | "bad" | "neutral"> = { pending
 
 // 상품 유형 — 라벨·색은 lib/items.js 가 단일 원천 (상점 카드와 같은 값). 세트(lib/bundle.js)는 상품에만 있는 유형이라 여기서 붙인다
 const typeLabel = (t: string) => (t === BUNDLE_TYPE ? "세트" : itemTypeLabel(t));
-function TypeBadge({ type, className = "" }: { type: string; className?: string }) {
+// 📌 유형 배지 — 글자는 분류(label — API categoryLabel, 2026-10-17 lib/itemCategory.js), 색은 유형. label 이 없으면 유형 이름(상점 TypeBadge 와 같은 모양)
+function TypeBadge({ type, label, className = "" }: { type: string; label?: string; className?: string }) {
   return (
-    <span className={`rounded-full font-black text-white whitespace-nowrap ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
-      {itemTypeLabel(type)}
+    <span className={`rounded-full font-black text-white whitespace-nowrap max-w-[9rem] overflow-hidden text-ellipsis ${className}`} style={{ backgroundColor: itemTypeColor(type) }}>
+      {label || typeLabel(type)}
+    </span>
+  );
+}
+// 📌 분류 · 짧은 이름(2026-10-17 운영자 「자동 + 바꾸기」) — 목록 줄 · 카드 · 요약이 찍는 값. API 의 shortName · categoryLabel 을 쓰고,
+//    옛 응답 · 화면에서 막 고친 줄은 같은 규칙(lib/itemCategory.js — 직접 정한 분류 > 옛 이름 머리말 > 자동)으로 셈한다. 이름 칸(편집)은 name 그대로
+type Named = { name?: unknown; shortName?: unknown };
+const shortOfRow = (it: Named | null | undefined): string =>
+  typeof it?.shortName === "string" && it.shortName ? it.shortName : shortNameOf(it?.name);
+type Classed = { categoryLabel?: unknown; category?: unknown; name?: unknown; type?: unknown; effects?: unknown };
+const categoryOfRow = (it: Classed | null | undefined): string =>
+  typeof it?.categoryLabel === "string" && it.categoryLabel ? it.categoryLabel : resolveCategory(it);
+// 📌 보일 효과 줄 · 적용 범위(2026-10-18 lib/itemEffects) — 관리자 아이템 API 가 붙인 effectLines(직접 쓴 문구 > 자동 · 채널 이름까지) · scopeLabel 을 쓰고,
+//    옛 응답(칸 없음)은 같은 규칙으로 셈한다(채널 이름 없이). 꾸미기 문장은 줄에 없다 — 꾸미기는 적용 범위 글자
+type FxRow = { effectLines?: unknown; scopeLabel?: unknown; [k: string]: unknown } | null | undefined;
+const rowEffectLines = (it: FxRow): string[] => (Array.isArray(it?.effectLines) ? it.effectLines.map(String) : effectLinesOf(it));
+const rowScopeLabel = (it: FxRow): string => (typeof it?.scopeLabel === "string" ? it.scopeLabel : scopeLabelOf(it));
+// 화면 목록 줄을 먼저 고칠 때(일괄 편집 · 저장 응답 전) — 분류 칸 셋을 새 값으로 다시 셈한다(아이템 줄: 유형 · 효과 · 분류 · 이름이 한 줄에 다 있다)
+const withCategoryFields = <T extends Classed & Named>(it: T): T => ({
+  ...it,
+  shortName: shortNameOf(it.name),
+  categoryLabel: resolveCategory(it),
+  categoryAuto: resolveCategory({ ...it, category: "" }),
+});
+
+// 📌 희귀도(2026-10-17 운영자 — 일곱 등급, 이름 · 색 · 순서는 lib/rarity.js 한 곳). 관리 화면은 색 점 + 등급 이름으로만 보인다
+//    (유물처럼 옅은 색은 흰 바탕 글자색으로 못 써서 점으로)
+function RarityDot({ r, className = "w-2.5 h-2.5" }: { r: { c: string }; className?: string }) {
+  return <span aria-hidden className={`shrink-0 rounded-full border border-black/10 ${className}`} style={{ backgroundColor: r.c }} />;
+}
+// 아이템 등록 「희귀도」 — 일곱 알약을 네 칸 두 줄로(옆으로 넘치지 않게 · 폰 390 도 그대로). "" = 안 고름 → 일반이 켜져 보인다.
+//    켜진 것을 다시 눌러도 그대로, 안 고른 아이템에서 「일반」을 누르면 일반으로 고른 것("common")이 된다(목록 이름 옆에 보인다)
+function RarityPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const cur = normalizeRarity(value) || RARITIES[0].v;
+  return (
+    <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="희귀도">
+      {RARITIES.map((r) => {
+        const on = cur === r.v;
+        return (
+          <button key={r.v} type="button" aria-pressed={on} onClick={() => { if (value !== r.v) onChange(r.v); }}
+            className={`min-w-0 inline-flex items-center justify-center gap-1.5 h-8 px-2 rounded-full border text-[13px] font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 ${
+              on ? "border-[#131313] ring-1 ring-[#131313] text-[#131313]" : "border-[#a3a3a3] text-[#5a5a5a] hover:border-[#131313] hover:text-[#131313]"
+            }`}>
+            <RarityDot r={r} />
+            {r.l}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+// 아이템 목록 줄 이름 옆 — 고른 희귀도만(안 고른 "" 은 표시 없음)
+function RarityMark({ v }: { v: unknown }) {
+  const k = normalizeRarity(v);
+  if (!k) return null;
+  const r = rarityOf(k);
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-black text-[#5a5a5a] whitespace-nowrap">
+      <RarityDot r={r} className="w-2 h-2" />
+      {r.l}
     </span>
   );
 }
@@ -157,15 +243,18 @@ function Thumb({ it }: { it: any }) {
 type ThumbArt = { icon?: unknown; imageUrl?: unknown; itemImageUrl?: unknown };
 const withCosmeticIcon = <T extends ThumbArt>(it: T, src: { effects?: { list?: unknown } } | null | undefined): T => {
   const raw0 = src?.effects?.list;
-  const list = (Array.isArray(raw0) ? normalizeEffects(raw0) : []) as { on?: string; skin?: string; frame?: string }[];
+  const list = (Array.isArray(raw0) ? normalizeEffects(raw0) : []) as { on?: string; skin?: string; scene?: string; frame?: string }[];
   const skin = list.find((e) => e?.on === "cardSkin" && e.skin);
+  const scene = list.find((e) => e?.on === "cardScene" && e.scene);
   const frame = list.find((e) => e?.on === "avatarFrame" && e.frame);
   const skins: string[] = skin ? skinsOf(skin.skin) : [];
+  const scenes: string[] = scene ? scenesOf(scene.scene) : [];
   const frames: string[] = frame ? framesOf(frame.frame) : [];
-  if (!it || (!skins.length && !frames.length)) return it;
+  if (!it || (!skins.length && !scenes.length && !frames.length)) return it;
   const raw = String(it.imageUrl || it.itemImageUrl || "");
   const out = cosmeticIconOf({
     icon: it.icon, imageUrl: raw,
+    ...(scenes.length ? { sceneKey: scenes[0] } : {}),
     ...(skins.length > 1 ? { skinKeys: skins } : skins.length ? { skinKey: skins[0] } : {}),
     ...(frames.length > 1 ? { frameKeys: frames } : frames.length ? { frameKey: frames[0] } : {}),
   });
@@ -182,12 +271,34 @@ const cosmeticKeysProp = (ri: { type?: string; effects?: { list?: unknown } } | 
 //    open(조건 펼침)은 화면 상태라 저장하지 않는다. chText 는 채널 목록을 못 불러왔을 때 쓰는 ID 입력칸의 날 글자
 type EffectDraft = {
   id: string; on: string; mode: string; amount: string; minMinutes: string; everyN: string;
-  chance: string; minMembers: string; seconds: string; skin: string; frame: string;
+  chance: string; minMembers: string; seconds: string; skin: string; frame: string; scene: string;
+  again: string; // 다시 오른 레벨 몫(levelUp — "" = 크기의 절반 · lib/itemEffects againXpOf)
+  candy: CandyRow[]; // 보상 구간 표(voiceCandy — 처음엔 기본 표 · 기본 표와 같으면 저장하지 않는다 · lib/itemEffects normalizeCandyTiers)
+  maxPct: string; // 최대 %(voiceStay — 머물수록 증가의 끝)
   days: number[]; hourFrom: string; hourTo: string; channelIds: string[]; chText: string; open: boolean;
+};
+// 📌 보상 구간 한 줄(화면용 — 칸은 문자열) { w: 확률 %, min, max }. 기본 표(CANDY_TIERS)로 채워 연다
+type CandyRow = { w: string; min: string; max: string };
+const candyRowsOf = (tiers: { w: number; min: number; max: number }[]): CandyRow[] => tiers.map((t) => ({ w: String(t.w), min: String(t.min), max: String(t.max) }));
+const candyNums = (rows: CandyRow[]) => rows.map((r) => ({ w: Number(r.w), min: Number(r.min), max: Number(r.max) }));
+const sameCandy = (rows: CandyRow[]) => JSON.stringify(normalizeCandyTiers(candyNums(rows))) === JSON.stringify(CANDY_TIERS);
+// 저장 전 검사 — 틀린 곳 한 줄(맞으면 "")
+const candyTiersError = (rows: CandyRow[]): string => {
+  if (!rows.length) return "구간을 한 줄 이상 넣어 주세요.";
+  if (rows.length > CANDY_TIER_MAX) return `구간은 ${CANDY_TIER_MAX}줄까지입니다.`;
+  for (const [i, r] of rows.entries()) {
+    if ([r.w, r.min, r.max].some((v) => String(v).trim() === "")) return `${i + 1}번째 구간의 칸을 채워 주세요.`;
+    const w = Number(r.w), min = Number(r.min), max = Number(r.max);
+    if (!(w > 0 && w <= 100)) return `${i + 1}번째 구간의 확률은 0 초과 100 이하로 넣어 주세요.`;
+    if (!(min >= 0 && max <= CANDY_XP_MAX && min <= max)) return `${i + 1}번째 구간은 최소 ≤ 최대(0~${CANDY_XP_MAX.toLocaleString()})로 넣어 주세요.`;
+  }
+  const sum = Math.round(rows.reduce((s, r) => s + Math.round(Number(r.w) * 10) / 10, 0) * 10) / 10;
+  return sum === 100 ? "" : `확률을 합쳐 100%가 되어야 합니다(지금 ${sum}%).`;
 };
 const newEffectId = () => Math.random().toString(36).slice(2, 10);
 const newEffect = (): EffectDraft => ({
-  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "", frame: "",
+  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "", frame: "", scene: "", again: "", maxPct: "",
+  candy: candyRowsOf(CANDY_TIERS),
   days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false,
 });
 // 빈 칸은 undefined 로 넘긴다 — normalizeEffects 는 "" 를 0 으로 읽어 분 · 번째를 최솟값(1분 · 2번째)으로 채워 버린다
@@ -197,9 +308,14 @@ const effectOf = (d: EffectDraft) => ({
   id: d.id, on: d.on, mode: d.mode, amount: TRIGGER_OF[d.on]?.needs === "seconds" ? undefined : numOrNone(d.amount),
   minMinutes: numOrNone(d.minMinutes), everyN: numOrNone(d.everyN),
   chance: numOrNone(d.chance), minMembers: numOrNone(d.minMembers), seconds: numOrNone(d.seconds), skin: d.skin || undefined, frame: d.frame || undefined,
+  scene: d.scene || undefined,
+  againAmount: TRIGGER_OF[d.on]?.again ? numOrNone(d.again) : undefined,
+  maxPct: TRIGGER_OF[d.on]?.maxPct ? numOrNone(d.maxPct) : undefined,
+  // 보상 구간 표 — 기본 표와 같으면 보내지 않는다(기본 표를 따라가게)
+  candyTiers: TRIGGER_OF[d.on]?.tiers && !sameCandy(d.candy) ? candyNums(d.candy) : undefined,
   days: d.days, hourFrom: d.hourFrom, hourTo: d.hourTo, channelIds: d.channelIds,
 });
-// 📌 한 번에 수정(2026-10-11) — 폼이 저장된 값과 다른지 볼 때 줄마다 새로 만드는 내부 키(효과 줄 id · 세트 줄 key) · 화면 상태(효과 줄 「조건」 펼침 open) ·
+// 📌 열린 폼이 저장된 값과 다른가(고친 채 다른 줄로 넘어갈 때 한 번 묻는다) — 줄마다 새로 만드는 내부 키(효과 줄 id · 세트 줄 key) · 화면 상태(효과 줄 「조건」 펼침 open) ·
 //    폼으로 저장하지 않는 순서(sortOrder — 순서는 끌기만 바꾼다)는 빼고 견준다
 const sameForm = (a: any, b: any) => {
   const strip = (x: any) => {
@@ -212,7 +328,8 @@ const sameForm = (a: any, b: any) => {
   };
   return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
 };
-// 목록이 바뀐 만큼 폼을 옮긴다 — 고친 칸(폼 ≠ 옛 저장 값)은 그대로, 안 고친 칸 중 목록에서 바뀐 것만 새 저장 값으로
+// 목록이 바뀐 만큼 열린 폼을 옮긴다 — 고친 칸(폼 ≠ 옛 저장 값)은 그대로, 안 고친 칸 중 목록에서 바뀐 것만 새 저장 값으로
+//    (줄 표시 스위치 · 일괄 편집 · 끌어서 그룹 옮기기가 연 폼을 옛 값으로 되돌려 저장하지 않게)
 const rebaseForm = (fm: any, was: any, now: any) => {
   const out: any = { ...fm };
   for (const k of new Set([...Object.keys(fm || {}), ...Object.keys(now || {})])) {
@@ -228,7 +345,10 @@ const draftOf = (e: any): EffectDraft => {
     amount: e?.amount ? String(e.amount) : "", minMinutes: e?.minMinutes ? String(e.minMinutes) : "", everyN: e?.everyN ? String(e.everyN) : "",
     chance: e?.chance ? String(e.chance) : "", minMembers: e?.minMembers ? String(e.minMembers) : "",
     seconds: e?.seconds ? String(e.seconds) : "", skin: typeof e?.skin === "string" ? e.skin : "",
-    frame: typeof e?.frame === "string" ? e.frame : "",
+    frame: typeof e?.frame === "string" ? e.frame : "", scene: typeof e?.scene === "string" ? e.scene : "",
+    again: e?.againAmount != null ? String(e.againAmount) : "",
+    maxPct: e?.maxPct ? String(e.maxPct) : "",
+    candy: candyRowsOf(normalizeCandyTiers(e?.candyTiers) || CANDY_TIERS),
     days: Array.isArray(e?.days) ? e.days.map(Number) : [], hourFrom: e?.hourFrom != null ? String(e.hourFrom) : "", hourTo: e?.hourTo != null ? String(e.hourTo) : "",
     channelIds, chText: channelIds.join(", "), open: false,
   };
@@ -238,26 +358,39 @@ const xpNum = (s: string) => Math.max(0, Math.floor(Number(s) || 0));
 // 아이템 등록 폼 — 숫자 칸은 비울 수 있어야 해서 문자열로 든다
 //    효과(chatBuffXp · voiceBuffXp · attendBuffXp · effects)는 아이템 자체에 저장 — 이 아이템을 인벤토리에 가진 사람에게 적용(디스코드 역할과 무관)
 //    group: 목록 묶음 이름("" = 묶지 않음 — models/Item.js group)
+//    rarity: 희귀도 키("" = 안 고름 → 일반 — models/Item.js rarity · lib/rarity.js). 키 차례는 regFormOf 와 같게(sameForm 이 JSON 으로 견준다)
+//    chatBuffXp · voiceBuffXp · attendBuffXp: 옛 「기본 효과」 세 칸 — 입력칸은 없다(값이 있으면 읽기 전용 + 「추가 효과로 옮기기」 — EffectsEditor)
+//    category: 분류 저장 칸 그대로("" = 자동 — models/Item.js category · lib/itemCategory.js). 보이는 분류(categoryLabel)는 넣지 않는다 — 저장하면 자동이 고정돼 버린다
+//    📌 2026-10-18 효과 문구 · 적용 범위(models/Item.js effectText · scope — lib/itemEffects):
+//       effectCustom: 「직접 쓰기」 중인가(false = 자동) · effectText: 직접 쓰는 글자(한 줄에 하나 — 자동이면 "") · scope: 고른 적용 범위 키([] = 자동)
 type ItemForm = {
   id: string; name: string; description: string; type: string; roleId: string; icon: string; imageUrl: string;
-  color: string; detachOnSeason: boolean; visible: boolean; group: string;
+  color: string; detachOnSeason: boolean; visible: boolean; group: string; rarity: string; category: string;
   chatBuffXp: string; voiceBuffXp: string; attendBuffXp: string; effects: EffectDraft[];
+  effectCustom: boolean; effectText: string; scope: string[];
 };
 const EMPTY_ITEM_FORM: ItemForm = {
-  id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, group: "",
+  id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, group: "", rarity: "", category: "",
   chatBuffXp: "", voiceBuffXp: "", attendBuffXp: "", effects: [],
+  effectCustom: false, effectText: "", scope: [],
 };
 
+// 📌 상품 폼 + 분류(2026-10-17) — 상품 폼 모양(app/arctic/productForm)에 분류 저장 칸을 붙여 든다(직접 설정 · 세트만 뜻이 있다 — 연결 상품은 아이템 분류를 따라 늘 "").
+//    저장된 상품 → 폼은 prodFormOf(formFromShopItem + category), 빈 폼은 EMPTY_PROD_FORM — 「고친 채인가」 견줄 때 두 쪽 모두 이 칸이 있어야 같게 본다
+type ProdForm = ProductForm & { category?: string };
+const EMPTY_PROD_FORM: ProdForm = { ...EMPTY_PRODUCT_FORM, category: "" };
+const prodFormOf = (it: AnyRow): ProdForm => ({ ...formFromShopItem(it), category: it?.itemId ? "" : String(it?.category || "") });
+
 // 📌 아이템 그룹(2026-10-10 운영자: "시즌 끝나면 등급별 지급되는 아이템들이 너무 많아져서 다 관리하기 힘드니까 그룹 시스템을 만들어 줘")
-//    목록은 그룹마다 머리줄 하나로 접어 둔다(기본 접힘 — DataTable groupOf).
-//    한 개는 아이템 수정의 "그룹" 칸, 여러 개는 목록의 "그룹 지정"(골라서 한 번에 — PATCH /api/admin/items { ids, group }).
+//    목록은 그룹마다 머리줄 하나로 접어 둔다(기본 접힘 — DataTable groupOf · 펼친 그룹은 이 브라우저에 기억 · 「모두 펼치기 / 접기」).
+//    한 개는 아이템 수정의 "그룹" 칸, 여러 개는 고르기 칸으로 고른 뒤 아래 띠 「그룹」(2026-10-17 — 예전 「그룹 지정」 모드를 대신. PATCH { batch }).
 //    📌 2026-10-11 순서는 하나 — 목록 순서 = 실제 순서(Item.sortOrder · 인벤토리 · 상점). 같은 그룹은 늘 붙은 덩어리, 머리줄은 그 덩어리 첫 아이템 자리
 //       (예전엔 머리줄을 저장된 그룹 차례로 위에 모아 그려 실제 순서와 달랐다 — 운영자 "이러면 안 되는 거잖아"). 규칙 · 계산은 lib/itemOrder.js(서버와 같은 함수).
 //       끌기: 머리줄 → 덩어리째 단위 사이로. 아이템 줄 하나 → 놓은 자리가 곧 그룹(2026-10-11 운영자 "바깥에 있는 걸 바로 그룹에 못 넣는다"):
 //         펼친 덩어리 안(두 줄 사이 · 첫 줄 앞) = 그 그룹에 그 자리로 · 접힌 머리줄 위 = 그 덩어리 끝 · 단위 사이 = 그룹에서 빼 그 자리로
 //         (자리 셈 lib/groupedDrop.js · 순서 셈 lib/itemOrder.js moveToGroup — 서버와 같은 함수). 그룹이 바뀌면 토스트로 알린다.
-//       그룹 지정 모드도 머리줄로 접은 채 — 머리줄 고르기 칸 = 그 그룹 (보이는) 아이템 통째로, 고른 수 · 그룹 고르기 · 옮기기는 화면 아래 띠(ActionBar).
-//       그룹 지정 · 그룹 칸 저장 → 그 그룹 덩어리 끝에(빼면 옛 덩어리 바로 뒤). 그룹 관리 창 차례 = 덩어리 차례(빈 그룹은 그 뒤 — Setting "itemGroups")
+//       머리줄 고르기 칸 = 그 그룹 아이템 통째로. 아래 띠 「그룹」 · 그룹 칸 저장 → 그 그룹 덩어리 끝에(빼면 옛 덩어리 바로 뒤).
+//       그룹 관리 창 차례 = 덩어리 차례(빈 그룹은 그 뒤 — Setting "itemGroups")
 //    그룹 거르기 값: "all" 전체 · "none" 그룹 없음 · "g:<이름>" 그 그룹 · "p:<이름>" 그 상위 그룹(든 그룹 모두 — 그룹 머리줄로 묶어 보인다)
 //    📌 상위 그룹(그룹의 그룹 — 2026-10-11 운영자 "그룹의 그룹도 만들어서 자동 정렬"): 그룹 관리 창에서 그룹마다 상위를 고른다. 목록은 같은 상위의 그룹들 위에
 //       상위 머리줄 하나(누르면 접고 편다 · 기본 펼침 · 끌기 없음). 같은 상위의 그룹은 늘 이어져 있다 — 다른 자리에 끌어 놓아도 제 상위로 돌아간다(상위를 바꾸는 곳은 그룹 관리 창).
@@ -280,94 +413,115 @@ const reorderById = (list: any[], ids: string[]) => {
   return out.map((it, i) => (it.sortOrder === i ? it : { ...it, sortOrder: i }));
 };
 
-// 그룹 고르기 — 목록 하나(그룹 없음 · 그룹들(저장된 차례 · 개수) · + 새 그룹). 새 그룹을 고르면 이름 칸이 열린다.
-//    목록에 없는 이름이 들어 있으면(새 그룹 · 꾸미기 효과 자동 채우기) 이름 칸이 열린 채 그 이름을 보인다.
-//    mixed: 고른 아이템들의 그룹이 서로 달라 아직 아무것도 고르지 않은 상태 — 단추에 "여러 그룹"(값은 보지 않는다)
-//    onEnter: 폼 밖(그룹 지정 띠)에서 Enter 로 바로 적용 · onPending: 새 그룹 칸이 열렸는데 이름이 비었는지(그룹 지정 띠가 옮기기를 잠근다)
-//    placeholder: mixed 일 때 단추 글자 · bar: 화면 아래 띠 안 — 목록은 위로 열고, 새 그룹 이름 칸은 PC 에서 옆에(모바일은 아래)
+// ── 체크한 줄 덩어리 놓기(2026-10-18 운영자 "체크 표시 했으면 한 번에 옮겨져야지 왜 따로 움직여..?") ──
+//    📌 표가 주는 놓은 자리(TableRowDrop — 끈 줄 하나의 이웃)를 지금 전체 차례(ids)의 틈 번호로 읽고(dropGapOf), 옮길 줄(moving — 차례 그대로)을
+//       뺀 나머지 차례의 그 자리에 한 덩어리로 끼운다(placeBlock). 틈 앞의 옮기지 않는 줄 수 = 끼울 번호라 이웃이 고른 줄이어도 · 거른 목록이어도 같은 셈.
+//       틈을 못 찾으면(다른 창에서 바뀐 목록) null
+const placeBlock = (ids: string[], moving: string[], gap: number | null) => {
+  if (gap == null || gap < 0) return null;
+  const set = new Set(moving);
+  let at = 0;
+  for (let i = 0; i < Math.min(gap, ids.length); i++) if (!set.has(ids[i])) at++;
+  const rest = ids.filter((k) => !set.has(k));
+  return [...rest.slice(0, at), ...moving, ...rest.slice(at)];
+};
+//    틈 — after(그 바로 뒤)가 먼저, 없으면 before(그 바로 앞), 둘 다 없고 그룹 안이면 그 덩어리 끝(접힌 머리줄 위). 이웃이 표 단위 키(그룹 머리줄)면 그 덩어리 뒤 · 앞
+const dropGapOf = (ids: string[], groupOfId: (id: string) => string, drop: TableRowDrop): number | null => {
+  const first = (g: string) => ids.findIndex((k) => groupOfId(k) === g);
+  const last = (g: string) => { for (let i = ids.length - 1; i >= 0; i--) if (groupOfId(ids[i]) === g) return i; return -1; };
+  const at = (key: string, end: boolean) => {
+    const g = tableGroupOfKey(key);
+    const p = g != null ? (end ? last(g) : first(g)) : ids.indexOf(key);
+    return p < 0 ? null : end ? p + 1 : p;
+  };
+  if (drop.after) return at(drop.after, true);
+  if (drop.before) return at(drop.before, false);
+  if (drop.group) { const p = last(drop.group); return p < 0 ? null : p + 1; }
+  return null;
+};
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
+
+// 그룹 고르기(아이템 폼 「그룹」 칸) — 목록 하나(그룹 없음 · 그룹들(저장된 차례 · 개수) · + 새 그룹). 새 그룹을 고르면 이름 칸이 열린다.
+//    목록에 없는 이름이 들어 있으면(새 그룹 · 꾸미기 효과 자동 채우기) 이름 칸이 열린 채 그 이름을 보인다
 const NEW_GROUP_V = "+new";
-function GroupPicker({ value, groups, counts, onChange, mixed = false, placeholder = "여러 그룹", bar = false, onEnter, onPending }: {
-  value: string; groups: string[]; counts: ReadonlyMap<string, number>; onChange: (v: string) => void; mixed?: boolean; placeholder?: string; bar?: boolean; onEnter?: () => void; onPending?: (pending: boolean) => void;
+function GroupPicker({ value, groups, counts, onChange }: {
+  value: string; groups: string[]; counts: ReadonlyMap<string, number>; onChange: (v: string) => void;
 }) {
   const v = normalizeItemGroup(value);
   const known = !!v && groups.includes(v);
   const [newOpen, setNewOpen] = useState(false);
-  const typing = !mixed && (newOpen || (!!v && !known));
+  const typing = newOpen || (!!v && !known);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (newOpen) inputRef.current?.focus(); }, [newOpen]);
-  const pending = typing && !v;
-  useEffect(() => { onPending?.(pending); }, [pending, onPending]);
   const options: DropdownOption[] = [
     { value: "n:", label: "그룹 없음" },
     ...groups.map((g) => ({ value: `g:${g}`, label: g, hint: String(counts.get(g) || 0) })),
     { value: NEW_GROUP_V, label: "+ 새 그룹" },
   ];
-  const dropdown = (
-    <Dropdown
-      theme="light"
-      className={bar ? "w-full md:w-[240px] shrink-0" : ""}
-      buttonClassName={DD_BTN}
-      value={mixed ? "" : typing ? NEW_GROUP_V : known ? `g:${v}` : "n:"}
-      placeholder={placeholder}
-      options={options}
-      maxHeight={bar ? 260 : 300}
-      up={bar}
-      onChange={(x) => {
-        if (x === NEW_GROUP_V) { setNewOpen(true); if (known || mixed) onChange(""); return; }
-        setNewOpen(false);
-        onChange(x === "n:" ? "" : x.slice(2));
-      }}
-    />
-  );
-  const nameInput = typing && (
-    <input ref={inputRef} type="text" value={value} maxLength={ITEM_GROUP_MAX} onChange={(e) => onChange(e.target.value)} placeholder="새 그룹 이름" aria-label="새 그룹 이름"
-      className={bar ? `${inputClass} md:!w-[200px]` : `${inputClass} mt-2`}
-      onKeyDown={onEnter ? (e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onEnter(); } } : undefined} />
-  );
-  if (bar) {
-    return (
-      <div className="min-w-0 w-full md:w-auto flex flex-wrap md:flex-nowrap items-center gap-2">
-        {dropdown}
-        {nameInput}
-      </div>
-    );
-  }
   return (
     <>
-      {dropdown}
-      {nameInput}
+      <Dropdown
+        theme="light"
+        buttonClassName={DD_BTN}
+        value={typing ? NEW_GROUP_V : known ? `g:${v}` : "n:"}
+        options={options}
+        maxHeight={300}
+        onChange={(x) => {
+          if (x === NEW_GROUP_V) { setNewOpen(true); if (known) onChange(""); return; }
+          setNewOpen(false);
+          onChange(x === "n:" ? "" : x.slice(2));
+        }}
+      />
+      {typing && (
+        <input ref={inputRef} type="text" value={value} maxLength={ITEM_GROUP_MAX} onChange={(e) => onChange(e.target.value)} placeholder="새 그룹 이름" aria-label="새 그룹 이름"
+          className={`${inputClass} mt-2`} />
+      )}
     </>
   );
 }
 
-// 그룹 지정 고르기 표시 — 표 줄(PC <tr> · 모바일 <button>) 안이라 input 이 아니라 span 으로(버튼 속 입력 금지). 누르기는 줄이 받는다
-//    mixed: 일부만 고름(그룹 머리줄 — 반쯤 찬 표시) · bare: 그림만(감싼 단추가 checkbox 역할)
-function PickMark({ on, mixed = false, bare = false }: { on: boolean; mixed?: boolean; bare?: boolean }) {
-  const fill = on || mixed;
+// 📌 분류 고르기(아이템 폼 · 직접 설정 상품 폼 「분류」 · 일괄 「분류 바꾸기」 — 2026-10-17 「자동 + 바꾸기」) — 목록 하나:
+//    「자동 · <지금 자동 값>」(저장 "") · 분류 목록(lib/itemCategory.js CATEGORY_OPTIONS) · 「직접 입력」(이름 칸이 열린다 · 20자).
+//    목록에 없는 글자가 들어 있으면 이름 칸이 열린 채 그 글자를 보인다(그룹 고르기와 같은 모양). auto — 「자동」 옆 글자(비우면 「자동」만).
+//    unset — 아직 안 고름(일괄 창 — 고르기 칸을 비워 둔다)
+const CATEGORY_CUSTOM_V = "+custom";
+function CategoryPicker({ value, auto, unset = false, onChange }: { value: string; auto?: string; unset?: boolean; onChange: (v: string) => void }) {
+  const v = normalizeCategory(value);
+  const listed = !v || (CATEGORY_OPTIONS as string[]).includes(v);
+  const [typeOpen, setTypeOpen] = useState(false);
+  const typing = typeOpen || !listed;
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (typeOpen) inputRef.current?.focus(); }, [typeOpen]);
+  const options: DropdownOption[] = [
+    { value: "a:", label: auto ? `자동 · ${auto}` : "자동" },
+    ...(CATEGORY_OPTIONS as string[]).map((c) => ({ value: `c:${c}`, label: c })),
+    { value: CATEGORY_CUSTOM_V, label: "직접 입력" },
+  ];
   return (
-    <span {...(bare ? { "aria-hidden": true } : { role: "checkbox", "aria-checked": on ? true : mixed ? "mixed" as const : false, "aria-label": "선택" })}
-      className={`inline-flex items-center justify-center w-4 h-4 shrink-0 rounded border transition-colors ${fill ? "bg-[#131313] border-[#131313] text-white" : "bg-white border-[#a3a3a3] group-hover/pick:border-[#131313]"}`}>
-      {on ? (
-        <svg aria-hidden viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.4}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 8.5l3 3 6-7" />
-        </svg>
-      ) : mixed ? (
-        <svg aria-hidden viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.4}>
-          <path strokeLinecap="round" d="M4 8h8" />
-        </svg>
-      ) : null}
-    </span>
+    <>
+      <Dropdown
+        theme="light"
+        buttonClassName={DD_BTN}
+        value={typing ? CATEGORY_CUSTOM_V : unset ? "" : v ? `c:${v}` : "a:"}
+        options={options}
+        placeholder="분류 선택"
+        maxHeight={300}
+        onChange={(x) => {
+          // 직접 입력 — 지금 글자를 그대로 두고 칸만 연다(고른 분류를 고쳐 쓸 수 있게)
+          if (x === CATEGORY_CUSTOM_V) { setTypeOpen(true); return; }
+          setTypeOpen(false);
+          onChange(x === "a:" ? "" : x.slice(2));
+        }}
+      />
+      {typing && (
+        <input ref={inputRef} type="text" value={value} maxLength={CATEGORY_MAX} onChange={(e) => onChange(e.target.value)} placeholder={auto || "분류"} aria-label="분류 직접 입력"
+          className={`${inputClass} mt-2`} />
+      )}
+    </>
   );
 }
-// 그룹 머리줄 고르기 칸(그룹 지정) — 그 그룹의 보이는 아이템 통째로 고르기 · 풀기. 누르는 자리는 손잡이와 같은 32px(줄 높이는 그대로 — -my-1)
-function GroupPickBox({ on, mixed, label, onToggle }: { on: boolean; mixed: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button type="button" role="checkbox" aria-checked={on ? true : mixed ? "mixed" : false} aria-label={label} title={label} onClick={onToggle}
-      className="group/pick -ml-2 -my-1 w-8 h-8 shrink-0 inline-flex items-center justify-center cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40">
-      <PickMark on={on} mixed={mixed} bare />
-    </button>
-  );
-}
+
+// 📌 아래 띠 · 도구 줄의 펼침 메뉴 단추(희귀도 ▾ · 그룹 ▾ · 「⋯」) — 공용 부품 MenuBtn · MoreMenu(app/admin/ui.tsx)로 올렸다(같은 항목 모양)
 
 // 채널 표기 — 봇 관리 화면과 같은 기호
 const CH_ICON: Record<string, string> = { text: "#", voice: "🔊", category: "📁" };
@@ -384,19 +538,21 @@ const fmtDateTime = (v: string | Date) => {
 // 📌 주문 묶기 — 세트 구성 건(bundleName — lib/bundle.js)은 구성 아이템마다 한 줄("세트 이름 · 아이템 이름").
 //    한 결제의 구성 건은 orderId · 상품(세트) id 가 모두 같아 groupOrders 가 세트 전체를 한 줄로 묶어 버린다 —
 //    묶는 열쇠에만 구성 아이템(itemRef)을 붙이고 묶은 뒤 orderId 를 되돌린다. 같은 구성 여러 개(qty)는 한 줄 "×N". 세트가 아닌 건은 그대로
-type OrderRow = { orderId?: string; itemRef?: string; bundleName?: string; itemName?: string };
+//    📌 이름은 짧은 이름(2026-10-17 — API shortName: 산 때 이름에서 옛 분류 머리말만 뗀 것)
+type OrderRow = { orderId?: string; itemRef?: string; bundleName?: string; itemName?: string; shortName?: string };
 const groupOrderRows = (rows: OrderRow[]) =>
   groupOrders(rows.map((r) => (r?.bundleName && r.orderId ? { ...r, orderId: `${r.orderId}#${r.itemRef || ""}`, bundleOrderId: r.orderId } : r)))
     .map((g) => (g.bundleOrderId ? { ...g, orderId: g.bundleOrderId } : g));
-const orderName = (o: OrderRow | null | undefined) => (o?.bundleName ? `${o.bundleName} · ${o.itemName || ""}` : o?.itemName || "");
+const orderItemName = (o: OrderRow | null | undefined) => (o?.shortName || shortNameOf(o?.itemName || ""));
+const orderName = (o: OrderRow | null | undefined) => (o?.bundleName ? `${o.bundleName} · ${orderItemName(o)}` : orderItemName(o));
 // 주문 금액 — 정가 × 개수(빙옥 전용은 빙옥으로 올림). 빙옥 전용 세트의 구성 건은 나눠 적은 값이 1 빙옥의 배수가 아니라
 //    올림하면 합이 낸 값보다 커지므로 낸 빙옥(paidPoint 합 — lib/orderGroups)을 그대로 쓴다
 type OrderMoney = { bundleName?: string; pointOnly?: boolean; billed?: boolean; paidPoint?: number; price?: number; paidQty?: number; qty?: number };
 const orderAmount = (o: OrderMoney) =>
   o.bundleName && o.pointOnly && o.billed ? `${(Number(o.paidPoint) || 0).toLocaleString()} 빙옥` : priceText(o, (o.price || 0) * (o.paidQty || o.qty || 1));
 // 세트 구성 한 칸 표기(상품 목록) — "이름 ×N 30일"
-const bundleCompLabel = (c: { name?: string; qty?: number; days?: number }) =>
-  `${c?.name || "알 수 없음"}${(Number(c?.qty) || 1) > 1 ? ` ×${c.qty}` : ""}${Number(c?.days) > 0 ? ` ${c.days}일` : ""}`;
+const bundleCompLabel = (c: { name?: string; shortName?: string; qty?: number; days?: number }) =>
+  `${c?.shortName || shortNameOf(c?.name || "") || "알 수 없음"}${(Number(c?.qty) || 1) > 1 ? ` ×${c.qty}` : ""}${Number(c?.days) > 0 ? ` ${c.days}일` : ""}`;
 
 // 같은 건(_id)은 한 번만 — 앞의 것을 남긴다(구매 내역 더 보기의 겹친 건)
 const uniqById = <T extends { _id?: unknown }>(rows: T[]) => {
@@ -408,6 +564,11 @@ const uniqById = <T extends { _id?: unknown }>(rows: T[]) => {
     return true;
   });
 };
+
+// 📌 상품 그룹 바꾸기(2026-10-17 — 상품 줄 끌어 다른 그룹에 놓기 · 상세 칸 「그룹」) — 상품 그룹 = 연결 아이템 그룹(lib/productOrder.js productGroupOf)이라 그 아이템의 그룹을 바꾼다(아이템 탭에서도 옮겨진다).
+//    못 바꾸는 상품이면 짧은 이유, 되면 "". 세트 — 첫 구성 아이템 그룹을 따른다(그 아이템 · 그 아이템 상품까지 딸려 옮겨지므로 막는다) · 직접 설정(연결 아이템 없음) — 그룹 없음 그대로
+const productRegroupBlock = (p: { type?: unknown } | null | undefined, itemIds: ReadonlySet<string>) =>
+  p?.type === BUNDLE_TYPE ? "세트는 첫 구성 아이템의 그룹을 따릅니다." : !itemIds.has(anchorItemOf(p)) ? "연결 아이템이 없는 상품은 그룹에 넣을 수 없습니다." : "";
 
 // 필수 · 선택 표시 (라벨 옆 기호)
 const Req = () => <span className="text-[#e91e3f]"> *</span>;
@@ -428,23 +589,108 @@ function Field({ label, hint, children }: { label: React.ReactNode; hint?: React
   );
 }
 // 두 칸 한 줄 (모바일은 한 칸) — 세로 간격은 Field 의 mb 로 (flex-col gap 이 안 먹는 빌드)
+//    흰 판(PaneSection) 본문의 마지막이면 끝 줄 Field 의 mb-4 만큼 당긴다(판 아래 여백이 두 겹이 되지 않게)
+const PANE_TWO_CSS = ".admin-sec-body>.pane-two:last-child{margin-bottom:-16px}";
 function Two({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">{children}</div>;
-}
-// 📌 긴 폼의 소제목 — 예전 접이식 묶음(FormGroup)을 걷고 소제목 + 선으로만 나눈다(상세 칸이 따로 스크롤된다)
-function PaneSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="pb-1 mb-4 border-b border-[#ededed] last:border-b-0 last:mb-0 last:pb-0">
-      <h3 className="text-[14px] font-black tracking-tight mb-3">{title}</h3>
+    <div className="pane-two grid grid-cols-1 md:grid-cols-2 gap-x-4">
+      <style href="shop-pane-two" precedence="medium">{PANE_TWO_CSS}</style>
       {children}
-    </section>
+    </div>
+  );
+}
+// 📌 상세 칸 흰 판(ui PaneSection)의 접기 — 수정 중이면 접힘을 기억하고(storeKey) 처음엔 open 값(덜 쓰는 판은 접힘).
+//    새로 만들기 폼은 다 펼친 채 시작한다(비운 필수 칸이 접힌 판 속에 숨지 않게 · 기억하지 않는다)
+const foldOf = (editing: boolean, key: string, open = false) =>
+  editing ? { collapsible: true, storeKey: key, defaultOpen: open } : { collapsible: true, defaultOpen: true };
+// 📌 접힌 판 속 칸이 저장 검사(min · max)에 걸리면 그 판을 펼치고 말풍선을 띄운다 — 숨은 칸은 브라우저가 알려 주지 못해 저장이 말없이 막히던 것.
+//    폼 ref 로 단다(PC 칸 · 모바일 판 폼 둘 다). 같은 판에 걸린 칸이 여럿이어도 한 번만 편다
+const revealInvalid = (f: HTMLFormElement | null) => {
+  if (!f) return;
+  const on = (e: Event) => {
+    const el = e.target as HTMLInputElement | null;
+    const body = el?.closest<HTMLElement>(".admin-sec-body[hidden]");
+    if (!el || !body || body.dataset.revealing) return;
+    body.dataset.revealing = "1";
+    body.parentElement?.querySelector<HTMLButtonElement>(":scope > div > button[aria-expanded='false']")?.click();
+    window.setTimeout(() => { delete body.dataset.revealing; el.reportValidity?.(); }, 0);
+  };
+  f.addEventListener("invalid", on, true);
+  return () => f.removeEventListener("invalid", on, true);
+};
+
+// 📌 꾸미기 아이템의 입는 모양(카드 테두리 · 카드 배경 · 프로필 테두리) — 폼의 효과 줄에서 첫 키. 등급 전체 · 테두리 전체는 맨 윗 등급 그림으로
+//    (상점 상세 적용 미리보기 lib/itemCosmetic cosmeticOf 와 같은 규칙). 하나도 없으면 null(착용 미리보기 판 없음)
+const wearOf = (fx: { on: string; skin: string; scene: string; frame: string }[]) => {
+  const sk = fx.find((d) => d.on === "cardSkin" && d.skin)?.skin || "";
+  const scene = fx.find((d) => d.on === "cardScene" && d.scene)?.scene || "";
+  const fr = fx.find((d) => d.on === "avatarFrame" && d.frame)?.frame || "";
+  const skin = sk === SKIN_RANK_ALL ? "rank_igloo" : skinsOf(sk).length ? sk : "";
+  const frame = fr === FRAME_ALL ? "igloo" : framesOf(fr).length ? fr : "";
+  const sc = scenesOf(scene).length ? scene : "";
+  return skin || sc || frame ? { skin, scene: sc, frame } : null;
+};
+// 📌 착용 미리보기(2026-10-17 승인 시안 shop-tidy ⑤) — 내 프로필 카드 · 디스코드 /레벨 카드에 그 꾸미기를 입혀 본다(입은 모습을 보고 희귀도를 정하게).
+//    상점 상세 적용 미리보기(app/arctic/AppliedPreview)와 같은 부품(ProfileCardPreview · FitBox · whoOf)과 같은 디스코드 그림(/api/shop/skin-card?me=1 — 서버가 세션 본인 값으로).
+//    사람 값은 /api/xp/me 한 번. 디스코드 카드는 카드 테두리 · 배경이 있을 때만이고, 봇이 못 그리는 키(400)면 그 칸을 뺀다. 칸 크기는 먼저 잡아 그림이 늦게 와도 밀리지 않는다
+//    내 값은 한 번만 읽어 둔다(좁은 화면은 상세 칸이 PC 칸 · 모바일 판 둘로 그려진다 · 줄을 넘겨도 다시 읽지 않게). 못 읽으면 다음에 다시
+let wearMeLoad: Promise<unknown> | null = null;
+const loadWearMe = () => {
+  if (!wearMeLoad) {
+    wearMeLoad = fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).then((d) => (d?.success ? d.data : null))
+      .catch(() => null)
+      .then((v) => { if (!v) wearMeLoad = null; return v; });
+  }
+  return wearMeLoad;
+};
+function WearPreview({ skin, scene, frame }: { skin: string; scene: string; frame: string }) {
+  const { data: session } = useSession();
+  const user = session?.user || null;
+  const [me, setMe] = useState<unknown>(null);
+  useEffect(() => {
+    let live = true;
+    void loadWearMe().then((v) => { if (live && v) setMe(v); });
+    return () => { live = false; };
+  }, []);
+  const today = useTodayXp(!!user && !!me);
+  const who = whoOf(user, me, today);
+  const src = skin || scene
+    ? `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`
+    : "";
+  const [failed, setFailed] = useState("");
+  const discord = !!src && failed !== src;
+  const cap = "mt-1.5 text-[11px] font-bold text-[#8a8a8a] text-center";
+  return (
+    <div className="bg-[#f2f2f2] p-3 flex flex-wrap items-start justify-center gap-3">
+      <div className="shrink-0">
+        <div className="relative w-[136px] h-[200px] overflow-hidden">
+          <FitBox pad={1} max={1}>
+            <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
+          </FitBox>
+        </div>
+        <p className={cap}>프로필 카드</p>
+      </div>
+      {discord && (
+        <div className="min-w-0 flex-1 basis-[200px] max-w-[300px]">
+          {/* 칸은 카드 비율(1200 × 630)로 먼저 — 효과를 바꿔 주소가 바뀌어도 앞 그림을 둔 채 새 그림으로 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" draggable={false} decoding="async" loading="lazy" onError={() => setFailed(src)}
+            className="block w-full bg-[#e0e0e0] select-none" style={{ aspectRatio: "1200 / 630" }} />
+          <p className={cap}>디스코드 /레벨</p>
+        </div>
+      )}
+    </div>
   );
 }
 
 // 📌 표시 토글 — 표 줄(PC <tr> · 모바일 <button>) 안에 놓이므로 <button> 이 아니라 span 으로 만든다(버튼 속 버튼 금지).
 //    누르면 줄의 상세 칸이 열리지 않게 전파를 끊는다. 모양은 ui.tsx Switch 와 같은 값.
 //    disabled: 실사이트 읽기 전용(liveLocked) — 자리 · 모양은 그대로 두고 흐리게 잠근다
-function VisSwitch({ on, busy, disabled = false, onToggle }: { on: boolean; busy: boolean; disabled?: boolean; onToggle: () => void }) {
+//    📌 2026-10-17 줄 스위치 한 벌 — 아이템 인벤토리 표시 · 상품 판매 · 배너 노출 · 쿠폰 사용 상태가 같은 모양(label · onText · offText 만 다르다).
+//       글자 칸은 두 글자 중 긴 쪽 폭을 잡는다(켜고 끌 때 줄이 흔들리지 않게)
+function VisSwitch({ on, busy, disabled = false, onToggle, label = "인벤토리 표시", onText = "표시", offText = "숨김" }: {
+  on: boolean; busy: boolean; disabled?: boolean; onToggle: () => void; label?: string; onText?: string; offText?: string;
+}) {
   const off = busy || disabled;
   const fire = (e: React.SyntheticEvent) => {
     e.stopPropagation();
@@ -456,7 +702,7 @@ function VisSwitch({ on, busy, disabled = false, onToggle }: { on: boolean; busy
       role="switch"
       aria-checked={on}
       aria-disabled={off}
-      aria-label="인벤토리 표시"
+      aria-label={label}
       tabIndex={0}
       onClick={fire}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fire(e); }}
@@ -465,7 +711,10 @@ function VisSwitch({ on, busy, disabled = false, onToggle }: { on: boolean; busy
       <span className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${on ? "bg-[#131313]" : "bg-[#d4d4d4]"}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
       </span>
-      <span className={`text-[12px] font-bold ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{on ? "표시" : "숨김"}</span>
+      <span className={`inline-grid text-[12px] font-bold whitespace-nowrap ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>
+        <span className={`col-start-1 row-start-1 ${on ? "" : "invisible"}`} aria-hidden={!on || undefined}>{onText}</span>
+        <span className={`col-start-1 row-start-1 ${on ? "invisible" : ""}`} aria-hidden={on || undefined}>{offText}</span>
+      </span>
     </span>
   );
 }
@@ -533,6 +782,14 @@ const submitNearest = (e: React.MouseEvent<HTMLButtonElement>) => {
   if (typeof f.requestSubmit === "function") f.requestSubmit();
   else f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 };
+// Ctrl/⌘+S — 보이는 폼(selector)을 제출(저장 단추와 같은 길 — 숫자 칸 검사 · onSubmit). 덮는 칸은 PC · 모바일 폼이 둘 그려진다
+const submitVisible = (selector: string) => {
+  const forms = Array.from(document.querySelectorAll<HTMLFormElement>(selector));
+  const f = forms.find((x) => x.getClientRects().length > 0) || forms[0];
+  if (!f) return;
+  if (typeof f.requestSubmit === "function") f.requestSubmit();
+  else f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+};
 // 폼 안 숨은 제출 단추 — 입력칸에서 Enter 로 저장되던 것을 그대로 둔다
 const HiddenSubmit = () => <button type="submit" hidden aria-hidden tabIndex={-1} />;
 
@@ -557,8 +814,6 @@ const M_BANNER_MAX = 3;
 
 // Dropdown(라이트) 단추를 inputClass 높이 · 테두리에 맞춘다
 const DD_BTN = "min-h-10 !py-2 !px-3 !border-[#a3a3a3] !text-[14px]";
-// 목록 위 한 줄의 거르기 단추 — 검색칸과 같은 높이 · 알약 모양
-const GROUP_FILTER_BTN = "!h-10 !py-0 !px-4 !rounded-full !border-[#a3a3a3] !text-[13px]";
 // 그룹 표시(거르기 단추 · 목록)
 function FolderMark() {
   return (
@@ -577,24 +832,14 @@ function FolderStackMark() {
 }
 
 // 📌 배너 '클릭 시 이동' 바로 고르기 — 고르면 아래 링크 칸이 그 주소로 채워진다(2026-10-01 "배너 클릭하면 어느 카테고리로 갈 수 있게 선택").
-//    스토어 유형은 app/arctic/ArcticShopBody.tsx TYPES 와 같은 값(/arctic?type=<v> — 상점이 이 값으로 그 탭을 연다). 바꾸면 거기도.
+//    스토어 유형 탭은 lib/items.js STORE_TYPE_OPTIONS 한 곳(/arctic?type=<v> — 상점이 이 값으로 그 탭을 연다).
 //    이벤트 테마 탭은 테마 목록(lib/shopThemes.js)에서 — /arctic?type=<테마 키>(꺼진 테마는 「꺼짐」 — 켜야 그 탭이 선다)
-const BANNER_STORE_TYPES = [
-  { v: "all", l: "전체" },
-  { v: "role", l: "역할" },
-  { v: "perk", l: "권한" },
-  { v: "item", l: "아이템" },
-  { v: "cosmetic", l: "꾸미기" },
-  { v: "physical", l: "기프트카드" },
-  { v: "timed", l: "기간제" },
-  { v: "season", l: "시즌" },
-];
 const BANNER_LINK_CUSTOM = "__custom";
 const bannerLinkOptions = (items: any[], themes: { key: string; name: string; on: boolean }[]): DropdownOption[] => [
   { value: "", label: "이동 없음" },
   { value: "g:store", label: "스토어", group: true },
   { value: "/arctic", label: "스토어 홈", indent: true },
-  ...BANNER_STORE_TYPES.map((t) => ({ value: `/arctic?type=${t.v}`, label: t.l, indent: true })),
+  ...STORE_TYPE_OPTIONS.map((t) => ({ value: `/arctic?type=${t.v}`, label: t.l, indent: true })),
   ...themes.map((t) => ({ value: `/arctic?type=${t.key}`, label: t.name, indent: true, ...(t.on ? {} : { hint: "꺼짐" }) })),
   { value: "g:site", label: "사이트", group: true },
   { value: "/level?tab=pass", label: "시즌 패스", indent: true },
@@ -607,7 +852,10 @@ const bannerLinkOptions = (items: any[], themes: { key: string; name: string; on
 // 상세 칸 아래 줄의 삭제 — 저장 옆에 빨간 덩어리를 두지 않고 글자만
 const DEL_BTN = "ml-auto !text-[#d01634]";
 
-// 📌 아이템 효과 편집 — 기본 세 칸 + 추가 효과 목록(발동 · 상시 · 소모 · 꾸미기). 상세 칸(520px) · 모바일 판 모두에서 줄이 무너지지 않게 줄바꿈을 허용한다.
+// 📌 아이템 효과 편집 — 추가 효과 목록(발동 · 상시 · 소모 · 꾸미기). 상세 칸(520px) · 모바일 판 모두에서 줄이 무너지지 않게 줄바꿈을 허용한다.
+//    📌 2026-10-17 「기본 효과」 세 칸(채팅 · 음성 1회당 · 출석 시 +N XP)은 추가 효과의 같은 이름 발동 효과와 같은 일이라 합쳤다 —
+//       입력칸은 없애고, 값이 남은 아이템만 읽기 전용 줄 + 「추가 효과로 옮기기」(같은 값의 추가 효과 줄을 맨 앞에 넣고 세 칸은 0 — 저장할 때 반영).
+//       봇(bot/src/itemEffects.js itemEffectList)은 세 칸을 같은 모양의 효과로 바꿔 앞에 붙여 쓰므로 옮겨도 지급은 같다
 //    ⚠️ 모듈 바깥에 둔다(페이지 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다)
 const HOUR_FROM = Array.from({ length: 24 }, (_, h) => h);
 const HOUR_TO = Array.from({ length: 24 }, (_, h) => h + 1);
@@ -617,23 +865,32 @@ const SKIN_GROUPS: { l: string; has: (s: { v: string }) => boolean }[] = [
   { l: "기본", has: (s) => ["gold", "aurora", "ice", "crimson"].includes(s.v) },
   { l: "시즌 2", has: (s) => ["newworld", "chart", "airship"].includes(s.v) },
   { l: "등급", has: (s) => s.v.startsWith("rank_") },
-  { l: "할로윈", has: (s) => s.v.startsWith("hw_") },
+  { l: "할로윈", has: (s) => s.v.startsWith("hw_") || s.v.startsWith("ev_") }, // ev_* — 할로윈 이벤트(유령 펭귄의 초대)
 ];
 const FRAME_GROUPS: { l: string; all?: boolean; has: (f: { v: string }) => boolean }[] = [
   { l: "등급", all: true, has: (f) => !f.v.includes("_") },
-  { l: "할로윈", has: (f) => f.v.startsWith("hwf_") },
+  { l: "할로윈", has: (f) => f.v.startsWith("hwf_") || f.v.startsWith("evf_") },
   { l: "시즌 2", has: (f) => f.v.startsWith("nwf_") },
+];
+// 📌 카드 배경(2026-10-15) — 이벤트마다 늘어난다. 묶음에 없는 새 배경은 「기타」에(목록에서 빠지지 않게)
+const SCENE_HALLOWEEN = ["sc_ghost"];
+const SCENE_GROUPS: { l: string; has: (s: { v: string }) => boolean }[] = [
+  { l: "할로윈", has: (s) => SCENE_HALLOWEEN.includes(s.v) },
+  { l: "기타", has: (s) => !SCENE_HALLOWEEN.includes(s.v) },
 ];
 const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
 
-// 📌 카드 스킨 · 아바타 테두리 고르기 — 긴 목록 칸 대신 그림 칸(2026-10-11 운영자). 묶음(기본 · 시즌 2 · 등급 · 할로윈 / 등급 · 할로윈 · 시즌 2)마다
-//    스킨은 그 스킨 아이콘(lib/cosmeticArt artOfSkin), 테두리는 테두리 그림(public/avatar-borders — 등급 전체는 아이콘) + 이름.
+// 📌 카드 배경 · 카드 테두리 · 프로필 테두리 고르기 — 긴 목록 칸 대신 그림 칸(2026-10-11 운영자). 묶음(기본 · 시즌 2 · 등급 · 할로윈 / 등급 · 할로윈 · 시즌 2 / 할로윈 · 기타)마다
+//    배경 · 카드 테두리는 그 아이콘(lib/cosmeticArt artOfScene · artOfSkin), 프로필 테두리는 테두리 그림(public/avatar-borders — 등급 전체는 아이콘) + 이름.
 //    판은 높이 고정(안에서 스크롤) — 효과 줄 높이가 고른 것에 따라 바뀌지 않게. 열 때 고른 칸이 보이게 판 안에서만 굴린다
 const COSMETIC_BOX_H = 264;
-function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "frame"; value: string; onChange: (v: string) => void }) {
+const PICKER_LABEL = { skin: "카드 테두리", scene: "카드 배경", frame: "프로필 테두리" } as const;
+function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "scene" | "frame"; value: string; onChange: (v: string) => void }) {
   const groups = kind === "skin"
     ? SKIN_GROUPS.map((g) => ({ l: g.l, opts: SKINS.filter(g.has) }))
-    : FRAME_GROUPS.map((g) => ({ l: g.l, opts: [...FRAMES.filter(g.has), ...(g.all ? [{ v: "all", l: "등급 전체" }] : [])] }));
+    : kind === "scene"
+      ? SCENE_GROUPS.map((g) => ({ l: g.l, opts: SCENES.filter(g.has) }))
+      : FRAME_GROUPS.map((g) => ({ l: g.l, opts: [...FRAMES.filter(g.has), ...(g.all ? [{ v: "all", l: "등급 전체" }] : [])] }));
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const box = boxRef.current;
@@ -642,7 +899,7 @@ function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "frame"; val
     // 처음 열 때만 — 고를 때마다 판이 튀지 않게
   }, []);
   return (
-    <div ref={boxRef} role="group" aria-label={kind === "skin" ? "카드 스킨" : "아바타 테두리"}
+    <div ref={boxRef} role="group" aria-label={PICKER_LABEL[kind]}
       className="relative mt-2 overflow-y-auto overscroll-contain rounded-lg border border-[#ededed] p-2" style={{ height: COSMETIC_BOX_H }}>
       {groups.map((g) => g.opts.length > 0 && (
         <div key={g.l} className="mb-2.5 last:mb-0">
@@ -663,7 +920,7 @@ function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "frame"; val
                         <img src={img} alt="" className="absolute inset-0 w-full h-full" />
                       </>
                     ) : (
-                      <ArtIcon k={kind === "skin" ? artOfSkin(o.v) : artOfFrame(o.v)} size={32} />
+                      <ArtIcon k={kind === "skin" ? artOfSkin(o.v) : kind === "scene" ? artOfScene(o.v) : artOfFrame(o.v)} size={32} />
                     )}
                   </span>
                   <span className={`block w-full truncate text-center text-[11px] font-bold ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.l}</span>
@@ -679,26 +936,43 @@ function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "frame"; val
 // 크기 칸 앞 기호 · 뒤 단위 — 문구(describeEffect)와 같은 모양: 할인 · 단축 · 완화는 "−", 캐시백은 기호 없음, 나머지 "+"
 const PERK_SIGN: Record<string, string> = { enhanceDiscount: "−", muteRelief: "−", shopCashback: "" };
 const unitOf = (t: any, mode: string) => t?.unit || (mode === "percent" ? "%" : "XP");
+// 상시 효과 상한 계산 재료(레벨 설정 · 상점 설정 값) — 페이지가 한 번 읽어 넘긴다(상세 칸을 열 때마다 다시 읽지 않게)
+type BotCaps = { cooldown: number; mute: number; cashback: number };
+const botCapsOf = (s: any): BotCaps => ({ cooldown: Number(s?.chatCooldownSec) || 0, mute: Math.min(100, Math.max(0, Number(s?.muteReducePct) || 0)), cashback: cashbackRuleOf(s).cap });
+// 상점 설정 창(머리 「설정」) 칸 — ARCTIC 상점 공개 · 캐시백 합 상한(입력 중엔 글자) · 빙옥 결제분 캐시백
+type ShopSet = { pub: boolean; cap: string; onPoint: boolean };
+const shopSetOf = (s: any): ShopSet => {
+  const r = cashbackRuleOf(s);
+  return { pub: !!s?.shopPublic, cap: String(r.cap), onPoint: r.onPoint };
+};
+const BASIC_BUFFS = [
+  { k: "chatBuffXp", on: "chat" },
+  { k: "voiceBuffXp", on: "voice" },
+  { k: "attendBuffXp", on: "attend" },
+] as const;
 function EffectsEditor({
-  chatBuffXp, voiceBuffXp, attendBuffXp, list, channels, onChange,
+  chatBuffXp, voiceBuffXp, attendBuffXp, list, channels, botCaps, onChange,
 }: {
-  chatBuffXp: string; voiceBuffXp: string; attendBuffXp: string; list: EffectDraft[]; channels: any[];
+  chatBuffXp: string; voiceBuffXp: string; attendBuffXp: string; list: EffectDraft[]; channels: any[]; botCaps: BotCaps | null;
   onChange: (patch: Partial<Pick<ItemForm, "chatBuffXp" | "voiceBuffXp" | "attendBuffXp" | "effects">>) => void;
 }) {
   const setRow = (i: number, patch: Partial<EffectDraft>) => onChange({ effects: list.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
   const chName = (id: string) => channels.find((c) => c.id === id)?.name as string | undefined;
+  // 옛 기본 효과 — 값이 있는 칸만(같은 문장 — lib/itemEffects describeItemBasic)
+  const basicVals = { chatBuffXp: xpNum(chatBuffXp), voiceBuffXp: xpNum(voiceBuffXp), attendBuffXp: xpNum(attendBuffXp) };
+  const basicLines = describeItemBasic(basicVals);
+  const basicRows = BASIC_BUFFS.filter((b) => basicVals[b.k] > 0);
+  const moveBasics = () => {
+    if (list.length + basicRows.length > MAX_EFFECTS) return;
+    sfxTick();
+    onChange({
+      chatBuffXp: "", voiceBuffXp: "", attendBuffXp: "",
+      effects: [...basicRows.map((b) => ({ ...newEffect(), on: b.on, mode: "add", amount: String(basicVals[b.k]) })), ...list],
+    });
+  };
   // 📌 2026-10-04 "상시 효과 숨은 상한은 관리자만 표기" — 상한은 관리자 편집 칸에만 적는다(유저 화면에는 없다).
   //    쿨타임 단축 · 음소거 완화는 상한이 설정값에 따라 바뀐다(채팅 쿨타임의 절반 · 지금 음소거 감소율) — 지금 설정으로 계산해 적는다
   //    캐시백 상한은 관리자 설정(상점 관리 › 설정 — BotSetting.shopCashbackCap, 기본 30%)
-  const [botCaps, setBotCaps] = useState<{ cooldown: number; mute: number; cashback: number } | null>(null);
-  useEffect(() => {
-    fetch("/api/bot-settings", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.data) setBotCaps({ cooldown: Number(d.data.chatCooldownSec) || 0, mute: Math.min(100, Math.max(0, Number(d.data.muteReducePct) || 0)), cashback: cashbackRuleOf(d.data).cap });
-      })
-      .catch(() => {});
-  }, []);
   const capText = (t: { v: string; cap?: number; unit?: string }) => {
     if (t.v === "cooldownCut") return botCaps ? `합 최대 ${Math.min(3600, Math.floor(botCaps.cooldown / 2)).toLocaleString()}초 (채팅 쿨타임의 절반)` : "합 최대 채팅 쿨타임의 절반";
     if (t.v === "muteRelief") return botCaps ? `합 최대 ${botCaps.mute}%p (지금 음소거 감소율)` : "합 최대 지금 음소거 감소율";
@@ -707,7 +981,7 @@ function EffectsEditor({
   };
   // 상황을 바꾸면 — 없는 방식(%)은 첫 방식으로, 채팅 ↔ 음성이면 맞지 않는 종류의 채널은 뺀다(카테고리 · 모르는 ID 는 둔다).
   //    채널 종류는 TRIGGERS 의 channels("voice" 면 음성, true 면 텍스트)
-  //    발동형이 아니면(상시 · 소모 · 꾸미기) 요일 · 시간대 · 채널 조건이 없다 — 비우고 접는다. 카드 스킨 · 아바타 테두리는 첫 것을 골라 둔다
+  //    발동형이 아니면(상시 · 소모 · 꾸미기) 요일 · 시간대 · 채널 조건이 없다 — 비우고 접는다. 카드 배경 · 카드 테두리 · 프로필 테두리는 첫 것을 골라 둔다
   const pickOn = (i: number, v: string) => {
     const t = TRIGGER_OF[v];
     if (!t) return;
@@ -723,6 +997,9 @@ function EffectsEditor({
       ...(trig ? {} : { days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false }),
       ...(t.needs === "skin" && !d.skin ? { skin: SKINS[0].v } : {}),
       ...(t.needs === "frame" && !d.frame ? { frame: FRAMES[0].v } : {}),
+      ...(t.needs === "scene" && !d.scene && SCENES[0] ? { scene: SCENES[0].v } : {}),
+      // 머물수록 증가 — 최대 % 는 비우면 저장되지 않으므로 20 으로 채워 둔다
+      ...(t.maxPct && !d.maxPct ? { maxPct: "20" } : {}),
     });
   };
   const toggleDay = (i: number, day: number) => {
@@ -740,27 +1017,18 @@ function EffectsEditor({
 
   return (
     <fieldset className="min-w-0">
-      <div className={labelClass}>기본 효과</div>
-      <div className="mb-5 space-y-2">
-        <Inline>
-          <span className="w-[88px] shrink-0 font-bold text-[#131313]">채팅 1회당</span>
-          <span>+</span>
-          <input type="number" min={0} inputMode="numeric" value={chatBuffXp} onChange={(e) => onChange({ chatBuffXp: e.target.value })} placeholder="0" className={numClass} />
-          <span>XP</span>
-        </Inline>
-        <Inline>
-          <span className="w-[88px] shrink-0 font-bold text-[#131313]">음성 1회당</span>
-          <span>+</span>
-          <input type="number" min={0} inputMode="numeric" value={voiceBuffXp} onChange={(e) => onChange({ voiceBuffXp: e.target.value })} placeholder="0" className={numClass} />
-          <span>XP</span>
-        </Inline>
-        <Inline>
-          <span className="w-[88px] shrink-0 font-bold text-[#131313]">출석 시</span>
-          <span>+</span>
-          <input type="number" min={0} inputMode="numeric" value={attendBuffXp} onChange={(e) => onChange({ attendBuffXp: e.target.value })} placeholder="0" className={numClass} />
-          <span>XP</span>
-        </Inline>
-      </div>
+      {/* 옛 기본 효과 — 값이 남은 아이템만(읽기 전용). 옮기면 같은 값의 추가 효과 줄이 맨 앞에 생긴다(저장할 때 반영) */}
+      {basicLines.length > 0 && (
+        <div className="mb-5">
+          <div className={labelClass}>기본 효과</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-[#f7f7f7] px-3.5 py-3">
+            <span className="min-w-0 flex-1 text-[13px] font-bold text-[#131313] tabular-nums break-keep">
+              {basicLines.map((l) => <span key={l} className="block">{l}</span>)}
+            </span>
+            <Btn variant="secondary" size="sm" className="shrink-0" onClick={moveBasics} disabled={list.length + basicRows.length > MAX_EFFECTS}>추가 효과로 옮기기</Btn>
+          </div>
+        </div>
+      )}
 
       <div className={labelClass}>추가 효과</div>
       {list.map((d, i) => {
@@ -795,13 +1063,14 @@ function EffectsEditor({
               </button>
             </div>
 
-            {/* 값 줄 — 효과마다 필요한 칸만. 크기가 없는 효과(보호막 · 배지)는 줄이 없다. 스킨 · 테두리는 아래 그림 칸 */}
-            {(!t.noAmount || (t.needs && t.needs !== "skin" && t.needs !== "frame")) && (
+            {/* 값 줄 — 효과마다 필요한 칸만. 크기가 없는 효과(보호막 · 배지)는 줄이 없다. 카드 배경 · 카드 테두리 · 프로필 테두리는 아래 그림 칸 */}
+            {(!t.noAmount || (t.needs && t.needs !== "skin" && t.needs !== "frame" && t.needs !== "scene")) && (
               <Inline className="mt-2">
                 {t.needs === "minMinutes" && (
                   <>
-                    <input type="number" min={1} max={1440} inputMode="numeric" value={d.minMinutes} onChange={(e) => setRow(i, { minMinutes: e.target.value })} placeholder="60" aria-label="분" className={`${inputClass} !w-20 tabular-nums`} />
-                    <span>분</span>
+                    <input type="number" min={1} max={1440} inputMode="numeric" value={d.minMinutes} onChange={(e) => setRow(i, { minMinutes: e.target.value })} placeholder={t.maxPct ? "25" : "60"} aria-label="분" className={`${inputClass} !w-20 tabular-nums`} />
+                    {/* 머물수록 증가는 「이어서 머문 N분마다」 */}
+                    <span>{t.maxPct ? "분마다" : "분"}</span>
                   </>
                 )}
                 {t.needs === "everyN" && (
@@ -831,6 +1100,8 @@ function EffectsEditor({
                 )}
                 {!t.noAmount && t.needs !== "seconds" && (
                   <>
+                    {/* 📌 레벨업마다 — 처음 오른 레벨 · 다시 오른 레벨 두 줄(아래 줄 again). 이름 칸 폭을 같게 해 두 입력칸이 줄을 맞춘다 */}
+                    {t.again && <span className="w-[92px] shrink-0 font-bold text-[#131313]">처음 오른 레벨</span>}
                     {(PERK_SIGN[t.v] ?? "+") && <span>{PERK_SIGN[t.v] ?? "+"}</span>}
                     <input type="number" min={0} max={amountMaxOf(t, d.mode)} inputMode="numeric" value={d.amount} onChange={(e) => setRow(i, { amount: e.target.value })}
                       placeholder={unitOf(t, d.mode) === "XP" ? "100" : "10"} aria-label="크기" className={numClass} />
@@ -839,11 +1110,72 @@ function EffectsEditor({
                       : <span>{unitOf(t, d.mode)}</span>}
                   </>
                 )}
+                {/* 📌 최대 %(머물수록 증가 — 2026-10-18 마녀의 모래시계) — 이어서 머물수록 오르는 % 의 끝 */}
+                {t.maxPct && (
+                  <>
+                    <span>최대</span>
+                    <input type="number" min={FIELD_RANGE.maxPct[0]} max={FIELD_RANGE.maxPct[1]} inputMode="numeric" value={d.maxPct} onChange={(e) => setRow(i, { maxPct: e.target.value })} placeholder="20" aria-label="최대 %" className={`${inputClass} !w-20 tabular-nums`} />
+                    <span>%</span>
+                  </>
+                )}
                 {/* 상시형은 아이템끼리 합한 뒤 상한으로 자른다 */}
                 {t.kind === "perk" && t.cap && <span className="text-[#8a8a8a] tabular-nums">{capText(t)}</span>}
               </Inline>
             )}
+            {/* 📌 다시 오른 레벨 몫(2026-10-18 운영자 "내려가고 다시 올라갔을 때 … 설정하는 칸") — 상점 · 강화에 XP 를 써서 내려갔다가 다시 오른 레벨.
+                   비우면 위 크기의 절반(자리 글자에 그 값) · 0 이면 다시 오른 레벨엔 주지 않는다. 봇 지급(itemEffects levelUpEffectXp)이 이 값을 쓴다 */}
+            {t.again && (
+              <Inline className="mt-2">
+                <span className="w-[92px] shrink-0 font-bold text-[#131313]">다시 오른 레벨</span>
+                <span>+</span>
+                <input type="number" min={0} max={amountMaxOf(t, d.mode)} inputMode="numeric" value={d.again} onChange={(e) => setRow(i, { again: e.target.value })}
+                  placeholder={String(againXpOf({ amount: xpNum(d.amount) }))} aria-label="다시 오른 레벨" className={numClass} />
+                <span>XP</span>
+                <span className="text-[#8a8a8a]">비우면 절반</span>
+              </Inline>
+            )}
+            {/* 📌 보상 구간 표(음성 N분마다 무작위 XP — 2026-10-18 운영자 "100~5000 인데 그걸 왜 내가 수정을 못해") — 확률 % · 최소 ~ 최대 XP, 최대 CANDY_TIER_MAX 줄.
+                   확률은 소수 첫째 자리까지 · 합 100%(틀리면 아래 빨간 줄 · 저장 막음). 「기본으로」는 기본 표(80% 100~800 · 19% 800~1,500 · 1% 1,500~3,000) */}
+            {t.tiers && (() => {
+              const err = candyTiersError(d.candy);
+              const setCandy = (rows: CandyRow[]) => setRow(i, { candy: rows });
+              const sum = Math.round(d.candy.reduce((s, r) => s + (Math.round(Number(r.w) * 10) / 10 || 0), 0) * 10) / 10;
+              return (
+                <div className="mt-2.5 rounded-lg bg-[#f7f7f7] px-3 py-2.5">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-bold text-[#131313]">보상 구간</span>
+                    <Btn variant="secondary" size="sm" disabled={sameCandy(d.candy)} onClick={() => { sfxTick(); setCandy(candyRowsOf(CANDY_TIERS)); }}>기본으로</Btn>
+                  </div>
+                  {/* 한 줄 칸 — 확률 · 최소 ~ 최대 XP · 빼기가 좁은 편집 칸(약 330px)에서도 접히지 않게 격자(최소 · 최대 칸이 남는 폭을 나눠 가진다) */}
+                  {d.candy.map((r, k) => (
+                    <div key={k} className="mt-1.5 grid items-center gap-1.5 text-[13px] text-[#5a5a5a]" style={{ gridTemplateColumns: "56px auto minmax(0,1fr) auto minmax(0,1fr) auto 28px" }}>
+                      <input type="number" min={0.1} max={100} step={0.1} inputMode="decimal" value={r.w} aria-label={`${k + 1}번째 구간 확률`}
+                        onChange={(e) => setCandy(d.candy.map((x, j) => (j === k ? { ...x, w: e.target.value } : x)))} className={`${inputClass} !px-2 tabular-nums`} />
+                      <span>%</span>
+                      <input type="number" min={0} max={CANDY_XP_MAX} inputMode="numeric" value={r.min} aria-label={`${k + 1}번째 구간 최소`}
+                        onChange={(e) => setCandy(d.candy.map((x, j) => (j === k ? { ...x, min: e.target.value } : x)))} className={`${inputClass} !px-2 tabular-nums`} />
+                      <span>~</span>
+                      <input type="number" min={0} max={CANDY_XP_MAX} inputMode="numeric" value={r.max} aria-label={`${k + 1}번째 구간 최대`}
+                        onChange={(e) => setCandy(d.candy.map((x, j) => (j === k ? { ...x, max: e.target.value } : x)))} className={`${inputClass} !px-2 tabular-nums`} />
+                      <span>XP</span>
+                      <button type="button" aria-label={`${k + 1}번째 구간 빼기`} disabled={d.candy.length <= 1}
+                        onClick={() => { sfxTick(); setCandy(d.candy.filter((_, j) => j !== k)); }}
+                        className="shrink-0 w-7 h-7 rounded-full text-[#8a8a8a] hover:text-[#d01634] hover:bg-white flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30 disabled:opacity-30 disabled:pointer-events-none">
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <Btn variant="secondary" size="sm" disabled={d.candy.length >= CANDY_TIER_MAX}
+                      onClick={() => { sfxTick(); const last = d.candy[d.candy.length - 1]; setCandy([...d.candy, { w: "", min: last?.max || "", max: "" }]); }}>+ 구간 추가</Btn>
+                    <span className={`text-[12px] tabular-nums ${sum === 100 ? "text-[#8a8a8a]" : "font-bold text-[#d01634]"}`}>합 {sum}%</span>
+                  </div>
+                  {err && <p className="mt-1.5 text-[12px] font-bold text-[#d01634] break-keep">{err}</p>}
+                </div>
+              );
+            })()}
             {/* 📌 스킨 · 테두리 — 그림 칸(목록 칸은 길어 찾기 어려웠다). key: 효과 종류가 바뀌면 판을 새로 열어 고른 칸으로 굴린다 */}
+            {t.needs === "scene" && <CosmeticPicker key={`${d.id}:scene`} kind="scene" value={d.scene} onChange={(v) => setRow(i, { scene: v })} />}
             {t.needs === "skin" && <CosmeticPicker key={`${d.id}:skin`} kind="skin" value={d.skin} onChange={(v) => setRow(i, { skin: v })} />}
             {t.needs === "frame" && <CosmeticPicker key={`${d.id}:frame`} kind="frame" value={d.frame} onChange={(v) => setRow(i, { frame: v })} />}
 
@@ -925,12 +1257,91 @@ function EffectsEditor({
             {/* 저장되면 이렇게 적용된다 — describeEffect 문장(관리자 확인용이라 채널 하나면 이름까지) */}
             <p className="mt-2 text-[12px] text-[#8a8a8a] leading-relaxed break-keep">
               {norm ? describeEffect(norm, norm.channelIds?.length === 1 ? chName(norm.channelIds[0]) : undefined) : "값을 입력해 주세요"}
+              {norm && TRIGGER_OF[norm.on]?.again && ` · 다시 오른 레벨 +${againXpOf(norm).toLocaleString()} XP`}
             </p>
           </div>
         );
       })}
       <Btn variant="secondary" size="sm" disabled={list.length >= MAX_EFFECTS} onClick={() => onChange({ effects: [...list, newEffect()] })}>+ 효과 추가</Btn>
     </fieldset>
+  );
+}
+
+// 📌 효과 문구(2026-10-18 운영자 "기본적으로 네가 적고 내가 수정을 할 수 있게") — 인벤토리 · 상품 상세 · 세트 구성 · 패스 보상에 보일 효과 줄(models/Item.js effectText).
+//    자동: 지금 효과로 만든 줄(lib/itemEffects autoEffectLinesOf — 꾸미기 문장 없음)을 읽기 전용으로 + 「직접 쓰기」(그 줄로 채워 연다).
+//    직접 쓰기: 한 줄에 하나(최대 EFFECT_TEXT_MAX 줄 · 줄마다 EFFECT_TEXT_LINE_MAX 자 — 넘으면 저장 전에 막는다) + 「자동으로 되돌리기」. 바꾸는 것은 표시뿐(지급 규칙은 위 효과 그대로)
+//    ⚠️ 모듈 바깥에 둔다(페이지 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다)
+const fxRawLines = (text: string) => text.split(/\r\n?|\n/).map((l) => l.trim()).filter(Boolean);
+//    onTemplates — 「종류별 문구」(자동 문구의 틀 — 효과 종류마다 · EffectTemplatesSheet)를 연다
+function EffectTextField({ custom, text, auto, className = "", onChange, onTemplates }: {
+  custom: boolean; text: string; auto: string[]; className?: string;
+  onChange: (patch: Partial<Pick<ItemForm, "effectCustom" | "effectText">>) => void;
+  onTemplates?: () => void;
+}) {
+  const raw = fxRawLines(text);
+  const over = raw.length > EFFECT_TEXT_MAX || raw.some((l) => l.length > EFFECT_TEXT_LINE_MAX);
+  return (
+    <div className={className}>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="text-[13px] font-bold text-[#131313]">효과 문구</span>
+        <span className="flex items-center gap-2">
+          {onTemplates && (
+            <button type="button" onClick={onTemplates} className="text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313] underline underline-offset-2 transition-colors">종류별 문구</button>
+          )}
+          {/* 폭 고정(긴 「직접 작성」 자리) — 바뀌어도 옆 「종류별 문구」가 밀리지 않게 */}
+          <StatusChip tone={custom ? "ink" : "neutral"} className="w-[64px] justify-center">{custom ? "직접 작성" : "자동"}</StatusChip>
+        </span>
+      </div>
+      {custom ? (
+        <>
+          {/* 📌 칸은 넉넉히(2026-10-18 운영자 "칸 좀 더 늘려 답답해") — 최소 4줄 · 쓴 줄 + 1줄(최대 줄 수까지) · 아래로 끌어 늘리기 */}
+          <textarea rows={Math.min(EFFECT_TEXT_MAX, Math.max(4, text.split(/\n/).length + 1))} value={text} aria-label="효과 문구" placeholder="한 줄에 효과 하나"
+            onChange={(e) => onChange({ effectText: e.target.value })} className={`${inputClass} !px-3.5 !py-3 !text-[16px] md:!text-[15px] !leading-[1.7] resize-y`} />
+          <div className="mt-1.5 flex items-center justify-between gap-3">
+            <span className={`text-[12px] tabular-nums ${over ? "text-[#d01634] font-bold" : "text-[#8a8a8a]"}`}>{raw.length}/{EFFECT_TEXT_MAX}줄</span>
+            <Btn variant="secondary" size="sm" onClick={() => { sfxTick(); onChange({ effectCustom: false, effectText: "" }); }}>자동으로 되돌리기</Btn>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-[#f7f7f7] px-3.5 py-3">
+          <span className="min-w-0 flex-1 text-[13px] font-bold text-[#131313] break-keep">
+            {auto.length ? auto.map((l, i) => <span key={i} className="block">{l}</span>) : <span className="text-[#a3a3a3]">없음</span>}
+          </span>
+          <Btn variant="secondary" size="sm" className="shrink-0" onClick={() => { sfxTick(); onChange({ effectCustom: true, effectText: auto.join("\n") }); }}>직접 쓰기</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 📌 적용 범위(2026-10-18 운영자 — 꾸미기는 「효과」가 아니라 「적용 범위」) — 대시보드 · 랭킹 · 명령어 카드 · 알림 카드(lib/itemEffects COSMETIC_SCOPES) 체크 칸.
+//    value: 고른 키([] = 자동 — 꾸미기 종류마다 AUTO_SCOPE) · auto: 자동 키 · notes: 키마다 어느 명령어 · 알림인지(scopeNotesOf).
+//    자동이면 자동 키가 켜진 채로 보이고, 하나라도 바꾸면 직접 선택(자동과 같아지면 다시 자동). 하나는 늘 남긴다. 「자동」 단추는 늘 같은 자리(자동이면 잠금)
+function ScopeEditor({ value, auto, notes, onChange }: { value: string[]; auto: string[]; notes: Record<string, string>; onChange: (v: string[]) => void }) {
+  const own = normalizeScope(value);
+  const custom = own.length > 0 && own.join(",") !== auto.join(",");
+  const on = custom ? own : auto;
+  const toggle = (k: string) => {
+    const next = normalizeScope(on.includes(k) ? on.filter((x) => x !== k) : [...on, k]);
+    if (!next.length) return;
+    sfxTick();
+    onChange(next.join(",") === auto.join(",") ? [] : next);
+  };
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <StatusChip tone={custom ? "ink" : "neutral"}>{custom ? "직접 선택" : "자동"}</StatusChip>
+        <Btn variant="secondary" size="sm" disabled={!custom} onClick={() => { sfxTick(); onChange([]); }}>자동</Btn>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+        {COSMETIC_SCOPES.map((s) => (
+          <PickBox key={s.v} on={on.includes(s.v)} inset={false} onToggle={() => toggle(s.v)} className="min-w-0 justify-start">
+            <span className="shrink-0">{s.l}</span>
+            {notes[s.v] && <span className="min-w-0 truncate font-medium text-[#a3a3a3]">{notes[s.v]}</span>}
+          </PickBox>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -941,8 +1352,9 @@ function EffectsEditor({
 //    몸값 칸 옆 "상품가" — 그 아이템을 따로 파는 상품이 있으면 같은 기간의 정가로 채운다(없으면 단추 없음).
 //    ⚠️ 모듈 바깥에 둔다(페이지 안에서 정의하면 입력할 때마다 다시 마운트돼 포커스가 날아간다)
 //    stackable: 관리자 아이템 목록 API(lib/unitSale unitThingSet)가 주는 쌓임 여부
-type RegLite = { _id: string; name?: string; icon?: string; imageUrl?: string; color?: string; type?: string; roleId?: string; stackable?: boolean; effects?: unknown };
-type ShopLite = { _id: string; name?: string; itemId?: string; type?: string; active?: boolean; unitSale?: boolean; price?: number; durations?: { days?: number; price?: number }[] };
+// shortName · categoryLabel — 목록 API 가 붙여 주는 짧은 이름 · 분류(lib/itemCategory.js categoryFieldsOf)
+type RegLite = { _id: string; name?: string; shortName?: string; categoryLabel?: string; category?: string; icon?: string; imageUrl?: string; color?: string; type?: string; roleId?: string; stackable?: boolean; effects?: unknown };
+type ShopLite = { _id: string; name?: string; shortName?: string; itemId?: string; type?: string; active?: boolean; unitSale?: boolean; price?: number; durations?: { days?: number; price?: number }[] };
 // 구성 아이템을 따로 파는 상품의 정가 — N일 구성은 그 기간 값, 영구 구성은 무제한 값(기간제만 파는 상품은 없음) × 개수. 판매 중인 상품을 먼저
 const soloPriceOf = (shops: ShopLite[], itemId: string, days: number, qty: number): number | null => {
   const list = shops
@@ -998,7 +1410,8 @@ function BundlePicker({ regItems, shops, picked, room, onAdd, onClose }: {
   }, [onClose]);
   const list = regItems.filter((x) => x.type !== "physical");
   const qq = q.trim().toLowerCase();
-  const shown = list.filter((x) => (!type || x.type === type) && (!qq || String(x.name || "").toLowerCase().includes(qq)));
+  // 검색 — 이름 · 분류
+  const shown = list.filter((x) => (!type || x.type === type) && (!qq || [x.name, categoryOfRow(x)].some((s) => String(s || "").toLowerCase().includes(qq))));
   const full = sel.length >= room;
   const toggle = (id: string) => setSel((s) => (s.includes(id) ? s.filter((v) => v !== id) : s.length >= room ? s : [...s, id]));
   // 넣는 차례 — 목록(아이템 순서) 차례 그대로(누른 차례가 아니라)
@@ -1008,7 +1421,7 @@ function BundlePicker({ regItems, shops, picked, room, onAdd, onClose }: {
     onAdd(list.filter((x) => set.has(String(x._id))).map((x) => String(x._id)));
   };
   return (
-    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={onClose}>
+    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" {...backdropClose(onClose)}>
       <div role="dialog" aria-modal="true" aria-label="구성에 아이템 추가" onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-lg max-h-[88dvh] sm:max-h-[84dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
         <div className="shrink-0 px-5 pt-5 pb-3 border-b border-[#ededed]">
@@ -1023,7 +1436,7 @@ function BundlePicker({ regItems, shops, picked, room, onAdd, onClose }: {
             </button>
           </div>
           <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="아이템 이름" aria-label="아이템 검색" className={`${inputClass} mt-3`} />
-          <div className="mt-2.5 overflow-x-auto no-bar">
+          <div className="mt-2.5">
             <Segmented options={PICK_TYPES.map((o) => ({ ...o, n: list.filter((x) => !o.v || x.type === o.v).length }))} value={type} onChange={setType} />
           </div>
         </div>
@@ -1040,11 +1453,11 @@ function BundlePicker({ regItems, shops, picked, room, onAdd, onClose }: {
               const setV = setValueOf(shops, id);
               return (
                 <label key={id} className={`flex items-center gap-3 min-h-14 px-5 py-2.5 border-b border-[#ededed] ${locked ? "opacity-50 cursor-default" : "cursor-pointer hover:bg-[#f7f7f7]"}`}>
-                  <input type="checkbox" className={CHECK} checked={on} disabled={locked} onChange={() => toggle(id)} aria-label={`${x.name || "아이템"} 고르기`} />
+                  <input type="checkbox" className={CHECK} checked={on} disabled={locked} onChange={() => toggle(id)} aria-label={`${shortOfRow(x) || "아이템"} 고르기`} />
                   <span className="shrink-0"><ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={28} color={x.color || itemTypeColor(x.type)} /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-bold">{x.name || "이름 없음"}</span>
-                    <span className="block truncate text-[12px] text-[#5a5a5a]">{itemTypeLabel(x.type)}{inSet ? " · 이미 있음" : ""}</span>
+                    <span className="block truncate text-[14px] font-bold" title={x.name}>{shortOfRow(x) || "이름 없음"}</span>
+                    <span className="block truncate text-[12px] text-[#5a5a5a]">{categoryOfRow(x)}{inSet ? " · 이미 있음" : ""}</span>
                   </span>
                   {/* 몸값 참고 — 상품가(따로 파는 무제한 값) · 다른 세트 몸값. 둘 다 없으면 「—」 */}
                   <span className="shrink-0 text-right text-[11px] font-bold tabular-nums leading-tight">
@@ -1098,8 +1511,8 @@ function BundleEditor({ rows, regItems, shops, onChange }: { rows: BundleRow[]; 
               <span className="shrink-0 -ml-1.5"><DragHandle {...dnd.handleProps(BUNDLE_SEG, i)} /></span>
               <span className="shrink-0"><ItemIcon icon={it?.icon} imageUrl={it?.imageUrl} type={it?.type || "item"} size={28} color={it?.color || itemTypeColor(it?.type)} /></span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-bold text-[#131313]">{it?.name || "찾을 수 없는 아이템"}</span>
-                {it && <span className="block truncate text-[12px] text-[#5a5a5a]">{itemTypeLabel(it.type)}{hasRole ? " · 역할" : ""}</span>}
+                <span className="block truncate text-[14px] font-bold text-[#131313]" title={it?.name}>{it ? shortOfRow(it) || "이름 없음" : "찾을 수 없는 아이템"}</span>
+                {it && <span className="block truncate text-[12px] text-[#5a5a5a]">{categoryOfRow(it)}{hasRole ? " · 역할" : ""}</span>}
               </span>
               <button type="button" aria-label="구성 빼기" onClick={() => onChange(rows.filter((_, j) => j !== i))}
                 className="shrink-0 w-8 h-8 rounded-full text-[#8a8a8a] hover:text-[#d01634] hover:bg-[#f2f2f2] flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
@@ -1181,23 +1594,24 @@ const shopWorthOf = (s: ShopLite, itemId: string): { v: number | null; tag?: str
 };
 const inBundleOf = (s: ShopLite, itemId: string) =>
   s.type === BUNDLE_TYPE && ((s as ShopLite & { bundle?: { itemId?: string }[] }).bundle || []).some((c) => String(c?.itemId || "") === itemId);
-function WorthRef({ itemId, group, type, regItems, shops, open, onToggle }: {
-  itemId: string; group: string; type: string; regItems: RegLite[]; shops: ShopLite[]; open: boolean; onToggle: () => void;
+//    📌 2026-10-17 상세 칸 흰 판(PaneSection) 하나 — 처음엔 접힘 · 접힘은 이 브라우저에 기억. 머리 줄에 센 수(이 아이템 상품 · 견줄 아이템)
+function WorthRef({ itemId, group, type, regItems, shops }: {
+  itemId: string; group: string; type: string; regItems: RegLite[]; shops: ShopLite[];
 }) {
   const id = String(itemId || "");
   const own: WorthRow[] = id
     ? [
         ...shops.filter((s) => s.type !== BUNDLE_TYPE && String(s.itemId || "") === id).map((s) => {
           const w = shopWorthOf(s, id);
-          return { key: `p:${s._id}`, name: s.name || "이름 없음", off: s.active === false, solo: w.v, soloTag: w.tag, setV: null };
+          return { key: `p:${s._id}`, name: shortOfRow(s) || "이름 없음", off: s.active === false, solo: w.v, soloTag: w.tag, setV: null };
         }),
-        ...shops.filter((s) => inBundleOf(s, id)).map((s) => ({ key: `s:${s._id}`, name: s.name || "이름 없음", off: s.active === false, solo: null, setV: setValueOf([s], id) })),
+        ...shops.filter((s) => inBundleOf(s, id)).map((s) => ({ key: `s:${s._id}`, name: shortOfRow(s) || "이름 없음", off: s.active === false, solo: null, setV: setValueOf([s], id) })),
       ]
     : [];
   const g = normalizeItemGroup(group);
   const peers: WorthRow[] = regItems
     .filter((x) => String(x._id) !== id && (g ? groupOfItem(x as { group?: unknown }) === g : x.type === type))
-    .map((x) => { const xid = String(x._id); return { key: `i:${xid}`, name: x.name || "이름 없음", solo: soloPriceOf(shops, xid, 0, 1), setV: setValueOf(shops, xid) }; });
+    .map((x) => { const xid = String(x._id); return { key: `i:${xid}`, name: shortOfRow(x) || "이름 없음", solo: soloPriceOf(shops, xid, 0, 1), setV: setValueOf(shops, xid) }; });
   const ranked = [...peers.filter((r) => r.solo != null || r.setV != null), ...peers.filter((r) => r.solo == null && r.setV == null)];
   const shown = ranked.slice(0, WORTH_MAX);
   const num = (v: number | null) => (v != null ? v.toLocaleString() : "—");
@@ -1215,18 +1629,9 @@ function WorthRef({ itemId, group, type, regItems, shops, open, onToggle }: {
     </div>
   );
   return (
-    <section className="mt-2 pt-4 border-t border-[#ededed]">
-      <h3 className={open ? "mb-3" : ""}>
-        <button type="button" onClick={onToggle} aria-expanded={open}
-          className="w-full flex items-center gap-2 text-left text-[14px] font-black tracking-tight rounded outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
-          몸값 참고
-          <svg aria-hidden viewBox="0 0 20 20" className={`ml-auto w-4 h-4 shrink-0 text-[#8a8a8a] transition-transform ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 5l5 5-5 5" />
-          </svg>
-        </button>
-      </h3>
-      {open && (
-        <div className="mb-1">
+    <PaneSection title="몸값 참고" collapsible defaultOpen={false} storeKey="shop:item:worth"
+      summary={`${own.length ? `상품 ${own.length.toLocaleString()} · ` : ""}${g || itemTypeLabel(type)} ${ranked.length.toLocaleString()}`}>
+        <div>
           <div className="grid gap-x-2 pb-1 text-[11px] font-bold text-[#8a8a8a]" style={WORTH_GRID}>
             <span />
             <span className="text-right">상품가</span>
@@ -1242,15 +1647,15 @@ function WorthRef({ itemId, group, type, regItems, shops, open, onToggle }: {
           {shown.length > 0 ? shown.map(line) : <p className="py-1.5 border-t border-[#f2f2f2] text-[12px] text-[#a3a3a3]">없음</p>}
           {ranked.length > shown.length && <p className="pt-1.5 text-[11px] font-bold text-[#8a8a8a] tabular-nums">외 {(ranked.length - shown.length).toLocaleString()}개</p>}
         </div>
-      )}
-    </section>
+    </PaneSection>
   );
 }
 
 // 📌 추천 아이템 창 — 목록(lib/itemPresets.js · /api/admin/items/presets)에서 골라 한 번에 등록한다. 같은 이름이 이미 있으면 잠근다(등록됨).
 //    모바일은 아래에서 올라오는 판, PC 는 가운데 창. 머리 · 전체 선택 줄 · 아래 동작 줄은 고정이고 목록만 스크롤한다
 //    열 때만 그린다(페이지가 presetOpen 일 때 마운트) — 열 때마다 상태가 새로 시작하고 목록을 다시 읽는다
-type PresetRow = { key: string; name: string; icon: string; group: string; lines: string[]; exists: boolean };
+// shortName · categoryLabel — 추천 이름(「카드 테두리 · 골드」)을 나눈 값(API 가 붙인다 — 등록하면 이름은 짧은 이름 · 분류는 따로)
+type PresetRow = { key: string; name: string; shortName?: string; categoryLabel?: string; icon: string; group: string; lines: string[]; exists: boolean };
 type PresetIconSwap = { name: string; icon: string; found: number; pending: number };
 const CHECK = "w-4 h-4 shrink-0 accent-[#131313] cursor-pointer disabled:cursor-default";
 function PresetDialog({
@@ -1302,7 +1707,7 @@ function PresetDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" {...backdropClose(busy ? undefined : onClose)}>
       <div role="dialog" aria-modal="true" aria-label="추천 아이템" onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-lg max-h-[88dvh] sm:max-h-[84dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
         <div className="shrink-0 flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
@@ -1334,7 +1739,11 @@ function PresetDialog({
                   <input type="checkbox" className={CHECK} checked={r.exists || sel.has(r.key)} disabled={r.exists || busy} onChange={() => toggle(r.key)} />
                   <ItemIcon icon={r.icon} type="item" size={32} />
                   <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-[14px] font-bold ${r.exists ? "text-[#a3a3a3]" : ""}`}>{r.name}</span>
+                    {/* 이름 · 분류(작게) — 등록되는 모양 그대로 */}
+                    <span className="flex items-baseline gap-1.5 min-w-0">
+                      <span className={`min-w-0 truncate text-[14px] font-bold ${r.exists ? "text-[#a3a3a3]" : ""}`} title={r.name}>{shortOfRow(r)}</span>
+                      <span className="shrink-0 text-[11px] font-bold text-[#8a8a8a]">{categoryOfRow(r)}</span>
+                    </span>
                     {r.lines.map((l, j) => <span key={j} className="block truncate text-[12px] text-[#5a5a5a] tabular-nums">{l}</span>)}
                   </span>
                   {r.exists && <StatusChip className="shrink-0">등록됨</StatusChip>}
@@ -1345,11 +1754,14 @@ function PresetDialog({
         </div>
 
         <div className="shrink-0 border-t border-[#ededed] px-5 py-3.5 flex items-center gap-3">
-          <label className={`min-w-0 flex-1 flex items-center gap-2 text-[13px] font-bold break-keep ${pendingIcons ? "cursor-pointer" : "text-[#a3a3a3]"}`}>
-            <input type="checkbox" className={CHECK} checked={doSwap} disabled={!pendingIcons || busy} onChange={(e) => setSwap(e.target.checked)} />
-            <span className="min-w-0">기존 아이템 아이콘도 도트로 바꾸기</span>
-          </label>
-          <Btn className="w-[88px] shrink-0" onClick={submit} disabled={busy || rows == null || (!picked.length && !doSwap)}>{busy ? "등록 중…" : "등록"}</Btn>
+          {/* 옛 아이콘을 도트로 한 번 바꾸는 이관 줄 — 바꿀 것이 남아 있을 때만 */}
+          {pendingIcons > 0 && (
+            <label className="min-w-0 flex-1 flex items-center gap-2 text-[13px] font-bold break-keep cursor-pointer">
+              <input type="checkbox" className={CHECK} checked={doSwap} disabled={busy} onChange={(e) => setSwap(e.target.checked)} />
+              <span className="min-w-0">기존 아이템 아이콘도 도트로 바꾸기</span>
+            </label>
+          )}
+          <Btn className="ml-auto w-[88px] shrink-0" onClick={submit} disabled={busy || rows == null || (!picked.length && !doSwap)}>{busy ? "등록 중…" : "등록"}</Btn>
         </div>
       </div>
     </div>
@@ -1531,7 +1943,7 @@ function GroupManager({
 
   return (
     <>
-      <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={busy ? undefined : onClose}>
+      <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" {...backdropClose(busy ? undefined : onClose)}>
         <div role="dialog" aria-modal="true" aria-label="그룹 관리" onClick={(e) => e.stopPropagation()}
           className="w-full sm:max-w-lg max-h-[88dvh] sm:max-h-[84dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
           <div className="shrink-0 flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
@@ -1715,7 +2127,7 @@ function ThemeManager({
 
   return (
     <>
-      <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" onClick={busy ? undefined : onClose}>
+      <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center bg-black/40 sm:p-4 overlay-in" {...backdropClose(busy ? undefined : onClose)}>
         <div role="dialog" aria-modal="true" aria-label="테마 관리" onClick={(e) => e.stopPropagation()}
           className="w-full sm:max-w-lg max-h-[88dvh] sm:max-h-[84dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white border border-[#ededed] shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313] pb-[env(safe-area-inset-bottom)] sm:pb-0">
           <div className="shrink-0 flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#ededed]">
@@ -1809,40 +2221,811 @@ const BASE_BANNER_PLACES = [{ v: "home", l: "홈" }, { v: "season", l: "시즌 �
 const GONE_PLACE = "-gone";
 const bannerPlaceOf = (b: { placement?: unknown } | null | undefined) => (typeof b?.placement === "string" && b.placement ? b.placement : "home");
 
-// 📌 한 번에 수정 — 저장 안 한 게 남은 채 떠날 때 묻는 글(링크 · 뒤로 가기 같은 글)
-const leaveAsk = (n: number) => `저장하지 않은 수정이 ${n}개 있습니다. 나가면 사라집니다. 나갈까요?`;
-// 📌 뒤로 가기 표지(2026-10-11) — 고친 게 생기면 지금 기록 자리를 「아래」로 적고 같은 주소로 「위」 자리를 하나 더 쌓는다(history.state[LEAVE_MARK] — 같은 n 이 한 쌍).
-//    뒤로 가기 한 번은 「위」 → 「아래」(같은 주소 — 화면 그대로)라 그때 묻는다. 주소를 안 넘기고 쌓아 Next 라우터는 아무것도 다시 그리지 않는다(Next 의 기록 값은 그대로 따라 담는다)
+// ══ 상점 관리 › 아이템 — 여러 개 고르기 · 거르기 · 카드 보기 · 붙는 편집기(2026-10-17) ══
+
+// 📌 거르기 — 묶음 안은 「또는」, 묶음끼리는 「그리고」. 희귀도 미지정("" — 일반으로 보인다)은 「미지정」 칩
+type ItemFilters = { rarity: string[]; kind: string[]; use: string[]; vis: string[]; draft: string[] };
+const NO_FILTERS: ItemFilters = { rarity: [], kind: [], use: [], vis: [], draft: [] };
+const RARITY_NONE = "none";
+const KIND_FILTERS = [...EFFECT_KINDS, { v: "none", l: "없음" }];
+const USE_FILTERS = [{ v: "shop", l: "상품 있음" }, { v: "noshop", l: "상품 없음" }, { v: "pass", l: "패스 있음" }];
+const VIS_FILTERS = [{ v: "on", l: "표시" }, { v: "off", l: "숨김" }];
+const DRAFT_FILTERS = [{ v: "new", l: "추가" }, { v: "edit", l: "수정" }];
+// 효과 종류(발동 · 상시 · 소모 · 꾸미기 — lib/itemEffects EFFECT_KINDS). 옛 기본 효과 세 칸은 발동. 하나도 없으면 「없음」(기프트카드 포함)
+const effectKindsOf = (it: any): Set<string> => {
+  const out = new Set<string>();
+  const ef = it?.effects || {};
+  if (it?.type !== "physical") {
+    if (Number(ef.chatBuffXp) > 0 || Number(ef.voiceBuffXp) > 0 || Number(ef.attendBuffXp) > 0) out.add("trigger");
+    for (const e of Array.isArray(ef.list) ? ef.list : []) {
+      const k = TRIGGER_OF[e?.on]?.kind;
+      if (k) out.add(k);
+    }
+  }
+  if (!out.size) out.add("none");
+  return out;
+};
+const passItemFilters = (it: any, f: ItemFilters) => {
+  if (f.rarity.length && !f.rarity.includes(normalizeRarity(it.rarity) || RARITY_NONE)) return false;
+  if (f.kind.length) {
+    const ks = effectKindsOf(it);
+    if (!f.kind.some((k) => ks.has(k))) return false;
+  }
+  if (f.use.length) {
+    const u = Number(it.usage) || 0;
+    const p = Number(it.passUsage) || 0;
+    if (!f.use.some((v) => (v === "shop" ? u > 0 : v === "noshop" ? u === 0 : p > 0))) return false;
+  }
+  if (f.vis.length && !f.vis.includes(it.visible === false ? "off" : "on")) return false;
+  if (f.draft.length && !f.draft.includes(String(it._draft || ""))) return false;
+  return true;
+};
+
+// 📌 열 고르기 — 색상 · 시즌 · 연결 역할은 기본 숨김(정보는 적고 표 폭을 차지한다). 이 브라우저에 기억
+const REG_OPTIONAL_COLS = [
+  { key: "rarity", label: "희귀도" },
+  { key: "role", label: "연결 역할" },
+  { key: "color", label: "색상" },
+  { key: "usage", label: "사용" },
+  { key: "season", label: "시즌" },
+];
+const REG_HIDDEN_DEFAULT = ["role", "color", "season"];
+const REG_SORT_LABEL: Record<string, string> = { name: "이름", rarity: "희귀도", role: "연결 역할", usage: "사용", vis: "인벤토리" };
+
+// 화면에 그려지는 줄 차례 — 묶음 표 · 카드 격자와 같은 셈(묶음은 그 묶음 첫 줄 자리에 모은다). 편집기 ‹ › 가 이 차례로 넘긴다
+const displayOrderOf = <T,>(rows: T[], groupOf?: (r: T) => string): T[] => {
+  if (!groupOf) return rows;
+  const members = new Map<string, T[]>();
+  for (const r of rows) {
+    const g = groupOf(r) || "";
+    if (!g) continue;
+    const a = members.get(g);
+    if (a) a.push(r);
+    else members.set(g, [r]);
+  }
+  const out: T[] = [];
+  const done = new Set<string>();
+  for (const r of rows) {
+    const g = groupOf(r) || "";
+    if (!g) { out.push(r); continue; }
+    if (done.has(g)) continue;
+    done.add(g);
+    out.push(...(members.get(g) || []));
+  }
+  return out;
+};
+
+// 📌 편집기 두 열 — 칸 안쪽 폭이 넉넉하면(넓은 화면에서 붙는 칸을 넓혔을 때) 왼쪽 미리보기 · 기본 칸 | 오른쪽 효과 · 몸값 참고.
+//    좁으면 예전처럼 한 열(왼쪽 → 오른쪽 차례). 폭은 틀을 재서 정한다(임의 grid-template 클래스가 안 먹는 빌드라 인라인)
+const PANE_TWO_COL = 760;
+function PaneColumns({ children }: { children: (wide: boolean) => [React.ReactNode, React.ReactNode] }) {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const [wide, setWide] = useState(false);
+  useLayoutEffect(() => {
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setWide(el.clientWidth >= PANE_TWO_COL));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  const [left, right] = children(wide);
+  return (
+    // 📌 2026-10-17 흰 판(PaneSection) 묶음 — 열 사이 · 한 열로 쌓일 때 두 열 사이도 판 사이와 같은 12px
+    <div ref={setEl} style={wide ? { display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", columnGap: 12, alignItems: "start" } : undefined}>
+      <div className="min-w-0">{left}</div>
+      <div className={wide ? "min-w-0" : "min-w-0 mt-3 empty:mt-0"}>{right}</div>
+    </div>
+  );
+}
+
+// 📌 카드 보기의 아이템 카드 — 평평한 잉크 바닥(#0c0c0c) 위 큰 그림 + 아래 3px 띠(희귀도 색, 안 고른 아이템은 아이템 색) + 이름 · 유형 · 희귀도 · 표시 스위치.
+//    희귀도 빛(아래에서 번지는 그라데이션)은 걷었다(2026-10-17 — 승인 시안 ③ · 그라데이션 금지). 틀 · 테두리 · 고르기 칸은 CardGrid 가 그린다
+function ItemCard({ it, visBusy, locked, onToggleVis, draftMark }: { it: any; visBusy: boolean; locked: boolean; onToggleVis: () => void; draftMark: React.ReactNode }) {
+  const art = withCosmeticIcon(it, it);
+  const color = art.color || itemTypeColor(art.type);
+  const rk = normalizeRarity(it.rarity);
+  const r = rk ? rarityOf(rk) : null;
+  const hidden = it.visible === false;
+  return (
+    <>
+      <div className="relative aspect-[4/3] flex items-center justify-center overflow-hidden" style={{ background: "#0c0c0c" }}>
+        <span className={hidden ? "opacity-40" : ""}>
+          <ItemIcon icon={art.icon} imageUrl={art.imageUrl} type={art.type} size={56} color={color} />
+        </span>
+        <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: r ? r.c : color }} />
+      </div>
+      <div className="px-3 pt-2.5 pb-3">
+        <p className={`truncate text-[13px] font-black ${hidden ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`} title={it.name}>{shortOfRow(it)}</p>
+        <div className="mt-1.5 flex items-center gap-1.5 min-w-0 h-5">
+          <TypeBadge type={it.type} label={categoryOfRow(it)} className="shrink-0 px-2 py-0.5 text-[10px]" />
+          <RarityMark v={it.rarity} />
+          {draftMark}
+        </div>
+        <div className="mt-2.5">
+          <VisSwitch on={!hidden} busy={visBusy} disabled={locked} onToggle={onToggleVis} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// 📌 이름 바꾸기 · 복제 창(아래 띠) — 방식: 찾아 바꾸기 · 앞에 붙이기 · 뒤에 붙이기 · 앞머리 빼기(복제는 맨 앞에 「(복사) 붙이기」 — lib/items.js copyNameOf).
+//    「설명에도」 — 같은 규칙을 설명에도. 미리보기 「지금 → 바뀐 이름」: 40자 넘김 · 겹침 · 빈 이름은 빨강(보내지 않는다), 그대로는 회색.
+//    겹침 — 바꾼 뒤 이름이 다른 아이템(고르지 않은 것 · 바꾼 것 · 복제 원본) 이름과 같은 것
+type RenameRule = "copy" | "replace" | "prefix" | "suffix" | "strip";
+const RENAME_RULES: { v: RenameRule; l: string }[] = [
+  { v: "replace", l: "찾아 바꾸기" },
+  { v: "prefix", l: "앞에 붙이기" },
+  { v: "suffix", l: "뒤에 붙이기" },
+  { v: "strip", l: "앞머리 빼기" },
+];
+const DUP_RULES: { v: RenameRule; l: string }[] = [{ v: "copy", l: "(복사) 붙이기" }, ...RENAME_RULES];
+const applyRule = (s: string, rule: RenameRule, a: string, b: string) => {
+  if (rule === "copy") return copyNameOf(s);
+  if (rule === "replace") return a ? s.split(a).join(b) : s;
+  if (rule === "prefix") return a + s;
+  if (rule === "suffix") return s + a;
+  return a && s.startsWith(a) ? s.slice(a.length).trimStart() : s;
+};
+// 고른 이름들의 같은 앞머리(「카드 테두리 · 」처럼 「· 」로 끝나는 데까지) — 「앞머리 빼기」 칸 처음 값
+const commonHeadOf = (names: string[]) => {
+  if (names.length < 2) return "";
+  let p = names[0];
+  for (const n of names) {
+    let i = 0;
+    while (i < p.length && i < n.length && p[i] === n[i]) i++;
+    p = p.slice(0, i);
+  }
+  const at = p.lastIndexOf("· ");
+  return at >= 0 ? p.slice(0, at + 2) : "";
+};
+type RenameRow = { id: string; from: string; to: string; descTo: string; descChanged: boolean; flag: "" | "same" | "empty" | "over" | "descOver" | "dup" };
+const RENAME_FLAG: Record<Exclude<RenameRow["flag"], "">, { l: string; bad: boolean }> = {
+  same: { l: "그대로", bad: false },
+  empty: { l: "빈 이름", bad: true },
+  over: { l: `${ITEM_NAME_MAX}자 넘김`, bad: true },
+  descOver: { l: `설명 ${DESCRIPTION_MAX}자 넘김`, bad: true },
+  dup: { l: "겹침", bad: true },
+};
+function RenameSheet({ mode, items, allItems, busy, onClose, onSubmit }: {
+  mode: "rename" | "duplicate";
+  items: any[]; // 고른 아이템(목록 차례)
+  allItems: any[]; // 모든 아이템(겹침 검사)
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (rows: RenameRow[], withDesc: boolean) => void;
+}) {
+  const dup = mode === "duplicate";
+  const [rule, setRule] = useState<RenameRule>(dup ? "copy" : "replace");
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [withDesc, setWithDesc] = useState(false);
+  const descOn = withDesc && rule !== "copy";
+  const pickRule = (v: string) => {
+    const next = v as RenameRule;
+    setRule(next);
+    // 앞머리 빼기 — 고른 이름들의 같은 앞머리를 먼저 넣어 둔다(칸이 비어 있을 때만)
+    if (next === "strip" && !a) setA(commonHeadOf(items.map((it) => String(it.name || ""))));
+  };
+  const picked = new Set(items.map((it) => String(it._id)));
+  const rows: RenameRow[] = items.map((it) => {
+    const from = String(it.name || "");
+    const desc = String(it.description || "");
+    const to = applyRule(from, rule, a, b).trim();
+    const descTo = descOn ? applyRule(desc, rule, a, b) : desc;
+    return { id: String(it._id), from, to, descTo, descChanged: descTo !== desc, flag: "" };
+  });
+  // 바꾼 뒤 모든 이름(겹침 셈) — 고르지 않은 아이템 + 고른 아이템의 새 이름(복제는 원본 이름도 그대로 남는다)
+  const count = new Map<string, number>();
+  const add = (n: string) => count.set(n, (count.get(n) || 0) + 1);
+  for (const it of allItems) if (dup || !picked.has(String(it._id))) add(String(it.name || "").trim());
+  for (const r of rows) add(r.to);
+  for (const r of rows) {
+    if (!dup && r.to === r.from.trim() && !r.descChanged) r.flag = "same";
+    else if (!r.to) r.flag = "empty";
+    else if (r.to.length > ITEM_NAME_MAX) r.flag = "over";
+    else if (r.descTo.length > DESCRIPTION_MAX) r.flag = "descOver";
+    else if ((count.get(r.to) || 0) > 1) r.flag = "dup";
+  }
+  const ok = rows.filter((r) => !r.flag);
+  const needA = rule !== "copy";
+  return (
+    <FormSheet open onClose={onClose} busy={busy} width={640} title={dup ? "복제" : "이름 바꾸기"} sub={`${items.length.toLocaleString()}개`}
+      onSubmit={() => { if (ok.length) onSubmit(ok, descOn); }}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>취소</Btn>
+          <Btn type="submit" className="min-w-[112px] tabular-nums" disabled={!ok.length}>{ok.length ? `${ok.length.toLocaleString()}개 ${dup ? "복제" : "바꾸기"}` : dup ? "복제" : "바꾸기"}</Btn>
+        </>
+      }>
+      <div className="mb-4">
+        <Segmented options={dup ? DUP_RULES : RENAME_RULES} value={rule} onChange={pickRule} />
+      </div>
+      {needA && (
+        <div className={`grid gap-x-3 ${rule === "replace" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+          <Field label={rule === "replace" ? "찾을 글" : rule === "strip" ? "뺄 앞머리" : "붙일 글"}>
+            <input type="text" value={a} onChange={(e) => setA(e.target.value)} className={inputClass} autoFocus
+              placeholder={rule === "strip" ? "예: 카드 테두리 · " : rule === "prefix" ? "예: [한정] " : rule === "suffix" ? "예:  · 시즌 2" : ""} />
+          </Field>
+          {rule === "replace" && (
+            <Field label="바꿀 글">
+              <input type="text" value={b} onChange={(e) => setB(e.target.value)} className={inputClass} />
+            </Field>
+          )}
+        </div>
+      )}
+      {needA && (
+        <label className="mb-4 inline-flex items-center gap-2 text-[13px] font-bold cursor-pointer select-none">
+          <input type="checkbox" className={CHECK} checked={withDesc} onChange={(e) => setWithDesc(e.target.checked)} />
+          설명에도
+        </label>
+      )}
+      <div className="rounded-xl border border-[#ededed] overflow-hidden">
+        <div className="hidden sm:grid gap-x-3 px-3.5 py-2 bg-[#f7f7f7] border-b border-[#ededed] text-[11px] font-bold text-[#8a8a8a]" style={RENAME_GRID}>
+          <span>지금</span>
+          <span />
+          <span>{dup ? "복제본 이름" : "바뀐 이름"}</span>
+          <span />
+        </div>
+        {rows.map((r) => {
+          const f = r.flag ? RENAME_FLAG[r.flag] : null;
+          return (
+            <div key={r.id} className="px-3.5 py-2 border-b border-[#f2f2f2] last:border-b-0 sm:grid sm:items-center gap-x-3" style={RENAME_GRID}>
+              <span className="block min-w-0 truncate text-[12px] text-[#8a8a8a]" title={r.from}>{r.from}</span>
+              <span aria-hidden className="hidden sm:block text-[#a3a3a3] text-[12px]">→</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`min-w-0 truncate text-[13px] font-bold ${f?.bad ? "text-[#d01634]" : f ? "text-[#a3a3a3]" : "text-[#131313]"}`} title={r.to}>{r.to || "—"}</span>
+                {r.descChanged && !f && <span className="shrink-0 text-[10px] font-bold text-[#8a8a8a]">설명</span>}
+                {f && <StatusChip tone={f.bad ? "bad" : "neutral"} className="sm:hidden shrink-0 ml-auto">{f.l}</StatusChip>}
+              </span>
+              <span className="hidden sm:flex justify-end">{f && <StatusChip tone={f.bad ? "bad" : "neutral"}>{f.l}</StatusChip>}</span>
+            </div>
+          );
+        })}
+      </div>
+    </FormSheet>
+  );
+}
+// 미리보기 표 열 — 지금 · → · 바뀐 이름 · 표시(임의 grid-template 클래스가 안 먹는 빌드라 인라인. 폰은 위아래로)
+const RENAME_GRID: React.CSSProperties = { gridTemplateColumns: "minmax(0,1fr) 14px minmax(0,1fr) 88px" };
+
+// ══ 상점 관리 › 상품 · 배너 · 쿠폰 · 구매 내역 — 여러 개 고르기 · 거르기 · 카드 보기 · 붙는 편집기 · 줄 스위치(2026-10-17) ══
+
+// 목록 줄(API 그대로 받은 문서) — 이 화면의 다른 목록과 같은 느슨한 모양
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRow = any;
+
+// 📌 상품 판매 상태 — 숨김(판매 꺼짐) · 판매 종료(판매 중인데 종료 시각이 지남 — lib/saleWindow) · 판매 중. 알약 개수와 줄 표시가 같은 셈이다
+//    (예전 「판매 중」 개수는 종료 시각이 지난 상품까지 셌다)
+const prodStatusOf = (it: AnyRow) => (!it?.active ? "off" : saleEnded(it) ? "ended" : "on");
+const PROD_STATUS_OPTIONS = [{ v: "on", l: "판매 중" }, { v: "ended", l: "판매 종료" }, { v: "off", l: "숨김" }];
+// 배너 거르기 › 노출 — 하나만(다시 누르면 전체)
+const BANNER_VIS = [{ v: "on", l: "노출 중" }, { v: "off", l: "숨김" }];
+const COUPON_STATES = ["사용 가능", "중지", "만료", "소진"];
+// 📌 상품 거르기 — 묶음 안은 「또는」, 묶음끼리는 「그리고」(아이템 거르기와 같다). 지운 테마를 가리키는 상품은 「테마 없음」
+type ProdFilters = { theme: string[]; disc: string[]; pay: string[]; src: string[] };
+const NO_PROD_FILTERS: ProdFilters = { theme: [], disc: [], pay: [], src: [] };
+const THEME_NONE = "-none";
+const DISC_FILTERS = [{ v: "on", l: "할인 중" }, { v: "off", l: "할인 없음" }];
+const PAY_FILTERS = [{ v: "point", l: "빙옥 전용" }, { v: "both", l: "XP · 빙옥" }];
+const SRC_FILTERS = [{ v: "linked", l: "등록된 아이템" }, { v: "custom", l: "직접 설정" }, { v: "bundle", l: "세트" }];
+const prodSrcOf = (it: AnyRow) => (isBundle(it) ? "bundle" : it?.itemId ? "linked" : "custom");
+const prodThemeOf = (it: AnyRow, keys: ReadonlySet<string>) => (it?.theme && keys.has(String(it.theme)) ? String(it.theme) : THEME_NONE);
+const passProdFilters = (it: AnyRow, f: ProdFilters, themeKeys: ReadonlySet<string>) => {
+  if (f.theme.length && !f.theme.includes(prodThemeOf(it, themeKeys))) return false;
+  if (f.disc.length && !f.disc.includes(discountPctOf(it) > 0 ? "on" : "off")) return false;
+  if (f.pay.length && !f.pay.includes(it?.pointOnly ? "point" : "both")) return false;
+  if (f.src.length && !f.src.includes(prodSrcOf(it))) return false;
+  return true;
+};
+const PROD_SORT_LABEL: Record<string, string> = { name: "이름", status: "판매", price: "가격", stock: "재고", sold: "판매 수" };
+// 상품 표에서 끄고 켤 수 있는 열(기본은 모두 보임)
+const PROD_OPTIONAL_COLS = [{ key: "type", label: "유형 · 역할" }, { key: "price", label: "가격" }, { key: "stock", label: "재고" }, { key: "sold", label: "판매 수" }];
+const COUPON_SORT_LABEL: Record<string, string> = { state: "상태", code: "코드", used: "사용", exp: "만료" };
+
+// 📌 가격 칸(상품 폼 값 — 입력칸 단위: 빙옥 전용이면 빙옥). 기간제는 7일 · 30일(· 무제한), 그 밖(무제한 · 1개 단위 · 기프트카드 · 세트)은 정가 한 칸
+type PriceKey = "price" | "price7" | "price30" | "priceInf";
+const PRICE_LABEL: Record<PriceKey, string> = { price: "정가", price7: "7일", price30: "30일", priceInf: "무제한" };
+const PRICE_KEYS_ALL: PriceKey[] = ["price", "price7", "price30", "priceInf"];
+const priceKeysOf = (f: ProductForm): PriceKey[] => (!f.timed ? ["price"] : ["price7", "price30", ...(f.withInf ? (["priceInf"] as PriceKey[]) : [])]);
+const priceLineOf = (f: ProductForm) => {
+  const parts = priceKeysOf(f).map((k) => ({ k, n: Math.floor(Number(f[k]) || 0) })).filter((x) => x.n > 0);
+  if (!parts.length) return "—";
+  const unit = formUnit(f);
+  return f.timed ? `${parts.map((x) => `${PRICE_LABEL[x.k]} ${x.n.toLocaleString()}`).join(" · ")} ${unit}` : `${parts[0].n.toLocaleString()} ${unit}`;
+};
+// datetime-local 값(KST "YYYY-MM-DDTHH:mm") → 「2026.10.31 23:59」
+const kstLabel = (v: string) => (v ? v.replace("T", " ").replace(/-/g, ".") : "");
+// 보내는 값 — 그 1분이 끝날 때까지(상품 폼 toPayload 와 같다). 비우면 "" (서버가 지운다)
+const kstSend = (v: string) => (v ? `${v}:59+09:00` : "");
+
+// 📌 일괄 미리보기 — 줄마다 이름 · 「지금 → 바뀐 값」. 빨강(보내지 않음) · 회색 「그대로」. 폰에서도 두 줄로 같은 모양
+//    tag — 이름 옆 옅은 글(설명 · 분류 바꾸기: 연결 상품이 바꾸는 곳 「아이템」)
+type PreviewRow = { id: string; name: string; tag?: string; from: string; to: string; flag?: { l: string; bad: boolean } | null };
+function BatchPreview({ rows }: { rows: PreviewRow[] }) {
+  return (
+    <div className="rounded-xl border border-[#ededed] overflow-hidden">
+      {rows.map((r) => (
+        <div key={r.id} className="px-3.5 py-2 border-b border-[#f2f2f2] last:border-b-0">
+          <div className="flex items-center gap-2 min-w-0 h-5">
+            <span className="min-w-0 truncate text-[13px] font-bold text-[#131313]" title={r.name}>{r.name || "이름 없음"}</span>
+            {r.tag && <span className="shrink-0 text-[10px] font-bold text-[#8a8a8a]">{r.tag}</span>}
+            <span className="flex-1" />
+            {r.flag && <StatusChip tone={r.flag.bad ? "bad" : "neutral"} className="shrink-0 !h-5">{r.flag.l}</StatusChip>}
+          </div>
+          <div className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[12px] tabular-nums">
+            <span className="min-w-0 truncate text-[#8a8a8a]" title={r.from}>{r.from}</span>
+            <span aria-hidden className="shrink-0 text-[#a3a3a3]">→</span>
+            <span className={`min-w-0 truncate font-bold ${r.flag?.bad ? "text-[#d01634]" : r.flag ? "text-[#a3a3a3]" : "text-[#131313]"}`} title={r.to}>{r.to}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 📌 상품 일괄 편집 창(아래 띠 「할인 · 판매 종료 · 가격 · 재고」) — 고른 상품마다 바꿀 값을 셈하고 미리보기(지금 → 바뀐 값)를 보인 뒤 「N개 적용」.
+//    서버(PATCH /api/shop/items { batch })가 상품 저장과 같은 규칙으로 다시 검사한다. 가격은 상품 폼 규칙(app/arctic/productForm — 판매 방식 · 기준가 · 빙옥 환산) 그대로
+//      할인 — 할인율(0 = 할인 없음) · 할인 종료(비우면 계속)
+//      판매 종료 — 시각(비우면 끝 없음)
+//      가격 — 바꿀 칸(정가 · 7일 · 30일 · 무제한 — 값이 있는 칸만) · 비율(±%, 반올림 단위) 또는 같은 값(XP · 빙옥 — 다른 단위 상품은 환산)
+//      재고 — 같은 값(무제한 포함) 또는 더하기(±, 0 아래로 안 내림 · 무제한 재고는 그대로)
+type ProdSheetMode = "discount" | "saleEnd" | "price" | "stock";
+type ProdEntry = { id: string; set: Record<string, unknown> };
+const PROD_SHEET_TITLE: Record<ProdSheetMode, string> = { discount: "할인", saleEnd: "판매 종료", price: "가격", stock: "재고" };
+const ROUND_OPTIONS = [{ v: "1", l: "1" }, { v: "100", l: "100" }, { v: "1000", l: "1,000" }, { v: "10000", l: "10,000" }];
+function ProdBatchSheet({ mode, items, busy, at, onClose, onSubmit }: {
+  mode: ProdSheetMode;
+  items: AnyRow[]; // 고른 상품(목록 차례)
+  busy: boolean;
+  at: number; // 창을 연 시각(ms) — 지난 시각 표시
+  onClose: () => void;
+  onSubmit: (entries: ProdEntry[]) => void;
+}) {
+  const [pct, setPct] = useState("");
+  const [until, setUntil] = useState("");
+  const [keys, setKeys] = useState<PriceKey[]>(PRICE_KEYS_ALL);
+  const [op, setOp] = useState("pct");
+  const [val, setVal] = useState("");
+  const [unit, setUnit] = useState(() => (items.length > 0 && items.every((it) => it?.pointOnly) ? "point" : "xp"));
+  const [round, setRound] = useState("100");
+  const [stockOp, setStockOp] = useState("set");
+  const [unlimited, setUnlimited] = useState(false);
+
+  const rows: { preview: PreviewRow; entry: ProdEntry | null }[] = [];
+  let inputOk = true;
+  let untilPast = false;
+  if (mode === "discount") {
+    const n = pct.trim() === "" ? NaN : Number(pct);
+    inputOk = Number.isInteger(n) && n >= 0 && n <= 100;
+    untilPast = !!until && n > 0 && new Date(`${until}:00+09:00`).getTime() <= at;
+    for (const it of items) {
+      const curPct = Math.max(0, Math.floor(Number(it.discountPct) || 0));
+      const curUntil = curPct > 0 ? toKstInput(it.discountUntil) : "";
+      const nextUntil = n > 0 ? until : "";
+      const from = curPct > 0 ? `${curPct}%${curUntil ? ` ~${kstLabel(curUntil)}` : ""}` : "없음";
+      const to = !inputOk ? "—" : n > 0 ? `${n}%${nextUntil ? ` ~${kstLabel(nextUntil)}` : ""}` : "없음";
+      const same = inputOk && curPct === n && curUntil === nextUntil;
+      rows.push({
+        preview: { id: String(it._id), name: shortOfRow(it), from, to, flag: same ? { l: "그대로", bad: false } : null },
+        entry: inputOk && !same ? { id: String(it._id), set: { discountPct: n, discountUntil: n > 0 ? kstSend(until) : "" } } : null,
+      });
+    }
+  } else if (mode === "saleEnd") {
+    untilPast = !!until && new Date(`${until}:00+09:00`).getTime() <= at;
+    for (const it of items) {
+      const cur = toKstInput(it.saleUntil);
+      const same = cur === until;
+      rows.push({
+        preview: { id: String(it._id), name: shortOfRow(it), from: cur ? kstLabel(cur) : "없음", to: until ? kstLabel(until) : "없음", flag: same ? { l: "그대로", bad: false } : null },
+        entry: same ? null : { id: String(it._id), set: { saleUntil: kstSend(until) } },
+      });
+    }
+  } else if (mode === "price") {
+    const v = Number(val);
+    inputOk = val.trim() !== "" && Number.isFinite(v) && (op === "pct" ? v > -100 && v !== 0 : v > 0) && keys.length > 0;
+    const r = Number(round) || 1;
+    for (const it of items) {
+      const f = formFromShopItem(it);
+      const touch = priceKeysOf(f).filter((k) => keys.includes(k) && Number(f[k]) > 0);
+      const next: ProductForm = { ...f };
+      if (inputOk) {
+        for (const k of touch) {
+          const cur = Math.floor(Number(f[k]) || 0);
+          let n: number;
+          if (op === "pct") {
+            n = cur * (1 + v / 100);
+            n = f.pointOnly ? Math.max(1, Math.round(n)) : Math.max(r, Math.round(n / r) * r);
+          } else {
+            // 같은 값 — 고른 단위로 친 값을 그 상품 단위로(XP → 빙옥은 올림 · 빙옥 → XP 는 ×10,000)
+            n = f.pointOnly ? (unit === "xp" ? xpToPoint(v) : Math.floor(v)) : unit === "point" ? pointToXp(Math.floor(v)) : Math.floor(v);
+          }
+          next[k] = String(Math.max(1, n));
+        }
+      }
+      const same = !inputOk || touch.every((k) => next[k] === f[k]);
+      const bad = !same ? saleModeError(next) : "";
+      const body = toPayload(next, "");
+      rows.push({
+        preview: {
+          id: String(it._id), name: shortOfRow(it), from: priceLineOf(f), to: inputOk ? priceLineOf(next) : "—",
+          flag: bad ? { l: "가격 확인", bad: true } : same && inputOk ? { l: "그대로", bad: false } : null,
+        },
+        entry: inputOk && !same && !bad ? { id: String(it._id), set: { price: Number(body.price) || 0, durations: body.durations } } : null,
+      });
+    }
+  } else {
+    const v = Number(val);
+    const setMode = stockOp === "set";
+    inputOk = setMode ? unlimited || (val.trim() !== "" && Number.isInteger(v) && v >= 0) : val.trim() !== "" && Number.isInteger(v) && v !== 0;
+    for (const it of items) {
+      const cur = Number(it.stock) < 0 || it.stock == null ? -1 : Math.floor(Number(it.stock));
+      const curTxt = cur < 0 ? "무제한" : cur.toLocaleString();
+      if (!setMode && cur < 0) {
+        rows.push({ preview: { id: String(it._id), name: shortOfRow(it), from: curTxt, to: curTxt, flag: { l: "무제한", bad: false } }, entry: null });
+        continue;
+      }
+      const next = !inputOk ? cur : setMode ? (unlimited ? -1 : v) : Math.max(0, cur + v);
+      const same = !inputOk || next === cur;
+      rows.push({
+        preview: { id: String(it._id), name: shortOfRow(it), from: curTxt, to: !inputOk ? "—" : next < 0 ? "무제한" : next.toLocaleString(), flag: same && inputOk ? { l: "그대로", bad: false } : null },
+        entry: same ? null : { id: String(it._id), set: setMode ? { stock: next } : { stockDelta: v } },
+      });
+    }
+  }
+  const entries = rows.map((x) => x.entry).filter((e): e is ProdEntry => !!e);
+  const anyXp = items.some((it) => !it?.pointOnly);
+  const pastNote = untilPast ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : undefined;
+  const dateRow = (label: string) => (
+    <Field label={label} hint={pastNote}>
+      <div className="flex items-center gap-2">
+        <input type="datetime-local" value={until} onChange={(e) => setUntil(e.target.value)} className={inputClass} />
+        {until && <Btn variant="ghost" size="sm" onClick={() => setUntil("")}>지우기</Btn>}
+      </div>
+    </Field>
+  );
+  return (
+    <FormSheet open onClose={onClose} busy={busy} width={640} title={PROD_SHEET_TITLE[mode]} sub={`${items.length.toLocaleString()}개`}
+      onSubmit={() => { if (entries.length) onSubmit(entries); }}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>취소</Btn>
+          <Btn type="submit" className="min-w-[112px] tabular-nums" disabled={!entries.length}>{entries.length ? `${entries.length.toLocaleString()}개 적용` : "적용"}</Btn>
+        </>
+      }>
+      {mode === "discount" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+          <Field label="할인율 (%)">
+            <input type="number" min={0} max={100} step={1} inputMode="numeric" autoFocus value={pct} onChange={(e) => setPct(e.target.value)} placeholder="0 = 할인 없음" className={inputClass} />
+          </Field>
+          {dateRow("할인 종료")}
+        </div>
+      )}
+      {mode === "saleEnd" && dateRow("판매 종료")}
+      {mode === "price" && (
+        <>
+          <Field label="바꿀 칸">
+            <div className="flex flex-wrap gap-1.5">
+              {PRICE_KEYS_ALL.map((k) => (
+                <ChoiceChip key={k} on={keys.includes(k)} onClick={() => setKeys((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]))}>{PRICE_LABEL[k]}</ChoiceChip>
+              ))}
+            </div>
+          </Field>
+          <div className="mb-4">
+            <Segmented options={[{ v: "pct", l: "비율 (%)" }, { v: "set", l: "같은 값" }]} value={op} onChange={(x) => { setOp(x); setVal(""); }} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+            <Field label={op === "pct" ? "변경률 (%)" : "가격"}>
+              <input type="number" step={op === "pct" ? "any" : 1} inputMode="decimal" autoFocus value={val} onChange={(e) => setVal(e.target.value)}
+                placeholder={op === "pct" ? "예: -20" : unit === "point" ? "예: 30" : "예: 300000"} className={inputClass} />
+            </Field>
+            {op === "set" ? (
+              <Field label="단위">
+                <Segmented options={[{ v: "xp", l: "XP" }, { v: "point", l: "빙옥" }]} value={unit} onChange={setUnit} />
+              </Field>
+            ) : anyXp ? (
+              <Field label="반올림 (XP)">
+                <Segmented options={ROUND_OPTIONS} value={round} onChange={setRound} />
+              </Field>
+            ) : null}
+          </div>
+        </>
+      )}
+      {mode === "stock" && (
+        <>
+          <div className="mb-4">
+            <Segmented options={[{ v: "set", l: "같은 값" }, { v: "add", l: "더하기" }]} value={stockOp} onChange={(x) => { setStockOp(x); setVal(""); setUnlimited(false); }} />
+          </div>
+          <Field label={stockOp === "set" ? "재고" : "더할 수 (빼려면 −)"}>
+            <div className="flex flex-wrap items-center gap-3">
+              <input type="number" step={1} inputMode="numeric" autoFocus value={val} disabled={stockOp === "set" && unlimited} onChange={(e) => setVal(e.target.value)}
+                placeholder={stockOp === "set" ? "예: 100" : "예: 50"} className={`${numClass} !w-36`} />
+              {stockOp === "set" && (
+                <label className="inline-flex items-center gap-2 text-[13px] font-bold cursor-pointer select-none">
+                  <input type="checkbox" className={CHECK} checked={unlimited} onChange={(e) => setUnlimited(e.target.checked)} />
+                  무제한
+                </label>
+              )}
+            </div>
+          </Field>
+        </>
+      )}
+      <BatchPreview rows={rows.map((x) => x.preview)} />
+    </FormSheet>
+  );
+}
+
+// 📌 설명 바꾸기 · 분류 바꾸기 창(아래 띠 「⋯」 — 2026-10-17 운영자 "설명 한 번에 바꾸는 기능") — 아이템 탭 · 상품 탭이 같이 쓴다.
+//    줄(TextTarget)마다 바꿀 문서 하나: 아이템(아이템 탭 줄 · 연결 상품의 연결 아이템 — 설명 · 분류의 원천이라 그 아이템을 바꾼다) · 상품(직접 설정 · 세트).
+//    같은 아이템에 연결된 상품 여럿은 한 줄(그 아이템을 바꾸면 연결 상품이 모두 따라간다 — 이름 옆 「아이템」).
+//    미리보기 「지금 → 바뀐 값」은 앞 TEXT_PREVIEW_MAX 줄 + 남은 수. 빨강(보내지 않음) · 회색 「그대로」. 보내기는 부르는 쪽(PATCH { batch } — 아이템 · 상품)
+type TextTarget = { key: string; kind: "item" | "product"; id: string; name: string; via: boolean; desc: string; category: string; categoryAuto: string };
+type TextEntry = { kind: "item" | "product"; id: string; set: Record<string, unknown> };
+type TextRow = { preview: PreviewRow; entry: TextEntry | null };
+type TextSheetMode = "desc" | "category";
+const TEXT_PREVIEW_MAX = 8;
+const VIA_TAG = "아이템";
+// 바꿀 줄 목록 → 미리보기 줄(앞 몇 줄) + 남은 수 줄
+function TextPreview({ rows }: { rows: PreviewRow[] }) {
+  const more = rows.length - TEXT_PREVIEW_MAX;
+  const badMore = rows.slice(TEXT_PREVIEW_MAX).filter((r) => r.flag?.bad).length;
+  return (
+    <>
+      <BatchPreview rows={rows.slice(0, TEXT_PREVIEW_MAX)} />
+      {more > 0 && (
+        <p className="mt-2 text-[12px] font-bold text-[#8a8a8a] tabular-nums">
+          외 {more.toLocaleString()}개{badMore > 0 && <span className="text-[#d01634]"> · 보내지 않음 {badMore.toLocaleString()}개</span>}
+        </p>
+      )}
+    </>
+  );
+}
+// 설명 정리 — lib/items.js normalizeDescription 과 같은 차례(CRLF → LF · 줄 끝 공백 · 빈 줄 셋까지 · 앞뒤 trim)에서 자르기만 뺀 것(300자 넘김을 알린다)
+const descFlat = (v: string) => String(v ?? "").replace(/\r\n?/g, "\n").replace(/[ \t\xa0]+$/gm, "").replace(/\n{4,}/g, "\n\n\n").trim();
+// 미리보기 한 줄 — 줄바꿈은 「↵」로
+const descLine = (v: string) => (v ? v.replace(/\n/g, " ↵ ") : "없음");
+type DescRule = "set" | "replace" | "prefix" | "suffix";
+const DESC_RULES: { v: DescRule; l: string }[] = [
+  { v: "set", l: "통째로 바꾸기" },
+  { v: "replace", l: "찾아 바꾸기" },
+  { v: "prefix", l: "앞에 붙이기" },
+  { v: "suffix", l: "뒤에 붙이기" },
+];
+function DescSheet({ targets, busy, onClose, onSubmit }: {
+  targets: TextTarget[]; // 고른 줄(목록 차례 · 같은 문서는 한 번)
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (entries: TextEntry[]) => void;
+}) {
+  const [rule, setRule] = useState<DescRule>("set");
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  // 통째로 바꾸기 — 한 번이라도 적은 뒤부터(열자마자 빈 설명으로 다 지워지게 준비되지 않게 · 적었다 지우면 설명을 지운다).
+  //    찾아 바꾸기 · 붙이기는 찾을 · 붙일 글이 있어야 한다
+  const [touched, setTouched] = useState(false);
+  const inputOk = rule === "set" ? touched : a !== "";
+  const rows = targets.map((t): TextRow => {
+    const cur = descFlat(t.desc);
+    const raw = rule === "set" ? a : rule === "replace" ? (a ? t.desc.split(a).join(b) : t.desc) : rule === "prefix" ? a + t.desc : t.desc + a;
+    const to = descFlat(raw);
+    const over = to.length > DESCRIPTION_MAX;
+    const same = !inputOk || to === cur;
+    const flag = over ? { l: `${DESCRIPTION_MAX}자 넘김`, bad: true } : same && inputOk ? { l: "그대로", bad: false } : null;
+    return {
+      preview: { id: t.key, name: t.name, tag: t.via ? VIA_TAG : undefined, from: descLine(cur), to: inputOk ? descLine(to) : "—", flag },
+      entry: inputOk && !same && !over ? { kind: t.kind, id: t.id, set: { description: to } } : null,
+    };
+  });
+  const entries = rows.map((x) => x.entry).filter((e): e is TextEntry => !!e);
+  const setLen = rule === "set" ? descFlat(a).length : 0;
+  return (
+    <FormSheet open onClose={onClose} busy={busy} width={640} title="설명 바꾸기" sub={`${targets.length.toLocaleString()}개`}
+      onSubmit={() => { if (entries.length) onSubmit(entries); }}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>취소</Btn>
+          <Btn type="submit" className="min-w-[112px] tabular-nums" disabled={!entries.length}>{entries.length ? `${entries.length.toLocaleString()}개 바꾸기` : "바꾸기"}</Btn>
+        </>
+      }>
+      <div className="mb-4">
+        <Segmented options={DESC_RULES} value={rule} onChange={(v) => { setRule(v as DescRule); setA(""); setB(""); setTouched(false); }} />
+      </div>
+      {rule === "replace" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+          <Field label="찾을 글">
+            <input type="text" value={a} onChange={(e) => setA(e.target.value)} className={inputClass} autoFocus />
+          </Field>
+          <Field label="바꿀 글">
+            <input type="text" value={b} onChange={(e) => setB(e.target.value)} className={inputClass} />
+          </Field>
+        </div>
+      ) : (
+        // 줄바꿈 그대로(인벤토리 · 상품 상세는 whitespace-pre-line) — 붙이기도 줄을 바꿔 붙일 수 있게 여러 줄 칸
+        <Field label={rule === "set" ? "설명" : "붙일 글"}>
+          <textarea key={rule} rows={rule === "set" ? 3 : 2} value={a} autoFocus onChange={(e) => { setA(e.target.value); setTouched(true); }}
+            maxLength={rule === "set" ? DESCRIPTION_MAX : undefined} className={`${inputClass} resize-none`} />
+          {rule === "set" && <p className="mt-1 text-right text-[12px] text-[#8a8a8a] tabular-nums">{setLen}/{DESCRIPTION_MAX}</p>}
+        </Field>
+      )}
+      <TextPreview rows={rows.map((x) => x.preview)} />
+    </FormSheet>
+  );
+}
+// 📌 분류 바꾸기 — 「자동」(저장 "" — 줄마다 그 아이템 · 상품의 자동 분류) · 분류 목록 · 직접 입력(CategoryPicker). 「그대로」 = 저장 칸이 이미 그 값
+function CategorySheet({ targets, busy, onClose, onSubmit }: {
+  targets: TextTarget[];
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (entries: TextEntry[]) => void;
+}) {
+  // picked — 고른 뒤부터(열자마자 「자동」으로 되돌리기가 준비되지 않게 — 처음엔 고르기 칸이 비어 있다)
+  const [val, setVal] = useState("");
+  const [picked, setPicked] = useState(false);
+  const v = normalizeCategory(val);
+  const shown = (stored: string, auto: string) => (stored ? stored : `자동 · ${auto || "—"}`);
+  const rows = targets.map((t): TextRow => {
+    const cur = normalizeCategory(t.category);
+    const same = picked && cur === v;
+    return {
+      preview: { id: t.key, name: t.name, tag: t.via ? VIA_TAG : undefined, from: shown(cur, t.categoryAuto), to: picked ? shown(v, t.categoryAuto) : "—", flag: same ? { l: "그대로", bad: false } : null },
+      entry: !picked || same ? null : { kind: t.kind, id: t.id, set: { category: v } },
+    };
+  });
+  const entries = rows.map((x) => x.entry).filter((e): e is TextEntry => !!e);
+  return (
+    <FormSheet open onClose={onClose} busy={busy} width={640} title="분류 바꾸기" sub={`${targets.length.toLocaleString()}개`}
+      onSubmit={() => { if (entries.length) onSubmit(entries); }}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>취소</Btn>
+          <Btn type="submit" className="min-w-[112px] tabular-nums" disabled={!entries.length}>{entries.length ? `${entries.length.toLocaleString()}개 바꾸기` : "바꾸기"}</Btn>
+        </>
+      }>
+      <Field label="분류">
+        <CategoryPicker value={val} unset={!picked} onChange={(x) => { setVal(x); setPicked(true); }} />
+      </Field>
+      <TextPreview rows={rows.map((x) => x.preview)} />
+    </FormSheet>
+  );
+}
+
+// 📌 카드 보기 — 상품: 상점 카드(ProductCard) 그대로 작게(누를 수 없게 — 카드를 누르면 편집기) + 판매 스위치. 틀 · 고르기 칸은 CardGrid 가 그린다
+function ProductTile({ it, busy, locked, onToggle, draftMark }: { it: AnyRow; busy: boolean; locked: boolean; onToggle: () => void; draftMark: React.ReactNode }) {
+  const st = prodStatusOf(it);
+  return (
+    <div className="p-2.5 pb-3">
+      <div inert className="pointer-events-none select-none">
+        <ProductCard it={it} href="#" wished={false} onWish={() => {}}
+          // 숨김 · 판매 종료는 그림 왼쪽 아래(왼쪽 위는 고르기 칸 자리) — 비어 있어도 자리 표시를 넘겨 NEW 딱지가 고르기 칸 밑에 깔리지 않게
+          overlay={st !== "on" ? <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">{st === "off" ? "숨김" : "판매 종료"}</span> : <span hidden />} />
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 min-h-5">
+        <VisSwitch on={!!it.active} busy={busy} disabled={locked} onToggle={onToggle} label="판매" onText="판매 중" offText="숨김" />
+        {draftMark}
+      </div>
+    </div>
+  );
+}
+// 배너 — 그림(4:1) · 제목 · 부제 · 노출 스위치
+function BannerTile({ b, busy, locked, onToggle, draftMark }: { b: AnyRow; busy: boolean; locked: boolean; onToggle: () => void; draftMark: React.ReactNode }) {
+  return (
+    <>
+      <div className="relative aspect-[4/1] bg-[#f2f2f2] overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={b.imageUrl} alt="" className={`absolute inset-0 w-full h-full object-cover ${b.active ? "" : "opacity-50"}`} />
+      </div>
+      <div className="px-3 pt-2.5 pb-3">
+        <p className="truncate text-[13px] font-black text-[#131313]">{b.title || "(제목 없음)"}</p>
+        <p className="mt-0.5 truncate text-[12px] text-[#5a5a5a] h-[18px]">{b.subtitle || (b.link ? `→ ${b.link}` : "")}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 min-h-5">
+          <VisSwitch on={!!b.active} busy={busy} disabled={locked} onToggle={onToggle} label="노출" onText="노출 중" offText="숨김" />
+          {draftMark}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// 📌 CSV 내려받기 — 엑셀이 한글을 읽게 BOM, 수식으로 읽히지 않게 = + - @ 로 시작하는 글은 앞에 '
+const csvCell = (v: unknown) => {
+  if (typeof v === "number") return String(v);
+  let t = String(v ?? "");
+  if (/^[=+\-@]/.test(t)) t = `'${t}`;
+  return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+const downloadCsv = (name: string, rows: unknown[][]) => {
+  const text = `﻿${rows.map((r) => r.map(csvCell).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+
+// 📌 쿠폰 여러 장 — 만든 코드 창(복사 · CSV). 코드는 서버가 만든다(app/api/shop/coupons bulk)
+function CouponCodesSheet({ name, codes, onClose, onCopy, onCsv }: { name: string; codes: string[]; onClose: () => void; onCopy: () => void; onCsv: () => void }) {
+  return (
+    <FormSheet open onClose={onClose} width={560} title="발급한 코드" sub={`${name ? `${name} · ` : ""}${codes.length.toLocaleString()}장`}
+      footer={
+        <>
+          <Btn variant="secondary" onClick={onCopy}>복사</Btn>
+          <Btn variant="secondary" onClick={onCsv}>CSV</Btn>
+          <Btn onClick={onClose}>닫기</Btn>
+        </>
+      }>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 rounded-xl bg-[#f7f7f7] px-3.5 py-3">
+        {codes.map((c) => <span key={c} className="truncate font-mono text-[13px] font-bold text-[#131313]">{c}</span>)}
+      </div>
+    </FormSheet>
+  );
+}
+// 쿠폰 여러 장 입력 — 앞머리 · 장수 · 무작위 글자 수(서버와 같은 범위)
+const BULK_COUNT_MAX = 500;
+type CouponBulk = { on: boolean; prefix: string; count: string; length: string };
+const EMPTY_BULK: CouponBulk = { on: false, prefix: "", count: "10", length: "8" };
+// 목록 줄 → 쿠폰 폼 (예전 '수정' 단추 안의 값 그대로 — 만료 일시는 KST 로 바꿔 넣는다. 서버도 KST 로 읽는다)
+const couponFormOf = (c: AnyRow) => ({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", payScope: c.payScope || "both", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: toKstInput(c.expiresAt) });
+// 새 쿠폰 폼(빈 값) — 「고친 채 넘어가나」 견줄 바탕이기도 하다
+const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", payScope: "both", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
+
+// 📌 구매 내역 기간 — 오늘 · 7일 · 30일 · 전체 · 직접(날짜 두 칸). 시작 시각은 고를 때 정한다(화면을 그릴 때마다 지금 시각을 읽지 않게)
+const ORDER_PERIODS = [{ v: "today", l: "오늘" }, { v: "7d", l: "7일" }, { v: "30d", l: "30일" }, { v: "all", l: "전체" }, { v: "custom", l: "직접" }];
+type OrderPeriod = { v: string; from: number };
+const ORDER_TYPE_FILTERS = [...ITEM_TYPE_OPTIONS.map((o) => ({ v: o.v, l: o.l })), { v: BUNDLE_TYPE, l: "세트" }];
+const orderTypeOf = (o: AnyRow) => (o?.bundleName ? BUNDLE_TYPE : String(o?.itemType || ""));
+const dayStart = (v: string) => (v ? new Date(`${v}T00:00:00`).getTime() : NaN);
+
+// 📌 뒤로 가기 표지(2026-10-11 「한 번에 수정」에서 되살림 — 10/17 전체 수정) — 고친 게 생기면 지금 기록 자리를 「아래」로 적고 같은 주소로 「위」 자리를 하나 더 쌓는다.
+//    뒤로 가기 한 번은 「위」 → 「아래」(같은 주소 — 화면 그대로)라 그때 묻는다. 주소를 안 넘기고 쌓아 Next 라우터는 아무것도 다시 그리지 않는다
 const LEAVE_MARK = "__shopLeave";
 type LeaveMark = { at: "below" | "top"; n: number };
-const leaveMarkOf = (s: unknown): LeaveMark | null => {
-  const m = (s as Record<string, unknown> | null)?.[LEAVE_MARK] as LeaveMark | undefined;
+const leaveMarkOf = (st: unknown): LeaveMark | null => {
+  const m = (st as Record<string, unknown> | null)?.[LEAVE_MARK] as LeaveMark | undefined;
   return m && (m.at === "below" || m.at === "top") && typeof m.n === "number" ? m : null;
 };
-const pushLeaveTop = (n: number): LeaveMark => {
-  const m: LeaveMark = { at: "top", n };
-  window.history.pushState({ ...(window.history.state || {}), [LEAVE_MARK]: m }, "");
-  return m;
-};
-// 지금 자리가 이미 「위」면 그대로, 「아래」면 「위」만, 표지 없는 자리면 「아래」로 적고 「위」를 쌓는다
 const armLeaveGuard = (): LeaveMark => {
   const cur = leaveMarkOf(window.history.state);
   if (cur?.at === "top") return cur;
   const n = cur ? cur.n : Date.now();
   if (!cur) window.history.replaceState({ ...(window.history.state || {}), [LEAVE_MARK]: { at: "below", n } }, "");
-  return pushLeaveTop(n);
+  const top: LeaveMark = { at: "top", n };
+  window.history.pushState({ ...(window.history.state || {}), [LEAVE_MARK]: top }, "");
+  return top;
 };
+const backLeaveAsk = (name: string) => `저장하지 않은 수정(${name})이 있습니다. 나가면 사라집니다. 나갈까요?`;
 
 export default function AdminShopPage() {
   const { isAdmin, gate } = useAdminGuard();
+  // 📌 효과음 — 토스트 · 알림 창이 뜰 때 같이 울린다(ui.tsx useToast · useNotice — 성공 sfxOk · 실패 sfxErr). 여기서 따로 울리지 않는다(두 번 울리던 것)
   const { notify, noticeEl } = useNotice();
-  // 가벼운 조작(끌어서 순서 저장 · 그룹 관리)의 결과 한 줄
+  // 결과 한 줄(토스트). 놓치면 안 되는 실패 · 건너뜀 목록은 알림 창(notify · 실패는 fail)
   const { toast, toastEl } = useToast();
+  const fail = useCallback((message: string) => notify(message, true), [notify]);
+  const router = useRouter();
 
   const searchParams = useSearchParams();
-  // 상점 카드의 '수정' 링크(?edit=<id>)는 탭 없이 들어오므로 상품 탭으로 보낸다
-  const tabParam = searchParams.get("tab") || (searchParams.get("edit") ? "products" : "items");
-  const tab = TAB_META[tabParam] ? tabParam : "items";
+  // 상점 카드의 '수정' 링크(?edit=<id>)는 탭 없이 들어오므로 상품 탭으로 보낸다.
+  // 📌 상점 설정 창 주소(isSettingsLink — 기능 검색 「상점 설정」 · ARCTIC 「비공개 · 공개로 바꾸기」)는 탭을 바꾸지 않는다 —
+  //    탭 없이 오면 지금 보던 탭(lastTab) 그대로(처음 들어오면 아이템). 옛 ?tab=settings 도 같다
+  const settingsLink = isSettingsLink(searchParams);
+  const rawTab = searchParams.get("tab") || "";
+  const [lastTab, setLastTab] = useState("items");
+  const tab = tabOfParams(searchParams, lastTab);
+  if (tab !== lastTab) setLastTab(tab);
+  // 옮긴 탭의 옛 주소(?tab=season — 역할 떼기) → 그 화면으로 넘긴다
+  const movedTo = MOVED_TAB[rawTab] || "";
+  useEffect(() => { if (movedTo) router.replace(movedTo); }, [movedTo, router]);
+  // 📌 붙는 편집기(DetailPane docked — 1280 이상). 넓은 화면은 처음 폭을 넓혀 편집기 안이 두 열(PaneColumns)로 — 끌어 바꾼 폭은 ui 가 기억한다
+  const wideDock = useMedia("(min-width: 1280px)");
+  const paneXl = useMedia("(min-width: 1920px)");
+  const paneXxl = useMedia("(min-width: 2400px)");
+  // 도구 줄 「⋯」 › 보이는 열 고르기 — 표 열은 PC(768 이상)에서만 고른다(예전 「열」 단추와 같은 폭)
+  const colsPickable = useMedia("(min-width: 768px)");
+  const [colsMenuOpen, setColsMenuOpen] = useState(false);
+  const regPaneW = paneXxl ? 1040 : paneXl ? 880 : 452; // 1440 아래는 시안 폭(452) — 목록 칸 도구 줄이 한 줄에 들어가게
 
   const [items, setItems] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1867,14 +3050,32 @@ export default function AdminShopPage() {
   // 목록 한 줄 도구 — 검색어는 탭마다 새로, 상태 토글은 탭별로 따로 둔다
   const [q, setQ] = useState("");
   const [regType, setRegType] = useState("");
+  // 상품 판매 상태 알약 — "" 전체 · on 판매 중 · ended 판매 종료 · off 숨김(prodStatusOf)
   const [productView, setProductView] = useState("");
   // 📌 상품 유형 탭(2026-10-11 운영자 "상품에 제발 탭 좀 나눠줘") — 아이템 탭의 유형 칸과 같은 모양 + 세트. "" = 전체
   const [productType, setProductType] = useState("");
-  // 📌 상품 묶음(B안) — 연결 아이템의 그룹 · 상위로 머리줄(세트는 첫 구성 아이템 그룹 — lib/productOrder.js). 펼친 그룹(기본 접힘) · 접은 상위(기본 펼침)
-  const [openProductGroups, setOpenProductGroups] = useState<Set<string>>(() => new Set());
-  const [closedProductSections, setClosedProductSections] = useState<Set<string>>(() => new Set());
+  // 📌 상품 묶음(B안) — 연결 아이템의 그룹 · 상위로 머리줄(세트는 첫 구성 아이템 그룹 — lib/productOrder.js). 펼친 그룹(기본 접힘) · 접은 상위(기본 펼침).
+  //    아이템 목록처럼 이 브라우저에 기억한다(「모두 펼치기 / 접기」)
+  const [openProductGroupList, setOpenProductGroupList] = useStoredState<string[]>("open:shop-products", []);
+  const openProductGroups = useMemo(() => new Set(Array.isArray(openProductGroupList) ? openProductGroupList : []), [openProductGroupList]);
+  const [closedProductSectionList, setClosedProductSectionList] = useStoredState<string[]>("closed:shop-products", []);
+  const closedProductSections = useMemo(() => new Set(Array.isArray(closedProductSectionList) ? closedProductSectionList : []), [closedProductSectionList]);
   const [syncAsk, setSyncAsk] = useState(false);
+  // 📌 상품 목록 보기(2026-10-17) — 「표 | 카드」 · 열 머리 정렬 · 거르기 · 고르기(아래 띠) · 줄 판매 스위치
+  const [prodViewMode, setProdViewMode] = useStoredState<ViewMode>("view:shop-products", "table");
+  const [prodSort, setProdSort] = useState<SortState>(null);
+  const [prodHiddenCols, setProdHiddenCols] = useStoredState<string[]>("cols:shop-products", []);
+  const [prodFilters, setProdFilters] = useState<ProdFilters>(NO_PROD_FILTERS);
+  // prodBusy: 일괄 편집 보내는 중 · prodSheet: 열린 창 · prodSheetAt: 창을 연 시각(지난 시각 표시) · prodDelAsk: 일괄 삭제 확인 · prodSwitchBusy: 줄 스위치 저장 중(상품 id)
+  const [prodBusy, setProdBusy] = useState(false);
+  const [prodSheet, setProdSheet] = useState<"" | ProdSheetMode>("");
+  const [prodSheetAt, setProdSheetAt] = useState(0);
+  const [prodDelAsk, setProdDelAsk] = useState(false);
+  const [prodSwitchBusy, setProdSwitchBusy] = useState("");
   const [bannerView, setBannerView] = useState("");
+  // 📌 배너 보기 — 「표 | 카드(그림 격자)」 · 줄 노출 스위치(배너 id)
+  const [bannerViewMode, setBannerViewMode] = useStoredState<ViewMode>("view:shop-banners", "table");
+  const [bannerSwitchBusy, setBannerSwitchBusy] = useState("");
   // 📌 배너 노출 위치 탭 — 위치마다 따로 보여 주고 그 안에서 끌어 순서를 바꾼다(2026-10-11 운영자 "배너도 노출 순서 편하게")
   const [bannerPlace, setBannerPlace] = useState("home");
   // 📌 이벤트 테마(lib/shopThemes.js · app/api/shop/themes) — 상품 폼 고르기 칸 · 배너 위치 · 배너 링크 · 테마 관리 창이 같이 쓴다(fetchAll 이 받는다).
@@ -1882,47 +3083,71 @@ export default function AdminShopPage() {
   const [themes, setThemes] = useState<ShopTheme[]>(() => DEFAULT_THEMES.map((t) => ({ ...t })));
   const [themeManageOpen, setThemeManageOpen] = useState(false);
   const [couponView, setCouponView] = useState("");
+  const [coupons, setCoupons] = useState<AnyRow[]>([]);
+  const [couponForm, setCouponForm] = useState<AnyRow>(EMPTY_COUPON);
+  // 📌 쿠폰 — 열 머리 정렬 · 줄 사용 상태 스위치(쿠폰 id) · 여러 장 발급(새 쿠폰 폼) · 만든 코드 창
+  const [couponSort, setCouponSort] = useState<SortState>(null);
+  const [couponSwitchBusy, setCouponSwitchBusy] = useState("");
+  const [couponBulk, setCouponBulk] = useState<CouponBulk>(EMPTY_BULK);
+  const [couponCodes, setCouponCodes] = useState<{ name: string; codes: string[] } | null>(null);
+  const [couponSaving, setCouponSaving] = useState(false);
+  // 📌 구매 내역 — 기간(시작 시각은 고를 때 정한다) · 직접 기간(날짜 두 칸) · 상품 유형 거르기
+  const [orderPeriod, setOrderPeriod] = useState<OrderPeriod>({ v: "all", from: 0 });
+  const [orderFrom, setOrderFrom] = useState("");
+  const [orderTo, setOrderTo] = useState("");
+  const [orderTypes, setOrderTypes] = useState<string[]>([]);
   // 📌 순서 — 아이템 · 상품 목록은 늘 줄 앞 손잡이로 끌어 옮기고, 놓으면 바로 저장한다(2026-10-11 운영자 — '순서 바꾸기' 모드 · 단추를 걷었다).
   //    savingOrder: 저장 중인 목록(그동안 끌기만 잠근다)
   const [savingOrder, setSavingOrder] = useState<"" | "reg" | "product" | "banner">("");
-  // 📌 아이템 그룹 — regGroup: 그룹 거르기(GROUP_ALL · GROUP_NONE · "g:<이름>"), openGroups: 펼친 그룹(기본 접힘), regGroupSaved: 서버에 둔 그룹 차례(빈 그룹 포함)
-  //    groupMode: 그룹 지정 모드(줄 · 머리줄 고르기 칸을 눌러 고른다 · 펼침은 openGroups 그대로), groupPick: 고른 아이템 id,
-  //    groupName: 아래 띠의 옮길 그룹(null = 아직 안 고름 — 옮기기를 잠근다. 모르고 눌러 그룹이 풀리지 않게), groupPending: 새 그룹 칸이 비어 있음
+  // 📌 아이템 그룹 — regGroup: 그룹 거르기(GROUP_ALL · GROUP_NONE · "g:<이름>" · "p:<상위>"), regGroupSaved: 서버에 둔 그룹 차례(빈 그룹 포함)
+  //    펼친 그룹(기본 접힘) · 접은 상위(기본 펼침)는 이 브라우저에 기억한다(useStoredState — 「모두 펼치기 / 접기」)
   const [regGroup, setRegGroup] = useState(GROUP_ALL);
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const [openGroupList, setOpenGroupList] = useStoredState<string[]>("open:shop-items", []);
+  const openGroups = useMemo(() => new Set(Array.isArray(openGroupList) ? openGroupList : []), [openGroupList]);
   const [regGroupSaved, setRegGroupSaved] = useState<string[]>([]);
   // 상위 그룹 — regParents: 상위 차례, regParentOf: 그룹 → 상위, closedSections: 목록에서 접은 상위(기본 펼침)
   const [regParents, setRegParents] = useState<string[]>([]);
   const [regParentOf, setRegParentOf] = useState<Record<string, string>>({});
-  const [closedSections, setClosedSections] = useState<Set<string>>(() => new Set());
+  const [closedSectionList, setClosedSectionList] = useStoredState<string[]>("closed:shop-items", []);
+  const closedSections = useMemo(() => new Set(Array.isArray(closedSectionList) ? closedSectionList : []), [closedSectionList]);
   const [groupManageOpen, setGroupManageOpen] = useState(false);
-  const [groupMode, setGroupMode] = useState(false);
-  const [groupPick, setGroupPick] = useState<Set<string>>(() => new Set());
-  const [groupName, setGroupName] = useState<string | null>(null);
-  const [groupPending, setGroupPending] = useState(false);
-  const [groupBusy, setGroupBusy] = useState(false);
-  useEffect(() => { setGroupMode(false); setGroupPick(new Set()); setGroupName(null); }, [tab]);
-
-  // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/arctic/productForm 공용 (상점 인라인 폼과 같다)
-  const emptyForm = EMPTY_PRODUCT_FORM;
-  const [form, setForm] = useState<ProductForm>(emptyForm);
-  // 📌 한 번에 수정(2026-10-11 운영자 "하나 바꾸고 하나 바꾸고 … 전체 수정으로 한 번에") — 상세 칸에서 고친 폼은 다른 줄을 열거나 칸을 닫아도
-  //    버리지 않고 여기에 쌓는다(종류마다 id → 폼). 아래 띠 「전체 수정」이 쌓인 것 + 지금 열린 것을 차례로 저장하고, 실패한 것만 남긴다.
-  //    상세 칸 「수정 저장」은 그 하나만 바로(그 줄은 여기서 빠진다). 새로 등록하기는 지금처럼 바로 저장 — 쌓지 않는다
-  const [pending, setPending] = useState<{ reg: Record<string, ItemForm>; product: Record<string, ProductForm>; banner: Record<string, any> }>({ reg: {}, product: {}, banner: {} });
+  // 📌 아이템 목록 보기(2026-10-17) — 「표 | 카드」 · 숨긴 열 · 열 머리 정렬 · 거르기
+  const [regView, setRegView] = useStoredState<ViewMode>("view:shop-items", "table");
+  const [regHiddenCols, setRegHiddenCols] = useStoredState<string[]>("cols:shop-items", REG_HIDDEN_DEFAULT);
+  const [regSort, setRegSort] = useState<SortState>(null);
+  const [regFilters, setRegFilters] = useState<ItemFilters>(NO_FILTERS);
+  // 📌 일괄 편집 — batchBusy: 보내는 중 · sheet: 열린 창(이름 바꾸기 · 복제 · 새 그룹) · batchDelAsk: 삭제 확인
+  //    textSheet: 설명 바꾸기 · 분류 바꾸기 창(아이템 탭 · 상품 탭 — of 가 고른 목록)
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [sheet, setSheet] = useState<"" | "rename" | "duplicate" | "group">("");
+  const [textSheet, setTextSheet] = useState<{ of: "reg" | "product"; mode: TextSheetMode } | null>(null);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [batchDelAsk, setBatchDelAsk] = useState(false);
+  // 📌 고친 채 다른 줄 · 새로 만들기 · 닫기 · 다른 화면으로 — 한 번 묻는다(name: 고치던 것, go: 버리고 할 일)
+  const [leaveAsk, setLeaveAsk] = useState<{ name: string; go: () => void } | null>(null);
+  // 📌 전체 수정(2026-10-17 되살림 — 운영자 승인) — 고친 수정 폼(id 있음)은 다른 줄 · ‹ › · 새로 만들기 · 칸 닫기 · 탭 옮기기에도 버리지 않고
+  //    여기 쌓는다(종류마다 id → 폼). 아래 띠 「저장 안 한 수정 N개 · 되돌리기 · 모두 저장」이 쌓인 것 + 지금 열린 고친 폼을 차례로 저장하고 실패한 것만 남긴다.
+  //    새로 쓰던 폼(id 없음)은 쌓지 않는다(지금처럼 칸을 닫아도 남아 이어 쓰고, 고친 채 다른 줄을 열면 한 번 묻는다)
+  type Stacked = { reg: Record<string, ItemForm>; product: Record<string, ProdForm>; banner: Record<string, AnyRow>; coupon: Record<string, AnyRow> };
+  const [stacked, setStacked] = useState<Stacked>({ reg: {}, product: {}, banner: {}, coupon: {} });
   const [savingAll, setSavingAll] = useState(false);
+  // 마지막으로 따라간 주소(기능 검색 · 다른 화면 링크 — ?item= · new · open)
+  const [deepSeen, setDeepSeen] = useState<string | null>(null);
+
+  // 상품 폼 — 상태 모양·기간·유형·아이템 적용 규칙은 app/arctic/productForm(2026-10-17 상점 안 인라인 폼을 걷어 상품을 고치는 곳은 여기 하나)
+  //    + 분류 저장 칸(ProdForm — 직접 설정 · 세트만)
+  const emptyForm = EMPTY_PROD_FORM;
+  const [form, setForm] = useState<ProdForm>(emptyForm);
   // 📌 「등록된 아이템」 고르는 중(아직 안 고름 — 저절로 첫 아이템을 고르지 않는다) · 아이템을 고르기 직전의 직접 설정 값.
   //    폼마다(form.id || "new") — 다른 상품을 열면 자연히 풀린다(productForm customSnapOf · unlinkItem)
   const [linkPick, setLinkPick] = useState<string | null>(null);
   const [customSnap, setCustomSnap] = useState<{ key: string; snap: CustomSnap } | null>(null);
-  const [isRoleOpen, setIsRoleOpen] = useState(false);
-  const selectedRole = guildRoles.find((r) => r.id === form.roleId);
   const linked = isLinked(form);
   const formKey = form.id || "new";
   // 세트 상품(lib/bundle.js) — 아이템 연결 · 역할 · 판매 방식 · 시즌 동작 대신 구성 편집
   const bundleOn = isBundleForm(form);
 
-  const closePane = useCallback(() => { setPane(""); setIsRoleOpen(false); }, []);
+  const closePane = useCallback(() => { setPane(""); }, []);
 
   // ── 상품 초안(머리 "초안 N" · "초안 버리기" · "실사이트 반영", 줄 "초안" 칩 · 되돌리기) ──
   //    fetchDraft — 목록을 다시 읽을 때마다(fetchRegItems · fetchAll) 함께, 목록을 다시 읽지 않는 쓰기(끌어서 순서 · 그룹 차례) 뒤엔 따로.
@@ -1952,7 +3177,7 @@ export default function AdminShopPage() {
       if (m && typeof m === "object") setDraft((s) => (s.loaded ? s : { ...s, draftMode: !!m.draftMode, liveLocked: !!m.liveLocked }));
     } catch {}
   }, []);
-  // 실사이트 읽기 전용 — 아이템 · 상품 · 배너의 저장 · 새로 만들기 · 삭제 · 끌기 · 표시 토글을 자리를 지킨 채 잠근다(쿠폰 · 구매 내역 · 시즌 전환 · 설정은 그대로)
+  // 실사이트 읽기 전용 — 아이템 · 상품 · 배너의 저장 · 새로 만들기 · 삭제 · 끌기 · 표시 토글을 자리를 지킨 채 잠근다(쿠폰 · 구매 내역 · 상점 설정 창은 그대로)
   const liveLocked = draft.liveLocked;
   // "" | "publish" | "discard" — 머리 단추의 확인 창 · revertAsk: 되돌릴 초안 한 건 · draftBusy: 처리 중인 요청
   const [draftAsk, setDraftAsk] = useState<"" | "publish" | "discard">("");
@@ -1961,18 +3186,20 @@ export default function AdminShopPage() {
 
   // ── 아이템 등록 ──────────────────────────────
   const [regItems, setRegItems] = useState<any[]>([]);
+  const [regLoaded, setRegLoaded] = useState(false);
   const [itemForm, setItemForm] = useState<ItemForm>(EMPTY_ITEM_FORM);
   const [isSavingReg, setIsSavingReg] = useState(false);
-  // 예전 '인벤토리 표기 역할' — 남아 있으면 가져오기 버튼을 보여 준다
-  const [invRoles, setInvRoles] = useState<any[]>([]);
-  // 아직 아이템으로 옮기지 않은 옛 표기 역할 — 가져오기 버튼의 숫자·표시 조건
-  const [isImporting, setIsImporting] = useState(false);
+  // 지금 열린 아이템 폼의 id — 저장 응답이 오는 사이 다른 줄로 넘어갔는지 본다(그 폼을 덮지 않게)
+  const regFormIdRef = useRef("");
+  useEffect(() => { regFormIdRef.current = String(itemForm.id || ""); }, [itemForm.id]);
   // 추천 아이템 창 (PresetDialog)
   const [presetOpen, setPresetOpen] = useState(false);
-  // 상세 칸 「몸값 참고」 펼침 — 다른 줄을 열어도 그대로(기본 펼침)
-  const [worthOpen, setWorthOpen] = useState(true);
-
-  const pendingInv = invRoles.filter((r) => r.visible !== false && !regItems.some((i) => i.roleId === r.roleId));
+  // 여러 개 고르기 — 모든 아이템 키(거른 결과가 아니라 — 지워진 아이템만 빠진다)
+  const regKeys = useMemo(() => regItems.map((it) => String(it._id)), [regItems]);
+  const sel = useSelection(regKeys);
+  // 상품 여러 개 고르기 — 모든 상품 키(거른 결과가 아니라 — 지워진 상품만 빠진다)
+  const prodKeys = useMemo(() => items.map((it) => String(it._id)), [items]);
+  const prodSel = useSelection(prodKeys);
 
   // 서버가 준 상위 그룹(parents · parentOf)을 받아 둔다 — 응답에 없으면(옛 응답) 지금 값 그대로
   const takeParents = useCallback((d: any) => {
@@ -1982,15 +3209,12 @@ export default function AdminShopPage() {
     }
   }, []);
   const fetchRegItems = useCallback(() => {
-    Promise.all([
-      fetch("/api/admin/items?withUsage=1&groups=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch("/api/inventory-role", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ]).then(([reg, inv]) => {
+    fetch("/api/admin/items?withUsage=1&groups=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })).then((reg) => {
       setRegItems(Array.isArray(reg?.data) ? reg.data : []);
+      setRegLoaded(true);
       // 그룹 차례 — 못 읽으면 지금 값 그대로(아이템에 든 그룹은 목록 순서로 뒤에 붙는다)
       if (Array.isArray(reg?.groups)) setRegGroupSaved(reg.groups.map(String));
       takeParents(reg);
-      setInvRoles(Array.isArray(inv?.data) ? inv.data : []);
     }).finally(() => {
       // 초안 요약은 목록을 받은 뒤에 — 목록 조회(?groups=1)가 떨어진 그룹 덩어리를 맞춰 쓰면(초안 모드는 순서 초안) 그것까지 센다
       fetchDraft();
@@ -1999,10 +3223,11 @@ export default function AdminShopPage() {
 
   // 📌 꾸미기 효과(카드 스킨 · 아바타 테두리)로 새 아이템 채우기 — 이름 · 아이콘 · 그룹이 비었거나 앞서 자동으로 채운 값 그대로일 때만
   //    (친 값은 건드리지 않는다). 효과를 바꾸면 따라 바뀌고, 꾸미기 효과를 빼면 자동으로 채운 값만 비운다. 수정(id 있음)에는 하지 않는다.
-  //    값 꼴은 추천 아이템과 같다(lib/cosmeticArt cosmeticAutoOf — "카드 스킨 · <이름>" · 그룹 시즌 2 / 등급 카드 스킨 / 등급 아바타 테두리 / 할로윈)
+  //    값 꼴은 추천 아이템과 같다(lib/cosmeticArt cosmeticAutoOf — "카드 테두리 · <이름>" · 그룹 시즌 2 / 등급 카드 테두리 / 등급 프로필 테두리 / 할로윈)
+  //    📌 2026-10-17 이름은 짧은 이름만(「<이름>」) — 분류(카드 테두리 …)는 「분류」 칸의 자동(꾸미기 효과)이 정한다
   const withCosmeticAuto = (prev: ItemForm, next: ItemForm): ItemForm => {
     if (next.id) return next;
-    const autoOf = (f: ItemForm) => { for (const d of f.effects) { const a = cosmeticAutoOf(d); if (a) return a; } return null; };
+    const autoOf = (f: ItemForm) => { for (const d of f.effects) { const a = cosmeticAutoOf(d); if (a) return { ...a, name: shortNameOf(a.name) }; } return null; };
     const was = autoOf(prev);
     const now = autoOf(next);
     if (was?.name === now?.name && was?.icon === now?.icon && was?.group === now?.group) return next;
@@ -2010,7 +3235,7 @@ export default function AdminShopPage() {
     return { ...next, name: pick(next.name, "name"), icon: pick(next.icon, "icon"), group: pick(next.group, "group") };
   };
 
-  // 저장된 아이템 → 폼 값(목록 줄을 눌러 열 때 · 한 번에 수정의 "바뀌었나" 견줄 바탕)
+  // 저장된 아이템 → 폼 값(목록 줄을 눌러 열 때 · 「고친 채 넘어가나」 견줄 바탕)
   const regFormOf = (it: any): ItemForm => {
     // 효과는 GET 이 아이템 문서에서 읽어 붙여 준 값 (없으면 0 / [])
     const ef = it.effects || {};
@@ -2018,37 +3243,72 @@ export default function AdminShopPage() {
     return {
       id: it._id, name: it.name || "", description: it.description || "", type: it.type || "item", roleId: it.roleId || "",
       icon: it.icon || "", imageUrl: it.imageUrl || "", color: it.color || "", detachOnSeason: !!it.detachOnSeason,
-      visible: it.visible !== false, group: groupOfItem(it),
+      visible: it.visible !== false, group: groupOfItem(it), rarity: normalizeRarity(it.rarity),
+      // 분류 — 저장 칸 그대로("" = 자동). 옛 이름 머리말은 이름 칸에 남은 채 분류를 정한다(말없이 고쳐 쓰지 않는다)
+      category: typeof it.category === "string" ? it.category : "",
       chatBuffXp: ef.chatBuffXp ? String(ef.chatBuffXp) : "", voiceBuffXp: ef.voiceBuffXp ? String(ef.voiceBuffXp) : "",
       attendBuffXp: ef.attendBuffXp ? String(ef.attendBuffXp) : "",
       effects: list.map(draftOf),
+      // 효과 문구 — 저장된 줄이 있으면 「직접 쓰기」(한 줄에 하나), 없으면 자동 · 적용 범위 — 저장 칸 그대로([] = 자동)
+      ...(() => { const lines = normalizeEffectText(it.effectText); return { effectCustom: lines.length > 0, effectText: lines.join("\n") }; })(),
+      scope: normalizeScope(it.scope),
     };
   };
   const fillRegForm = (it: any) => setItemForm(regFormOf(it));
 
-  // 아이템 폼 → 저장 본문(검사 실패면 error) — 상세 칸 「수정 저장」과 「전체 수정」이 같은 길
+  // 아이템 폼 → 저장 본문(검사 실패면 error)
   const regBody = (fm: ItemForm): { body: any; group: string } | { error: string } => {
     if (!fm.name.trim()) return { error: "이름을 입력해 주세요." };
     if ((fm.type === "role" || fm.type === "perk") && !fm.roleId) return { error: "연결할 역할을 선택해 주세요." };
     // 📌 효과 — 기프트카드를 뺀 모든 아이템(역할 연결 여부와 무관). 값이 빈 줄은 서버가 말없이 버리므로 저장 전에 막는다.
     //    아이템 문서에 같이 저장되므로 늘 보낸다(전부 비운 것도 그대로 저장돼야 지워진다). 기프트카드는 보내지 않는다(서버가 비움)
-    const { chatBuffXp, voiceBuffXp, attendBuffXp, effects: effDrafts, ...base } = fm;
+    const { chatBuffXp, voiceBuffXp, attendBuffXp, effects: effDrafts, effectCustom, effectText: fxText, scope: scopeKeys, ...base } = fm;
     let effects: { chatBuffXp: number; voiceBuffXp: number; attendBuffXp: number; list: ReturnType<typeof effectOf>[] } | undefined;
     if (base.type !== "physical") {
+      // 📌 보상 구간 표(음성 N분마다 무작위 XP) — 서버는 틀린 표를 말없이 기본 표로 돌리므로 저장 전에 막는다
+      const badCandy = effDrafts.findIndex((d) => TRIGGER_OF[d.on]?.tiers && candyTiersError(d.candy));
+      if (badCandy >= 0) return { error: `추가 효과 ${badCandy + 1}번째 줄 — ${candyTiersError(effDrafts[badCandy].candy)}` };
       const bad = effDrafts.findIndex((d) => normalizeEffects([effectOf(d)]).length === 0);
       if (bad >= 0) return { error: `추가 효과 ${bad + 1}번째 줄의 값을 입력해 주세요.` };
       effects = { chatBuffXp: xpNum(chatBuffXp), voiceBuffXp: xpNum(voiceBuffXp), attendBuffXp: xpNum(attendBuffXp), list: effDrafts.map(effectOf) };
     }
+    // 📌 효과 문구 — 「직접 쓰기」면 그 줄(서버도 같은 normalizeEffectText), 자동이면 []. 직접 쓴 줄이 지금 자동 문구와 같으면 [](효과를 고치면 문구도 따라가게)
+    //    적용 범위 — 고른 키(서버도 같은 normalizeScope). 꾸미기가 아니거나 자동과 같으면 [](늘 보낸다 — 비운 것도 그대로 저장돼야 자동으로 돌아간다)
+    if (effectCustom && base.type !== "physical") {
+      const raw = fxRawLines(fxText);
+      if (raw.length > EFFECT_TEXT_MAX) return { error: `효과 문구는 최대 ${EFFECT_TEXT_MAX}줄까지 입력할 수 있습니다.` };
+      const long = raw.findIndex((l) => l.length > EFFECT_TEXT_LINE_MAX);
+      if (long >= 0) return { error: `효과 문구 ${long + 1}번째 줄은 ${EFFECT_TEXT_LINE_MAX}자까지 입력할 수 있습니다.` };
+    }
+    const fxShape = { type: base.type, ...(effects || {}), effects: effects ? normalizeEffects(effects.list) : [] };
+    const fxLines = effectCustom && base.type !== "physical" ? normalizeEffectText(fxText) : [];
+    const autoLines = autoEffectLinesOf(fxShape, (id: string) => guildChannels.find((c) => c.id === id)?.name);
+    const effectText = fxLines.length && fxLines.join("\n") !== autoLines.join("\n") ? fxLines : [];
+    const ownScope = isCosmeticItem(fxShape) ? normalizeScope(scopeKeys) : [];
+    const scope = ownScope.join(",") === autoScopeOf(fxShape).join(",") ? [] : ownScope;
     const group = normalizeItemGroup(base.group);
-    return { group, body: { ...base, group, roleName: guildRoles.find((r) => r.id === base.roleId)?.name || "", ...(effects ? { effects } : {}) } };
+    // 희귀도 — 늘 보낸다("" = 안 고름 그대로). 서버도 같은 normalizeRarity 로 다시 정리한다(lib/items.js normalizeItemPayload)
+    // 분류 — 늘 보낸다("" = 자동으로). 서버도 같은 정리(lib/items.js normalizeItemCategory)
+    return { group, body: { ...base, group, rarity: normalizeRarity(base.rarity), category: normalizeCategory(base.category), roleName: guildRoles.find((r) => r.id === base.roleId)?.name || "", ...(effects ? { effects } : {}), effectText, scope } };
+  };
+  // 펼친 그룹에 더하기 — 저장 · 일괄 그룹 · 이전 · 다음으로 연 아이템이 접힌 머리줄 속으로 사라져 보이지 않게
+  const openGroupNamed = (g: string) => {
+    if (g) setOpenGroupList((l) => (Array.isArray(l) && l.includes(g) ? l : [...(Array.isArray(l) ? l : []), g]));
+  };
+  // 이전 · 다음 · 주소로 연 상품이 접힌 묶음 속이면 그 묶음을 펼친다
+  const openProductGroupNamed = (g: string) => {
+    if (g) setOpenProductGroupList((l) => (Array.isArray(l) && l.includes(g) ? l : [...(Array.isArray(l) ? l : []), g]));
   };
   const saveRegItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSavingReg) return;
-    // 단추는 잠겨 있다 — 입력칸 Enter 로 들어온 제출만 여기서 막는다
-    if (liveLocked) return notify(LIVE_LOCKED_MSG, true);
+    // 단추는 잠겨 있다 — 입력칸 Enter · Ctrl+S 로 들어온 제출만 여기서 막는다
+    if (liveLocked) return fail(LIVE_LOCKED_MSG);
     const built = regBody(itemForm);
-    if ("error" in built) return notify(built.error, true);
+    if ("error" in built) return fail(built.error);
+    const wasNew = !itemForm.id;
+    const sentId = String(itemForm.id || "");
+    const sentForm = itemForm;
     setIsSavingReg(true);
     const res = await fetch("/api/admin/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -2057,39 +3317,151 @@ export default function AdminShopPage() {
     const d = await res?.json().catch(() => null);
     setIsSavingReg(false);
     if (res?.ok && d?.success) {
-      // 넣은 그룹은 펼쳐 둔다 — 저장한 아이템이 접힌 머리줄 속으로 사라져 보이지 않게
-      if (built.group) setOpenGroups((s) => new Set(s).add(built.group));
-      dropPending("reg", itemForm.id);
-      setItemForm(EMPTY_ITEM_FORM); fetchRegItems(); fetchAll(); closePane(); notify("저장되었습니다.");
+      openGroupNamed(built.group);
+      const saved = d.data;
+      // 보내는 사이 다른 줄로 넘어가 쌓인 것(보낸 폼 그대로)은 뺀다 — 전체 수정
+      dropStacked("reg", [sentId], sentForm);
+      if (!wasNew && saved?._id) setRegItems((list) => list.map((x) => (String(x._id) === String(saved._id) ? { ...x, ...saved } : x)));
+      // 📌 붙는 편집기(넓은 화면)는 저장한 아이템을 연 채 다음 줄로 넘어가며 고친다 — 목록 줄부터 새 값으로(다시 읽기 전 「고친 채」로 보이지 않게).
+      //    좁은 화면(덮는 칸 · 아래 판)은 예전처럼 닫는다. 보내는 동안 다른 줄로 넘어갔으면 그 폼은 그대로 둔다
+      if (regFormIdRef.current === sentId) {
+        if (wideDock && saved?._id) setItemForm(regFormOf(saved));
+        else { setItemForm(EMPTY_ITEM_FORM); closePane(); }
+      }
+      fetchRegItems(); fetchAll();
+      toast(wasNew ? "등록했습니다." : "저장했습니다.");
     }
-    else notify(d?.message || "저장에 실패했습니다.", true);
+    else fail(d?.message || "저장에 실패했습니다.");
+  };
+  // Ctrl/⌘+S — 보이는 아이템 폼을 제출(숫자 칸 검사 · onSubmit 은 저장 단추와 같은 길). 덮는 칸은 PC · 모바일 폼이 둘 그려진다
+  const submitRegForm = () => {
+    const forms = Array.from(document.querySelectorAll<HTMLFormElement>("form[data-reg-form]"));
+    const f = forms.find((x) => x.getClientRects().length > 0) || forms[0];
+    if (!f) return;
+    if (typeof f.requestSubmit === "function") f.requestSubmit();
+    else f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   };
 
-  // 표시 토글 — 목록에서 바로 켜고 끈다 (폼을 열지 않아도 되게)
+  // ── 아이템 일괄 편집(PATCH /api/admin/items { batch } · { duplicate } — 서버가 POST 와 같은 정리 · 초안 규칙으로 쓴다) ──
+  type ItemsPatch = { ok: boolean; d: any };
+  const patchItems = async (body: Record<string, unknown>): Promise<ItemsPatch> => {
+    const res = await fetch("/api/admin/items", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    return { ok: !!(res?.ok && d?.success), d };
+  };
+  // 결과 알림 — 다 됐으면 토스트, 건너뛴 게 있으면 이유 목록(알림 창)
+  type Skip = { id?: string; name?: string; why?: string };
+  //    list — 이름을 찾을 목록(기본 아이템 · 상품 일괄 편집은 상품 목록)
+  const reportBatch = (done: number, skipped: Skip[], verb: string, list: AnyRow[] = regItems) => {
+    if (!skipped.length) return toast(`${done.toLocaleString()}개 ${verb}`);
+    const nameOf = (s: Skip) => s.name || list.find((x) => String(x._id) === String(s.id))?.name || "이름 없음";
+    notify([
+      `${done.toLocaleString()}개 ${verb} · ${skipped.length.toLocaleString()}개 건너뜀`,
+      ...skipped.slice(0, 12).map((s) => `${nameOf(s)} — ${s.why || "건너뜀"}`),
+      ...(skipped.length > 12 ? [`외 ${(skipped.length - 12).toLocaleString()}개`] : []),
+    ].join("\n"), done === 0);
+  };
+  // 줄마다 바꿀 값(set) — 화면 목록부터 맞추고(되돌릴 값 보관) 보낸다. 실패하면 되돌린다
+  const runBatch = async (entries: { id: string; set: Record<string, unknown> }[], verb: string) => {
+    if (!entries.length || batchBusy || liveLocked) return false;
+    const before = regItems;
+    const local = new Map(entries.map((e) => [e.id, e.set]));
+    const localOf = (set: Record<string, unknown>) => {
+      const out: Record<string, unknown> = { ...set };
+      if ("rarity" in out) out.rarity = normalizeRarity(out.rarity);
+      if ("group" in out) out.group = normalizeItemGroup(out.group);
+      if ("category" in out) out.category = normalizeCategory(out.category);
+      return out;
+    };
+    // 분류 · 짧은 이름도 바뀐 값으로 다시 셈한다(이름 · 분류 · 유형을 바꾼 줄이 다시 읽기 전까지 옛 글자로 보이지 않게)
+    setRegItems((list) => list.map((x) => (local.has(String(x._id)) ? withCategoryFields({ ...x, ...localOf(local.get(String(x._id)) as Record<string, unknown>) }) : x)));
+    setBatchBusy(true);
+    const { ok, d } = await patchItems({ batch: entries });
+    setBatchBusy(false);
+    if (!ok) {
+      setRegItems(before);
+      fail(d?.message || "저장하지 못했습니다.");
+      return false;
+    }
+    if (Array.isArray(d.order)) setRegItems((list) => reorderById(list, d.order.map(String)));
+    if (Array.isArray(d.groups)) setRegGroupSaved(d.groups.map(String));
+    takeParents(d);
+    fetchRegItems();
+    // 연결 상품 스냅샷(이름 · 설명 · 아이콘 · 색 · 유형)이 같이 바뀌는 편집만 상품 목록도 다시(분류 — 연결 상품 줄의 분류는 아이템을 따른다)
+    if (entries.some((e) => ["name", "description", "icon", "color", "type", "category"].some((k) => k in e.set))) fetchAll();
+    reportBatch(Number(d.updated) || 0, Array.isArray(d.skipped) ? d.skipped : [], verb);
+    return true;
+  };
+  const batchSet = (set: Record<string, unknown>, verb = "바꿈") => runBatch(sel.keys().map((id) => ({ id, set })), verb);
+  const batchGroup = async (raw: string) => {
+    const g = normalizeItemGroup(raw);
+    if (g && regParents.includes(g)) { fail("같은 이름의 상위 그룹이 있습니다."); return false; }
+    const ok = await batchSet({ group: g }, g ? "옮김" : "뺌");
+    if (ok) openGroupNamed(g);
+    return ok;
+  };
+  // 이름 바꾸기 · 복제(RenameSheet 가 고른 줄)
+  const submitRename = async (rows: RenameRow[], withDesc: boolean) => {
+    const ok = await runBatch(rows.map((r) => ({ id: r.id, set: { name: r.to, ...(withDesc && r.descChanged ? { description: r.descTo } : {}) } })), "바꿈");
+    if (ok) setSheet("");
+  };
+  const submitDuplicate = async (rows: RenameRow[], withDesc: boolean) => {
+    if (batchBusy || liveLocked || !rows.length) return;
+    setBatchBusy(true);
+    const { ok, d } = await patchItems({ duplicate: rows.map((r) => ({ id: r.id, name: r.to, ...(withDesc && r.descChanged ? { description: r.descTo } : {}) })) });
+    setBatchBusy(false);
+    if (!ok) return fail(d?.message || "복제하지 못했습니다.");
+    setSheet("");
+    const made: string[] = Array.isArray(d.created) ? d.created.map((c: { id?: string }) => String(c?.id || "")).filter(Boolean) : [];
+    // 복제본을 골라 둔다 — 바로 이어서 이름 · 희귀도 등을 고친다
+    if (made.length) sel.replace(made);
+    if (Array.isArray(d.groups)) setRegGroupSaved(d.groups.map(String));
+    takeParents(d);
+    fetchRegItems();
+    reportBatch(made.length, Array.isArray(d.skipped) ? d.skipped : [], "복제");
+  };
+  // 일괄 삭제 — 상품 · 시즌 패스가 쓰는 아이템은 남긴다(서버도 같은 검사). 확인 한 번
+  const batchDelete = async () => {
+    const ids = sel.keys().filter((id) => {
+      const it = regItems.find((x) => String(x._id) === id);
+      return it && !(Number(it.usage) > 0) && !(Number(it.passUsage) > 0);
+    });
+    if (!ids.length || batchBusy || liveLocked) return;
+    setBatchBusy(true);
+    const res = await fetch(`/api/admin/items?ids=${ids.map(encodeURIComponent).join(",")}`, { method: "DELETE" }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setBatchBusy(false);
+    setBatchDelAsk(false);
+    if (!(res?.ok && d?.success)) return fail(d?.message || "삭제하지 못했습니다.");
+    const gone: string[] = Array.isArray(d.deleted) ? d.deleted.map(String) : [];
+    // 지운 아이템이 편집기에 열려 있으면 닫는다
+    if (itemForm.id && gone.includes(String(itemForm.id))) { setItemForm(EMPTY_ITEM_FORM); if (pane === "reg") closePane(); }
+    dropStacked("reg", gone);
+    fetchRegItems();
+    const blocked: { id: string; usage?: number; passUsage?: number }[] = Array.isArray(d.blocked) ? d.blocked : [];
+    reportBatch(gone.length, blocked.map((b) => ({ id: b.id, why: `상품 ${Number(b.usage) || 0} · 패스 ${Number(b.passUsage) || 0}` })), "삭제");
+  };
+
+  // 표시 토글 — 목록에서 바로 켜고 끈다(폼을 열지 않아도 되게). 일괄 편집과 같은 길(그 칸만 — 효과 · 순서는 건드리지 않는다)
+  //    📌 건너뛴 게 없으면 성공(상품 판매 스위치와 같은 판정 — 이미 그 값이라 바뀐 수가 0 이어도). 응답이 오면 목록을 다시 읽어 줄을 서버 값에 맞춘다
   const [visBusy, setVisBusy] = useState("");
   const toggleRegVisible = async (it: any) => {
     if (visBusy || liveLocked) return;
-    setVisBusy(it._id);
-    const res = await fetch("/api/admin/items", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      // 효과는 빼고 보낸다 — 표시 토글이 아이템 효과를 다시 쓰지 않게(효과가 없으면 서버가 효과 칸을 건드리지 않는다. undefined 는 JSON 에서 빠진다).
-      //    순서(sortOrder)도 빼고 — 화면에 든 값으로 덮어 순서가 흔들리지 않게(순서는 끌기 · 그룹 지정만 바꾼다)
-      body: JSON.stringify({ ...it, effects: undefined, sortOrder: undefined, id: it._id, visible: it.visible === false }),
-    }).catch(() => null);
-    const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { fetchRegItems(); notify(it.visible === false ? "인벤토리에 표시합니다." : "인벤토리에서 숨깁니다."); }
-    else notify(d?.message || "저장에 실패했습니다.", true);
+    const id = String(it._id);
+    const next = it.visible === false;
+    const before = regItems;
+    setVisBusy(id);
+    setRegItems((list) => list.map((x) => (String(x._id) === id ? { ...x, visible: next } : x)));
+    const { ok, d } = await patchItems({ batch: [{ id, set: { visible: next } }] });
     setVisBusy("");
-  };
-
-  const importInvRoles = async () => {
-    if (isImporting || liveLocked) return;
-    setIsImporting(true);
-    const res = await fetch("/api/admin/items/import", { method: "POST" }).catch(() => null);
-    const d = await res?.json().catch(() => null);
-    setIsImporting(false);
-    if (res?.ok && d?.success) { fetchRegItems(); notify(`${d.imported || 0}개를 가져왔습니다.${d.skipped ? ` (이미 있는 ${d.skipped}개는 건너뜀)` : ""}`); }
-    else notify(d?.message || "가져오기에 실패했습니다.", true);
+    if (ok && !(Array.isArray(d?.skipped) && d.skipped.length)) { fetchRegItems(); toast(next ? "인벤토리에 표시합니다." : "인벤토리에서 숨깁니다."); }
+    else {
+      setRegItems(before);
+      if (ok) fetchRegItems();
+      fail(d?.skipped?.[0]?.why || d?.message || "저장에 실패했습니다.");
+    }
   };
 
   // 추천 아이템 등록 결과 — 창을 닫고 목록을 다시 불러온다
@@ -2142,7 +3514,7 @@ export default function AdminShopPage() {
     setOrdersBusy(true);
     const d = await fetch(`/api/shop/orders?before=${encodeURIComponent(ordersNext)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
     setOrdersBusy(false);
-    if (!d?.success || !Array.isArray(d.data)) return notify("구매 내역을 더 불러오지 못했습니다.", true);
+    if (!d?.success || !Array.isArray(d.data)) return fail("구매 내역을 더 불러오지 못했습니다.");
     setOrders((prev) => {
       const next = uniqById([...prev, ...d.data]);
       ordersDepth.current = next.length;
@@ -2183,29 +3555,66 @@ export default function AdminShopPage() {
   const placeNow = placeTabs.some((p) => p.v === bannerPlace) ? bannerPlace : "home";
   const bannersAt = (place: string) => (place === GONE_PLACE ? goneBanners : banners.filter((b) => bannerPlaceOf(b) === place));
 
+  // 목록 줄 → 배너 폼 (예전 '수정' 단추 안의 값 그대로)
+  const bannerFormOf = (b: any) => ({ id: b._id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", placement: bannerPlaceOf(b), sortOrder: String(b.sortOrder || 0), active: b.active });
+  const fillBannerForm = (b: any) => setBannerForm(bannerFormOf(b));
+  // 📌 지금 열린 폼의 id(상품 · 배너 · 쿠폰) — 저장 응답이 오는 사이 다른 줄로 넘어갔는지 본다(그 폼을 덮거나 칸을 닫지 않게 — 아이템 regFormIdRef 와 같다)
+  const openFormIds = useRef({ product: "", banner: "", coupon: "" });
+  const [savingBanner, setSavingBanner] = useState(false);
+  const [savingProduct, setSavingProduct] = useState(false);
   const saveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (liveLocked) return notify(LIVE_LOCKED_MSG, true);
+    if (savingBanner) return;
+    if (liveLocked) return fail(LIVE_LOCKED_MSG);
+    const wasNew = !bannerForm.id;
+    const sentId = String(bannerForm.id || "");
+    const sentForm = bannerForm;
+    setSavingBanner(true);
     // 순서는 보내지 않는다 — 새 배너 · 위치를 바꾼 배너는 서버가 그 위치 맨 뒤에, 그 밖은 저장된 순서 그대로(폼을 연 뒤 끌어서 바꾼 순서를 덮지 않게)
     const res = await fetch("/api/shop/banners", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...bannerForm, sortOrder: undefined }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { dropPending("banner", bannerForm.id); setBannerForm(EMPTY_BANNER); fetchAll(); closePane(); notify("저장되었습니다."); }
-    else notify(d?.message || "저장에 실패했습니다.", true);
+    setSavingBanner(false);
+    if (res?.ok && d?.success) {
+      dropStacked("banner", [sentId], sentForm);
+      // 📌 붙는 편집기(넓은 화면)는 저장한 배너를 연 채 둔다(다음 줄로 넘어가며 고친다) — 좁은 화면은 예전처럼 닫는다
+      if (openFormIds.current.banner === sentId) {
+        if (wideDock && d.data?._id) setBannerForm(bannerFormOf(d.data));
+        else { setBannerForm(EMPTY_BANNER); closePane(); }
+      }
+      fetchAll();
+      toast(wasNew ? "등록했습니다." : "저장했습니다.");
+    }
+    else fail(d?.message || "저장에 실패했습니다.");
   };
 
-  // 목록 줄 → 배너 폼 (예전 '수정' 단추 안의 값 그대로)
-  const bannerFormOf = (b: any) => ({ id: b._id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", placement: bannerPlaceOf(b), sortOrder: String(b.sortOrder || 0), active: b.active });
-  const fillBannerForm = (b: any) => setBannerForm(bannerFormOf(b));
+  // 📌 줄 노출 스위치 — 바로 저장(그 칸만 — 위치 · 순서는 보내지 않아 그대로). 화면부터 바꾸고 실패하면 되돌린다
+  const toggleBannerActive = async (b: AnyRow) => {
+    if (bannerSwitchBusy || liveLocked) return;
+    const id = String(b._id);
+    const next = !b.active;
+    const before = banners;
+    setBannerSwitchBusy(id);
+    setBanners((list) => list.map((x) => (String(x._id) === id ? { ...x, active: next } : x)));
+    const res = await fetch("/api/shop/banners", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, imageUrl: b.imageUrl, mobileImageUrl: b.mobileImageUrl || "", title: b.title || "", subtitle: b.subtitle || "", link: b.link || "", active: next }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setBannerSwitchBusy("");
+    if (res?.ok && d?.success) { fetchAll(); toast(next ? "노출합니다." : "숨겼습니다."); }
+    else { setBanners(before); fail(d?.message || "저장에 실패했습니다."); }
+  };
 
-  // ── 한 번에 수정 — 목록이 바뀌면(표시 토글 · 끌어서 그룹 옮기기 · 그룹 지정 · 그룹 이름 바꾸기 · 초안 되돌리기 · 저장 뒤 다시 읽기)
-  //    열린 폼 · 쌓인 폼을 새 저장 값 위로 옮긴다 — 고친 칸만 그대로(「전체 수정」 · 「수정 저장」이 목록에서 바꾼 값을 옛 값으로 되돌리지 않게).
+  // ── 목록이 바뀌면(표시 토글 · 일괄 편집 · 끌어서 그룹 옮기기 · 그룹 이름 바꾸기 · 초안 되돌리기 · 저장 뒤 다시 읽기)
+  //    열린 폼을 새 저장 값 위로 옮긴다 — 고친 칸만 그대로(저장이 목록에서 바꾼 값을 옛 값으로 되돌리지 않게).
   //    렌더 중 조정(이펙트로 한 박자 늦지 않게). 줄이 목록에서 사라졌으면 그대로 둔다(못 읽은 빈 목록에 고친 것이 지워지지 않게)
-  const [seenRows, setSeenRows] = useState({ reg: regItems, product: items, banner: banners });
-  if (seenRows.reg !== regItems || seenRows.product !== items || seenRows.banner !== banners) {
+  //    📌 전체 수정 — 쌓인 폼(stacked)도 같이 옮기고, 옮기고 나니 저장 값과 같아졌으면(목록에서 같은 값으로 바꿨다) 쌓인 데서 뺀다
+  const [seenRows, setSeenRows] = useState({ reg: regItems, product: items, banner: banners, coupon: coupons });
+  if (seenRows.reg !== regItems || seenRows.product !== items || seenRows.banner !== banners || seenRows.coupon !== coupons) {
     const prev = seenRows;
-    setSeenRows({ reg: regItems, product: items, banner: banners });
+    setSeenRows({ reg: regItems, product: items, banner: banners, coupon: coupons });
     const onto = (fm: any, was: any[], now: any[], formOf: (r: any) => any) => {
       const id = String(fm?.id || "");
       const a = id ? was.find((x) => String(x._id) === id) : null;
@@ -2214,178 +3623,287 @@ export default function AdminShopPage() {
       const fa = formOf(a), fb = formOf(b);
       return sameForm(fa, fb) ? fm : rebaseForm(fm, fa, fb);
     };
-    const kinds = [
-      { k: "reg" as const, was: prev.reg, now: regItems, formOf: regFormOf as (r: any) => any },
-      { k: "product" as const, was: prev.product, now: items, formOf: formFromShopItem as (r: any) => any },
-      { k: "banner" as const, was: prev.banner, now: banners, formOf: bannerFormOf as (r: any) => any },
-    ].filter((x) => x.was !== x.now);
-    for (const { k, was, now, formOf } of kinds) {
-      if (k === "reg") { const f = onto(itemForm, was, now, formOf); if (f !== itemForm) setItemForm(f); }
-      if (k === "product") { const f = onto(form, was, now, formOf); if (f !== form) setForm(f); }
-      if (k === "banner") { const f = onto(bannerForm, was, now, formOf); if (f !== bannerForm) setBannerForm(f); }
-    }
-    if (kinds.length) {
-      setPending((p) => {
+    if (prev.reg !== regItems) { const f = onto(itemForm, prev.reg, regItems, regFormOf); if (f !== itemForm) setItemForm(f); }
+    if (prev.product !== items) { const f = onto(form, prev.product, items, prodFormOf); if (f !== form) setForm(f); }
+    if (prev.banner !== banners) { const f = onto(bannerForm, prev.banner, banners, bannerFormOf); if (f !== bannerForm) setBannerForm(f); }
+    if (prev.coupon !== coupons) { const f = onto(couponForm, prev.coupon, coupons, couponFormOf); if (f !== couponForm) setCouponForm(f); }
+    const moved = ([
+      { k: "reg", was: prev.reg, now: regItems, formOf: regFormOf },
+      { k: "product", was: prev.product, now: items, formOf: prodFormOf },
+      { k: "banner", was: prev.banner, now: banners, formOf: bannerFormOf },
+      { k: "coupon", was: prev.coupon, now: coupons, formOf: couponFormOf },
+    ] as { k: keyof Stacked; was: AnyRow[]; now: AnyRow[]; formOf: (r: AnyRow) => AnyRow }[]).filter((x) => x.was !== x.now);
+    if (moved.length) {
+      setStacked((p) => {
         let changed = false;
-        const out = { ...p } as Record<"reg" | "product" | "banner", Record<string, any>>;
-        for (const { k, was, now, formOf } of kinds) {
-          const next: Record<string, any> = {};
-          for (const [id, fm] of Object.entries(p[k] as Record<string, any>)) {
+        const out = { ...p } as Record<keyof Stacked, Record<string, AnyRow>>;
+        for (const { k, was, now, formOf } of moved) {
+          const next: Record<string, AnyRow> = {};
+          for (const [id, fm] of Object.entries(p[k] as Record<string, AnyRow>)) {
             const nf = onto(fm, was, now, formOf);
             if (nf === fm) { next[id] = fm; continue; }
             changed = true;
-            // 옮기고 나니 저장 값과 같아졌으면(목록에서 같은 값으로 바꿨다) 고친 것에서 뺀다
             const row = now.find((x) => String(x._id) === id);
             if (!(row && sameForm(nf, formOf(row)))) next[id] = nf;
           }
           out[k] = next;
         }
-        return changed ? (out as typeof p) : p;
+        return changed ? (out as Stacked) : p;
       });
     }
   }
 
-  // ── 한 번에 수정 — 지금 열린 폼이 저장된 값과 다른가(새로 쓰는 폼 · 목록에 없는 것은 아니다) ──
+  // ── 열린 폼을 고쳤나 — 수정 폼은 저장된 값과, 새로 쓰는 폼은 빈 폼과 견준다(효과 줄 id · 펼침 같은 화면 상태는 빼고 — sameForm)
+  //    📌 2026-10-17 「전체 수정」 되살림 — 고친 수정 폼은 다른 줄 · ‹ › · 새로 만들기 · 칸 닫기 · 탭 옮기기에 묻지 않고 쌓는다(stacked → 아래 띠 「모두 저장」).
+  //       새로 쓰던 폼을 고친 채 다른 줄을 열거나, 고친 게 남은 채 다른 화면으로 가면 한 번 묻는다(「버리기」 — leaveAsk). 편집기 「저장」은 그 하나만 바로
   const regSavedRow = itemForm.id ? regItems.find((x) => String(x._id) === String(itemForm.id)) : null;
   const prodSavedRow = form.id ? items.find((x) => String(x._id) === String(form.id)) : null;
   const banSavedRow = bannerForm.id ? banners.find((x) => String(x._id) === String(bannerForm.id)) : null;
-  const regEditDirty = !!regSavedRow && !sameForm(itemForm, regFormOf(regSavedRow));
-  const prodEditDirty = !!prodSavedRow && !sameForm(form, formFromShopItem(prodSavedRow));
-  const banEditDirty = !!banSavedRow && !sameForm(bannerForm, bannerFormOf(banSavedRow));
-  const dropPending = (kind: "reg" | "product" | "banner", id: string) => {
-    if (!id) return;
-    setPending((p) => {
-      if (!(id in p[kind])) return p;
-      const next = { ...p[kind] } as Record<string, any>;
-      delete next[id];
+  const regDirty = itemForm.id ? !!regSavedRow && !sameForm(itemForm, regFormOf(regSavedRow)) : !sameForm(itemForm, EMPTY_ITEM_FORM);
+  const prodDirty = form.id ? !!prodSavedRow && !sameForm(form, prodFormOf(prodSavedRow)) : !sameForm(form, emptyForm);
+  const banDirty = bannerForm.id
+    ? !!banSavedRow && !sameForm(bannerForm, bannerFormOf(banSavedRow))
+    : !sameForm({ ...bannerForm, placement: "" }, { ...EMPTY_BANNER, placement: "" });
+  // 쿠폰도 같은 규칙(2026-10-17 — 붙는 편집기 ‹ › 로 넘길 때 고친 것이 말없이 사라지지 않게)
+  const coupSavedRow = couponForm.id ? coupons.find((x) => String(x._id) === String(couponForm.id)) : null;
+  const coupDirty = couponForm.id ? !!coupSavedRow && !sameForm(couponForm, couponFormOf(coupSavedRow)) : !sameForm(couponForm, EMPTY_COUPON);
+  type EditKind = "reg" | "product" | "banner" | "coupon";
+  const isEditKind = (k: string): k is EditKind => k === "reg" || k === "product" || k === "banner" || k === "coupon";
+  const dirtyNameOf = (kind: EditKind): string | null =>
+    kind === "reg" ? (regDirty ? itemForm.name.trim() || "새 아이템" : null)
+    : kind === "product" ? (prodDirty ? form.name.trim() || "새 상품" : null)
+    : kind === "coupon" ? (coupDirty ? String(couponForm.code || "").trim() || "새 쿠폰" : null)
+    : banDirty ? String(bannerForm.title || "").trim() || "배너" : null;
+  // 📌 전체 수정 — 수정 폼(id 있음)을 고쳤나(이것만 쌓는다 — 새로 쓰던 폼은 아니다)
+  const EDIT_KINDS: EditKind[] = ["reg", "product", "banner", "coupon"];
+  const editDirtyOf = (kind: EditKind) =>
+    kind === "reg" ? !!itemForm.id && regDirty
+    : kind === "product" ? !!form.id && prodDirty
+    : kind === "banner" ? !!bannerForm.id && banDirty
+    : !!couponForm.id && coupDirty;
+  // 쌓인 데서 빼기 — only: 그 폼 그대로일 때만(저장하는 사이 다시 쌓인 새 고친 것은 남긴다)
+  const dropStacked = (kind: EditKind, ids: string[], only?: unknown) => {
+    const drop = ids.filter(Boolean);
+    if (!drop.length) return;
+    setStacked((p) => {
+      const cur = p[kind] as Record<string, AnyRow>;
+      const hit = drop.filter((id) => id in cur && (only === undefined || cur[id] === only));
+      if (!hit.length) return p;
+      const next = { ...cur };
+      for (const id of hit) delete next[id];
       return { ...p, [kind]: next };
     });
   };
-  // 지금 열린 폼 중 고친 것을 쌓고 폼은 비운다(다른 줄을 열기 전 · 칸을 닫을 때 · 탭을 옮길 때)
-  const stashEdits = () => {
-    if (!regEditDirty && !prodEditDirty && !banEditDirty) return;
-    setPending((p) => ({
-      reg: regEditDirty ? { ...p.reg, [String(itemForm.id)]: itemForm } : p.reg,
-      product: prodEditDirty ? { ...p.product, [String(form.id)]: form } : p.product,
-      banner: banEditDirty ? { ...p.banner, [String(bannerForm.id)]: bannerForm } : p.banner,
+  // 고친 수정 폼을 쌓고 그 폼은 비운다(다른 줄 · 새로 만들기 · 칸 닫기 · 탭 옮기기 전). kinds — 안 주면 넷 다
+  const stashEdits = (kinds: EditKind[] = EDIT_KINDS) => {
+    const take = kinds.filter(editDirtyOf);
+    if (!take.length) return;
+    setStacked((p) => ({
+      reg: take.includes("reg") ? { ...p.reg, [String(itemForm.id)]: itemForm } : p.reg,
+      product: take.includes("product") ? { ...p.product, [String(form.id)]: form } : p.product,
+      banner: take.includes("banner") ? { ...p.banner, [String(bannerForm.id)]: bannerForm } : p.banner,
+      coupon: take.includes("coupon") ? { ...p.coupon, [String(couponForm.id)]: couponForm } : p.coupon,
     }));
-    if (regEditDirty) setItemForm(EMPTY_ITEM_FORM);
-    if (prodEditDirty) { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
-    if (banEditDirty) setBannerForm(EMPTY_BANNER);
+    if (take.includes("reg")) setItemForm(EMPTY_ITEM_FORM);
+    if (take.includes("product")) { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+    if (take.includes("banner")) setBannerForm(EMPTY_BANNER);
+    if (take.includes("coupon")) setCouponForm(EMPTY_COUPON);
   };
-  // 줄 열기 — 쌓아 둔 고친 값이 있으면 그것으로(쌓인 데서는 뺀다 — 지금 열린 폼이 된다), 없으면 저장된 값으로
+  // 다른 폼으로 바꾸기 전 — 고친 수정 폼은 쌓고 바로, 새로 쓰던 폼을 고쳤으면 한 번 묻고(「버리기」) 할 일을, 없으면 바로
+  const guard = (kind: EditKind, go: () => void) => {
+    if (editDirtyOf(kind)) { stashEdits([kind]); go(); return; }
+    const name = dirtyNameOf(kind);
+    if (name == null) go();
+    else setLeaveAsk({ name, go });
+  };
+  // 폼 비우기(수정하던 폼만 — 새로 쓰던 폼은 남겨 「새로 만들기」로 이어 쓴다)
+  const resetEditForm = (kind: EditKind) => {
+    if (kind === "reg") setItemForm((f) => (f.id ? EMPTY_ITEM_FORM : f));
+    if (kind === "product" && form.id) { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+    if (kind === "banner") setBannerForm((f: any) => (f.id ? EMPTY_BANNER : f));
+    if (kind === "coupon") setCouponForm((f: AnyRow) => (f.id ? EMPTY_COUPON : f));
+  };
+  // 줄 열기 — 같은 줄이면 그대로, 아니면(고친 수정 폼은 쌓고 · 고친 새 폼은 한 번 묻고) 쌓아 둔 고친 값이 있으면 그것으로(쌓인 데서는 뺀다 —
+  //    지금 열린 폼이 된다), 없으면 저장된 값으로. 「모두 저장」 중에 열어도 된다(저장은 그때 폼 그대로 — 끝나면 같은 폼일 때만 저장 값으로 바꾼다)
   const openRegRow = (it: any) => {
     const id = String(it._id);
-    if (savingAll || (pane === "reg" && String(itemForm.id) === id)) return;
-    stashEdits();
-    const kept = pending.reg[id];
-    if (kept) { dropPending("reg", id); setItemForm(kept); } else fillRegForm(it);
-    setPane("reg");
+    if (pane === "reg" && String(itemForm.id) === id) return;
+    guard("reg", () => {
+      const kept = stacked.reg[id];
+      if (kept) { dropStacked("reg", [id]); setItemForm(kept); } else fillRegForm(it);
+      setPane("reg");
+      // 이전 · 다음으로 접힌 그룹의 아이템을 열면 그 그룹을 펼친다
+      openGroupNamed(groupOfItem(it));
+    });
   };
   const openProductRow = (it: any) => {
     const id = String(it._id);
-    if (savingAll || (pane === "product" && String(form.id) === id)) return;
-    stashEdits();
-    const kept = pending.product[id];
-    if (kept) { dropPending("product", id); setForm(kept); setLinkPick(null); setCustomSnap(null); } else fillItemForm(it);
-    setIsRoleOpen(false);
-    setPane("product");
+    if (pane === "product" && String(form.id) === id) return;
+    guard("product", () => {
+      const kept = stacked.product[id];
+      if (kept) { dropStacked("product", [id]); setForm(kept); setLinkPick(null); setCustomSnap(null); } else fillItemForm(it);
+      setPane("product");
+      // 이전 · 다음 · 주소로 접힌 묶음의 상품을 열면 그 묶음을 펼친다(묶음 = 연결 아이템 그룹 — lib/productOrder.js)
+      openProductGroupNamed(productGroupOf(it, itemIndexOf(regItems.map((x) => ({ id: String(x._id), group: groupOfItem(x) })))));
+    });
   };
   const openBannerRow = (b: any) => {
     const id = String(b._id);
-    if (savingAll || (pane === "banner" && String(bannerForm.id) === id)) return;
-    stashEdits();
-    const kept = pending.banner[id];
-    if (kept) { dropPending("banner", id); setBannerForm(kept); } else fillBannerForm(b);
-    setPane("banner");
+    if (pane === "banner" && String(bannerForm.id) === id) return;
+    guard("banner", () => {
+      const kept = stacked.banner[id];
+      if (kept) { dropStacked("banner", [id]); setBannerForm(kept); } else fillBannerForm(b);
+      setPane("banner");
+    });
   };
-  // 칸 닫기 — 고친 것은 쌓아 둔다(버리지 않는다)
-  const closeEditPane = () => { stashEdits(); closePane(); };
-  // 고친 것 목록(쌓인 것 + 지금 열린 고친 폼) — 띠 · 줄 표시 · 전체 수정이 같이 쓴다
-  type EditJob = { kind: "reg" | "product" | "banner"; id: string; name: string; form: any };
-  const editJobs: EditJob[] = [
-    ...Object.entries(pending.reg).map(([id, fm]) => ({ kind: "reg" as const, id, name: fm.name || "이름 없음", form: fm })),
-    ...(regEditDirty && !pending.reg[String(itemForm.id)] ? [{ kind: "reg" as const, id: String(itemForm.id), name: itemForm.name || "이름 없음", form: itemForm }] : []),
-    ...Object.entries(pending.product).map(([id, fm]) => ({ kind: "product" as const, id, name: fm.name || "이름 없음", form: fm })),
-    ...(prodEditDirty && !pending.product[String(form.id)] ? [{ kind: "product" as const, id: String(form.id), name: form.name || "이름 없음", form }] : []),
-    ...Object.entries(pending.banner).map(([id, fm]) => ({ kind: "banner" as const, id, name: fm.title || "제목 없는 배너", form: fm })),
-    ...(banEditDirty && !pending.banner[String(bannerForm.id)] ? [{ kind: "banner" as const, id: String(bannerForm.id), name: bannerForm.title || "제목 없는 배너", form: bannerForm }] : []),
-  ];
-  const editedIds = new Set(editJobs.map((j) => j.id));
-  const EDIT_KIND: Record<EditJob["kind"], string> = { reg: "아이템", product: "상품", banner: "배너" };
-  // 되돌리기 — 쌓인 것 · 지금 열린 폼을 모두 저장된 값으로(지금 열린 줄은 저장된 값으로 다시 연다)
-  const discardEdits = () => {
-    setPending({ reg: {}, product: {}, banner: {} });
-    if (regSavedRow) setItemForm(regFormOf(regSavedRow));
-    if (prodSavedRow) { setForm(formFromShopItem(prodSavedRow)); setLinkPick(null); setCustomSnap(null); }
-    if (banSavedRow) setBannerForm(bannerFormOf(banSavedRow));
-    toast("고친 것을 되돌렸습니다.");
+  const openCouponRow = (c: AnyRow) => {
+    const id = String(c._id);
+    if (pane === "coupon" && String(couponForm.id) === id) return;
+    guard("coupon", () => {
+      const kept = stacked.coupon[id];
+      if (kept) { dropStacked("coupon", [id]); setCouponForm(kept); } else fillCouponForm(c);
+      setCouponBulk(EMPTY_BULK);
+      setPane("coupon");
+    });
   };
-  // 전체 수정 — 쌓인 것 + 지금 열린 고친 폼을 차례로 저장(검사 · 본문은 상세 칸 저장과 같은 길). 실패한 것만 남기고 무엇이 왜 실패했는지 알린다
+  // 칸 닫기 — 새로 쓰던 폼은 그대로 두고 닫는다(다시 열면 이어 쓴다). 고친 수정 폼은 쌓아 두고 닫는다(버리지 않는다 — 아래 띠 「모두 저장」)
+  const closeEditPane = () => {
+    const kind: EditKind | null = isEditKind(pane) ? pane : null;
+    if (!kind) return closePane();
+    const isNew = kind === "reg" ? !itemForm.id : kind === "product" ? !form.id : kind === "coupon" ? !couponForm.id : !bannerForm.id;
+    if (isNew) return closePane();
+    stashEdits([kind]);
+    resetEditForm(kind);
+    closePane();
+  };
+  // ── 전체 수정 — 고친 것 목록(쌓인 것 + 지금 열린 고친 수정 폼). 아래 띠 · 줄 점 · 모두 저장 · 떠날 때 묻기가 같이 쓴다 ──
+  type EditJob = { kind: EditKind; id: string; name: string; form: AnyRow };
+  const openForms: Record<EditKind, AnyRow> = { reg: itemForm, product: form, banner: bannerForm, coupon: couponForm };
+  const jobNameOf = (kind: EditKind, fm: AnyRow) =>
+    kind === "banner" ? String(fm?.title || "").trim() || "배너"
+    : kind === "coupon" ? String(fm?.code || "").trim() || "쿠폰"
+    : String(fm?.name || "").trim() || "이름 없음";
+  const editJobs: EditJob[] = EDIT_KINDS.flatMap((k) => {
+    const kept = stacked[k] as Record<string, AnyRow>;
+    const open = openForms[k];
+    return [
+      ...Object.entries(kept).map(([id, fm]) => ({ kind: k, id, name: jobNameOf(k, fm), form: fm })),
+      ...(editDirtyOf(k) && !kept[String(open.id)] ? [{ kind: k, id: String(open.id), name: jobNameOf(k, open), form: open }] : []),
+    ];
+  });
+  const editedKeys = new Set(editJobs.map((j) => `${j.kind}:${j.id}`));
+  // 목록 줄 · 카드의 빨간 점(쌓인 것 · 열린 고친 것)
+  const isEdited = (kind: EditKind, id: unknown) => editedKeys.has(`${kind}:${String(id ?? "")}`);
+  const editedDot = (kind: EditKind, id: unknown) =>
+    isEdited(kind, id) ? <span role="img" aria-label="저장 안 한 수정" title="저장 안 한 수정" className="shrink-0 w-1.5 h-1.5 rounded-full bg-[#e91e3f]" /> : null;
+  // 띠 · 확인 창 이름 — 종류가 섞이면 앞에 종류
+  const EDIT_KIND_LABEL: Record<EditKind, string> = { reg: "아이템", product: "상품", banner: "배너", coupon: "쿠폰" };
+  const mixedKinds = new Set(editJobs.map((j) => j.kind)).size > 1;
+  const editNames = editJobs.map((j) => (mixedKinds ? `${EDIT_KIND_LABEL[j.kind]} ${j.name}` : j.name));
+  const namesLine = (names: string[]) => `${names.slice(0, 3).join(" · ")}${names.length > 3 ? ` 외 ${(names.length - 3).toLocaleString()}개` : ""}`;
+  // 되돌리기 — 쌓인 것 · 지금 열린 고친 수정 폼을 모두 저장된 값으로(한 번 묻는다 — 「버리기」). 열린 줄은 저장된 값으로 연 채
+  const revertEdits = () => {
+    setStacked({ reg: {}, product: {}, banner: {}, coupon: {} });
+    if (regSavedRow && editDirtyOf("reg")) setItemForm(regFormOf(regSavedRow));
+    if (prodSavedRow && editDirtyOf("product")) fillItemForm(prodSavedRow);
+    if (banSavedRow && editDirtyOf("banner")) setBannerForm(bannerFormOf(banSavedRow));
+    if (coupSavedRow && editDirtyOf("coupon")) setCouponForm(couponFormOf(coupSavedRow));
+    toast("되돌렸습니다.");
+  };
+  const askRevertEdits = () => { if (!savingAll && editJobs.length) setLeaveAsk({ name: namesLine(editNames), go: revertEdits }); };
+  // 저장 응답이 온 뒤 견줄 지금 폼 · 칸(저장하는 사이 칸을 닫거나 다시 고쳤는지)
+  const liveEdit = useRef({ forms: openForms, pane });
+  useEffect(() => { liveEdit.current = { forms: openForms, pane }; });
+  // 모두 저장 — 쌓인 것 + 지금 열린 고친 폼을 차례로(검사 · 본문은 편집기 「저장」과 같은 길). 실패한 것만 남기고 무엇이 왜 실패했는지 알린다.
+  //    실사이트 읽기 전용이면 쿠폰만 저장한다(아이템 · 상품 · 배너는 그대로 남는다)
   const saveAllEdits = async () => {
-    if (savingAll || liveLocked || editJobs.length === 0) return;
-    const jobs = editJobs;
-    // 📌 열린 상품 폼이 「등록된 아이템」을 고르는 중인데 아이템을 아직 안 골랐다 — 상세 칸 「수정 저장」과 같이 막는다(직접 설정 상품으로 저장되지 않게).
-    //    그 폼은 칸을 연 채 고친 그대로 남긴다(쌓아 두면 고르는 중이 풀려 다시 열 때 직접 설정으로 보인다)
-    const holdOpen = pane === "product" && !!form.id && !isBundleForm(form) && !linked && linkPick === formKey;
-    const isHeld = (j: EditJob) => holdOpen && j.kind === "product" && j.form === form;
-    // 고친 폼 칸은 먼저 닫는다(저장하는 동안 더 고치지 않게 — 그 폼은 jobs 에 들어 있다). 새로 쓰던 폼 칸 · 위 고르는 중인 칸은 그대로
-    if ((pane === "reg" && itemForm.id) || (pane === "product" && form.id && !holdOpen) || (pane === "banner" && bannerForm.id)) closePane();
+    if (savingAll || !editJobs.length) return;
+    const locked = liveLocked ? editJobs.filter((j) => j.kind !== "coupon") : [];
+    const jobs = editJobs.filter((j) => !locked.includes(j));
+    if (!jobs.length) return fail(LIVE_LOCKED_MSG);
+    // 열린 상품 폼이 「등록된 아이템」을 고르는 중인데 아직 안 골랐다 — 편집기 「저장」과 같이 막는다(직접 설정 상품으로 저장되지 않게)
+    const held = !isBundleForm(form) && !linked && linkPick === formKey ? form : null;
     setSavingAll(true);
-    const failed: (EditJob & { why: string })[] = [];
+    const done: { job: EditJob; saved: AnyRow }[] = [];
+    const failed: { job: EditJob; why: string }[] = [];
     for (const j of jobs) {
-      if (isHeld(j)) { failed.push({ ...j, why: "아이템을 선택해 주세요." }); continue; }
-      const built = j.kind === "reg" ? regBody(j.form) : j.kind === "product" ? productBody(j.form) : { body: { ...j.form, sortOrder: undefined } };
-      if ("error" in built) { failed.push({ ...j, why: built.error }); continue; }
-      const url = j.kind === "reg" ? "/api/admin/items" : j.kind === "product" ? "/api/shop/items" : "/api/shop/banners";
+      if (j.kind === "product" && j.form === held) { failed.push({ job: j, why: "아이템을 선택해 주세요." }); continue; }
+      const built = j.kind === "reg" ? regBody(j.form) : j.kind === "product" ? productBody(j.form)
+        : { body: j.kind === "banner" ? { ...j.form, sortOrder: undefined } : j.form };
+      if ("error" in built) { failed.push({ job: j, why: built.error }); continue; }
+      const url = { reg: "/api/admin/items", product: "/api/shop/items", banner: "/api/shop/banners", coupon: "/api/shop/coupons" }[j.kind];
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body) }).catch(() => null);
       const d = await res?.json().catch(() => null);
-      if (!(res?.ok && d?.success)) failed.push({ ...j, why: d?.message || "저장에 실패했습니다." });
+      if (res?.ok && d?.success) done.push({ job: j, saved: d.data });
+      else failed.push({ job: j, why: d?.message || "저장에 실패했습니다." });
     }
     setSavingAll(false);
-    // 실패한 것만 남긴다 — 수정 폼(id 있음)은 비운다(실패했으면 쌓인 쪽에 들어 있다). 새로 쓰던 폼(id 없음)은 그대로 이어 쓴다
-    const left = { reg: {} as Record<string, ItemForm>, product: {} as Record<string, ProductForm>, banner: {} as Record<string, any> };
-    // 고르는 중이라 막은 열린 폼은 쌓지 않는다 — 열린 폼 그대로가 고친 것이다(아래 띠 수에 그대로 든다)
-    for (const j of failed) if (!isHeld(j)) (left[j.kind] as Record<string, any>)[j.id] = j.form;
-    setPending(left);
-    setItemForm((f) => (f.id ? EMPTY_ITEM_FORM : f));
-    if (form.id && !holdOpen) { setLinkPick(null); setCustomSnap(null); }
-    if (!holdOpen) setForm((f) => (f.id ? emptyForm : f));
-    setBannerForm((f: any) => (f.id ? EMPTY_BANNER : f));
+    // 저장한 것 — 쌓인 데서 빼고(그사이 다시 고쳐 쌓인 것은 남긴다), 목록 줄부터 새 값으로(다시 읽기 전 고친 채로 보이지 않게)
+    for (const k of EDIT_KINDS) {
+      const mine = done.filter((x) => x.job.kind === k);
+      if (!mine.length) continue;
+      for (const { job } of mine) dropStacked(k, [job.id], job.form);
+      const rows = new Map<string, AnyRow>(mine.filter((x) => x.saved?._id).map((x) => [String(x.saved._id), x.saved]));
+      if (!rows.size) continue;
+      const merge = (list: AnyRow[]) => list.map((x) => (rows.has(String(x._id)) ? { ...x, ...rows.get(String(x._id)) } : x));
+      if (k === "reg") setRegItems(merge);
+      if (k === "product") setItems(merge);
+      if (k === "banner") setBanners(merge);
+      if (k === "coupon") setCoupons(merge);
+    }
+    // 열린 폼을 저장했으면(그사이 안 고쳤으면) — 넓은 화면은 저장한 값으로 연 채, 좁은 화면은 폼을 비우고 칸을 닫는다(편집기 「저장」과 같다)
+    const live = liveEdit.current;
+    for (const { job, saved } of done) {
+      if (live.forms[job.kind] !== job.form) continue;
+      const keep = wideDock && !!saved?._id;
+      if (job.kind === "reg") setItemForm(keep ? regFormOf(saved) : EMPTY_ITEM_FORM);
+      if (job.kind === "product") { if (keep) fillItemForm(saved); else { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); } }
+      if (job.kind === "banner") setBannerForm(keep ? bannerFormOf(saved) : EMPTY_BANNER);
+      if (job.kind === "coupon") setCouponForm(keep ? couponFormOf(saved) : EMPTY_COUPON);
+      if (!keep && live.pane === job.kind) closePane();
+    }
     fetchRegItems();
     fetchAll();
-    if (failed.length) notify(`${(jobs.length - failed.length).toLocaleString()}개 저장 · ${failed.length.toLocaleString()}개 실패\n${failed.map((x) => `${EDIT_KIND[x.kind]} ${x.name}: ${x.why}`).join("\n")}`, true);
-    else toast(`${jobs.length.toLocaleString()}개를 저장했습니다.`);
+    if (!failed.length && !locked.length) return toast(`${done.length.toLocaleString()}개 저장했습니다.`);
+    notify([
+      `${done.length.toLocaleString()}개 저장 · ${(failed.length + locked.length).toLocaleString()}개 남음`,
+      ...failed.slice(0, 12).map((x) => `${EDIT_KIND_LABEL[x.job.kind]} ${x.job.name} — ${x.why}`),
+      ...(failed.length > 12 ? [`외 ${(failed.length - 12).toLocaleString()}개`] : []),
+      ...(locked.length ? [`${locked.length.toLocaleString()}개 — ${LIVE_LOCKED_MSG}`] : []),
+    ].join("\n"), true);
   };
-  // 저장 안 한 게 남은 채 페이지를 떠나면 묻는다 — 새로 고침 · 닫기(beforeunload) · 다른 관리 화면으로 가는 링크 · 뒤로 가기(아래 표지)
-  const unsavedN = editJobs.length;
-  // 뒤로 가기 표지 — unsavedRef: 고친 수(기록 이벤트 안에서 읽는다) · lastLeaveMark: 마지막으로 본 자리의 표지 · leavingRef: 나가기로 해 한 번 더 뒤로 가는 중
-  const unsavedRef = useRef(0);
-  const lastLeaveMark = useRef<LeaveMark | null>(null);
+  // 📌 다른 화면으로 가는 링크(왼쪽 메뉴 · 칸 안 링크) · 기능 검색 · 새로 고침 — 고친 게 남았으면(쌓인 것 · 열린 고친 폼 · 고친 새 폼) 한 번 묻는다(뒤로 가기는 막지 않는다).
+  //    이 화면 안 주소(탭 줄 · ?item= · new · open= · 설정 창)는 묻지 않는다 — 탭을 옮기면 고친 수정 폼은 쌓이고 새로 쓰던 폼은 남는다
+  const openNewDirty = isEditKind(pane) && !openForms[pane].id ? dirtyNameOf(pane) : null;
+  const leaveNames = [...editNames, ...(openNewDirty ? [openNewDirty] : [])];
+  const openDirty = leaveNames.length ? namesLine(leaveNames) : null;
+  // 버리고 갈 때 — 쌓인 것을 비우고 열린 폼을 통째로 비우고 칸을 닫는다(새로 쓰던 폼도 — 「버리기」를 골랐다)
+  const discardOpen = () => {
+    setStacked({ reg: {}, product: {}, banner: {}, coupon: {} });
+    if (pane === "reg") setItemForm(EMPTY_ITEM_FORM);
+    if (pane === "product") { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+    if (pane === "banner") setBannerForm(EMPTY_BANNER);
+    if (pane === "coupon") { setCouponForm(EMPTY_COUPON); setCouponBulk(EMPTY_BULK); }
+    closePane();
+  };
+  // 저장 응답이 올 때 견줄 「지금 열린 폼」 id(saveBanner · saveItem · saveCoupon)
+  useEffect(() => { openFormIds.current = { product: String(form.id || ""), banner: String(bannerForm.id || ""), coupon: String(couponForm.id || "") }; });
+  // 이 화면(상점 관리) 안 주소 — 옮긴 탭(MOVED_TAB — 다른 화면으로 넘긴다)은 빼고
+  const stayInShop = (href: string) => {
+    try {
+      const u = new URL(href, window.location.origin);
+      if (u.origin !== window.location.origin || u.pathname.replace(/\/+$/, "") !== "/admin/shop") return false;
+      return !MOVED_TAB[u.searchParams.get("tab") || ""];
+    } catch {
+      return false;
+    }
+  };
+  const leaveRef = useRef<{ name: string | null; discard: () => void; stay: (href: string) => boolean }>({ name: null, discard: () => {}, stay: () => false });
   const leavingRef = useRef(false);
-  // 나가기로 한 뒤 다른 문서로 넘어가는 중(beforeunload 를 지났다)
   const unloadingRef = useRef(false);
-  useEffect(() => { unsavedRef.current = unsavedN; }, [unsavedN]);
-  useEffect(() => {
-    if (!unsavedN) return;
-    // 뒤로 가기로 나가기로 이미 답했으면 브라우저가 한 번 더 묻지 않게
-    const onUnload = (e: BeforeUnloadEvent) => { if (leavingRef.current) { unloadingRef.current = true; return; } e.preventDefault(); e.returnValue = ""; };
-    const onClick = (e: MouseEvent) => {
-      // 새 탭 · 새 창으로 여는 누르기(가운데 단추 · Ctrl · ⌘ · Shift)는 이 화면이 남는다
-      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!a || a.target === "_blank") return;
-      const href = a.getAttribute("href") || "";
-      if (href.startsWith("/admin/shop") || href.startsWith("#")) return; // 같은 화면 탭은 남는다(고친 것은 탭을 옮겨도 그대로)
-      if (!window.confirm(leaveAsk(unsavedN))) { e.preventDefault(); e.stopPropagation(); }
-    };
-    window.addEventListener("beforeunload", onUnload);
-    document.addEventListener("click", onClick, true);
-    return () => { window.removeEventListener("beforeunload", onUnload); document.removeEventListener("click", onClick, true); };
-  }, [unsavedN]);
-  // 📌 뒤로 가기(popstate — 2026-10-11) — 「위」 → 「아래」(같은 n)로 내려오면 묻는다. 남으면 「위」로 앞으로 한 칸, 나가면 한 번 더 뒤로(진짜 이전 화면).
-  //    탭 · 주소 바꾸기(?tab= — Next 가 쌓는 자리)는 「위」 위에 쌓여 묻지 않고 오간다. 앞으로 가기로 「아래」에 온 것은 묻지 않는다(지난 자리가 「위」가 아니다).
-  //    다 저장해 고친 게 없으면 묻지 않고 한 번 더 뒤로(같은 주소 한 칸 — 뒤로 가기가 헛돌지 않게). 나가기로 했는데 이전 자리도 이 화면이면(이전 탭) 표지를 다시 세운다
+  const lastLeaveMark = useRef<LeaveMark | null>(null);
+  // 📌 뒤로 가기(popstate) — 「위」 → 「아래」(같은 n)로 내려오면 묻는다. 남으면 「위」로 앞으로 한 칸, 나가면 한 번 더 뒤로(진짜 이전 화면).
+  //    탭 · 주소 바꾸기(Next 가 쌓는 자리)는 「위」 위에 쌓여 묻지 않고 오간다. 고친 게 없으면 묻지 않고 한 번 더 뒤로(뒤로 가기가 헛돌지 않게)
   useEffect(() => {
     lastLeaveMark.current = leaveMarkOf(window.history.state);
     const onPop = () => {
@@ -2394,46 +3912,72 @@ export default function AdminShopPage() {
       lastLeaveMark.current = m;
       if (leavingRef.current) {
         leavingRef.current = false;
-        if (unsavedRef.current > 0 && window.location.pathname.startsWith("/admin/shop")) lastLeaveMark.current = armLeaveGuard();
+        if (leaveRef.current.name && window.location.pathname.startsWith("/admin/shop")) lastLeaveMark.current = armLeaveGuard();
         return;
       }
       if (m?.at !== "below" || was?.at !== "top" || was.n !== m.n) return;
-      const n = unsavedRef.current;
-      // 📌 남으면 방금 떠난 「위」 자리로 앞으로 한 칸(새 자리를 쌓지 않는다 — 손댄 적 없는 자리에서 쌓은 기록은 크롬 뒤로 가기가 건너뛰어, 곧바로 또 뒤로 가면 묻지 않고 나갔다)
-      if (n > 0 && !window.confirm(leaveAsk(n))) { window.history.forward(); return; }
+      const name = leaveRef.current.name;
+      if (name && !window.confirm(backLeaveAsk(name))) { window.history.forward(); return; }
       leavingRef.current = true;
       unloadingRef.current = false;
       window.history.back();
-      // 더 뒤로 갈 데가 없으면(이 탭의 첫 자리) 기록 이벤트가 오지 않는다 — 잠시 뒤에도 그대로면 남은 것으로 보고 표지를 다시 세운다(새로 고침 묻기도 되살아난다).
-      //    다른 문서로 나가는 중(beforeunload 를 지남 — 이전 화면이 느리게 뜬다)이면 그대로 둔다
+      // 더 뒤로 갈 데가 없으면 기록 이벤트가 오지 않는다 — 잠시 뒤에도 그대로면 남은 것으로 보고 표지를 다시 세운다
       window.setTimeout(() => {
         if (!leavingRef.current || unloadingRef.current) return;
         leavingRef.current = false;
-        if (unsavedRef.current > 0) lastLeaveMark.current = armLeaveGuard();
+        if (leaveRef.current.name) lastLeaveMark.current = armLeaveGuard();
       }, 1500);
     };
-    // 📌 나가기로 한 뒤 앞으로 가기로 이 화면이 되살아나면(bfcache — 고친 것도 그대로 남는다) 나가는 중 표시를 풀고 표지를 다시 세운다.
-    //    안 풀면 그다음 나가기는 묻지 않고(beforeunload · 뒤로 가기 모두) 고친 것이 사라졌다
+    // 나가기로 한 뒤 앞으로 가기로 되살아나면(bfcache) 나가는 중 표시를 풀고 표지를 다시 세운다
     const onShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return;
       leavingRef.current = false;
       unloadingRef.current = false;
-      lastLeaveMark.current = unsavedRef.current > 0 ? armLeaveGuard() : leaveMarkOf(window.history.state);
+      lastLeaveMark.current = leaveRef.current.name ? armLeaveGuard() : leaveMarkOf(window.history.state);
     };
     window.addEventListener("popstate", onPop);
     window.addEventListener("pageshow", onShow);
     return () => { window.removeEventListener("popstate", onPop); window.removeEventListener("pageshow", onShow); };
   }, []);
-  // 고친 게 생기면(0 → 1) 표지를 세운다 — 그 뒤 수가 늘어도 다시 세우지 않는다(다른 탭 자리에서 또 세우면 탭 사이 뒤로 가기에서 묻게 된다)
-  const hasUnsaved = unsavedN > 0;
+  useEffect(() => { leaveRef.current = { name: openDirty, discard: discardOpen, stay: stayInShop }; });
+  const hasLeaveDirty = !!openDirty;
+  useEffect(() => { if (hasLeaveDirty) lastLeaveMark.current = armLeaveGuard(); }, [hasLeaveDirty]);
   useEffect(() => {
-    if (hasUnsaved) lastLeaveMark.current = armLeaveGuard();
-  }, [hasUnsaved]);
+    const onClick = (e: MouseEvent) => {
+      const { name, discard, stay } = leaveRef.current;
+      if (!name || e.defaultPrevented) return;
+      // 새 탭 · 새 창으로 여는 누르기(가운데 단추 · Ctrl · ⌘ · Shift)는 이 화면이 남는다
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      const href = a.getAttribute("href") || "";
+      if (!href || href.startsWith("#") || stay(href)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveAsk({ name, go: () => { discard(); router.push(href, { scroll: false }); } });
+    };
+    const onUnload = (e: BeforeUnloadEvent) => {
+      // 뒤로 가기로 나가기로 이미 답했으면 브라우저가 한 번 더 묻지 않게
+      if (leavingRef.current) { unloadingRef.current = true; return; }
+      if (!leaveRef.current.name) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("beforeunload", onUnload);
+    return () => { document.removeEventListener("click", onClick, true); window.removeEventListener("beforeunload", onUnload); };
+  }, [router]);
+  // 📌 기능 검색(ui.tsx adminNavigate — Enter · 누르기)으로 옮길 때도 같은 확인 한 번(검색 창은 먼저 닫힌다 — 확인이 그 아래에 깔리지 않게).
+  //    이 화면 안 주소(다른 탭 · ?item= · new · open= · 설정 창)는 묻지 않고 보낸다 — 탭을 옮기면 고친 수정 폼은 쌓이고, 따라가는 길(deepSeen)이
+  //    폼을 바꿀 때는 거기서(openRegRow · openNewReg … 고친 새 폼만 한 번 묻는다), 창만 여는 주소(설정 · 추천 아이템 · 그룹 · 테마)는 고친 폼을 그대로 둔다
+  useLeaveGuard(!!openDirty, (href) => {
+    const { name, discard } = leaveRef.current;
+    if (!name || stayInShop(href)) return true;
+    setLeaveAsk({ name, go: () => { discard(); router.push(href, { scroll: false }); } });
+    return false;
+  });
 
   // ── 쿠폰 ────────────────────────────────────
-  const EMPTY_COUPON = { id: "", code: "", name: "", kind: "discount", reward: "", rewardRoleId: "", rewardRoleName: "", rewardXp: "", requiredRoleId: "", requiredRoleName: "", type: "percent", value: "", maxDiscount: "", payScope: "both", minTotal: "", maxUses: "", perUserLimit: "1", active: true, expiresAt: "" };
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [couponForm, setCouponForm] = useState<any>(EMPTY_COUPON);
 
   // 쿠폰을 유저 지갑에 지급
   const [issueTarget, setIssueTarget] = useState<any>(null);
@@ -2451,122 +3995,196 @@ export default function AdminShopPage() {
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) { notify(d.message || "지급했습니다."); setIssueAllConfirm(false); setIssueTarget(null); setIssueInput(""); }
-    else notify(d?.message || "지급에 실패했습니다.", true);
+    else fail(d?.message || "지급에 실패했습니다.");
     setIsIssuing(false);
   };
 
-  // 예전 '코드'를 보상형 쿠폰으로 옮긴다 (여러 번 눌러도 중복되지 않는다) — 예전에 쓴 사람의 사용 기록도 넘긴다(app/api/shop/coupons/migrate)
-  //    📌 2026-10-04 "이미 다 옮겼다면 버튼을 없앤다" — 남은 일(옮길 코드 · 넘길 사용 기록)이 있을 때만 버튼을 보인다
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [legacyLeft, setLegacyLeft] = useState(0);
-  const fetchLegacy = useCallback(() => {
-    fetch("/api/shop/coupons/migrate", { cache: "no-store" }).then((r) => r.json())
-      .then((d) => setLegacyLeft(d?.success ? (Number(d.data?.pending) || 0) + (Number(d.data?.linked) || 0) : 0))
-      .catch(() => setLegacyLeft(0));
-  }, []);
-  const migrateCodes = async () => {
-    if (isMigrating) return;
-    setIsMigrating(true);
-    const res = await fetch("/api/shop/coupons/migrate", { method: "POST" }).catch(() => null);
-    const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { notify(d.message || "이전했습니다."); fetchAll(); fetchLegacy(); }
-    else notify(d?.message || "이전에 실패했습니다.", true);
-    setIsMigrating(false);
-  };
+  // 📌 2026-10-17 「예전 코드 가져오기」(옛 코드 → 보상형 쿠폰 이관 단추)와 쿠폰 탭을 열 때마다 돌던 예전 기록 조회를 걷었다(이관은 끝난 일 — 운영자 결정)
 
+  const fillCouponForm = (c: AnyRow) => setCouponForm(couponFormOf(c));
+
+  // 📌 쿠폰 저장 — 한 장(코드 직접) · 여러 장(앞머리 + 장수 + 무작위 글자 수 — 서버가 코드를 만든다 → 만든 코드 창 「복사 · CSV」).
+  //    붙는 편집기(넓은 화면)는 저장한 쿠폰을 연 채 둔다(여러 장은 닫고 코드 창)
   const saveCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (couponSaving) return;
+    const bulkOn = !couponForm.id && couponBulk.on;
+    let bulk: { prefix: string; count: number; length: number } | null = null;
+    if (bulkOn) {
+      const count = Number(couponBulk.count);
+      const length = Number(couponBulk.length);
+      if (!Number.isInteger(count) || count < 2 || count > BULK_COUNT_MAX) return fail(`장수는 2~${BULK_COUNT_MAX}장으로 입력해 주세요.`);
+      if (!Number.isInteger(length) || length < 4 || length > 16) return fail("무작위 글자 수는 4~16자로 입력해 주세요.");
+      bulk = { prefix: couponBulk.prefix.trim().toUpperCase(), count, length };
+    }
+    const wasNew = !couponForm.id;
+    const sentId = String(couponForm.id || "");
+    const sentForm = couponForm;
+    const name = String(couponForm.name || "").trim();
+    setCouponSaving(true);
     const res = await fetch("/api/shop/coupons", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(couponForm),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bulk ? { ...couponForm, code: "", bulk } : couponForm),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { setCouponForm(EMPTY_COUPON); fetchAll(); closePane(); notify("저장되었습니다."); }
-    else notify(d?.message || "저장에 실패했습니다.", true);
+    setCouponSaving(false);
+    if (!(res?.ok && d?.success)) return fail(d?.message || "저장에 실패했습니다.");
+    dropStacked("coupon", [sentId], sentForm);
+    fetchAll();
+    if (bulk) {
+      const codes: string[] = Array.isArray(d.codes) ? d.codes.map(String) : [];
+      setCouponForm(EMPTY_COUPON);
+      setCouponBulk(EMPTY_BULK);
+      closePane();
+      setCouponCodes({ name, codes });
+      toast(`${codes.length.toLocaleString()}장 발급했습니다.`);
+      return;
+    }
+    if (openFormIds.current.coupon === sentId) {
+      if (wideDock && d.data?._id) setCouponForm(couponFormOf(d.data));
+      else { setCouponForm(EMPTY_COUPON); closePane(); }
+    }
+    toast(wasNew ? "발급했습니다." : "저장했습니다.");
   };
-
-  // 목록 줄 → 쿠폰 폼 (예전 '수정' 단추 안의 값 그대로 — 만료 일시는 KST 로 바꿔 넣는다. 서버도 KST 로 읽는다)
-  const fillCouponForm = (c: any) =>
-    setCouponForm({ id: c._id, code: c.code, name: c.name || "", kind: c.kind || "discount", reward: c.reward || "", rewardRoleId: c.rewardRoleId || "", rewardRoleName: c.rewardRoleName || "", rewardXp: c.rewardXp ? String(c.rewardXp) : "", requiredRoleId: c.requiredRoleId || "", requiredRoleName: c.requiredRoleName || "", type: c.type, value: String(c.value), maxDiscount: c.maxDiscount ? String(c.maxDiscount) : "", payScope: c.payScope || "both", minTotal: c.minTotal ? String(c.minTotal) : "", maxUses: c.maxUses ? String(c.maxUses) : "", perUserLimit: String(c.perUserLimit ?? 1), active: c.active, expiresAt: toKstInput(c.expiresAt) });
-
-  // ── 시즌 전환 (디스코드 표기 떼기) ────────────
-  //    되돌리려면 역할을 손으로 다시 붙여야 하므로, 미리보기를 통과해야 실행 버튼이 열린다
-  const [detachPreview, setDetachPreview] = useState<any>(null);
-  // "" | "preview" | "run" — 어느 쪽을 누른 건지 알아야 버튼마다 다른 문구를 띄운다
-  const [detachBusy, setDetachBusy] = useState("");
-  const [detachConfirm, setDetachConfirm] = useState(false);
-
-  const callDetach = async (dryRun: boolean) => {
-    if (detachBusy) return null;
-    setDetachBusy(dryRun ? "preview" : "run");
-    const res = await fetch("/api/season/detach", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dryRun }),
+  // 📌 줄 사용 상태 스위치 — 그 칸만 바로 저장(PATCH { id, active }). 화면부터 바꾸고 실패하면 되돌린다
+  const toggleCouponActive = async (c: AnyRow) => {
+    if (couponSwitchBusy) return;
+    const id = String(c._id);
+    const next = !c.active;
+    const before = coupons;
+    setCouponSwitchBusy(id);
+    setCoupons((list) => list.map((x) => (String(x._id) === id ? { ...x, active: next } : x)));
+    const res = await fetch("/api/shop/coupons", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, active: next }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    setDetachBusy("");
-    if (res?.ok && d?.success) return d;
-    notify(d?.message || "처리에 실패했습니다.", true);
-    return null;
+    setCouponSwitchBusy("");
+    if (res?.ok && d?.success) {
+      // 열린 폼이 이 쿠폰이면 폼의 사용 상태도 새 값으로(저장이 옛 값으로 되돌리지 않게)
+      setCouponForm((f: AnyRow) => (String(f.id || "") === id ? { ...f, active: next } : f));
+      fetchAll();
+      toast(next ? "사용 가능으로 바꿨습니다." : "사용을 중지했습니다.");
+    } else { setCoupons(before); fail(d?.message || "저장에 실패했습니다."); }
   };
-
-  const runDetach = async () => {
-    if (!detachPreview || detachPreview.matched === 0) return;
-    const d = await callDetach(false);
-    setDetachConfirm(false);
-    if (!d) return;
-    // 실행한 목록으로 다시 실행하지 못하게 미리보기를 비운다
-    setDetachPreview(null);
-    notify(`${(d.updated || 0).toLocaleString()}건의 디스코드 표기를 내렸습니다. 봇이 30초 안에 실제 역할을 정리합니다.`);
+  // 만든 코드 — 복사 · CSV
+  const copyCodes = async (codes: string[]) => {
+    try { await navigator.clipboard.writeText(codes.join("\n")); toast(`${codes.length.toLocaleString()}개 복사했습니다.`); }
+    catch { fail("복사하지 못했습니다."); }
+  };
+  const codesCsv = (name: string, codes: string[]) => {
+    downloadCsv(`coupons-${ymd(new Date())}.csv`, [["코드", "쿠폰 이름"], ...codes.map((c) => [c, name])]);
+    toast("CSV 를 내려받았습니다.");
   };
 
   useEffect(() => { if (isAdmin) { fetchAll(); fetchRegItems(); } }, [isAdmin, fetchAll, fetchRegItems]);
-  // 예전 코드 남은 일 — 쿠폰 탭을 열 때만 센다(예전 기록을 훑는다)
-  useEffect(() => { if (isAdmin && tab === "coupons") fetchLegacy(); }, [isAdmin, tab, fetchLegacy]);
 
-  // ── 설정 (결제 캐시백) ────────────────────────
-  //    📌 2026-10-04 "관리자가 정하게 해" — 캐시백 합 상한(%) · 빙옥 결제분 캐시백. 저장은 그 두 칸만(app/api/bot-settings PATCH — 레벨 설정의 다른 값은 건드리지 않는다)
-  type ShopSet = { cap: string; onPoint: boolean };
+  // ── 상점 설정 창(머리 「설정」) ────────────────
+  //    📌 2026-10-04 "관리자가 정하게 해" — 캐시백 합 상한(%) · 빙옥 결제분 캐시백 + 2026-10-17 ARCTIC 상점 공개(레벨 설정 › 공개 · 초기화에서 옮김).
+  //       저장은 바뀐 칸만 app/api/bot-settings PATCH(다른 봇 설정은 건드리지 않는다 — POST 는 shopPublic 을 쓰지 않는다).
+  //       열 때마다 다시 읽어 그동안 칸을 잠근다(다른 창 · 다른 관리자가 바꾼 값). 닫으면 저장 안 한 수정은 버린다
   const [shopSet, setShopSet] = useState<ShopSet | null>(null);
   const [shopSetSnap, setShopSetSnap] = useState<ShopSet | null>(null);
   const [savingShopSet, setSavingShopSet] = useState(false);
+  const [shopSetOpen, setShopSetOpen] = useState(false);
+  const [shopSetLoading, setShopSetLoading] = useState(false);
+  // 아이템 효과 편집기의 상시 효과 상한 재료 — 같은 설정을 읽어 넘긴다(편집기가 열릴 때마다 다시 읽지 않게)
+  const [botCaps, setBotCaps] = useState<BotCaps | null>(null);
+  // 겹친 읽기는 마지막 것만 받는다. 처음 한 번(효과 편집기 상한 재료) + 창을 열 때마다 · 「다시 읽기」(shopSetReload). 창을 닫을 때는 다시 읽지 않는다
+  const shopSetSeq = useRef(0);
+  const shopSetReady = useRef(false);
+  const [shopSetReload, setShopSetReload] = useState(0);
   useEffect(() => {
-    if (!isAdmin) return;
-    let alive = true;
-    fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json())
-      .then((d) => {
-        if (!alive || !d?.success) return;
-        const r = cashbackRuleOf(d.data);
-        const v = { cap: String(r.cap), onPoint: r.onPoint };
-        setShopSet(v);
-        setShopSetSnap(v);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [isAdmin]);
-  const shopSetChanges: string[] = shopSet && shopSetSnap
-    ? [
-        shopSet.cap !== shopSetSnap.cap ? `캐시백 상한 ${shopSetSnap.cap}% → ${shopSet.cap || "-"}%` : "",
-        shopSet.onPoint !== shopSetSnap.onPoint ? `빙옥 결제분 ${shopSetSnap.onPoint ? "포함" : "제외"} → ${shopSet.onPoint ? "포함" : "제외"}` : "",
-      ].filter(Boolean)
-    : [];
+    if (!isAdmin || (!shopSetOpen && shopSetReady.current)) return;
+    const seq = ++shopSetSeq.current;
+    const reportFail = shopSetOpen;
+    fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null).then((d) => {
+      if (seq !== shopSetSeq.current) return;
+      setShopSetLoading(false);
+      if (!d?.success) {
+        if (reportFail) toast("설정을 읽지 못했습니다.", true);
+        return;
+      }
+      shopSetReady.current = true;
+      const v = shopSetOf(d.data);
+      setShopSet(v);
+      setShopSetSnap(v);
+      setBotCaps(botCapsOf(d.data));
+    });
+  }, [isAdmin, shopSetOpen, shopSetReload, toast]);
+  const openShopSettings = () => { if (shopSetOpen) return; setShopSetLoading(true); setShopSetOpen(true); };
+  const closeShopSettings = () => {
+    if (savingShopSet) return;
+    setShopSetOpen(false);
+    setShopSetLoading(false);
+    if (shopSetSnap) setShopSet(shopSetSnap);
+  };
+  // 주소로 열기(isSettingsLink — 없던 것이 생길 때 한 번) · 연 뒤 그 표시는 주소에서 걷는다(지금 탭으로 — 같은 주소로 다시 와도 또 열리게 · 새로고침에 다시 뜨지 않게)
+  const [settingsLinkOn, setSettingsLinkOn] = useState(false);
+  if (settingsLink !== settingsLinkOn) {
+    setSettingsLinkOn(settingsLink);
+    if (settingsLink && !shopSetOpen) { setShopSetLoading(true); setShopSetOpen(true); }
+  }
+  //    📌 따라가기 표시(?new=1 · item= · edit= · open=preset|groups|themes — 아래 deepSeen)도 따라간 뒤 같이 걷는다(2026-10-17 — 같은 기능 검색 줄을 다시 고르면 또 열리게 ·
+  //       새로 고침에 닫은 폼이 다시 열리지 않게). 목록을 기다리는 동안(deepWait — 아직 안 따라감)은 남겨 둔다. 한 번에 걷어 주소 바꾸기가 겹치지 않게
+  const deepKey = searchParams.toString();
+  const deepMarked = hasDeepMark(searchParams);
+  useEffect(() => {
+    if (movedTo) return;
+    const deepDone = deepMarked && deepSeen === deepKey;
+    if (!settingsLink && !deepDone) return;
+    const p = new URLSearchParams(deepKey);
+    if (settingsLink) {
+      if (p.get("open") === "settings") p.delete("open");
+      p.delete("settings");
+    }
+    if (deepDone) {
+      DEEP_KEYS.forEach((k) => p.delete(k));
+      if (DEEP_OPENS.has(p.get("open") || "")) p.delete("open");
+    }
+    p.set("tab", tab);
+    router.replace(`/admin/shop?${p.toString()}`, { scroll: false });
+  }, [settingsLink, deepMarked, deepSeen, deepKey, movedTo, tab, router]);
+  const shopSetDirty = !!shopSet && !!shopSetSnap && (shopSet.pub !== shopSetSnap.pub || shopSet.cap.trim() !== shopSetSnap.cap || shopSet.onPoint !== shopSetSnap.onPoint);
   const saveShopSet = async () => {
-    if (!shopSet || savingShopSet) return;
-    const cap = Number(shopSet.cap);
-    if (shopSet.cap.trim() === "" || !Number.isInteger(cap) || cap < 0 || cap > 100) return notify("캐시백 상한은 0~100 사이의 정수로 입력해 주세요.", true);
+    if (!shopSet || !shopSetSnap || savingShopSet || shopSetLoading) return;
+    // 바뀐 게 없으면(단추는 잠겨 있다 — Enter · Ctrl+S) 한 줄만
+    if (!shopSetDirty) { toast("바뀐 것이 없습니다."); return; }
+    const body: Record<string, number | boolean> = {};
+    if (shopSet.pub !== shopSetSnap.pub) body.shopPublic = shopSet.pub;
+    if (shopSet.cap.trim() !== shopSetSnap.cap) {
+      const cap = Number(shopSet.cap);
+      if (shopSet.cap.trim() === "" || !Number.isInteger(cap) || cap < 0 || cap > 100) return fail("캐시백 상한은 0~100 사이의 정수로 입력해 주세요.");
+      body.shopCashbackCap = cap;
+    }
+    if (shopSet.onPoint !== shopSetSnap.onPoint) body.cashbackOnPoint = shopSet.onPoint;
     setSavingShopSet(true);
     const res = await fetch("/api/bot-settings", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shopCashbackCap: cap, cashbackOnPoint: shopSet.onPoint }),
+      body: JSON.stringify(body),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     setSavingShopSet(false);
     if (res?.ok && d?.success) {
-      const r = cashbackRuleOf(d.data);
-      const v = { cap: String(r.cap), onPoint: r.onPoint };
+      const v = shopSetOf(d.data);
       setShopSet(v);
       setShopSetSnap(v);
-      notify("저장되었습니다.");
-    } else notify(d?.message || "저장에 실패했습니다.", true);
+      setBotCaps(botCapsOf(d.data));
+      setShopSetOpen(false);
+      toast("shopPublic" in body ? (v.pub ? "ARCTIC 상점을 공개했습니다." : "ARCTIC 상점을 비공개로 바꿨습니다.") : "저장했습니다.");
+    } else fail(d?.message || "저장에 실패했습니다.");
   };
+
+  // ── 종류별 효과 문구(2026-10-18 — ./EffectTemplatesSheet · lib/itemEffects 「종류별 효과 문구」) ────────────────
+  //    처음 한 번 읽어 이 화면의 지금 틀에 넣는다(아이템 편집기 자동 문구 미리 보기가 같은 틀 — fxTpl.ver 가 늘면 다시 그린다).
+  //    창: 상점 설정 창 「효과 문구」 · 아이템 편집기 효과 문구 칸 「종류별 문구」 · 기능 검색(?open=fxtext). 저장 뒤 아이템 목록을 다시 받는다(목록의 효과 줄은 서버가 만든 것)
+  const fxTpl = useEffectTemplates(isAdmin);
+  const [fxTextOpen, setFxTextOpen] = useState(false);
+  //    열 때 고를 종류 — 아이템 편집기 「종류별 문구」면 그 아이템 효과 종류(창이 앞에서부터 틀이 있는 첫 종류를 고른다), 그 밖은 없음
+  const [fxTextFocus, setFxTextFocus] = useState<string[]>([]);
+  //    상점 설정 창에서 열면 그 창 위에 겹쳐 띄운다(설정 창을 닫으면 저장 안 한 설정이 말없이 사라졌다) — 닫으면 설정 창으로 돌아온다
+  const openFxText = (focus: string[] = []) => { sfxTick(); setFxTextFocus(focus); setFxTextOpen(true); };
+  const fxTextCount = fxTpl.saved ? Object.keys(fxTpl.saved).length : 0;
+  //    아이템 편집기 「종류별 문구」 — 그 아이템 효과 종류부터(효과 줄 차례 → 기본 버프 채팅 · 음성 · 출석)
+  const openFxTextForItem = () => openFxText([...itemForm.effects.map((d) => d.on), ...(Number(itemForm.chatBuffXp) > 0 ? ["chat"] : []), ...(Number(itemForm.voiceBuffXp) > 0 ? ["voice"] : []), ...(Number(itemForm.attendBuffXp) > 0 ? ["attend"] : [])]);
 
   // 📌 역할 버프(관리자 › 레벨 설정 역할 탭) — 연결 역할에 걸려 있으면 효과 칸 · 미리보기에 읽기 전용으로 보여 준다.
   //    아이템 효과와 별개로 그 역할을 가진 사람에게 더해지므로, 모르고 아이템에 같은 값을 또 넣어 두 번 붙지 않게
@@ -2593,67 +4211,88 @@ export default function AdminShopPage() {
 
   // 목록·링크에서 상품을 폼으로 끌어오는 자리가 두 군데였다 — 한 함수로 모은다
   // 저장된 상품을 불러올 때 — 아이템 고르는 중 · 잡아 둔 직접 설정 값도 푼다(같은 상품을 닫았다 다시 열어도 옛 상태가 남지 않게)
-  const fillItemForm = useCallback((it: any) => { setForm(formFromShopItem(it)); setLinkPick(null); setCustomSnap(null); }, []);
+  const fillItemForm = useCallback((it: any) => { setForm(prodFormOf(it)); setLinkPick(null); setCustomSnap(null); }, []);
 
-  // 📌 상점 카드의 '수정' 링크(?edit=<id>)로 들어오면 해당 상품을 폼에 채워 둔다
-  //    처음 한 번만 채우고 연다 — 저장 뒤 목록을 다시 불러와도 칸이 저절로 다시 열리거나 다른 상품을 고치던 폼을 덮지 않게
-  const editId = searchParams.get("edit");
-  const editOpened = useRef<string | null>(null);
-  useEffect(() => {
-    if (!editId || items.length === 0 || editOpened.current === editId) return;
-    const it = items.find((x) => x._id === editId);
-    if (!it) return;
-    editOpened.current = editId;
-    fillItemForm(it);
-    setPane("product");
-  }, [editId, items, fillItemForm]);
+  // 📌 상점 카드의 「관리에서 수정」 링크(?edit=<id>)는 아래 주소 따라가기(deepSeen)가 연다 — 주소가 바뀔 때 한 번(저장 뒤 목록을 다시 불러와도 저절로 다시 열지 않는다)
 
   // 📌 탭을 옮기면 열린 상세 칸 · 검색어를 비운다 (렌더 중 조정 — 이펙트로 한 박자 늦게 닫히지 않게)
   const [paneTab, setPaneTab] = useState(tab);
   if (paneTab !== tab) {
     setPaneTab(tab);
+    // 수정하던 폼은 비운다(칸이 닫힌다 — 고친 것은 쌓아 둔다(전체 수정) · 새로 쓰던 폼은 남겨 「새로 만들기」로 이어 쓴다)
     stashEdits();
+    setItemForm((f) => (f.id ? EMPTY_ITEM_FORM : f));
+    if (form.id) { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+    setBannerForm((f: any) => (f.id ? EMPTY_BANNER : f));
+    setCouponForm((f: AnyRow) => (f.id ? EMPTY_COUPON : f));
     setPane("");
     setOrderSelId(null);
     setQ("");
-    setIsRoleOpen(false);
   }
 
-  // 상품 폼 → 저장 본문(검사 실패면 error) — 상세 칸 「수정 저장」과 「전체 수정」이 같은 길
-  const productBody = (fm: ProductForm): { body: any } | { error: string } => {
-    // 📌 판매 방식마다 꼭 필요한 가격 — 상점 인라인 폼과 같은 문구(productForm saleModeError)
+  // 상품 폼 → 저장 본문(검사 실패면 error)
+  const productBody = (fm: ProdForm): { body: any } | { error: string } => {
+    // 📌 판매 방식마다 꼭 필요한 가격(productForm saleModeError — 일괄 가격 창도 같은 검사)
     const bad = saleModeError(fm) || bundleError(fm);
     if (bad) return { error: bad };
     // 세트 — 역할 · 쌓이지 않는 아이템 줄은 1개로 보낸다(개수 칸이 잠겨 1로 보이는 값 그대로)
     const sendForm = isBundleForm(fm) ? { ...fm, bundle: fm.bundle.map((r) => (qtyLockedOf(regItems, items, r.itemId) ? { ...r, qty: "1" } : r)) } : fm;
-    return { body: { ...toPayload(sendForm, guildRoles.find((r) => r.id === fm.roleId)?.name || ""), sortOrder: undefined } };
+    // 분류 — 직접 설정 · 세트만 자기 칸("" = 자동). 연결 상품은 아이템 분류를 따른다(늘 "" — 서버도 같다)
+    const category = isLinked(fm) ? "" : normalizeCategory(fm.category || "");
+    return { body: { ...toPayload(sendForm, guildRoles.find((r) => r.id === fm.roleId)?.name || ""), category, sortOrder: undefined } };
   };
   const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (liveLocked) return notify(LIVE_LOCKED_MSG, true);
+    if (liveLocked) return fail(LIVE_LOCKED_MSG);
     // 「등록된 아이템」을 골랐는데 아이템을 아직 안 골랐다 — 직접 설정 상품으로 저장되지 않게 막는다
-    if (!isBundleForm(form) && !linked && linkPick === formKey) return notify("아이템을 선택해 주세요.", true);
+    if (!isBundleForm(form) && !linked && linkPick === formKey) return fail("아이템을 선택해 주세요.");
     const built = productBody(form);
-    if ("error" in built) return notify(built.error, true);
+    if ("error" in built) return fail(built.error);
+    if (savingProduct) return;
+    const wasNew = !form.id;
+    const sentId = String(form.id || "");
+    const sentForm = form;
+    setSavingProduct(true);
     const res = await fetch("/api/shop/items", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(built.body),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    if (res?.ok && d?.success) { dropPending("product", form.id); setForm(emptyForm); setLinkPick(null); setCustomSnap(null); fetchAll(); fetchRegItems(); closePane(); notify("저장되었습니다."); }
-    else notify(d?.message || "저장에 실패했습니다.", true);
+    setSavingProduct(false);
+    if (res?.ok && d?.success) {
+      dropStacked("product", [sentId], sentForm);
+      // 📌 붙는 편집기(넓은 화면)는 저장한 상품을 연 채 다음 줄로 넘어가며 고친다(목록 줄부터 새 값 — 다시 읽기 전 「고친 채」로 보이지 않게).
+      //    좁은 화면은 예전처럼 닫는다. 보내는 사이 다른 줄로 넘어갔으면 그 폼은 그대로
+      if (openFormIds.current.product === sentId) {
+        if (wideDock && d.data?._id) {
+          const saved = d.data;
+          if (!wasNew) setItems((list) => list.map((x) => (String(x._id) === String(saved._id) ? { ...x, ...saved } : x)));
+          fillItemForm(saved);
+        } else { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); closePane(); }
+      }
+      fetchAll(); fetchRegItems();
+      toast(wasNew ? "등록했습니다." : "저장했습니다.");
+    }
+    else fail(d?.message || "저장에 실패했습니다.");
   };
 
   const executeDelete = async () => {
     if (!deleteTarget) return;
-    if (liveLocked && deleteTarget.kind !== "coupon") { setDeleteTarget(null); return notify(LIVE_LOCKED_MSG, true); }
+    if (liveLocked && deleteTarget.kind !== "coupon") { setDeleteTarget(null); return fail(LIVE_LOCKED_MSG); }
     const api = { item: "/api/shop/items", banner: "/api/shop/banners", coupon: "/api/shop/coupons", reg: "/api/admin/items" }[deleteTarget.kind];
     const res = await fetch(`${api}?id=${deleteTarget.id}`, { method: "DELETE" }).catch(() => null);
     const d = await res?.json().catch(() => null);
-    // 지운 줄의 상세 칸은 닫는다
-    if (res?.ok) { fetchAll(); fetchRegItems(); closePane(); toast("삭제했습니다."); }
+    // 지운 줄의 상세 칸은 닫고 그 폼은 비운다(같은 폼으로 다시 저장되지 않게)
+    if (res?.ok) {
+      if (deleteTarget.kind === "reg") setItemForm(EMPTY_ITEM_FORM);
+      if (deleteTarget.kind === "item") { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+      if (deleteTarget.kind === "banner") setBannerForm(EMPTY_BANNER);
+      if (deleteTarget.kind === "coupon") setCouponForm(EMPTY_COUPON);
+      dropStacked(deleteTarget.kind === "item" ? "product" : deleteTarget.kind, [String(deleteTarget.id || "")]);
+      fetchAll(); fetchRegItems(); closePane(); toast("삭제했습니다.");
+    }
     // 아이템은 참조 상품이 있으면 서버가 409 로 막는다 — 이유를 그대로 보여 준다
-    else notify(d?.message || "삭제에 실패했습니다.", true);
+    else fail(d?.message || "삭제에 실패했습니다.");
     setDeleteTarget(null);
   };
 
@@ -2666,12 +4305,16 @@ export default function AdminShopPage() {
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) {
       fetchAll();
+      // 왼쪽 메뉴 「상점 관리」 처리 대기 숫자도 다시 센다(app/admin/adminIndex.ts)
+      try { window.dispatchEvent(new Event(ADMIN_COUNTS_EVENT)); } catch {}
       const n = Number(d.done) || 1;
       const many = n > 1 ? `${n}개를 ` : "";
-      const skip = Number(d.skipped) > 0 ? `\n이미 처리했거나 사용한 ${d.skipped}개는 건너뛰었습니다.` : "";
-      notify((newStatus === "completed" ? "발송 처리했습니다." : newStatus === "refunded" ? `${many}환불했습니다. 디스코드 역할은 봇이 1분 안에 회수합니다.` : `${many}취소하고 환불했습니다.`) + skip);
+      const msg = newStatus === "completed" ? "발송 처리했습니다." : newStatus === "refunded" ? `${many}환불했습니다.` : `${many}취소하고 환불했습니다.`;
+      // 건너뛴 건이 있으면 놓치지 않게 알림 창, 아니면 토스트(둘 다 효과음)
+      if (Number(d.skipped) > 0) notify(`${msg}\n이미 처리했거나 사용한 ${d.skipped}개는 건너뛰었습니다.`);
+      else toast(msg);
     }
-    else notify(d?.message || "처리에 실패했습니다.", true);
+    else fail(d?.message || "처리에 실패했습니다.");
     setNoteTarget(null); setNoteText(""); setCancelTarget(null);
   };
   // 돌려줄 수 있는 건 — 대기는 취소, 완료는 환불(기프트카드 제외). 이미 쓴 건은 빼고, 최근 것부터
@@ -2683,9 +4326,163 @@ export default function AdminShopPage() {
   };
   const openCancel = (g: any) => {
     const pool = cancelPoolOf(g);
-    if (!pool.length) return notify("돌려줄 수 있는 건이 없습니다. 이미 사용했거나 처리한 건입니다.", true);
+    if (!pool.length) return fail("돌려줄 수 있는 건이 없습니다. 이미 사용했거나 처리한 건입니다.");
     setCancelCount(String(pool.length));
     setCancelTarget({ ...g, pool });
+  };
+
+  // ── 상품 일괄 편집(PATCH /api/shop/items { batch } · { duplicate } · DELETE ?ids= — 서버가 상품 저장과 같은 규칙 · 초안 규칙으로 쓴다) ──
+  const patchProducts = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/shop/items", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    return { ok: !!(res?.ok && d?.success), d };
+  };
+  // 화면 목록에 먼저 — 바꿀 값을 저장 모양으로(응답 뒤 다시 읽어 서버 값으로 맞춘다)
+  const localProdSet = (it: AnyRow, set: Record<string, unknown>) => {
+    const out = { ...it };
+    if ("active" in set) out.active = !!set.active;
+    if ("theme" in set) out.theme = String(set.theme || "");
+    if ("discountPct" in set) { out.discountPct = Number(set.discountPct) || 0; if (!out.discountPct) out.discountUntil = null; }
+    if ("discountUntil" in set) out.discountUntil = set.discountUntil || null;
+    if ("saleUntil" in set) out.saleUntil = set.saleUntil || null;
+    if ("price" in set) out.price = Number(set.price) || 0;
+    if ("durations" in set) out.durations = set.durations;
+    if ("stock" in set) out.stock = Number(set.stock);
+    if ("stockDelta" in set && Number(it.stock) >= 0) out.stock = Math.max(0, Number(it.stock) + Number(set.stockDelta));
+    // 설명 · 분류(설명 바꾸기 · 분류 바꾸기) — 연결 상품 줄은 연결 아이템에 보낸 값을 따라 보인다(상품 자기 분류 칸은 늘 "")
+    if ("description" in set) out.description = String(set.description ?? "");
+    if ("category" in set) {
+      const c = normalizeCategory(set.category);
+      if (!it.itemId) out.category = c;
+      out.categoryLabel = c || it.categoryAuto || it.categoryLabel;
+    }
+    return out;
+  };
+  // 결과 — 다 됐으면 토스트(바뀐 게 없으면 그렇다고), 건너뛴 게 있으면 이유 목록(알림 창)
+  const reportProd = (d: AnyRow, verb: string) => {
+    const done = Number(d?.updated) || 0;
+    const skipped: Skip[] = Array.isArray(d?.skipped) ? d.skipped : [];
+    if (!done && !skipped.length) return toast("바뀐 것이 없습니다.");
+    reportBatch(done, skipped, verb, items);
+  };
+  const runProdBatch = async (entries: ProdEntry[], verb = "바꿈") => {
+    if (!entries.length || prodBusy || liveLocked) return false;
+    const before = items;
+    const local = new Map(entries.map((e) => [e.id, e.set]));
+    setItems((list) => list.map((x) => { const set = local.get(String(x._id)); return set ? localProdSet(x, set) : x; }));
+    setProdBusy(true);
+    const { ok, d } = await patchProducts({ batch: entries });
+    setProdBusy(false);
+    if (!ok) { setItems(before); fail(d?.message || "저장하지 못했습니다."); return false; }
+    fetchAll();
+    reportProd(d, verb);
+    return true;
+  };
+  const prodBatchSet = (set: Record<string, unknown>, verb = "바꿈") => runProdBatch(prodSel.keys().map((id) => ({ id, set })), verb);
+  // 창(할인 · 판매 종료 · 가격 · 재고) — 연 시각을 같이 둔다(지난 시각 표시)
+  const openProdSheet = (m: ProdSheetMode) => { setProdSheetAt(Date.now()); setProdSheet(m); };
+  const submitProdSheet = async (entries: ProdEntry[]) => {
+    const ok = await runProdBatch(entries, "바꿈");
+    if (ok) setProdSheet("");
+  };
+  // 📌 상품 설명 · 분류 일괄(설명 바꾸기 · 분류 바꾸기) — 직접 설정 · 세트는 상품(PATCH /api/shop/items { batch }), 연결 상품은 그 아이템
+  //    (PATCH /api/admin/items { batch } — 설명 · 분류의 원천. 그 아이템에 연결된 상품이 모두 따라간다). 화면 목록부터 맞추고 둘 다 보낸 뒤 결과를 한 번에 알린다
+  //    (토스트 하나 · 건너뜀은 알림 창). 둘 다 실패하면 되돌린다 — 한쪽만 실패하면 다시 읽어 서버 값으로 맞추고 실패한 줄은 건너뜀으로
+  const runProdTextBatch = async (own: ProdEntry[], viaItems: ProdEntry[], verb = "바꿈") => {
+    if ((!own.length && !viaItems.length) || prodBusy || batchBusy || liveLocked) return false;
+    const beforeProd = items;
+    const beforeReg = regItems;
+    const ownSet = new Map(own.map((e) => [e.id, e.set]));
+    const itemSet = new Map(viaItems.map((e) => [e.id, e.set]));
+    setItems((list) => list.map((x) => {
+      const set = ownSet.get(String(x._id)) || (x.itemId ? itemSet.get(String(x.itemId)) : undefined);
+      return set ? localProdSet(x, set) : x;
+    }));
+    if (itemSet.size) {
+      setRegItems((list) => list.map((x) => {
+        const set = itemSet.get(String(x._id));
+        if (!set) return x;
+        return withCategoryFields({ ...x, ...set, ...("category" in set ? { category: normalizeCategory(set.category) } : {}) });
+      }));
+    }
+    setProdBusy(true);
+    const a = own.length ? await patchProducts({ batch: own }) : null;
+    const b = viaItems.length ? await patchItems({ batch: viaItems }) : null;
+    setProdBusy(false);
+    if (!a?.ok && !b?.ok) {
+      setItems(beforeProd);
+      setRegItems(beforeReg);
+      fail(a?.d?.message || b?.d?.message || "저장하지 못했습니다.");
+      return false;
+    }
+    fetchAll();
+    if (b) fetchRegItems();
+    const failedOf = (r: { ok: boolean; d: AnyRow } | null, list: ProdEntry[]): Skip[] =>
+      !r ? [] : r.ok ? (Array.isArray(r.d?.skipped) ? r.d.skipped : []) : list.map((e) => ({ id: e.id, why: r.d?.message || "저장하지 못했습니다." }));
+    const done = (a?.ok ? Number(a.d?.updated) || 0 : 0) + (b?.ok ? Number(b.d?.updated) || 0 : 0);
+    const skipped = [...failedOf(a, own), ...failedOf(b, viaItems)];
+    if (!done && !skipped.length) toast("바뀐 것이 없습니다.");
+    else reportBatch(done, skipped, verb, [...items, ...regItems]);
+    return true;
+  };
+  // 창이 고른 줄 → 보낼 곳별로(아이템 탭은 아이템만 · 상품 탭은 상품 + 연결 아이템)
+  const submitTextSheet = async (of: "reg" | "product", entries: TextEntry[]) => {
+    const toItems = entries.filter((e) => e.kind === "item").map(({ id, set }) => ({ id, set }));
+    const toProducts = entries.filter((e) => e.kind === "product").map(({ id, set }) => ({ id, set }));
+    const ok = of === "reg" ? await runBatch(toItems, "바꿈") : await runProdTextBatch(toProducts, toItems, "바꿈");
+    if (ok) setTextSheet(null);
+  };
+  // 📌 줄 판매 스위치 — 바로 저장(그 칸만). 화면부터 바꾸고 실패하면 되돌린다
+  const toggleProductActive = async (it: AnyRow) => {
+    if (prodSwitchBusy || liveLocked) return;
+    const id = String(it._id);
+    const next = !it.active;
+    const before = items;
+    setProdSwitchBusy(id);
+    setItems((list) => list.map((x) => (String(x._id) === id ? { ...x, active: next } : x)));
+    const { ok, d } = await patchProducts({ batch: [{ id, set: { active: next } }] });
+    setProdSwitchBusy("");
+    if (ok && !(Array.isArray(d?.skipped) && d.skipped.length)) { fetchAll(); toast(next ? "판매합니다." : "숨겼습니다."); }
+    else { setItems(before); fail(d?.skipped?.[0]?.why || d?.message || "저장에 실패했습니다."); }
+  };
+  // 📌 일괄 복제 — 같은 값의 새 상품(숨김으로 · 원본 바로 뒤). 복제본을 골라 둔다(바로 이어서 가격 · 테마 등을 고친다)
+  const duplicateProducts = async () => {
+    const ids = prodSel.keys();
+    if (!ids.length || prodBusy || liveLocked) return;
+    setProdBusy(true);
+    const { ok, d } = await patchProducts({ duplicate: ids });
+    setProdBusy(false);
+    if (!ok) return fail(d?.message || "복제하지 못했습니다.");
+    const made: string[] = Array.isArray(d.created) ? d.created.map((c: { id?: string }) => String(c?.id || "")).filter(Boolean) : [];
+    if (made.length) prodSel.replace(made);
+    fetchAll();
+    const skipped: Skip[] = Array.isArray(d.skipped) ? d.skipped : [];
+    if (!skipped.length) toast(`${made.length.toLocaleString()}개 복제 · 숨김`);
+    else reportBatch(made.length, skipped, "복제", items);
+  };
+  // 📌 일괄 삭제 — 확인 한 번(지울 이름 목록). 주소 길이 때문에 100개씩 나눠 보낸다
+  const deleteProducts = async () => {
+    const ids = prodSel.keys();
+    if (!ids.length || prodBusy || liveLocked) return;
+    setProdBusy(true);
+    const gone: string[] = [];
+    let failMsg = "";
+    for (let i = 0; i < ids.length; i += 100) {
+      const part = ids.slice(i, i + 100);
+      const res = await fetch(`/api/shop/items?ids=${part.map(encodeURIComponent).join(",")}`, { method: "DELETE" }).catch(() => null);
+      const d = await res?.json().catch(() => null);
+      if (!(res?.ok && d?.success)) { failMsg = d?.message || "삭제하지 못했습니다."; break; }
+      if (Array.isArray(d.deleted)) gone.push(...d.deleted.map(String));
+    }
+    setProdBusy(false);
+    setProdDelAsk(false);
+    if (form.id && gone.includes(String(form.id))) { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); if (pane === "product") closePane(); }
+    dropStacked("product", gone);
+    if (gone.length) { prodSel.clear(); fetchAll(); fetchRegItems(); }
+    if (failMsg) return fail(gone.length ? `${gone.length.toLocaleString()}개 삭제 · ${failMsg}` : failMsg);
+    toast(`${gone.length.toLocaleString()}개 삭제`);
   };
 
   // ── 아이템 순서 · 그룹(끌어서 바로 저장) ──
@@ -2706,7 +4503,7 @@ export default function AdminShopPage() {
       : moveUnit(rows, move.unit as string, to);
     if (!local) {
       fetchRegItems();
-      return notify("목록이 바뀌었습니다. 다시 불러온 뒤 옮겨 주세요.", true);
+      return fail("목록이 바뀌었습니다. 다시 불러온 뒤 옮겨 주세요.");
     }
     // 그룹이 바뀐 아이템은 화면 목록에도 새 그룹으로
     const groupAt = new Map(local.map((r) => [r.id, r.group]));
@@ -2735,12 +4532,108 @@ export default function AdminShopPage() {
       else fetchDraft();
     } else {
       setRegItems(before);
-      notify(d?.message || (regrouped ? "그룹을 저장하지 못했습니다." : "순서를 저장하지 못했습니다."), true);
+      fail(d?.message || (regrouped ? "그룹을 저장하지 못했습니다." : "순서를 저장하지 못했습니다."));
       if (res?.status === 409) fetchRegItems();
     }
   };
-  const saveRegMove = async (keys: string[], moved: string) => {
+  // 📌 체크한 줄 덩어리(2026-10-18) — 고른 아이템 줄을 끌면 고른 줄 모두(목록 차례 그대로)를 놓은 자리에 한 덩어리로(placeBlock).
+  //    gapOf: 지금 전체 차례의 놓은 틈 · group: 옮긴 뒤 그룹(undefined = 그대로 — 한 그룹만 · 그룹 없음만 거른 표).
+  //    그룹이 바뀌는 줄은 일괄 「그룹」과 같은 길(batch)로 먼저 — 그 결과가 놓은 자리와 같으면(접힌 머리줄 위 = 새 덩어리 끝 등) 그것으로 끝,
+  //    아니면 전체 순서({ order })를 한 번 더. 그룹이 그대로면 순서 한 번만. 화면부터 서버와 같은 셈(덩어리 · 상위 규칙)으로 맞추고, 실패하면 되돌린다.
+  //    그룹을 못 바꾼 줄(서버 검사에 걸린 것)은 제자리에 두고 한 줄로 알린다
+  type RegGap = (ids: string[], groupOfId: (id: string) => string) => number | null;
+  const sendRegBlock = async (block: string[], gapOf: RegGap, group?: string) => {
+    const before = regItems;
+    const rows = orderRowsOf(before);
+    const ids = rows.map((r) => r.id);
+    const gOf = new Map(rows.map((r) => [r.id, r.group]));
+    const groupOfId = (id: string) => gOf.get(id) || "";
+    const gap = gapOf(ids, groupOfId);
+    // 옮길 줄 → 그룹이 바뀌는 줄 · 옮긴 뒤 전체 차례(서버 { order } 와 같은 셈)
+    const plan = (moving: string[]) => {
+      const order = placeBlock(ids, moving, gap);
+      if (!order) return null;
+      const re = new Set(group === undefined ? [] : moving.filter((id) => groupOfId(id) !== group));
+      return { moving, re, order: nestParents(order.map((id) => ({ id, group: re.has(id) ? (group as string) : groupOfId(id) })), regParentOf).map((r) => r.id) };
+    };
+    const pick = new Set(block);
+    const all = ids.filter((id) => pick.has(id));
+    let want = all.length ? plan(all) : null;
+    if (!want) {
+      fetchRegItems();
+      return fail("목록이 바뀌었습니다. 다시 불러온 뒤 옮겨 주세요.");
+    }
+    if (!want.re.size && sameIds(want.order, ids)) return toast("바뀐 순서가 없습니다.");
+    const show = (w: NonNullable<typeof want>) =>
+      setRegItems(reorderById(before.map((it) => (w.re.has(String(it._id)) ? { ...it, group } : it)), w.order));
+    show(want);
+    setSavingOrder("reg");
+    const regrouped = want.re.size > 0;
+    let skipN = 0;
+    let d: ItemsPatch["d"] = null;
+    let placed = false;
+    if (regrouped) {
+      const r1 = await patchItems({ batch: [...want.re].map((id) => ({ id, set: { group } })) });
+      const skipped: Skip[] = Array.isArray(r1.d?.skipped) ? r1.d.skipped : [];
+      if (!r1.ok || !(Number(r1.d?.updated) > 0)) {
+        setSavingOrder("");
+        setRegItems(before);
+        fail(skipped[0]?.why || r1.d?.message || "그룹을 저장하지 못했습니다.");
+        return;
+      }
+      d = r1.d;
+      if (skipped.length) {
+        const off = new Set(skipped.map((s) => String(s.id)));
+        const rest = want.moving.filter((id) => !off.has(id));
+        skipN = want.moving.length - rest.length;
+        want = plan(rest) || want;
+        show(want);
+      }
+      // 그룹 지정의 자리(새 덩어리 끝 · 빼면 옛 덩어리 바로 뒤)가 곧 놓은 자리면 순서는 이미 맞다
+      placed = Array.isArray(d?.order) && sameIds(d.order.map(String), want.order);
+    }
+    if (!placed) {
+      const res = await fetch("/api/admin/items", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: want.order }),
+      }).catch(() => null);
+      const d2 = await res?.json().catch(() => null);
+      if (res?.ok && d2?.success) d = d2;
+      else {
+        setSavingOrder("");
+        // 그룹은 이미 바뀌었다 — 실제 목록을 다시 받는다
+        if (regrouped) fetchRegItems();
+        else setRegItems(before);
+        fail(d2?.message || "순서를 저장하지 못했습니다.");
+        return;
+      }
+    }
+    setSavingOrder("");
+    if (Array.isArray(d?.order)) setRegItems((list) => reorderById(list, d.order.map(String)));
+    if (Array.isArray(d?.groups)) setRegGroupSaved(d.groups.map(String));
+    takeParents(d);
+    const n = want.moving.length.toLocaleString();
+    const msg = !regrouped ? `${n}개를 옮겼습니다.` : group ? `${n}개를 '${group}' 그룹으로 옮겼습니다.` : `${n}개를 그룹에서 뺐습니다.`;
+    toast(skipN ? `${msg} ${skipN.toLocaleString()}개는 그룹을 바꿀 수 없어 그대로 두었습니다.` : msg);
+    // 그룹이 바뀌면 다시 불러온다(초안 표시 등 — 그룹 지정과 같다). 순서만이면 초안 수만
+    if (regrouped) fetchRegItems();
+    else fetchDraft();
+  };
+  const saveRegMove = async (keys: string[], moved: string, block?: string[]) => {
     if (savingOrder || liveLocked) return;
+    // 거른 표(한 그룹만 · 그룹 없음만)에서 고른 줄 덩어리째 — keys 는 덩어리를 모아 끼운 차례. 덩어리 바로 앞(없으면 바로 뒤) 보이는 줄 곁으로, 그룹은 그대로
+    if (block && block.length > 1) {
+      const pick = new Set(block);
+      const s = keys.findIndex((k) => pick.has(k));
+      let e = s;
+      while (e + 1 < keys.length && pick.has(keys[e + 1])) e++;
+      const prev = s > 0 ? keys[s - 1] : null;
+      const next = s >= 0 && e + 1 < keys.length ? keys[e + 1] : null;
+      return sendRegBlock(block, (ids) => {
+        const p = prev ? ids.indexOf(prev) : next ? ids.indexOf(next) : -1;
+        return p < 0 ? null : prev ? p + 1 : p;
+      });
+    }
     const at = keys.indexOf(moved);
     if (at < 0) return;
     const prevKey = at > 0 ? keys[at - 1] : null;
@@ -2754,8 +4647,10 @@ export default function AdminShopPage() {
     await sendRegMove(move, "순서를 저장했습니다.", false);
   };
   // 묶음 표에서 아이템 줄 하나를 놓았다(DataTable onRowDrop) — group 있음: 그 그룹 안(이웃 = 아이템 id, 둘 다 없으면 덩어리 끝) · "": 단위 사이(이웃 = 표 단위 키)
+  //    고른 줄을 끌었으면(block) 고른 줄 모두를 그 자리 · 그 그룹으로(sendRegBlock)
   const saveRegDrop = async (drop: TableRowDrop) => {
     if (savingOrder || liveLocked) return;
+    if (drop.block && drop.block.length > 1) return sendRegBlock(drop.block, (ids, groupOfId) => dropGapOf(ids, groupOfId, drop), drop.group);
     const id = drop.moved;
     const cur = regItems.find((it) => String(it._id) === id);
     if (!cur) return;
@@ -2804,7 +4699,7 @@ export default function AdminShopPage() {
     if (res?.ok && d?.success) { toast("순서를 저장했습니다."); fetchDraft(); }
     else {
       setList(before);
-      notify(d?.message || "순서를 저장하지 못했습니다.", true);
+      fail(d?.message || "순서를 저장하지 못했습니다.");
     }
   };
 
@@ -2837,7 +4732,7 @@ export default function AdminShopPage() {
     if (res?.ok && d?.success) { toast("순서를 저장했습니다."); fetchDraft(); }
     else {
       setBanners(before);
-      notify(d?.message || "순서를 저장하지 못했습니다.", true);
+      fail(d?.message || "순서를 저장하지 못했습니다.");
     }
   };
 
@@ -2871,8 +4766,171 @@ export default function AdminShopPage() {
       fetchDraft();
     } else {
       setItems(before);
-      notify(d?.message || "순서를 저장하지 못했습니다.", true);
+      fail(d?.message || "순서를 저장하지 못했습니다.");
     }
+  };
+  // 📌 상품 줄 하나를 놓았다(DataTable onRowDrop — 2026-10-17 시안 B ①) — group 있음: 그 그룹 안(이웃 = 상품 id, 둘 다 없으면 덩어리 끝) · "": 그룹 밖 단위 사이(이웃 = 표 단위 키).
+  //    다른 그룹(· 밖)에 놓으면 연결 아이템의 그룹을 바꾼다 — 아이템 일괄 「그룹」과 같은 길(PATCH /api/admin/items batch · 아이템 탭에서도 옮겨지고 그 아이템의 다른 상품도 같이).
+  //    그 뒤 놓은 자리로 상품 순서를 저장한다(서버가 묶음 규칙으로 맞춘다) · 두 목록을 다시 받는다. 같은 그룹 안 · 밖 단위 사이는 순서만.
+  //    세트 · 직접 설정 상품은 그룹을 바꾸지 않는다(productRegroupBlock — 짧은 알림). 화면부터 맞추고 실패하면 되돌린다
+  //    고른 상품 줄을 끌었으면(block) 고른 상품 모두를 그 자리 · 그 그룹으로(saveProductBlock)
+  const saveProductDrop = async (drop: TableRowDrop) => {
+    if (savingOrder || liveLocked) return;
+    if (drop.block && drop.block.length > 1) return saveProductBlock(drop, drop.block);
+    const id = drop.moved;
+    const cur = items.find((it) => String(it._id) === id);
+    if (!cur) return;
+    const from = productGroupOf(cur, prodIdx);
+    const g = drop.group;
+    const regroup = g !== from;
+    const anchor = anchorItemOf(cur);
+    if (regroup) {
+      const why = productRegroupBlock(cur, new Set(regItems.map((it) => String(it._id))));
+      if (why) { toast(why, true); return; }
+    }
+    // 놓은 자리 — 전체 상품 차례 안. 이웃이 그룹 머리줄(표 단위 키)이면 그 그룹 상품 덩어리 앞 · 뒤
+    const rest = items.filter((it) => String(it._id) !== id);
+    const restIds = rest.map((it) => String(it._id));
+    const groupAt = (gg: string, last: boolean) => {
+      const hits = rest.map((it, i) => (productGroupOf(it, prodIdx) === gg ? i : -1)).filter((i) => i >= 0);
+      return hits.length ? hits[last ? hits.length - 1 : 0] : -1;
+    };
+    const posOf = (key: string, last: boolean) => {
+      const gg = tableGroupOfKey(key);
+      return gg != null ? groupAt(gg, last) : restIds.indexOf(key);
+    };
+    let at: number;
+    if (drop.after) { const p = posOf(drop.after, true); if (p < 0) return; at = p + 1; }
+    else if (drop.before) { const p = posOf(drop.before, false); if (p < 0) return; at = p; }
+    else if (g) { const p = groupAt(g, true); at = p < 0 ? restIds.length : p + 1; }
+    else return;
+    const next = [...restIds];
+    next.splice(Math.min(at, next.length), 0, id);
+    const beforeItems = items;
+    const beforeReg = regItems;
+    setItems(reorderById(beforeItems, next));
+    if (regroup) setRegItems((list) => list.map((x) => (String(x._id) === anchor ? { ...x, group: g } : x)));
+    setSavingOrder("product");
+    if (regroup) {
+      const { ok, d } = await patchItems({ batch: [{ id: anchor, set: { group: g } }] });
+      const skipped: { why?: string }[] = Array.isArray(d?.skipped) ? d.skipped : [];
+      if (!ok || !(Number(d?.updated) > 0)) {
+        setSavingOrder("");
+        setItems(beforeItems);
+        setRegItems(beforeReg);
+        fail(skipped[0]?.why || d?.message || "그룹을 저장하지 못했습니다.");
+        return;
+      }
+      if (Array.isArray(d.order)) setRegItems((list) => reorderById(list, d.order.map(String)));
+      if (Array.isArray(d.groups)) setRegGroupSaved(d.groups.map(String));
+      takeParents(d);
+      if (g) openProductGroupNamed(g);
+    }
+    const res = await fetch("/api/shop/items", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order: next }),
+    }).catch(() => null);
+    const d2 = await res?.json().catch(() => null);
+    setSavingOrder("");
+    if (res?.ok && d2?.success) {
+      if (Array.isArray(d2.order)) setItems((list) => reorderById(list, d2.order.map(String)));
+      toast(!regroup ? "순서를 저장했습니다." : g ? `'${g}' 그룹으로 옮겼습니다.` : "그룹에서 뺐습니다.");
+    } else if (!regroup) {
+      setItems(beforeItems);
+      fail(d2?.message || "순서를 저장하지 못했습니다.");
+    } else {
+      // 그룹은 바뀌었다 — 순서만 못 맞췄으면 다시 받은 목록(서버가 묶음 규칙으로 맞춘 차례)으로
+      toast(g ? `'${g}' 그룹으로 옮겼습니다.` : "그룹에서 뺐습니다.");
+    }
+    if (regroup) { fetchRegItems(); fetchAll(); }
+    else fetchDraft();
+  };
+  // 📌 체크한 상품 덩어리(2026-10-18) — 고른 상품 모두(목록 차례 그대로)를 놓은 자리에 한 덩어리로(placeBlock).
+  //    다른 그룹(· 밖)에 놓으면 연결 아이템들의 그룹을 한 번에 바꾼다(아이템 일괄 「그룹」 batch 한 번 — 단일 놓기와 같은 길 · 그 아이템의 다른 상품도 같이).
+  //    그룹을 못 바꾸는 상품(직접 설정 · 세트 — productRegroupBlock. 세트는 첫 구성 아이템이 같이 옮겨지면 따라간다)은 제자리에 두고 한 줄로 알린다.
+  //    그 뒤 놓은 자리로 상품 순서를 한 번에 저장(서버가 묶음 규칙으로 맞춘다). 화면부터 서버와 같은 셈으로 맞추고, 실패하면 되돌린다
+  const saveProductBlock = async (drop: TableRowDrop, block: string[]) => {
+    const g = drop.group;
+    const beforeItems = items;
+    const beforeReg = regItems;
+    const ids = beforeItems.map((it) => String(it._id));
+    const byId = new Map(beforeItems.map((it) => [String(it._id), it]));
+    const groupOfId = (id: string) => productGroupOf(byId.get(id), prodIdx);
+    const itemIds = new Set(beforeReg.map((it) => String(it._id)));
+    const pick = new Set(block);
+    const all = ids.filter((id) => pick.has(id));
+    // 그룹을 바꿀 연결 아이템 — 그룹이 달라지는 상품 중 바꿀 수 있는 것의 연결 아이템
+    let anchors = new Set(all.filter((id) => groupOfId(id) !== g && !productRegroupBlock(byId.get(id), itemIds)).map((id) => anchorItemOf(byId.get(id))));
+    // 옮길 상품 — 이미 그 그룹인 것 + 연결 아이템이 옮겨지는 것(세트도 첫 구성 아이템이 들면 따라간다)
+    const movingOf = (an: ReadonlySet<string>) => all.filter((id) => groupOfId(id) === g || an.has(anchorItemOf(byId.get(id))));
+    const gap = dropGapOf(ids, groupOfId, drop);
+    // 옮긴 뒤 전체 차례 — 연결 아이템을 옮긴 상품은 새 그룹으로 서버와 같은 셈(묶음 · 상위 규칙)
+    const orderOf = (mv: string[], an: ReadonlySet<string>) => {
+      const order = placeBlock(ids, mv, gap);
+      if (!order) return null;
+      const idx = itemIndexOf(beforeReg.map((x) => ({ id: String(x._id), group: an.has(String(x._id)) ? g : groupOfItem(x) })));
+      return normalizeProductOrder(productRowsOf(order.map((id) => byId.get(id)), idx), regParentOf).map((r) => r.id);
+    };
+    let moving = movingOf(anchors);
+    const stuckMsg = (n: number) => `${n.toLocaleString()}개는 그룹을 바꿀 수 없어 그대로 두었습니다.`;
+    if (!moving.length) return toast(stuckMsg(all.length), true);
+    let next = orderOf(moving, anchors);
+    if (!next) {
+      fetchAll();
+      return fail("목록이 바뀌었습니다. 다시 불러온 뒤 옮겨 주세요.");
+    }
+    if (!anchors.size && sameIds(next, ids)) return moving.length < all.length ? toast(stuckMsg(all.length - moving.length), true) : toast("바뀐 순서가 없습니다.");
+    const show = (nx: string[], an: ReadonlySet<string>) => {
+      setItems(reorderById(beforeItems, nx));
+      setRegItems(an.size ? beforeReg.map((x) => (an.has(String(x._id)) ? { ...x, group: g } : x)) : beforeReg);
+    };
+    show(next, anchors);
+    setSavingOrder("product");
+    const regrouped = anchors.size > 0;
+    if (regrouped) {
+      const { ok, d } = await patchItems({ batch: [...anchors].map((id) => ({ id, set: { group: g } })) });
+      const skipped: Skip[] = Array.isArray(d?.skipped) ? d.skipped : [];
+      if (!ok || !(Number(d?.updated) > 0)) {
+        setSavingOrder("");
+        setItems(beforeItems);
+        setRegItems(beforeReg);
+        fail(skipped[0]?.why || d?.message || "그룹을 저장하지 못했습니다.");
+        return;
+      }
+      // 그룹을 못 바꾼 연결 아이템(서버 검사)의 상품은 제자리 — 나머지만 다시 센다
+      if (skipped.length) {
+        const off = new Set(skipped.map((s) => String(s.id)));
+        anchors = new Set([...anchors].filter((a) => !off.has(a)));
+        moving = movingOf(anchors);
+        next = orderOf(moving, anchors) || next;
+        show(next, anchors);
+      }
+      if (Array.isArray(d.order)) setRegItems((list) => reorderById(list, d.order.map(String)));
+      if (Array.isArray(d.groups)) setRegGroupSaved(d.groups.map(String));
+      takeParents(d);
+      if (g) openProductGroupNamed(g);
+    }
+    const res = await fetch("/api/shop/items", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order: next }),
+    }).catch(() => null);
+    const d2 = await res?.json().catch(() => null);
+    setSavingOrder("");
+    const n = moving.length.toLocaleString();
+    const msg = !regrouped ? `${n}개를 옮겼습니다.` : g ? `${n}개를 '${g}' 그룹으로 옮겼습니다.` : `${n}개를 그룹에서 뺐습니다.`;
+    const done = moving.length < all.length ? `${msg} ${stuckMsg(all.length - moving.length)}` : msg;
+    if (res?.ok && d2?.success) {
+      if (Array.isArray(d2.order)) setItems((list) => reorderById(list, d2.order.map(String)));
+      toast(done);
+    } else if (!regrouped) {
+      setItems(beforeItems);
+      fail(d2?.message || "순서를 저장하지 못했습니다.");
+    } else {
+      // 그룹은 바뀌었다 — 순서만 못 맞췄으면 다시 받은 목록(서버가 묶음 규칙으로 맞춘 차례)으로(단일 놓기와 같다)
+      toast(done);
+    }
+    if (regrouped) { fetchRegItems(); fetchAll(); }
+    else fetchDraft();
   };
   // 「아이템 순서대로」 — 연결 상품은 아이템 순서, 세트는 첫 구성 아이템 상품 바로 뒤, 아이템 없는 상품은 맨 뒤(한 번 묻는다)
   const syncProductsToItems = async () => {
@@ -2889,51 +4947,21 @@ export default function AdminShopPage() {
       if (Array.isArray(d.order)) setItems((list) => reorderById(list, d.order.map(String)));
       toast(Number(d.moved) > 0 ? `아이템 순서대로 — ${Number(d.moved).toLocaleString()}개 자리를 바꿨습니다.` : "이미 아이템 순서대로입니다.");
       fetchDraft();
-    } else notify(d?.message || "순서를 저장하지 못했습니다.", true);
+    } else fail(d?.message || "순서를 저장하지 못했습니다.");
   };
-  const toggleProductGroup = (g: string) => setOpenProductGroups((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; });
-  const toggleProductSection = (p: string) => setClosedProductSections((s) => { const n = new Set(s); if (n.has(p)) n.delete(p); else n.add(p); return n; });
+  // 상품 묶음 펼침 · 접음 — 이 브라우저에 기억(아이템 목록과 같다)
+  const toggleProductGroup = (g: string) => { sfxTick(); setOpenProductGroupList((l) => { const a = Array.isArray(l) ? l : []; return a.includes(g) ? a.filter((x) => x !== g) : [...a, g]; }); };
+  const toggleProductSection = (p: string) => { sfxTick(); setClosedProductSectionList((l) => { const a = Array.isArray(l) ? l : []; return a.includes(p) ? a.filter((x) => x !== p) : [...a, p]; }); };
 
-  // ── 아이템 그룹 ──
-  const toggleGroup = (g: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; });
-  const toggleSection = (p: string) => setClosedSections((s) => { const n = new Set(s); if (n.has(p)) n.delete(p); else n.add(p); return n; });
-  // 그룹 지정 모드 — 켜고 끄기는 도구 줄 "그룹 지정"(누름 표시) · 아래 띠 "취소". 옮길 그룹은 띠에서 고른다(처음엔 안 고른 채 — 옮기기 잠금)
-  const startGroupMode = () => { closePane(); setGroupPick(new Set()); setGroupName(null); setGroupPending(false); setGroupMode(true); };
-  const cancelGroupMode = () => { setGroupMode(false); setGroupPick(new Set()); setGroupName(null); setGroupPending(false); };
-  const togglePick = (id: string) => setGroupPick((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  // 여러 개 한 번에 — 모두 골라져 있으면 모두 풀고, 아니면 모두 고른다(머리줄 고르기 칸 · 전체 선택)
-  const togglePickMany = (ids: string[]) => setGroupPick((s) => {
-    const all = ids.length > 0 && ids.every((id) => s.has(id));
-    const n = new Set(s);
-    for (const id of ids) { if (all) n.delete(id); else n.add(id); }
-    return n;
-  });
-  const applyGroup = async () => {
-    if (groupBusy || groupPick.size === 0 || groupName === null || groupPending) return;
-    const ids = [...groupPick];
-    const group = normalizeItemGroup(groupName);
-    setGroupBusy(true);
-    const res = await fetch("/api/admin/items", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, group }),
-    }).catch(() => null);
-    const d = await res?.json().catch(() => null);
-    setGroupBusy(false);
-    if (res?.ok && d?.success) {
-      // 다시 불러오기 전에 화면 목록부터 맞춘다(그룹 · 서버가 쓴 순서 — 그 그룹 덩어리 끝, 뺀 것은 옛 덩어리 바로 뒤) · 넣은 그룹은 펼쳐 둔다
-      const set = new Set(ids);
-      const order: string[] | null = Array.isArray(d.order) ? d.order.map(String) : null;
-      setRegItems((list) => {
-        const regrouped = list.map((it) => (set.has(String(it._id)) ? { ...it, group } : it));
-        return order ? reorderById(regrouped, order) : regrouped;
-      });
-      if (Array.isArray(d.groups)) setRegGroupSaved(d.groups.map(String));
-      takeParents(d);
-      if (group) setOpenGroups((s) => new Set(s).add(group));
-      cancelGroupMode();
-      fetchRegItems();
-      notify(group ? `${ids.length}개를 '${group}' 그룹으로 옮겼습니다.` : `${ids.length}개를 그룹에서 뺐습니다.`);
-    } else notify(d?.message || "그룹을 저장하지 못했습니다.", true);
+  // ── 아이템 그룹 — 펼침 · 접음은 이 브라우저에 기억(useStoredState) ──
+  const toggleGroup = (g: string) => { sfxTick(); setOpenGroupList((l) => { const a = Array.isArray(l) ? l : []; return a.includes(g) ? a.filter((x) => x !== g) : [...a, g]; }); };
+  const toggleSection = (p: string) => { sfxTick(); setClosedSectionList((l) => { const a = Array.isArray(l) ? l : []; return a.includes(p) ? a.filter((x) => x !== p) : [...a, p]; }); };
+  // 저장된 펼침 목록 안 이름 바꾸기 · 빼기(그룹 · 상위 이름 바꾸기 · 삭제 뒤)
+  const renameIn = (l: string[], from: string, to: string) => {
+    const a = Array.isArray(l) ? l : [];
+    if (!a.includes(from)) return a;
+    const rest = a.filter((x) => x !== from);
+    return to && !rest.includes(to) ? [...rest, to] : rest;
   };
   // 그룹 관리 창이 끌어 놓자마자 — 그룹 차례와 목록 순서(덩어리를 그 자리들 안에서 바꿔 끼움)를 함께. 실패하면 옛 차례로 다시 부른다(같은 계산이라 제자리로 돌아온다)
   //    상위가 있으면 맨 윗단위(상위 덩어리 · 상위 없는 그룹)끼리만 바꿔 끼운다(서버와 같은 orderGroupsNested — 그룹 없는 아이템은 제자리).
@@ -2955,7 +4983,8 @@ export default function AdminShopPage() {
   };
   // 그룹 관리 창이 저장한 뒤 — 새 차례(· 차례 바꾸기는 서버가 쓴 순서)를 받고, 이름 바꾸기 · 삭제는 화면 목록부터 맞춘 뒤 다시 불러온다(펼침 · 거르기도 새 이름으로)
   //    상위 그룹 · 자동 정렬도 같은 길 — 순서를 바꾸는 것(차례 · 상위 차례 · 상위 고르기 · 자동 정렬)은 서버가 쓴 순서로 맞추고 다시 읽지 않는다
-  const renamePendingGroup = (from: string, to: string) => setPending((p) => {
+  // 쌓인 아이템 폼의 그룹도 새 이름으로(이름 바꾸기 · 삭제 — 전체 수정)
+  const regroupStacked = (from: string, to: string) => setStacked((p) => {
     const hit = Object.entries(p.reg).filter(([, f]) => normalizeItemGroup(f.group) === from);
     return hit.length ? { ...p, reg: { ...p.reg, ...Object.fromEntries(hit.map(([id, f]) => [id, { ...f, group: to }])) } } : p;
   });
@@ -2966,28 +4995,28 @@ export default function AdminShopPage() {
     if (reordering && order) setRegItems((list) => reorderById(list, order));
     if (c.op === "parentRename" && c.from && c.to) {
       const { from, to } = c;
-      setClosedSections((s) => { if (!s.has(from)) return s; const n = new Set(s); n.delete(from); n.add(to); return n; });
+      setClosedSectionList((l) => renameIn(l, from, to));
       setRegGroup((v) => (v === `p:${from}` ? `p:${to}` : v));
     }
     if (c.op === "parentDelete" && c.name) {
       const name = c.name;
-      setClosedSections((s) => { if (!s.has(name)) return s; const n = new Set(s); n.delete(name); return n; });
+      setClosedSectionList((l) => renameIn(l, name, ""));
       setRegGroup((v) => (v === `p:${name}` ? GROUP_ALL : v));
     }
     if (c.op === "rename" && c.from && c.to) {
       const { from, to } = c;
       setRegItems((list) => list.map((it) => (groupOfItem(it) === from ? { ...it, group: to } : it)));
-      setOpenGroups((s) => { if (!s.has(from)) return s; const n = new Set(s); n.delete(from); n.add(to); return n; });
+      setOpenGroupList((l) => renameIn(l, from, to));
       setRegGroup((v) => (v === `g:${from}` ? `g:${to}` : v));
       setItemForm((f) => (normalizeItemGroup(f.group) === from ? { ...f, group: to } : f));
-      renamePendingGroup(from, to);
+      regroupStacked(from, to);
     }
     if (c.op === "delete" && c.name) {
       const name = c.name;
       setRegItems((list) => list.map((it) => (groupOfItem(it) === name ? { ...it, group: "" } : it)));
       setRegGroup((v) => (v === `g:${name}` ? GROUP_ALL : v));
       setItemForm((f) => (normalizeItemGroup(f.group) === name ? { ...f, group: "" } : f));
-      renamePendingGroup(name, "");
+      regroupStacked(name, "");
     }
     // 순서 · 상위만 바꾼 것은 목록을 다시 읽지 않는다(화면이 이미 그 순서) — 초안 수만 다시. 그룹 이름 · 삭제는 아이템이 바뀌어 다시 읽는다
     if (c.op === "create" || c.op === "rename" || c.op === "delete") fetchRegItems();
@@ -3003,7 +5032,8 @@ export default function AdminShopPage() {
     return { ok: !!(res?.ok && d?.success), d };
   };
   // fetchRegItems · fetchAll 이 초안 요약도 함께 다시 읽는다
-  const reloadCatalog = () => { fetchRegItems(); fetchAll(); };
+  //    종류별 효과 문구도 다시 읽는다(반영 · 버리기 · 되돌리기 뒤 — 초안 틀이 사라졌을 수 있다)
+  const reloadCatalog = () => { fetchRegItems(); fetchAll(); fxTpl.reload(); };
   // 아이템 · 상품 · 배너 상세 칸에 열린 줄(kind · id)
   const paneRowOf = (): { kind: string; id: string } | null =>
     pane === "reg" ? { kind: "item", id: String(itemForm.id || "") }
@@ -3018,12 +5048,14 @@ export default function AdminShopPage() {
     setDraftBusy("");
     setDraftAsk("");
     reloadCatalog();
-    if (!ok) return notify(d?.message || "반영하지 못했습니다.", true);
+    if (!ok) return fail(d?.message || "반영하지 못했습니다.");
     const skipped: DraftWarn[] = Array.isArray(d.skipped) ? d.skipped : [];
     const hidden: { name?: string }[] = Array.isArray(d.hidden) ? d.hidden : [];
     // 건너뛴 것은 초안으로 남는다(머리 개수 · 반영 창 목록에 그대로). 구매 이력이 있는 상품 삭제는 숨김으로 반영된다(운영자 결정 4)
-    if (Number(d.applied) > 0 || !skipped.length) toast("실사이트에 반영했습니다.");
-    if (skipped.length || hidden.length) {
+    //    알림 창이 같이 뜨면 효과음은 그 창 것 하나(토스트는 소리 없이)
+    const listed = skipped.length > 0 || hidden.length > 0;
+    if (Number(d.applied) > 0 || !skipped.length) toast("실사이트에 반영했습니다.", false, listed ? { sound: false } : undefined);
+    if (listed) {
       notify([
         ...(skipped.length ? [`건너뜀 ${skipped.length}건`, ...skipped.map((s) => `${s.name} — ${s.why}`)] : []),
         ...(skipped.length && hidden.length ? [""] : []),
@@ -3038,17 +5070,19 @@ export default function AdminShopPage() {
     setDraftBusy("");
     setDraftAsk("");
     reloadCatalog();
-    if (!ok) return notify(d?.message || "초안을 버리지 못했습니다.", true);
-    // 새로 만든 초안(목록에서 사라진다)에 쌓인 고친 것은 뺀다 — 고친 줄의 나머지 칸은 목록을 다시 읽으면 실사이트 값으로 옮겨진다
-    const gone = (rows: any[]) => new Set(rows.filter((x) => x._draft === "new").map((x) => String(x._id)));
-    const gReg = gone(regItems), gProd = gone(items), gBan = gone(banners);
-    setPending((p) => ({
-      reg: Object.fromEntries(Object.entries(p.reg).filter(([id]) => !gReg.has(id))),
-      product: Object.fromEntries(Object.entries(p.product).filter(([id]) => !gProd.has(id))),
-      banner: Object.fromEntries(Object.entries(p.banner).filter(([id]) => !gBan.has(id))),
-    }));
-    // 아이템 · 상품 · 배너 상세 칸의 값은 버린 초안일 수 있다 — 닫는다
-    if (paneRowOf()) closePane();
+    if (!ok) return fail(d?.message || "초안을 버리지 못했습니다.");
+    // 새로 만든 초안(목록에서 사라진다)에 쌓인 고친 것은 뺀다 — 고친 줄의 나머지 칸은 목록을 다시 읽으면 실사이트 값으로 옮겨진다(전체 수정)
+    const goneIds = (rows: AnyRow[]) => rows.filter((x) => x._draft === "new").map((x) => String(x._id));
+    dropStacked("reg", goneIds(regItems));
+    dropStacked("product", goneIds(items));
+    dropStacked("banner", goneIds(banners));
+    // 아이템 · 상품 · 배너 상세 칸의 값은 버린 초안일 수 있다 — 폼을 비우고 닫는다
+    if (paneRowOf()) {
+      if (pane === "reg") setItemForm(EMPTY_ITEM_FORM);
+      if (pane === "product") { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+      if (pane === "banner") setBannerForm(EMPTY_BANNER);
+      closePane();
+    }
     toast("초안을 버렸습니다.");
   };
   const revertDraft = async () => {
@@ -3059,12 +5093,18 @@ export default function AdminShopPage() {
     setDraftBusy("");
     setRevertAsk(null);
     reloadCatalog();
-    if (!ok) return notify(d?.message || "초안을 되돌리지 못했습니다.", true);
-    // 새로 만든 초안을 되돌리면 줄이 사라진다 — 쌓인 고친 것도 뺀다
-    if (t.op === "add") dropPending(t.kind === "item" ? "reg" : t.kind === "shopItem" ? "product" : "banner", t.id);
-    // 그 줄의 상세 칸이 열려 있으면 닫는다 — 폼에 든 값은 되돌리기 전 초안이다
+    if (!ok) return fail(d?.message || "초안을 되돌리지 못했습니다.");
+    // 그 줄에 쌓인 고친 것도 뺀다(되돌리기 전 초안 위에서 고친 값 — 열린 칸과 같다 · 전체 수정)
+    const stackKind = ({ item: "reg", shopItem: "product", banner: "banner" } as Record<string, EditKind>)[t.kind];
+    if (stackKind) dropStacked(stackKind, [t.id]);
+    // 그 줄의 상세 칸이 열려 있으면 폼을 비우고 닫는다 — 폼에 든 값은 되돌리기 전 초안이다
     const open = paneRowOf();
-    if (open && open.kind === t.kind && open.id === t.id) closePane();
+    if (open && open.kind === t.kind && open.id === t.id) {
+      if (pane === "reg") setItemForm(EMPTY_ITEM_FORM);
+      if (pane === "product") { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); }
+      if (pane === "banner") setBannerForm(EMPTY_BANNER);
+      closePane();
+    }
     toast("초안을 되돌렸습니다.");
   };
   // 목록 줄 → 되돌릴 초안(_draft: "new" 추가 · "edit" 수정)
@@ -3074,11 +5114,18 @@ export default function AdminShopPage() {
   // ⚠️ 훅을 모두 부른 뒤에 가린다. 이건 화면을 가리는 장치일 뿐이고 실제 방어는 서버(API)에서 한다.
   if (gate) return gate;
 
-  const meta = TAB_META[tab];
   // 📌 주문은 묶음(orderId + 상품 — lib/orderGroups.js)으로 센다 · 보인다. 1개 단위 상품 3개를 한 번에 샀으면 한 줄 "×3"
-  const groupCount = (s: string) => groupOrderRows(orders.filter((o) => o.status === s)).length;
-  const pendingCount = groupCount("pending");
-  const shownOrdersByStatus = groupOrderRows(orderFilter ? orders.filter((o) => o.status === orderFilter) : orders);
+  //    탭 줄 빨간 숫자(처리 대기)는 기간 · 유형과 상관없이 전부. 상태 알약 숫자 · 목록은 고른 기간 · 상품 유형 안에서(불러온 주문 안 — 더 오래된 주문은 「더 보기」)
+  const pendingCount = groupOrderRows(orders.filter((o) => o.status === "pending")).length;
+  const periodFrom = orderPeriod.v === "custom" ? dayStart(orderFrom) : orderPeriod.v === "all" ? NaN : orderPeriod.from;
+  const periodTo = orderPeriod.v === "custom" && orderTo ? dayStart(orderTo) + 86400e3 : NaN;
+  const orderInView = (o: AnyRow) => {
+    const t = new Date(o?.createdAt || 0).getTime();
+    return (!Number.isFinite(periodFrom) || t >= periodFrom) && (!Number.isFinite(periodTo) || t < periodTo) && (!orderTypes.length || orderTypes.includes(orderTypeOf(o)));
+  };
+  const viewOrders = orders.filter(orderInView);
+  const groupCount = (s: string) => groupOrderRows(viewOrders.filter((o) => o.status === s)).length;
+  const shownOrdersByStatus = groupOrderRows(orderFilter ? viewOrders.filter((o) => o.status === orderFilter) : viewOrders);
 
   const discountPct = Math.min(100, Math.max(0, Number(form.discountPct) || 0));
   // 입력칸 단위 그대로(빙옥 전용이면 빙옥 — XP 로 할인한 뒤 올림, 상점 · 결제와 같은 계산)
@@ -3123,8 +5170,9 @@ export default function AdminShopPage() {
     || (regGroupV === GROUP_NONE ? !groupOfItem(it)
       : regGroupV.startsWith("p:") ? parentOfGroup(groupOfItem(it)) === regGroupV.slice(2)
       : groupOfItem(it) === regGroupV.slice(2));
-  const shownReg = regItems.filter((it) => (!regType || it.type === regType) && groupHit(it) && hit(it.name, it.description, it.roleId ? roleNameOf(it.roleId, it.roleName) : "", groupOfItem(it), parentOfGroup(groupOfItem(it))));
-  // 그룹 머리줄로 묶어 보이는 때 — 전체 보기 · 상위 하나 거르기(그 상위의 그룹들을 머리줄로). 그룹 지정 중에도 접은 채 — 머리줄 고르기 칸. 한 그룹만 거르면 머리줄 없이 그 줄들
+  const shownReg = regItems.filter((it) => (!regType || it.type === regType) && groupHit(it) && passItemFilters(it, regFilters)
+    && hit(it.name, categoryOfRow(it), it.description, it.roleId ? roleNameOf(it.roleId, it.roleName) : "", groupOfItem(it), parentOfGroup(groupOfItem(it))));
+  // 그룹 머리줄로 묶어 보이는 때 — 전체 보기 · 상위 하나 거르기(그 상위의 그룹들을 머리줄로). 머리줄 고르기 칸 = 그 그룹 통째로. 한 그룹만 거르면 머리줄 없이 그 줄들
   const regGrouped = regGroupV === GROUP_ALL || regGroupV.startsWith("p:");
   // 그룹 거르기 — 단추 하나(폭 고정). 그룹이 늘어도 줄이 자라지 않는다
   const regGroupOptions: DropdownOption[] = [
@@ -3135,23 +5183,15 @@ export default function AdminShopPage() {
     ...regGroups.map((g) => ({ value: `g:${g}`, label: g, hint: String(regGroupCount.get(g) || 0), icon: <FolderMark /> })),
   ];
   // 꾸미기 효과에 맞는 아이콘 — 아이콘 고르기 판이 먼저 보여 준다
-  const regArtSuggest = [...new Set(itemForm.effects.flatMap((d) => (d.on === "cardSkin" && d.skin ? [artOfSkin(d.skin)] : d.on === "avatarFrame" && d.frame ? [artOfFrame(d.frame)] : [])))];
-  const pickAllOn = groupMode && shownReg.length > 0 && shownReg.every((it) => groupPick.has(String(it._id)));
-  const pickSomeOn = groupMode && !pickAllOn && shownReg.some((it) => groupPick.has(String(it._id)));
-  const togglePickAll = () => togglePickMany(shownReg.map((it) => String(it._id)));
-  // 그룹 지정 — 머리줄 고르기 칸(그 그룹의 보이는 아이템 통째로 · 일부만 고르면 반쯤 찬 표시)
-  const regGroupLead = groupMode
-    ? (g: string, rows: any[]) => {
-        const ids = rows.map((it) => String(it._id));
-        const n = ids.filter((id) => groupPick.has(id)).length;
-        return <GroupPickBox on={n > 0 && n === ids.length} mixed={n > 0 && n < ids.length} label={`${g} 선택`} onToggle={() => togglePickMany(ids)} />;
-      }
-    : undefined;
-  const shownProducts = items.filter((it) => (!productType || it.type === productType) && (!productView || (productView === "on" ? !!it.active : !it.active)) && hit(it.name, it.description, it.roleName, typeLabel(it.type), themeNameOf(themes, it.theme)));
+  const regArtSuggest = [...new Set(itemForm.effects.flatMap((d) => (d.on === "cardScene" && d.scene ? [artOfScene(d.scene)] : d.on === "cardSkin" && d.skin ? [artOfSkin(d.skin)] : d.on === "avatarFrame" && d.frame ? [artOfFrame(d.frame)] : [])))];
   // 상품 묶음 — 아이템 순서 · 그룹 표(상품 그룹 = 연결 아이템 그룹, 세트는 첫 구성 아이템 그룹)
   const prodIdx = itemIndexOf(regItems.map((it) => ({ id: String(it._id), group: groupOfItem(it) })));
-  // 유형 탭 — 역할 · 권한 · 아이템 · 꾸미기 · 기프트카드 · 세트(개수). 판매 중 · 숨김 칸은 이 탭 안에서 센다
+  // 유형 ▾ — 역할 · 권한 · 아이템 · 꾸미기 · 기프트카드 · 세트(개수). 판매 상태는 거르기 판 칸(칩 수는 전체 상품 기준)
   const typeProducts = productType ? items.filter((it) => it.type === productType) : items;
+  // 📌 상품 목록 — 유형 · 판매 상태(판매 중 · 판매 종료 · 숨김 — 줄 표시와 같은 셈) · 거르기 · 검색(아이템 그룹 이름까지)
+  const themeKeys = new Set(themes.map((t) => t.key));
+  const shownProducts = typeProducts.filter((it) => (!productView || prodStatusOf(it) === productView) && passProdFilters(it, prodFilters, themeKeys)
+    && hit(it.name, categoryOfRow(it), it.description, it.roleName, typeLabel(it.type), themeNameOf(themes, it.theme), productGroupOf(it, prodIdx)));
   const productTypeOptions = [
     { v: "", l: "전체", n: items.length },
     ...ITEM_TYPE_OPTIONS.map((o) => ({ v: o.v, l: o.l, n: items.filter((it) => it.type === o.v).length })),
@@ -3166,7 +5206,8 @@ export default function AdminShopPage() {
     return !c.active ? "중지" : expired ? "만료" : exhausted ? "소진" : "사용 가능";
   };
   const shownCoupons = coupons.filter((c) => (!couponView || couponState(c) === couponView) && hit(c.code, c.name));
-  const shownOrders = shownOrdersByStatus.filter((o) => hit(o.itemName, o.bundleName, o.userName, o.contact, o.adminNote));
+  const shownOrders = shownOrdersByStatus.filter((o) => hit(o.itemName, o.bundleName, o.categoryLabel, o.bundleCategoryLabel, o.userName, o.contact, o.adminNote));
+  const orderTypeLabel = (o: AnyRow) => (o?.bundleName ? o.bundleCategoryLabel || "세트" : o?.categoryLabel || typeLabel(o?.itemType));
 
   const noResult = "검색 결과가 없습니다.";
   const orderSel = orderSelId ? shownOrdersByStatus.find((o) => o._id === orderSelId) || null : null;
@@ -3177,47 +5218,131 @@ export default function AdminShopPage() {
   const regEffOn = itemForm.type !== "physical";
   const regRoleBuff: string[] = regEffOn && itemForm.roleId ? describeRoleBuff(roleCfgs.find((c) => c.roleId === itemForm.roleId) || {}) : [];
   const regChName = (id: string) => guildChannels.find((c) => c.id === id)?.name as string | undefined;
+  // 📌 2026-10-18 효과 문구 · 적용 범위(lib/itemEffects) — 편집 중인 효과로 다시 셈한다(저장 모양 { type, chatBuffXp …, effects[] }).
+  //    regFxAuto: 자동 효과 줄(꾸미기 문장 없음 — 「직접 쓰기」가 이 줄로 채워 연다) · regFxLines: 보일 줄(직접 쓰기 > 자동)
+  //    regCosmetic: 꾸미기 아이템인가 · regScopeAuto: 자동 적용 범위 키 · regScopeLabel: 보일 적용 범위 글자
+  const regFxShape = {
+    type: itemForm.type, chatBuffXp: xpNum(itemForm.chatBuffXp), voiceBuffXp: xpNum(itemForm.voiceBuffXp), attendBuffXp: xpNum(itemForm.attendBuffXp),
+    effects: normalizeEffects(itemForm.effects.map(effectOf)),
+    effectText: itemForm.effectCustom ? normalizeEffectText(itemForm.effectText) : [],
+    scope: itemForm.scope,
+  };
+  const regFxAuto: string[] = autoEffectLinesOf(regFxShape, regChName);
+  const regFxLines: string[] = effectLinesOf(regFxShape, regChName);
+  const regCosmetic = isCosmeticItem(regFxShape);
+  const regScopeAuto: string[] = autoScopeOf(regFxShape);
+  const regScopeLabel = scopeLabelOf(regFxShape);
   const regEffectLines: string[] = regEffOn
     ? [
-        ...describeItemBasic({ chatBuffXp: xpNum(itemForm.chatBuffXp), voiceBuffXp: xpNum(itemForm.voiceBuffXp), attendBuffXp: xpNum(itemForm.attendBuffXp) }),
-        ...normalizeEffects(itemForm.effects.map(effectOf)).map((e: any) => describeEffect(e, e.channelIds?.length === 1 ? regChName(e.channelIds[0]) : undefined)),
+        ...regFxLines,
         // 인벤토리처럼 역할 버프 줄도 뒤에 — 역할을 가진 사람에게 실제로 붙는 값
         ...regRoleBuff,
       ]
     : [];
+  // 📌 분류(2026-10-17 「자동 + 바꾸기」) — 편집 중인 유형 · 효과 · 이름으로 다시 셈한다(lib/itemCategory.js). regCategoryAuto = 「자동」이면 보일 값
+  const regCategory = resolveCategory(itemForm);
+  const regCategoryAuto = resolveCategory({ ...itemForm, category: "" });
   const regPreviewItem = {
     name: itemForm.name.trim() || "아이템 이름",
+    // 인벤토리 칸 · 상세의 분류 글자 · 이름(API categoryLabel · shortName 과 같은 값)
+    categoryLabel: regCategory,
+    shortName: shortNameOf(itemForm.name.trim() || "아이템 이름"),
     description: itemForm.description.trim(),
     type: itemForm.type,
     icon: itemForm.icon,
     imageUrl: itemForm.imageUrl.trim(),
     // 쓰는 중인 색(#e9 …)은 유형 기본색으로 — 반쯤 친 값이 엉뚱한 색으로 그려지지 않게
     color: /^#[0-9a-f]{6}$/i.test(itemForm.color) ? itemForm.color : "",
+    // 희귀도 — 인벤토리 칸 · 상세와 같은 키("" = 일반)
+    rarity: normalizeRarity(itemForm.rarity),
+    // 효과 문구 · 적용 범위 — 인벤토리 칸(lib/inventory)과 같은 칸 이름(isCosmetic · scopeLabel · effectCustom)
+    isCosmetic: regCosmetic,
+    scopeLabel: regScopeLabel,
+    effectCustom: regFxShape.effectText.length > 0,
+  };
+  // 📌 상세 칸 흰 판(2026-10-17 shop-tidy) — 꾸미기 아이템은 착용 미리보기부터 · 머리 줄 값(접힌 판도 지금 값이 보이게)
+  const regWear = itemForm.type !== "physical" ? wearOf(itemForm.effects) : null;
+  const regRarityLabel = rarityOf(normalizeRarity(itemForm.rarity) || RARITIES[0].v).l;
+  const regFxSummary = regEffectLines.length ? `${regEffectLines[0]}${regEffectLines.length > 1 ? ` 외 ${regEffectLines.length - 1}` : ""}` : "없음";
+  // 📌 상품 칸 「그룹」(shop-tidy ⑥) — 상품 그룹 = 연결 아이템 그룹(lib/productOrder productGroupOf)이라 그 아이템의 그룹을 바로 바꾼다(아이템 탭에서도 옮겨진다).
+  //    일괄 그룹과 같은 길(runBatch — PATCH /api/admin/items { batch } · 알림 · 소리). 세트(첫 구성 아이템을 따른다) · 직접 설정은 고르는 칸이 없다
+  const paneSetProdGroup = async (itemId: string, raw: string) => {
+    const g = normalizeItemGroup(raw);
+    const it = itemId ? regItems.find((x) => String(x._id) === itemId) : null;
+    if (!it || groupOfItem(it) === g) return;
+    if (liveLocked) { fail(LIVE_LOCKED_MSG); return; }
+    if (batchBusy) { fail("잠시 후 다시 시도해 주십시오."); return; }
+    if (g && regParents.includes(g)) { fail("같은 이름의 상위 그룹이 있습니다."); return; }
+    const ok = await runBatch([{ id: itemId, set: { group: g } }], g ? "옮김" : "뺌");
+    if (ok) { openGroupNamed(g); openProductGroupNamed(g); fetchAll(); }
   };
 
-  // 새로 만들기 — 수정 중이던 폼이면 비우고, 쓰다 만 새 폼이면 그대로 이어 쓴다
-  const openNewReg = () => { stashEdits(); if (itemForm.id) setItemForm(EMPTY_ITEM_FORM); setPane("reg"); };
+  // 새로 만들기 — 쓰다 만 새 폼이면 그대로 이어 쓰고, 수정하던 폼이면(고쳤으면 한 번 묻고) 비운다
+  const openNewReg = () => {
+    if (!itemForm.id) { setPane("reg"); return; }
+    guard("reg", () => { setItemForm(EMPTY_ITEM_FORM); setPane("reg"); });
+  };
+  // 📌 복제(편집기 아래) — 지금 폼 값 그대로 새로 만들기 폼으로(id 비움 · 이름 뒤 「 (복사)」 · 효과 줄 id 새로). 「등록」해야 저장된다
+  const openRegCopy = () => {
+    const src = itemForm;
+    if (!src.id) return;
+    const copy: ItemForm = { ...src, id: "", name: copyNameOf(src.name), effects: src.effects.map((d) => ({ ...d, id: newEffectId(), open: false })) };
+    guard("reg", () => { setItemForm(copy); setPane("reg"); toast("복제본을 열었습니다."); });
+  };
   // 수정하던 폼을 새 폼으로 바꿀 때는 아이템 고르는 중 · 잡아 둔 직접 설정 값도 함께 푼다(새로 쓰던 폼이면 그대로 이어 쓴다)
-  const openNewProduct = () => { stashEdits(); if (form.id) { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); } setIsRoleOpen(false); setPane("product"); };
+  const openNewProduct = () => {
+    if (!form.id) { setPane("product"); return; }
+    guard("product", () => { setForm(emptyForm); setLinkPick(null); setCustomSnap(null); setPane("product"); });
+  };
+  // 📌 복제(편집기 아래 — 상품 · 배너 · 쿠폰) — 지금 폼 값 그대로 새로 만들기 폼으로. 「등록」해야 저장된다.
+  //    상품은 이름 뒤 「 (복사)」(연결 상품은 아이템 이름 그대로) · 숨김으로 시작(같은 상품이 상점에 둘 뜨지 않게) · 재고 폭 기준 비움. 쿠폰은 코드를 비운다
+  const openProductCopy = () => {
+    if (!form.id) return;
+    const copy: ProdForm = { ...form, id: "", name: linked ? form.name : copyNameOf(form.name), stockBase: "", sortOrder: "", active: false, bundle: form.bundle.map((r) => ({ ...r })) };
+    guard("product", () => { setForm(copy); setLinkPick(null); setCustomSnap(null); setPane("product"); toast("복제본을 열었습니다."); });
+  };
   // 새 배너 — 지금 보던 위치로 시작(시즌 탭을 보다 누르면 시즌 탭 배너)
   const newPlace = placeNow === GONE_PLACE ? "home" : placeNow;
-  const openNewBanner = () => { stashEdits(); setBannerForm(bannerForm.id ? { ...EMPTY_BANNER, placement: newPlace } : { ...bannerForm, placement: bannerForm.imageUrl ? bannerForm.placement : newPlace }); setPane("banner"); };
-  const openNewCoupon = () => { if (couponForm.id) setCouponForm(EMPTY_COUPON); setPane("coupon"); };
+  const openNewBanner = () => {
+    if (!bannerForm.id) { setBannerForm({ ...bannerForm, placement: bannerForm.imageUrl ? bannerForm.placement : newPlace }); setPane("banner"); return; }
+    guard("banner", () => { setBannerForm({ ...EMPTY_BANNER, placement: newPlace }); setPane("banner"); });
+  };
+  const openBannerCopy = () => {
+    if (!bannerForm.id) return;
+    const copy = { ...bannerForm, id: "", sortOrder: "", placement: knownPlaces.has(bannerForm.placement) ? bannerForm.placement : newPlace };
+    guard("banner", () => { setBannerForm(copy); setPane("banner"); toast("복제본을 열었습니다."); });
+  };
+  const openNewCoupon = () => {
+    if (!couponForm.id) { setPane("coupon"); return; }
+    guard("coupon", () => { setCouponForm(EMPTY_COUPON); setCouponBulk(EMPTY_BULK); setPane("coupon"); });
+  };
+  const openCouponCopy = () => {
+    if (!couponForm.id) return;
+    const copy = { ...couponForm, id: "", code: "" };
+    guard("coupon", () => { setCouponForm(copy); setCouponBulk(EMPTY_BULK); setPane("coupon"); toast("복제본을 열었습니다."); });
+  };
 
   // ── 표 열 ─────────────────────────────────────
   // 상품 줄 그림 — 연결 아이템의 꾸미기 효과로 도트 아이콘(withCosmeticIcon)
   const regById = new Map(regItems.map((x) => [String(x._id), x]));
-  const regCols: Column<any>[] = [
+  // 숨긴 열(열 고르기) — 기본은 색상 · 시즌 · 연결 역할을 뺀다
+  const regHidden: string[] = Array.isArray(regHiddenCols) ? regHiddenCols : REG_HIDDEN_DEFAULT;
+  const regColsAll: Column<any>[] = [
     {
-      key: "name", label: "아이템", mobile: "title",
+      // 이름 칸이 남는 폭을 다 쓴다(w-full · max-w-0 — 긴 이름 · 설명은 칸 안에서 말줄임, 표가 옆으로 늘지 않는다)
+      // 📌 짧은 이름 + 분류 배지(2026-10-17 — 옛 이름 머리말은 떼어 보이고 분류로 읽는다 · 마우스를 올리면 원래 이름)
+      key: "name", label: "아이템", mobile: "title", className: "w-full max-w-0",
+      sortValue: (it) => shortOfRow(it),
       render: (it) => (
         <span className="flex items-center gap-3 min-w-0">
           <Thumb it={withCosmeticIcon(it, it)} />
-          <span className="block min-w-0 max-w-[340px]">
+          <span className="block min-w-0 flex-1">
             <span className="flex items-center gap-2 min-w-0">
-              <span className={`truncate font-bold ${it.visible === false ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>{it.name}</span>
-              {editedIds.has(String(it._id)) && <span role="img" aria-label="수정됨" title="수정됨 — 아래 「전체 수정」으로 저장" className="shrink-0 w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
-              <TypeBadge type={it.type} className="shrink-0 px-2 py-0.5 text-[10px]" />
+              <span className={`truncate font-bold ${it.visible === false ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`} title={it.name}>{shortOfRow(it)}</span>
+              {editedDot("reg", it._id)}
+              <TypeBadge type={it.type} label={categoryOfRow(it)} className="shrink-0 px-2 py-0.5 text-[10px]" />
+              {/* 시즌 뗌 — 역할 아이템만(시즌 열을 숨겨도 보이게 유형 옆 작은 표시) */}
+              {it.type === "role" && it.detachOnSeason && regHidden.includes("season") && <span className="shrink-0 text-[10px] font-bold text-[#8a8a8a]">시즌 뗌</span>}
               {/* 초안(추가 · 수정 — 순서만 바뀐 것은 표시 없음) — 되돌리기는 한 번 묻는다 */}
               {it._draft && <DraftMark onRevert={() => askRevertRow("item", it, it.name || "이름 없음")} disabled={!!draftBusy} />}
             </span>
@@ -3226,7 +5351,17 @@ export default function AdminShopPage() {
         </span>
       ),
     },
-    { key: "role", label: "연결 역할", render: (it) => <span className="text-[#5a5a5a]">{it.roleId ? roleNameOf(it.roleId, it.roleName) : "역할 없음"}</span> },
+    {
+      // 희귀도 — 고른 것만(안 고른 아이템은 PC 표에 「—」, 모바일 줄 카드는 비움)
+      key: "rarity", label: "희귀도",
+      sortValue: (it) => (normalizeRarity(it.rarity) ? rarityRank(it.rarity) : null),
+      render: (it) => (normalizeRarity(it.rarity) ? <RarityMark v={it.rarity} /> : <span className="hidden md:inline text-[#a3a3a3]">—</span>),
+    },
+    {
+      key: "role", label: "연결 역할",
+      sortValue: (it) => (it.roleId ? roleNameOf(it.roleId, it.roleName) : null),
+      render: (it) => <span className="text-[#5a5a5a]">{it.roleId ? roleNameOf(it.roleId, it.roleName) : "역할 없음"}</span>,
+    },
     {
       key: "color", label: "색상",
       render: (it) => {
@@ -3239,34 +5374,142 @@ export default function AdminShopPage() {
         );
       },
     },
-    { key: "usage", label: "사용", render: (it) => <span className="text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}{it.passUsage > 0 ? ` · 패스 ${it.passUsage}` : ""}</span> },
-    { key: "season", label: "시즌", render: (it) => (it.type === "role" && it.detachOnSeason ? <StatusChip>시즌 뗌</StatusChip> : null) },
-    { key: "vis", label: "인벤토리", render: (it) => <VisSwitch on={it.visible !== false} busy={visBusy === it._id} disabled={liveLocked} onToggle={() => toggleRegVisible(it)} /> },
-  ];
-  // 그룹 지정 모드 — 앞에 고르기 칸(머리줄은 같은 열 자리에 묶음째 고르기 칸 — regGroupLead)
-  const regModeCols: Column<any>[] = groupMode
-    ? [
-        { key: "pick", label: <span className="sr-only">선택</span>, mobile: "title", className: "w-px", render: (it) => <PickMark on={groupPick.has(String(it._id))} /> },
-        ...regCols,
-      ]
-    : regCols;
-
-  const productCols: Column<any>[] = [
     {
-      key: "name", label: "상품", mobile: "title",
+      key: "usage", label: "사용",
+      sortValue: (it) => (Number(it.usage) || 0) + (Number(it.passUsage) || 0),
+      render: (it) => <span className="text-[#5a5a5a] tabular-nums">상품 {it.usage || 0}{it.passUsage > 0 ? ` · 패스 ${it.passUsage}` : ""}</span>,
+    },
+    { key: "season", label: "시즌", render: (it) => (it.type === "role" && it.detachOnSeason ? <StatusChip>시즌 뗌</StatusChip> : null) },
+    {
+      key: "vis", label: "인벤토리",
+      sortValue: (it) => it.visible !== false,
+      render: (it) => <VisSwitch on={it.visible !== false} busy={visBusy === String(it._id)} disabled={liveLocked} onToggle={() => toggleRegVisible(it)} />,
+    },
+  ];
+  const regCols = regColsAll.filter((c) => !regHidden.includes(c.key));
+  const toggleRegCol = (key: string) => {
+    sfxTick();
+    const hide = !regHidden.includes(key);
+    setRegHiddenCols(hide ? [...regHidden, key] : regHidden.filter((k) => k !== key));
+    // 숨긴 열로 정렬하던 중이면 기본 순서로
+    if (hide && regSort?.key === key) setRegSort(null);
+  };
+  // 화면 차례(정렬 · 묶음) — 카드 보기 · 편집기 ‹ › 가 같은 차례
+  const regSorted = sortRows(shownReg, regColsAll, regSort);
+  const regGroupOf = (it: any) => groupOfItem(it);
+  const regNavList = displayOrderOf<any>(regSorted, regGrouped ? regGroupOf : undefined);
+  const regNavIdx = itemForm.id ? regNavList.findIndex((x) => String(x._id) === String(itemForm.id)) : -1;
+  const regNav = {
+    index: regNavIdx,
+    total: regNavList.length,
+    onPrev: () => { if (regNavIdx > 0) openRegRow(regNavList[regNavIdx - 1]); },
+    onNext: () => { if (regNavIdx >= 0 && regNavIdx < regNavList.length - 1) openRegRow(regNavList[regNavIdx + 1]); },
+  };
+  // 목록에서 ↑ ↓ — 포커스를 옆 줄(카드)로. 편집기가 열려 있으면 그 줄을 연다(고쳤으면 한 번 묻는다). 아이템 · 상품 · 배너 · 쿠폰 · 구매 내역 목록이 같이 쓴다
+  const listKeyNav = (openNow: boolean) => (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((e.key !== "ArrowUp" && e.key !== "ArrowDown") || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const rowSel = 'tr[tabindex="0"], div[role="button"][tabindex="0"]';
+    const t = e.target as HTMLElement;
+    if (!t.matches?.(rowSel)) return;
+    const rows = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(rowSel)).filter((el) => el.getClientRects().length > 0);
+    const i = rows.indexOf(t);
+    const next = i < 0 ? null : rows[e.key === "ArrowDown" ? i + 1 : i - 1];
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+    if (openNow) next.click();
+  };
+  const onRegListKey = listKeyNav(pane === "reg" && !!itemForm.id);
+  // 모두 펼치기 · 접기 — 지금 보이는 그룹들
+  const regShownGroups = [...new Set(shownReg.map(groupOfItem).filter(Boolean))];
+  const regAllOpen = regShownGroups.length > 0 && regShownGroups.every((g) => openGroups.has(g));
+  const toggleAllGroups = () => {
+    sfxTick();
+    if (regAllOpen) setOpenGroupList((l) => (Array.isArray(l) ? l : []).filter((g) => !regShownGroups.includes(g)));
+    else { setOpenGroupList((l) => [...new Set([...(Array.isArray(l) ? l : []), ...regShownGroups])]); setClosedSectionList([]); }
+  };
+  // 거르기 — 켜고 끄기 · 켠 칩 줄(정렬도 칩으로 — 누르면 기본 순서)
+  const toggleRegFilter = (k: keyof ItemFilters, v: string) => {
+    sfxTick();
+    setRegFilters((f) => ({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] }));
+  };
+  // 📌 그룹 거르기(2026-10-17 도구 줄 한 줄) — 도구 줄의 그룹 단추를 걷고 거르기 판 「그룹」 칸으로(하나만 고른다 · 다시 누르면 모든 그룹). 켠 칩 「그룹 · <이름>」
+  const pickRegGroup = (v: string) => { sfxTick(); setRegGroup((cur) => (cur === v ? GROUP_ALL : v)); };
+  const regGroupOn = regGroupV !== GROUP_ALL;
+  const regFilterN = Object.values(regFilters).reduce((s, a) => s + a.length, 0) + (regGroupOn ? 1 : 0);
+  const labelOf = (list: { v: string; l: string }[], v: string) => list.find((x) => x.v === v)?.l || v;
+  const regActive: ActiveFilter[] = [
+    ...(regGroupOn ? [{ key: "g", label: regGroupV === GROUP_NONE ? "그룹 없음" : `그룹 · ${regGroupV.slice(2)}`, onRemove: () => { sfxTick(); setRegGroup(GROUP_ALL); } }] : []),
+    ...regFilters.rarity.map((v) => ({ key: `r:${v}`, label: `희귀도 · ${v === RARITY_NONE ? "미지정" : rarityOf(v).l}`, onRemove: () => toggleRegFilter("rarity", v) })),
+    ...regFilters.kind.map((v) => ({ key: `k:${v}`, label: `효과 · ${labelOf(KIND_FILTERS, v)}`, onRemove: () => toggleRegFilter("kind", v) })),
+    ...regFilters.use.map((v) => ({ key: `u:${v}`, label: labelOf(USE_FILTERS, v), onRemove: () => toggleRegFilter("use", v) })),
+    ...regFilters.vis.map((v) => ({ key: `v:${v}`, label: `인벤토리 · ${labelOf(VIS_FILTERS, v)}`, onRemove: () => toggleRegFilter("vis", v) })),
+    ...regFilters.draft.map((v) => ({ key: `d:${v}`, label: `초안 · ${labelOf(DRAFT_FILTERS, v)}`, onRemove: () => toggleRegFilter("draft", v) })),
+    ...(regSort ? [{ key: "sort", label: `정렬 · ${REG_SORT_LABEL[regSort.key] || regSort.key} ${regSort.dir === "asc" ? "↑" : "↓"}`, onRemove: () => { sfxTick(); setRegSort(null); } }] : []),
+  ];
+  const clearRegFilters = () => { sfxTick(); setRegFilters(NO_FILTERS); setRegGroup(GROUP_ALL); setRegSort(null); };
+  // 거르기 칩 수 — 전체 아이템 기준(켠 거르기와 무관하게 늘 같은 수)
+  const regCountBy = (test: (it: any) => boolean) => regItems.reduce((n, it) => n + (test(it) ? 1 : 0), 0);
+  // 고른 아이템(목록 차례) · 일괄 삭제 확인 — 상품 · 패스가 쓰는 것은 막힌다
+  const regPicked = regItems.filter((it) => sel.has(String(it._id)));
+  const regDelOk = regPicked.filter((it) => !(Number(it.usage) > 0) && !(Number(it.passUsage) > 0));
+  const regDelBlocked = regPicked.filter((it) => Number(it.usage) > 0 || Number(it.passUsage) > 0);
+  const selProps = {
+    selectable: true as const,
+    selectedKeys: sel.selectedKeys,
+    onToggleKey: (k: string, o: { shift: boolean; range?: string[] }) => { sfxTick(); sel.onToggleKey(k, o); },
+    onToggleAll: (keys: string[]) => { sfxTick(); sel.onToggleAll(keys); },
+  };
+
+  // 📌 기능 검색 · 다른 화면에서 오는 주소(?tab=items&item=<id> · new=1 · open=preset|groups / ?tab=products&new=1 · open=themes) —
+  //    주소가 바뀔 때마다 한 번(렌더 중 조정 — 이미 이 화면이어도 따라간다). 아이템 열기는 목록을 받은 뒤에. 따라간 뒤 그 표시는 주소에서 걷는다(위 설정 창 주소와 같은 자리 — deepKey)
+  //    상품 열기(?edit= — ARCTIC 상점 카드의 「관리에서 수정」 · 기능 검색)도 같은 길 — 상품 목록을 받은 뒤에
+  const deepWait = (tab === "items" && !!searchParams.get("item") && !regLoaded) || (tab === "products" && !!searchParams.get("edit") && isLoading);
+  if (deepSeen !== deepKey && !deepWait) {
+    setDeepSeen(deepKey);
+    const open = searchParams.get("open") || "";
+    // 효과 문구 창(기능 검색 「효과 문구」) — 탭과 무관
+    if (open === "fxtext") { setFxTextFocus([]); setFxTextOpen(true); }
+    if (tab === "items") {
+      const itemId = searchParams.get("item");
+      const it = itemId ? regItems.find((x) => String(x._id) === itemId) : null;
+      if (it) openRegRow(it);
+      else if (searchParams.get("new") === "1") openNewReg();
+      if (open === "preset") setPresetOpen(true);
+      if (open === "groups") setGroupManageOpen(true);
+    }
+    if (tab === "products") {
+      const editId = searchParams.get("edit");
+      const it = editId ? items.find((x) => String(x._id) === editId) : null;
+      if (it) openProductRow(it);
+      else if (searchParams.get("new") === "1" && !editId) openNewProduct();
+      if (open === "themes") setThemeManageOpen(true);
+    }
+  }
+
+  // ── 상품 표 · 카드 ─────────────────────────────
+  //    이름 칸이 남는 폭을 다 쓴다(아이템 표와 같다). 판매 칸 = 줄에서 바로 켜고 끄는 스위치(그 칸만 저장 · 실패하면 되돌림)
+  const PROD_STATUS_RANK: Record<string, number> = { on: 0, ended: 1, off: 2 };
+  const productCols: Column<AnyRow>[] = [
+    {
+      // 최소 폭 — 붙는 편집기로 표가 좁아져도 이름이 사라지지 않게(넘치면 표 안에서 옆으로 민다)
+      // 📌 짧은 이름 + 분류 배지(아이템 목록과 같은 모양 — 연결 상품은 연결 아이템의 분류)
+      key: "name", label: "상품", mobile: "title", className: "w-full max-w-0 min-w-[200px]",
+      sortValue: (it) => shortOfRow(it),
       render: (it) => (
         <span className="flex items-center gap-3 min-w-0">
           <Thumb it={withCosmeticIcon(it, regById.get(String(it.itemId || "")))} />
-          <span className="block min-w-0 max-w-[320px]">
+          <span className="block min-w-0 flex-1">
             {/* 이름 줄 — 아이템 목록처럼 한 줄 flex(초안 칩이 붙어도 줄 높이 그대로) */}
             <span className="flex items-center gap-2 min-w-0">
-              <span className="truncate font-bold">{it.name}</span>
-              {editedIds.has(String(it._id)) && <span role="img" aria-label="수정됨" title="수정됨 — 아래 「전체 수정」으로 저장" className="shrink-0 w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
+              <span className="truncate font-bold" title={it.name}>{shortOfRow(it)}</span>
+              {editedDot("product", it._id)}
+              <TypeBadge type={it.type} label={categoryOfRow(it)} className="shrink-0 px-2 py-0.5 text-[10px]" />
               {it._draft && <DraftMark onRevert={() => askRevertRow("shopItem", it, it.name || "이름 없음")} disabled={!!draftBusy} />}
             </span>
             {/* 등록 아이템 · 1개 단위(1회 최대) — 목록에서 판매 방식이 보이게 */}
             {(it.itemId || isUnitSale(it)) && (
-              <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] tabular-nums">
+              <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] tabular-nums truncate">
                 {[it.itemId && "등록 아이템", isUnitSale(it) && `1개 단위 · 1회 최대 ${maxPerOrderOf(it)}개`].filter(Boolean).join(" · ")}
               </span>
             )}
@@ -3280,14 +5523,20 @@ export default function AdminShopPage() {
         </span>
       ),
     },
-    // 판매 종료(lib/saleWindow) — 판매 중 토글은 그대로여도 시각이 지나면 「판매 종료」(상점에서 빠짐)
-    { key: "status", label: "상태", mobile: "title", render: (it) => (it.active && saleEnded(it)
-      ? <StatusChip tone="warn">판매 종료</StatusChip>
-      : <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-          <StatusChip tone={it.active ? "ok" : "neutral"}>{it.active ? "판매 중" : "숨김"}</StatusChip>
-          {/* 끝나는 시각이 있으면 옆에 작게 */}
-          {it.active && saleUntilLabel(it) && <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">~{saleUntilLabel(it)}</span>}
-        </span>) },
+    // 판매 종료(lib/saleWindow) — 판매 중이어도 시각이 지나면 「판매 종료」(상점에서 빠짐). 끝나는 시각이 있으면 옆에 작게.
+    //    모바일 줄 카드는 아래 줄(이름이 스위치에 밀려 잘리지 않게)
+    {
+      key: "status", label: "판매", mobile: "meta",
+      sortValue: (it) => PROD_STATUS_RANK[prodStatusOf(it)],
+      render: (it) => (
+        <span className="inline-flex items-center gap-2 whitespace-nowrap">
+          <VisSwitch on={!!it.active} busy={prodSwitchBusy === String(it._id)} disabled={liveLocked} onToggle={() => { void toggleProductActive(it); }} label="판매" onText="판매 중" offText="숨김" />
+          {prodStatusOf(it) === "ended"
+            ? <StatusChip tone="warn">판매 종료</StatusChip>
+            : it.active && saleUntilLabel(it) ? <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">~{saleUntilLabel(it)}</span> : null}
+        </span>
+      ),
+    },
     {
       key: "type", label: "유형 · 역할",
       render: (it) => (
@@ -3295,11 +5544,14 @@ export default function AdminShopPage() {
           {isBundle(it)
             ? `${typeLabel(it.type)} · ${(Array.isArray(it.bundle) ? it.bundle.length : 0)}개`
             : it.type === "physical" || it.type === "cosmetic" ? typeLabel(it.type) : `${typeLabel(it.type)} · ${it.roleName || it.roleId || "역할 없음"}`}
+          {it.theme && themeKeys.has(String(it.theme)) && <span className="text-[#8a8a8a]"> · {themeNameOf(themes, it.theme)}</span>}
         </span>
       ),
     },
     {
       key: "price", label: "가격", align: "right",
+      // 할인가(XP — 빙옥 전용도 XP 로 저장돼 있어 같은 잣대)
+      sortValue: (it) => applyDiscount(it, it.price),
       render: (it) => (
         <span className="font-bold tabular-nums whitespace-nowrap">
           {/* 할인가 — 상점 · 결제와 같은 계산(빙옥 전용은 빙옥 단위로 내림 — lib/shopPricing applyDiscount) */}
@@ -3312,23 +5564,82 @@ export default function AdminShopPage() {
         </span>
       ),
     },
-    { key: "stock", label: "재고", align: "right", render: (it) => <span className="tabular-nums"><ML>재고</ML>{it.stock < 0 ? "무제한" : it.stock}</span> },
-    { key: "sold", label: "판매", align: "right", render: (it) => <span className="text-[#5a5a5a] tabular-nums">{it.soldCount || 0}개<span className="md:hidden"> 판매</span></span> },
+    { key: "stock", label: "재고", align: "right", sortValue: (it) => (Number(it.stock) < 0 ? Infinity : Number(it.stock) || 0), render: (it) => <span className="tabular-nums"><ML>재고</ML>{it.stock < 0 ? "무제한" : it.stock}</span> },
+    { key: "sold", label: "판매", sortLabel: "판매 수", align: "right", sortValue: (it) => Number(it.soldCount) || 0, render: (it) => <span className="text-[#5a5a5a] tabular-nums">{it.soldCount || 0}개<span className="md:hidden"> 판매</span></span> },
   ];
+  // 열 고르기(아이템 표와 같은 「열」 메뉴 · 이 브라우저에 기억) — 붙는 편집기를 연 채 좁은 표에서 줄일 열
+  const prodHidden: string[] = Array.isArray(prodHiddenCols) ? prodHiddenCols : [];
+  const prodCols = productCols.filter((c) => !prodHidden.includes(c.key));
+  const toggleProdCol = (key: string) => {
+    sfxTick();
+    const hide = !prodHidden.includes(key);
+    setProdHiddenCols(hide ? [...prodHidden, key] : prodHidden.filter((k) => k !== key));
+    if (hide && prodSort?.key === key) setProdSort(null);
+  };
+  // 화면 차례(정렬 · 묶음) — 카드 보기 · 편집기 ‹ › 가 같은 차례
+  const prodGroupOf = (it: AnyRow) => productGroupOf(it, prodIdx);
+  const prodSorted = sortRows(shownProducts, productCols, prodSort);
+  const prodNavList = displayOrderOf<AnyRow>(prodSorted, prodGroupOf);
+  const prodNavIdx = form.id ? prodNavList.findIndex((x) => String(x._id) === String(form.id)) : -1;
+  const prodNav = {
+    index: prodNavIdx,
+    total: prodNavList.length,
+    onPrev: () => { if (prodNavIdx > 0) openProductRow(prodNavList[prodNavIdx - 1]); },
+    onNext: () => { if (prodNavIdx >= 0 && prodNavIdx < prodNavList.length - 1) openProductRow(prodNavList[prodNavIdx + 1]); },
+  };
+  const onProdListKey = listKeyNav(pane === "product" && !!form.id);
+  // 모두 펼치기 · 접기 — 지금 보이는 묶음들
+  const prodShownGroups = [...new Set(shownProducts.map(prodGroupOf).filter(Boolean))];
+  const prodAllOpen = prodShownGroups.length > 0 && prodShownGroups.every((g) => openProductGroups.has(g));
+  const toggleAllProductGroups = () => {
+    sfxTick();
+    if (prodAllOpen) setOpenProductGroupList((l) => (Array.isArray(l) ? l : []).filter((g) => !prodShownGroups.includes(g)));
+    else { setOpenProductGroupList((l) => [...new Set([...(Array.isArray(l) ? l : []), ...prodShownGroups])]); setClosedProductSectionList([]); }
+  };
+  // 거르기 — 켜고 끄기 · 켠 칩 줄(정렬도 칩으로)
+  const toggleProdFilter = (k: keyof ProdFilters, v: string) => {
+    sfxTick();
+    setProdFilters((f) => ({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] }));
+  };
+  // 📌 판매 상태(2026-10-17 도구 줄 한 줄) — 도구 줄의 판매 상태 칸을 걷고 거르기 판 「판매 상태」 칸으로(하나만 고른다 · 다시 누르면 전체)
+  const pickProdStatus = (v: string) => { sfxTick(); setProductView((cur) => (cur === v ? "" : v)); };
+  const prodFilterN = Object.values(prodFilters).reduce((n, a) => n + a.length, 0) + (productView ? 1 : 0);
+  const prodCountBy = (test: (it: AnyRow) => boolean) => items.reduce((n, it) => n + (test(it) ? 1 : 0), 0);
+  const themeLabelOf = (k: string) => (k === THEME_NONE ? "테마 없음" : themeNameOf(themes, k) || k);
+  const prodActive: ActiveFilter[] = [
+    ...(productView ? [{ key: "st", label: `판매 상태 · ${labelOf(PROD_STATUS_OPTIONS, productView)}`, onRemove: () => { sfxTick(); setProductView(""); } }] : []),
+    ...prodFilters.theme.map((v) => ({ key: `t:${v}`, label: `테마 · ${themeLabelOf(v)}`, onRemove: () => toggleProdFilter("theme", v) })),
+    ...prodFilters.disc.map((v) => ({ key: `d:${v}`, label: labelOf(DISC_FILTERS, v), onRemove: () => toggleProdFilter("disc", v) })),
+    ...prodFilters.pay.map((v) => ({ key: `p:${v}`, label: labelOf(PAY_FILTERS, v), onRemove: () => toggleProdFilter("pay", v) })),
+    ...prodFilters.src.map((v) => ({ key: `s:${v}`, label: labelOf(SRC_FILTERS, v), onRemove: () => toggleProdFilter("src", v) })),
+    ...(prodSort ? [{ key: "sort", label: `정렬 · ${PROD_SORT_LABEL[prodSort.key] || prodSort.key} ${prodSort.dir === "asc" ? "↑" : "↓"}`, onRemove: () => { sfxTick(); setProdSort(null); } }] : []),
+  ];
+  const clearProdFilters = () => { sfxTick(); setProdFilters(NO_PROD_FILTERS); setProductView(""); setProdSort(null); };
+  // 고른 상품(목록 차례) — 띠 · 창 · 일괄 삭제 확인
+  const prodPicked = items.filter((it) => prodSel.has(String(it._id)));
+  const prodSelProps = {
+    selectable: true as const,
+    selectedKeys: prodSel.selectedKeys,
+    onToggleKey: (k: string, o: { shift: boolean; range?: string[] }) => { sfxTick(); prodSel.onToggleKey(k, o); },
+    onToggleAll: (keys: string[]) => { sfxTick(); prodSel.onToggleAll(keys); },
+  };
+  // 편집기 — 연결 상품의 아이템(요약 칸)
+  const linkedItem = linked ? regItems.find((x) => String(x._id) === String(form.itemId)) || null : null;
 
-  const bannerCols: Column<any>[] = [
+  // ── 배너 표 · 카드 ─────────────────────────────
+  const bannerCols: Column<AnyRow>[] = [
     {
-      key: "banner", label: "배너", mobile: "title",
+      key: "banner", label: "배너", mobile: "title", className: "w-full max-w-0 min-w-[240px]",
       render: (b) => (
         <span className="flex items-center gap-3 min-w-0">
           <span className="block w-24 h-12 rounded-lg bg-[#f2f2f2] overflow-hidden shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
           </span>
-          <span className="block min-w-0 max-w-[360px]">
+          <span className="block min-w-0 flex-1">
             <span className="flex items-center gap-2 min-w-0">
               <span className="truncate font-bold">{b.title || "(제목 없음)"}</span>
-              {editedIds.has(String(b._id)) && <span role="img" aria-label="수정됨" title="수정됨 — 아래 「전체 수정」으로 저장" className="shrink-0 w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
+              {editedDot("banner", b._id)}
               {b._draft && <DraftMark onRevert={() => askRevertRow("banner", b, String(b.title || "").trim() || "제목 없는 배너")} disabled={!!draftBusy} />}
             </span>
             {b.subtitle && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate">{b.subtitle}</span>}
@@ -3336,17 +5647,43 @@ export default function AdminShopPage() {
         </span>
       ),
     },
-    { key: "status", label: "상태", mobile: "title", render: (b) => <StatusChip tone={b.active ? "ok" : "neutral"}>{b.active ? "노출 중" : "숨김"}</StatusChip> },
-    { key: "link", label: "이동", render: (b) => (b.link ? <span className="font-bold text-[#5a5a5a]">→ {b.link}</span> : null) },
-  ];
-
-  const couponCols: Column<any>[] = [
-    { key: "state", label: "상태", mobile: "title", render: (c) => { const s = couponState(c); return <StatusChip tone={s === "사용 가능" ? "ok" : "neutral"}>{s}</StatusChip>; } },
     {
-      key: "code", label: "코드", mobile: "title",
+      key: "status", label: "노출", mobile: "meta",
+      render: (b) => <VisSwitch on={!!b.active} busy={bannerSwitchBusy === String(b._id)} disabled={liveLocked} onToggle={() => { void toggleBannerActive(b); }} label="노출" onText="노출 중" offText="숨김" />,
+    },
+    { key: "link", label: "이동", render: (b) => (b.link ? <span className="block max-w-[240px] truncate font-bold text-[#5a5a5a]" title={b.link}>→ {b.link}</span> : null) },
+  ];
+  const bannerNavIdx = bannerForm.id ? shownBanners.findIndex((x) => String(x._id) === String(bannerForm.id)) : -1;
+  const bannerNav = {
+    index: bannerNavIdx,
+    total: shownBanners.length,
+    onPrev: () => { if (bannerNavIdx > 0) openBannerRow(shownBanners[bannerNavIdx - 1]); },
+    onNext: () => { if (bannerNavIdx >= 0 && bannerNavIdx < shownBanners.length - 1) openBannerRow(shownBanners[bannerNavIdx + 1]); },
+  };
+  const onBannerListKey = listKeyNav(pane === "banner" && !!bannerForm.id);
+
+  // ── 쿠폰 표 ─────────────────────────────────────
+  //    사용 칸 = 줄에서 바로 켜고 끄는 스위치(만료 · 소진이면 옆에 칩)
+  const couponCols: Column<AnyRow>[] = [
+    {
+      key: "state", label: "사용", mobile: "meta",
+      sortValue: (c) => couponState(c),
+      render: (c) => {
+        const s = couponState(c);
+        return (
+          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+            <VisSwitch on={!!c.active} busy={couponSwitchBusy === String(c._id)} onToggle={() => { void toggleCouponActive(c); }} label="사용 상태" onText="사용" offText="중지" />
+            {(s === "만료" || s === "소진") && <StatusChip>{s}</StatusChip>}
+          </span>
+        );
+      },
+    },
+    {
+      key: "code", label: "코드", mobile: "title", className: "w-full max-w-0 min-w-[160px]",
+      sortValue: (c) => String(c.code || ""),
       render: (c) => (
-        <span className="block min-w-0 max-w-[260px]">
-          <span className="block truncate font-black">{c.code}</span>
+        <span className="block min-w-0">
+          <span className="flex items-center gap-2 min-w-0"><span className="truncate font-black">{c.code}</span>{editedDot("coupon", c._id)}</span>
           {c.name && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate">{c.name}</span>}
         </span>
       ),
@@ -3373,23 +5710,36 @@ export default function AdminShopPage() {
         : c.kind !== "reward" && c.minTotal > 0 ? <span className="text-[#5a5a5a]">{c.minTotal.toLocaleString()} XP 이상</span>
         : null,
     },
-    { key: "used", label: "사용", align: "right", render: (c) => <span className="text-[#5a5a5a] tabular-nums"><ML>사용</ML>{c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span> },
+    { key: "used", label: "사용 수", align: "right", sortValue: (c) => Number(c.usedCount) || 0, render: (c) => <span className="text-[#5a5a5a] tabular-nums"><ML>사용</ML>{c.usedCount || 0}{c.maxUses > 0 ? ` / ${c.maxUses}` : ""}</span> },
     { key: "per", label: "1인", align: "right", render: (c) => <span className="text-[#5a5a5a]"><ML>1인</ML>{c.perUserLimit === 0 ? "무제한" : `${c.perUserLimit}회`}</span> },
-    { key: "exp", label: "만료", render: (c) => (c.expiresAt ? <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">~ {fmtDateTime(c.expiresAt)}</span> : null) },
+    { key: "exp", label: "만료", sortValue: (c) => (c.expiresAt ? new Date(c.expiresAt) : null), render: (c) => (c.expiresAt ? <span className="text-[#8a8a8a] tabular-nums whitespace-nowrap">~ {fmtDateTime(c.expiresAt)}</span> : null) },
   ];
+  const couponSorted = sortRows(shownCoupons, couponCols, couponSort);
+  const couponNavIdx = couponForm.id ? couponSorted.findIndex((x) => String(x._id) === String(couponForm.id)) : -1;
+  const couponNav = {
+    index: couponNavIdx,
+    total: couponSorted.length,
+    onPrev: () => { if (couponNavIdx > 0) openCouponRow(couponSorted[couponNavIdx - 1]); },
+    onNext: () => { if (couponNavIdx >= 0 && couponNavIdx < couponSorted.length - 1) openCouponRow(couponSorted[couponNavIdx + 1]); },
+  };
+  const onCouponListKey = listKeyNav(pane === "coupon" && !!couponForm.id);
+  const couponActive: ActiveFilter[] = couponSort
+    ? [{ key: "sort", label: `정렬 · ${COUPON_SORT_LABEL[couponSort.key] || couponSort.key} ${couponSort.dir === "asc" ? "↑" : "↓"}`, onRemove: () => { sfxTick(); setCouponSort(null); } }]
+    : [];
 
-  const orderCols: Column<any>[] = [
+  // ── 구매 내역 표 ─────────────────────────────────
+  const orderCols: Column<AnyRow>[] = [
     { key: "status", label: "상태", mobile: "title", render: (o) => <StatusChip tone={STATUS_TONE[o.status] || "neutral"}>{STATUS_LABEL[o.status]}</StatusChip> },
     {
-      key: "item", label: "상품", mobile: "title",
+      key: "item", label: "상품", mobile: "title", className: "w-full max-w-0 min-w-[180px]",
       render: (o) => (
-        <span className="block min-w-0 max-w-[280px]">
+        <span className="block min-w-0">
           <span className="block truncate font-bold">{orderName(o)}{o.qty > 1 && <span className="tabular-nums"> ×{o.qty}</span>}</span>
           {orderSummary(o) && <span className="block mt-0.5 text-[12px] font-normal text-[#5a5a5a] truncate tabular-nums">{orderSummary(o)}</span>}
         </span>
       ),
     },
-    { key: "type", label: "유형", render: (o) => <span className="text-[#5a5a5a]">{typeLabel(o.itemType)}</span> },
+    { key: "type", label: "분류", render: (o) => <span className="text-[#5a5a5a]">{orderTypeLabel(o)}</span> },
     { key: "user", label: "구매자", render: (o) => <span className="font-bold text-[#5a5a5a]">{o.userName}</span> },
     // 빙옥 전용 상품을 산 건은 빙옥으로 (o.pointOnly — 구매 시점 스냅샷). 여러 개는 돌려주지 않은 개수만큼(paidQty — lib/orderGroups.js)
     { key: "price", label: "금액", align: "right", render: (o) => <span className="font-bold tabular-nums whitespace-nowrap">{orderAmount(o)}</span> },
@@ -3405,6 +5755,39 @@ export default function AdminShopPage() {
         ) : null,
     },
   ];
+  const orderNavIdx = orderSelId ? shownOrders.findIndex((o) => o._id === orderSelId) : -1;
+  const orderNav = {
+    index: orderNavIdx,
+    total: shownOrders.length,
+    onPrev: () => { if (orderNavIdx > 0) setOrderSelId(shownOrders[orderNavIdx - 1]._id); },
+    onNext: () => { if (orderNavIdx >= 0 && orderNavIdx < shownOrders.length - 1) setOrderSelId(shownOrders[orderNavIdx + 1]._id); },
+  };
+  const onOrderListKey = listKeyNav(pane === "order" && !!orderSelId);
+  // 기간 고르기 — 시작 시각은 고를 때 정한다(오늘 0시부터 · 7일 · 30일은 오늘 포함). 직접은 날짜 두 칸(처음엔 최근 7일)
+  const pickOrderPeriod = (v: string) => {
+    sfxTick();
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const today = d.getTime();
+    const back = v === "7d" ? 6 : v === "30d" ? 29 : 0;
+    if (v === "custom" && !orderFrom && !orderTo) {
+      const from = new Date(today - 6 * 86400e3);
+      const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+      setOrderFrom(iso(from));
+      setOrderTo(iso(d));
+    }
+    setOrderPeriod({ v, from: today - back * 86400e3 });
+  };
+  const toggleOrderType = (v: string) => { sfxTick(); setOrderTypes((l) => (l.includes(v) ? l.filter((x) => x !== v) : [...l, v])); };
+  // 「CSV」 — 지금 거른 주문(상태 · 기간 · 유형 · 검색)을 표 차례 그대로
+  const exportOrders = () => {
+    if (!shownOrders.length) return fail("내보낼 주문이 없습니다.");
+    downloadCsv(`orders-${ymd(new Date())}.csv`, [
+      ["상태", "상품", "분류", "구매자", "수량", "금액", "일시", "메모", "지급 실패"],
+      ...shownOrders.map((o) => [STATUS_LABEL[o.status] || o.status, orderName(o), orderTypeLabel(o), o.userName || "", Number(o.qty) || 1, orderAmount(o), fmtDateTime(o.createdAt), o.adminNote || "", o.error || ""]),
+    ]);
+    toast(`${shownOrders.length.toLocaleString()}건 내보냈습니다.`);
+  };
 
   // ── 쿠폰 종류 카드 — 설명을 함께 읽어야 고를 수 있어 알약 대신 카드로 둔다 ──
   const COUPON_KINDS = [
@@ -3416,13 +5799,14 @@ export default function AdminShopPage() {
   // 📌 할로윈 탭 기본 배너(2026-10-11 운영자 "할로윈 배너 탭에 배너가 안 보이다") — 스토어 할로윈 탭(테마 키 BUILTIN_BANNER_THEME — 기본 배너는 이 테마만)은 등록된 배너가 없으면 그림 파일(public/banners/halloween-*.png)을 띄우지만
   //    배너 목록(DB)엔 없어 이 탭이 비어 보였다. 그 그림을 보이고 「등록」으로 새 배너 폼에 채워 둔다(저장은 운영자가 — 초안 모드면 초안). 등록하면 이 줄은 사라지고 그 배너가 목록에 선다
   //    📌 제목은 비운다 — 스토어 기본 배너(ArcticShopBody HW_BANNER)도 제목이 없다. 제목이 있으면 BannerSlider 가 어두운 띠 + 흰 글자를 얹어 그림 속 HALLOWEEN 글자와 겹친다
-  //    📌 두 장(HALLOWEEN · 검은 고양이 세트 — 스토어 ArcticShopBody HW_BANNERS 와 같다). 줄마다 「등록」
+  //    📌 네 장(HALLOWEEN · 검은 고양이 · 꾸미기 세트 · 유령 펭귄의 초대 — 스토어 ArcticShopBody HW_BANNERS 와 같다). 줄마다 「등록」
   //    📌 등록 안 된 것(같은 그림 배너가 목록에 없는 것)은 목록이 있어도 목록 아래에 보인다 — 스토어도 등록된 켜진 배너 뒤에 같이 돈다
   //       (2026-10-11 운영자 "관리에 안 뜬다고" — HALLOWEEN 만 등록돼 있어 목록이 비지 않았고, 검은 고양이 기본 배너 줄이 숨었다)
   const HW_DEFAULT_BANNERS = [
     { imageUrl: "/banners/halloween-pc.png", mobileImageUrl: "/banners/halloween-mobile.png", title: "", link: "" }, // 할로윈 탭 맨 위라 링크 없음
     { imageUrl: "/banners/halloween-cat-pc.png", mobileImageUrl: "/banners/halloween-cat-mobile.png", title: "", link: "" },
     { imageUrl: "/banners/halloween-set-pc.png", mobileImageUrl: "/banners/halloween-set-mobile.png", title: "", link: "" }, // 할로윈 꾸미기 세트 65%(스토어 HW_BANNERS 세 번째)
+    { imageUrl: "/banners/ghost-invite-pc.png", mobileImageUrl: "/banners/ghost-invite-mobile.png", title: "", link: "" }, // 핫타임 「유령 펭귄의 초대」(스토어 HW_BANNERS 네 번째)
   ];
   const hwPending = HW_DEFAULT_BANNERS.filter((d) => !placeBanners.some((b) => String(b.imageUrl || "") === d.imageUrl));
   const hwDefaultRow = (
@@ -3434,7 +5818,7 @@ export default function AdminShopPage() {
           <img src={b.imageUrl} alt="" className="w-full sm:w-[320px] aspect-[4/1] rounded-lg object-cover bg-[#f2f2f2] mb-4 sm:mb-0" />
           <div className="flex items-center gap-3">
             <span className="text-[13px] font-bold text-[#131313]">기본 배너 {HW_DEFAULT_BANNERS.indexOf(b) + 1}</span>
-            <Btn size="sm" disabled={liveLocked} onClick={() => { stashEdits(); setBannerForm({ ...EMPTY_BANNER, ...b, placement: BUILTIN_BANNER_THEME }); setPane("banner"); }}>등록</Btn>
+            <Btn size="sm" disabled={liveLocked} onClick={() => guard("banner", () => { setBannerForm({ ...EMPTY_BANNER, ...b, placement: BUILTIN_BANNER_THEME }); setPane("banner"); })}>등록</Btn>
           </div>
         </div>
       ))}
@@ -3442,42 +5826,167 @@ export default function AdminShopPage() {
   );
   const newBtn = (onClick: () => void, className = "", disabled = false) => <Btn className={className} onClick={onClick} disabled={disabled}>새로 만들기</Btn>;
 
-  // 📌 머리 오른쪽 — 초안 모드: "초안 N" · 초안 버리기 · 실사이트 반영(0건이어도 숨기지 않고 잠근다 — 머리 · 탭 줄이 움직이지 않게),
-  //    실사이트: "실사이트 · 읽기 전용". 둘 다 아니면(플래그 없는 localhost) 없음
-  const headerActions = draft.draftMode ? (
+  // 📌 머리 오른쪽 — 「설정」(상점 설정 창 · 탭과 무관하게 늘 같은 자리 · 실사이트 읽기 전용에서도 열린다 — 초안이 아니라 바로 저장되는 설정) +
+  //    초안 모드: "초안 N" · 초안 버리기 · 실사이트 반영(0건이어도 숨기지 않고 잠근다 — 머리 · 탭 줄이 움직이지 않게) — 셋은 한 덩어리로 줄을 바꾼다(폰 375 는 「설정」 아래 한 줄),
+  //    실사이트: "실사이트 · 읽기 전용". 둘 다 아니면(플래그 없는 localhost) 「설정」만
+  const headerActions = (
     <>
-      <StatusChip tone={draft.total > 0 ? "info" : "neutral"} className="min-w-[64px] justify-center tabular-nums">초안 {draft.loaded ? draft.total : "–"}</StatusChip>
-      <Btn variant="ghost" onClick={() => setDraftAsk("discard")} disabled={!draft.total || !!draftBusy}>초안 버리기</Btn>
-      <Btn onClick={openPublish} disabled={!draft.total || !!draftBusy}>실사이트 반영</Btn>
+      <Btn variant="secondary" onClick={openShopSettings}>설정</Btn>
+      {draft.draftMode ? (
+        <div className="flex items-center gap-2">
+          <StatusChip tone={draft.total > 0 ? "info" : "neutral"} className="min-w-[64px] justify-center tabular-nums">초안 {draft.loaded ? draft.total : "–"}</StatusChip>
+          <Btn variant="ghost" onClick={() => setDraftAsk("discard")} disabled={!draft.total || !!draftBusy}>초안 버리기</Btn>
+          <Btn onClick={openPublish} disabled={!draft.total || !!draftBusy}>실사이트 반영</Btn>
+        </div>
+      ) : liveLocked ? (
+        <StatusChip tone="warn">실사이트 · 읽기 전용</StatusChip>
+      ) : null}
     </>
-  ) : liveLocked ? (
-    <StatusChip tone="warn">실사이트 · 읽기 전용</StatusChip>
-  ) : undefined;
-  const settingEdits = Number(draft.counts.setting?.edit) || 0;
-  const ORDER_BTN = "w-[116px]";
-  // 📌 모바일 두 글자 단추 폭 — 아이템 탭은 추천 · 그룹(지정) · 관리(그룹 관리)를 두 글자로 줄여야 한 줄에 든다(375 폭 기준).
-  //    2026-10-11 순서 바꾸기 단추를 걷은 자리에 그룹 관리 — 단추 수가 그대로라 그룹 지정 모드로 바뀌어도 줄이 밀리지 않는다
-  const SHORT_BTN = "w-[64px] md:w-[116px]";
-
-  // 📌 그룹 지정 아래 띠 — 전체 선택(지금 거른 목록) · 고른 수 · 옮길 그룹 · 취소 · 옮기기. 모바일은 두 줄(그룹 고르기가 아래 줄 전체 폭)
-  //    고른 수는 자리를 고정(tabular-nums · 3자리 폭) — 수가 바뀌어도 띠가 흔들리지 않게
-  const groupBar = (
-    <div className="flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-2.5">
-      <span className={`shrink-0 inline-flex items-center gap-2 h-10 text-[13px] font-bold select-none ${shownReg.length ? "" : "text-[#a3a3a3]"}`}>
-        <input type="checkbox" className={CHECK} aria-label="전체 선택" checked={pickAllOn} disabled={shownReg.length === 0} onChange={togglePickAll}
-          ref={(el) => { if (el) el.indeterminate = pickSomeOn; }} />
-        <span className="whitespace-nowrap" aria-live="polite">고른 <span className="inline-block min-w-[3ch] text-right tabular-nums">{groupPick.size.toLocaleString()}</span>개</span>
-      </span>
-      <div className="order-last md:order-none min-w-0 w-full md:w-auto">
-        <GroupPicker bar value={groupName ?? ""} mixed={groupName === null} placeholder="옮길 그룹" groups={regGroups} counts={regGroupCount}
-          onChange={setGroupName} onEnter={applyGroup} onPending={setGroupPending} />
-      </div>
-      <div className="ml-auto shrink-0 flex items-center gap-2">
-        <Btn variant="secondary" className={SHORT_BTN} onClick={cancelGroupMode} disabled={groupBusy}>취소</Btn>
-        <Btn className={SHORT_BTN} onClick={applyGroup} disabled={groupBusy || groupPick.size === 0 || groupName === null || groupPending}>옮기기</Btn>
-      </div>
-    </div>
   );
+  const settingEdits = Number(draft.counts.setting?.edit) || 0;
+  const NEW_BTN = "w-[116px]";
+
+  // 📌 아이템 고른 것 아래 띠(BatchBar · 2026-10-17 시안 A ②) — 앞: 「N개 선택」 · 「전체 선택 · <지금 거른 수>」 · 「선택 해제」,
+  //    자주 쓰는 일: 희귀도 ▾ · 그룹 ▾ · 표시 ▾(표시 · 숨김), 「⋯」: 이름 바꾸기 · 설명 바꾸기 · 분류 바꾸기 · 복제 · 삭제(한 번 확인)
+  const batchOff = batchBusy || liveLocked;
+  // 📌 설명 · 분류 바꾸기 창의 줄 — 아이템 탭: 고른 아이템. 상품 탭: 직접 설정 · 세트는 그 상품, 연결 상품은 연결 아이템(같은 아이템은 한 줄)
+  const itemTextTarget = (it: AnyRow, via = false, name?: string): TextTarget => ({
+    key: `item:${it._id}`, kind: "item", id: String(it._id), name: name ?? shortOfRow(it), via,
+    desc: String(it.description || ""), category: String(it.category || ""), categoryAuto: String(it.categoryAuto || it.categoryLabel || ""),
+  });
+  const textTargetsOf = (of: "reg" | "product"): TextTarget[] => {
+    if (of === "reg") return regPicked.map((it) => itemTextTarget(it));
+    const out: TextTarget[] = [];
+    const seen = new Set<string>();
+    for (const p of prodPicked) {
+      const itemId = String(p.itemId || "");
+      const key = itemId ? `item:${itemId}` : `product:${p._id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const ri = itemId ? regById.get(itemId) : null;
+      if (ri) out.push(itemTextTarget(ri, true, shortOfRow(p)));
+      else out.push({
+        key, kind: itemId ? "item" : "product", id: itemId || String(p._id), name: shortOfRow(p), via: !!itemId,
+        desc: String(p.description || ""), category: itemId ? "" : String(p.category || ""), categoryAuto: String(p.categoryAuto || p.categoryLabel || ""),
+      });
+    }
+    return out;
+  };
+  const regShownKeys = shownReg.map((it) => String(it._id));
+  const regAllPicked = regShownKeys.length === 0 || (sel.size === regShownKeys.length && regShownKeys.every((k) => sel.has(k)));
+  const regBatchBar = (
+    <BatchBar
+      count={sel.size}
+      total={regShownKeys.length}
+      allSelected={regAllPicked}
+      onSelectAll={() => { sfxTick(); sel.replace(regShownKeys); }}
+      onClear={() => { sfxTick(); sel.clear(); }}
+      moreDisabled={batchOff}
+      more={[
+        { key: "rename", label: "이름 바꾸기", onSelect: () => { sfxTick(); setSheet("rename"); } },
+        { key: "desc", label: "설명 바꾸기", onSelect: () => { sfxTick(); setTextSheet({ of: "reg", mode: "desc" }); } },
+        { key: "category", label: "분류 바꾸기", onSelect: () => { sfxTick(); setTextSheet({ of: "reg", mode: "category" }); } },
+        { key: "duplicate", label: "복제", onSelect: () => { sfxTick(); setSheet("duplicate"); } },
+        { key: "delete", label: "삭제", danger: true, divider: true, onSelect: () => { sfxTick(); setBatchDelAsk(true); } },
+      ]}
+    >
+      <MenuBtn tone="bar" up label="희귀도" disabled={batchOff} width={168}
+        items={RARITIES.map((r) => ({ key: r.v, label: r.l, icon: <RarityDot r={r} />, onSelect: () => { void batchSet({ rarity: r.v }); } }))} />
+      <MenuBtn tone="bar" up label="그룹" disabled={batchOff} width={240}
+        items={[
+          { key: "n:", label: "그룹 없음", onSelect: () => { void batchGroup(""); } },
+          ...regGroups.map((g) => ({ key: `g:${g}`, label: g, hint: String(regGroupCount.get(g) || 0), icon: <FolderMark />, onSelect: () => { void batchGroup(g); } })),
+          { key: "+new", label: "+ 새 그룹", divider: true, onSelect: () => { sfxTick(); setNewGroupName(""); setSheet("group"); } },
+        ]} />
+      <MenuBtn tone="bar" up label="표시" disabled={batchOff} width={168}
+        items={[
+          { key: "on", label: "표시", onSelect: () => { void batchSet({ visible: true }); } },
+          { key: "off", label: "숨김", onSelect: () => { void batchSet({ visible: false }); } },
+        ]} />
+    </BatchBar>
+  );
+  // 📌 상품 고른 것 아래 띠 — 앞 칸 셋(아이템 띠와 같다), 자주 쓰는 일: 판매 ▾(판매 중 · 숨김 — 바로 · 판매 종료 — 창) · 할인 · 가격(창) · 테마 ▾(바로),
+  //    「⋯」: 설명 바꾸기 · 분류 바꾸기(창 — 연결 상품은 연결 아이템을 바꾼다) · 재고(창) · 복제(바로 — 숨김으로) · 삭제(한 번 확인)
+  const prodBatchOff = prodBusy || liveLocked;
+  const prodShownKeys = shownProducts.map((it) => String(it._id));
+  const prodAllPicked = prodShownKeys.length === 0 || (prodSel.size === prodShownKeys.length && prodShownKeys.every((k) => prodSel.has(k)));
+  const prodBatchBar = (
+    <BatchBar
+      count={prodSel.size}
+      total={prodShownKeys.length}
+      allSelected={prodAllPicked}
+      onSelectAll={() => { sfxTick(); prodSel.replace(prodShownKeys); }}
+      onClear={() => { sfxTick(); prodSel.clear(); }}
+      moreDisabled={prodBatchOff}
+      more={[
+        { key: "desc", label: "설명 바꾸기", onSelect: () => { sfxTick(); setTextSheet({ of: "product", mode: "desc" }); } },
+        { key: "category", label: "분류 바꾸기", onSelect: () => { sfxTick(); setTextSheet({ of: "product", mode: "category" }); } },
+        { key: "stock", label: "재고", onSelect: () => { sfxTick(); openProdSheet("stock"); } },
+        { key: "duplicate", label: "복제", onSelect: () => { void duplicateProducts(); } },
+        { key: "delete", label: "삭제", danger: true, divider: true, onSelect: () => { sfxTick(); setProdDelAsk(true); } },
+      ]}
+    >
+      <MenuBtn tone="bar" up label="판매" disabled={prodBatchOff} width={180}
+        items={[
+          { key: "on", label: "판매 중", onSelect: () => { void prodBatchSet({ active: true }); } },
+          { key: "off", label: "숨김", onSelect: () => { void prodBatchSet({ active: false }); } },
+          { key: "saleEnd", label: "판매 종료", divider: true, onSelect: () => { sfxTick(); openProdSheet("saleEnd"); } },
+        ]} />
+      <BarBtn onClick={() => { sfxTick(); openProdSheet("discount"); }} disabled={prodBatchOff}>할인</BarBtn>
+      <BarBtn onClick={() => { sfxTick(); openProdSheet("price"); }} disabled={prodBatchOff}>가격</BarBtn>
+      <MenuBtn tone="bar" up label="테마" disabled={prodBatchOff} width={220}
+        items={[
+          { key: THEME_NONE, label: "테마 없음", onSelect: () => { void prodBatchSet({ theme: "" }); } },
+          ...themes.map((t) => ({ key: t.key, label: t.name, hint: t.on ? undefined : "꺼짐", onSelect: () => { void prodBatchSet({ theme: t.key }); } })),
+        ]} />
+    </BatchBar>
+  );
+
+  // 📌 도구 줄(2026-10-17 시안 A ① · B — 탭마다 한 줄): 검색 · 유형 ▾(배너 위치 · 쿠폰 · 주문 상태) · 거르기 | 표 · 카드 · 「⋯」 · 새로 만들기. 켠 거르기는 그 아래 칩 줄(누르면 그것만 끔).
+  //    「⋯」 — 덜 쓰는 일(추천 아이템 · 그룹 관리 · 테마 관리 · 아이템 순서대로 맞추기 · 모두 펼치기 · 보이는 열 고르기). 「보이는 열 고르기」를 누르면 그 아래 열 목록(켜고 끄기 · 판은 열린 채)
+  //    고르기 단추 폭은 후보 글자 중 가장 긴 것(reserve — 수는 두 자리 이상)을 늘 잡는다 — 고른 값 · 수가 바뀌어도 옆 단추가 밀리지 않는다
+  // 검색칸은 남는 폭을 채운다(120 ~ 320) — 붙는 편집기가 열린 좁은 목록(1920 화면 기본 폭)에서도 한 줄에 들게
+  const SEARCH_GROW = "sm:!w-auto sm:flex-1 sm:min-w-[120px] sm:max-w-[320px]";
+  type PickOpt = { v: string; l: string; n?: number };
+  const pickLabel = (k: string, l: string, n?: number) => (
+    <>{k ? `${k} · ` : ""}{l}{n != null && <span className="ml-1 text-[#8a8a8a]">{n.toLocaleString()}</span>}</>
+  );
+  const pickMenu = (k: string, opts: PickOpt[], value: string, onPick: (v: string) => void, active = !!value) => {
+    const cur = opts.find((o) => o.v === value) || opts[0];
+    return {
+      // 고른 값은 이름만(「꾸미기 11」) — 머리말은 전체일 때만. 폭은 그중 가장 긴 것(바꿔도 도구 줄이 밀리지 않게)
+      label: cur?.v ? pickLabel("", cur.l, cur.n) : pickLabel(k, cur?.l || "", cur?.n),
+      reserve: opts.map((o) => (o.v ? pickLabel("", o.l, o.n == null ? undefined : Math.max(o.n, 99)) : pickLabel(k, o.l, o.n == null ? undefined : Math.max(o.n, 99)))),
+      items: opts.map((o): MenuItem => ({ key: o.v || "all", label: o.l, hint: o.n == null ? undefined : o.n.toLocaleString(), on: value === o.v, onSelect: () => { sfxTick(); onPick(o.v); } })),
+      active,
+    };
+  };
+  const colsMenu = (cols: { key: string; label: string }[], hidden: string[], toggle: (k: string) => void, show: boolean): MenuItem[] =>
+    !show || !colsPickable ? [] : [
+      {
+        key: "cols", label: "보이는 열 고르기", divider: true, stay: true,
+        hint: (
+          <svg aria-hidden viewBox="0 0 24 24" className={`w-3 h-3 transition-transform ${colsMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2.6}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        ),
+        onSelect: () => { sfxTick(); setColsMenuOpen((v) => !v); },
+      },
+      ...(colsMenuOpen ? cols.map((c): MenuItem => ({ key: `col:${c.key}`, label: <span className="pl-3">{c.label}</span>, on: !hidden.includes(c.key), stay: true, onSelect: () => toggle(c.key) })) : []),
+    ];
+  const regTypeOpts: PickOpt[] = [{ v: "", l: "전체", n: regItems.length }, ...ITEM_TYPE_OPTIONS.map((o) => ({ v: o.v, l: o.l, n: regItems.filter((i) => i.type === o.v).length }))];
+  const regMore: MenuItem[] = [
+    { key: "preset", label: "추천 아이템", disabled: liveLocked, onSelect: () => { sfxTick(); setPresetOpen(true); } },
+    { key: "groups", label: "그룹 관리", disabled: liveLocked, onSelect: () => { sfxTick(); setGroupManageOpen(true); } },
+    { key: "fold", label: regAllOpen ? "모두 접기" : "모두 펼치기", divider: true, disabled: !regGrouped || !!qq || regShownGroups.length === 0, onSelect: toggleAllGroups },
+    ...colsMenu(REG_OPTIONAL_COLS, regHidden, toggleRegCol, regView === "table"),
+  ];
+  const prodMore: MenuItem[] = [
+    { key: "sync", label: "아이템 순서대로 맞추기", disabled: items.length === 0 || liveLocked || !!savingOrder, onSelect: () => { sfxTick(); setSyncAsk(true); } },
+    { key: "themes", label: "테마 관리", disabled: liveLocked, onSelect: () => { sfxTick(); setThemeManageOpen(true); } },
+    { key: "fold", label: prodAllOpen ? "모두 접기" : "모두 펼치기", divider: true, disabled: !!qq || prodShownGroups.length === 0, onSelect: toggleAllProductGroups },
+    ...colsMenu(PROD_OPTIONAL_COLS, prodHidden, toggleProdCol, prodViewMode !== "card"),
+  ];
 
   return (
     <>
@@ -3493,222 +6002,297 @@ export default function AdminShopPage() {
             hrefOf={(id) => `/admin/shop?tab=${id}`}
           />
         }
-        // 설정 탭 — 바뀐 게 있을 때만 뜨는 저장 줄 · 아이템 탭 — 그룹 지정 중 아래 띠
-        footer={tab === "settings" ? (
-          <SaveBar
-            dirty={shopSetChanges.length > 0}
-            changes={shopSetChanges}
-            onSave={saveShopSet}
-            onReset={() => { if (shopSetSnap) setShopSet(shopSetSnap); }}
-            saving={savingShopSet}
-          />
-        ) : tab === "items" && groupMode ? (
-          <ActionBar>{groupBar}</ActionBar>
-        ) : (tab === "items" || tab === "products" || tab === "banners") && unsavedN > 0 ? (
-          // 📌 한 번에 수정 — 고친 아이템 · 상품 · 배너(탭을 옮겨도 그대로 쌓여 있다). 되돌리기 = 모두 저장된 값으로
-          <SaveBar
-            dirty
-            changes={editJobs.map((j) => `${EDIT_KIND[j.kind]} ${j.name}`)}
-            onSave={() => { void saveAllEdits(); }}
-            onReset={discardEdits}
-            saving={savingAll}
-            saveLabel="전체 수정"
-          />
-        ) : undefined}
+        // 아이템 · 상품 탭 — 고른 게 있을 때 아래 띠(일괄 편집). 고친 게 쌓였으면 그 위에 「저장 안 한 수정」 띠(전체 수정 — 탭을 옮겨도 그대로)
+        footer={
+          <BarStack>
+            <PendingBar count={editJobs.length} names={editNames} onRevert={askRevertEdits} onSaveAll={() => { void saveAllEdits(); }} saving={savingAll} />
+            {tab === "items" ? regBatchBar : tab === "products" ? prodBatchBar : null}
+          </BarStack>
+        }
       >
-        {/* 탭별 설명은 탭 줄 아래 본문 첫 줄에
-            📌 설명이 없는 탭(쿠폰)도 한 줄 자리를 지킨다 — 그 탭으로 옮길 때만 아래 검색 · 토글 줄이 한 줄 위로 뛰던 것 */}
-        <p aria-hidden={!meta.desc || undefined} className={`mb-4 text-[13px] text-[#5a5a5a] break-keep ${meta.desc ? "" : "invisible"}`}>{meta.desc || "\u00a0"}</p>
         {/* ═══ 아이템 등록 ═══ */}
         {tab === "items" && (
           <>
+            {/* 📌 도구 줄 한 줄(시안 A ①) — 검색 · 유형 ▾ · 거르기(그룹 · 희귀도 · 효과 종류 · 쓰임 · 인벤토리 · 초안) | 표 · 카드 · 「⋯」(추천 아이템 · 그룹 관리 · 모두 펼치기 · 보이는 열 고르기) · 새로 만들기.
+                여러 개를 한 그룹으로는 고르기 칸 + 아래 띠 「그룹」 */}
             <Toolbar
               right={
                 <>
-                  {pendingInv.length > 0 && (
-                    <Btn variant="secondary" onClick={importInvRoles} disabled={isImporting || groupMode || liveLocked}>
-                      <SwapLabel swap={isImporting} to="가져오는 중...">{`표기 역할 가져오기 (${pendingInv.length})`}</SwapLabel>
-                    </Btn>
-                  )}
-                  {/* 📌 추천 아이템 — 상세 칸이 열려 좁을 땐 숨긴다(버튼이 많으면 도구 줄이 한 줄 더 꺾여 목록이 밀린다). 그룹 지정 중엔 자리를 지킨 채 잠근다.
-                      모바일은 "추천" 두 글자로 — 버튼이 한 줄에 들게(폭 고정이라 글자가 바뀌어도 줄이 밀리지 않는다) */}
-                  {!pane && (
-                    <Btn variant="secondary" className={SHORT_BTN} onClick={() => setPresetOpen(true)} disabled={groupMode || liveLocked}>
-                      <span className="md:hidden">추천</span>
-                      <span className="hidden md:inline">추천 아이템</span>
-                    </Btn>
-                  )}
-                  {/* 📌 그룹 지정 — 켜고 끄는 단추 하나(켜면 누름 표시). 켜면 줄 · 머리줄 고르기 칸을 눌러 고르고, 고른 수 · 옮길 그룹 · 옮기기 · 취소는
-                      화면 아래 띠(ActionBar). 단추 줄은 켜고 꺼도 같은 단추 · 같은 폭(그동안 다른 단추는 잠근다 — 줄이 밀리지 않게).
-                      이름 바꾸기 · 새 그룹 · 삭제 · 차례는 그룹 관리 창 */}
-                  {!pane && (
-                    <Btn variant={groupMode ? "primary" : "secondary"} className={SHORT_BTN} aria-pressed={groupMode}
-                      onClick={groupMode ? cancelGroupMode : startGroupMode} disabled={!groupMode && (regItems.length === 0 || liveLocked)}>
-                      <span className="md:hidden">그룹</span>
-                      <span className="hidden md:inline">그룹 지정</span>
-                    </Btn>
-                  )}
-                  {/* 📌 그룹 관리 — 이름 바꾸기 · 새 그룹 · 삭제 · 차례(창) */}
-                  {!pane && (
-                    <Btn variant="secondary" className={SHORT_BTN} onClick={() => setGroupManageOpen(true)} disabled={groupMode || liveLocked}>
-                      <span className="md:hidden">관리</span>
-                      <span className="hidden md:inline">그룹 관리</span>
-                    </Btn>
-                  )}
-                  {newBtn(openNewReg, ORDER_BTN, groupMode || liveLocked)}
+                  <ViewToggle value={regView === "card" ? "card" : "table"} onChange={(v) => { sfxTick(); setRegView(v); }} />
+                  <MoreMenu align="end" width={240} items={regMore} onOpenChange={(o) => { if (!o) setColsMenuOpen(false); }} />
+                  {newBtn(openNewReg, NEW_BTN, liveLocked)}
                 </>
               }
             >
-              <SearchInput value={q} onChange={setQ} placeholder="이름 · 설명 · 역할 · 그룹" />
-              <Segmented
-                options={[{ v: "", l: "전체", n: regItems.length }, ...ITEM_TYPE_OPTIONS.map((o) => ({ v: o.v, l: o.l, n: regItems.filter((i) => i.type === o.v).length }))]}
-                value={regType}
-                onChange={setRegType}
-              />
-              {/* 📌 그룹 거르기 — 알약 줄은 그룹이 늘면 옆으로 넘쳐 단추 하나(폭 고정 · 그룹 관리 차례 · 개수)로. 늘 자리를 지킨다.
-                     한 그룹만 고르면 머리줄 없이 그 줄들 */}
-              <Dropdown
-                theme="light"
-                className="w-full sm:w-[220px] shrink-0"
-                buttonClassName={GROUP_FILTER_BTN}
-                value={regGroupV}
-                onChange={setRegGroup}
-                options={regGroupOptions}
-                maxHeight={360}
-              />
+              <SearchInput value={q} onChange={setQ} placeholder="이름 · 설명 · 역할 · 그룹" className={SEARCH_GROW} />
+              <MenuBtn size="md" width={220} {...pickMenu("유형", regTypeOpts, regType, setRegType)} />
+              {/* 거르기 — 켠 수(그룹 포함)는 단추에 · 켠 것은 아래 칩 줄 */}
+              <FilterButton count={regFilterN} onClear={() => { sfxTick(); setRegFilters(NO_FILTERS); setRegGroup(GROUP_ALL); }}>
+                {/* 그룹 — 하나만(다시 누르면 모든 그룹). 상위 그룹을 고르면 그 상위의 그룹들(머리줄로 묶어 보인다) */}
+                <FilterSection label="그룹">
+                  {regGroupOptions.filter((o) => o.value !== GROUP_ALL).map((o) => (
+                    <ChoiceChip key={o.value} on={regGroupV === o.value} onClick={() => pickRegGroup(o.value)}
+                      n={o.value.startsWith("p:") ? regCountBy((it) => parentOfGroup(groupOfItem(it)) === o.value.slice(2)) : Number(o.hint) || 0}>
+                      {o.icon}{o.label}
+                    </ChoiceChip>
+                  ))}
+                </FilterSection>
+                <FilterSection label="희귀도">
+                  {RARITIES.map((r) => (
+                    <ChoiceChip key={r.v} on={regFilters.rarity.includes(r.v)} onClick={() => toggleRegFilter("rarity", r.v)} n={regCountBy((it) => normalizeRarity(it.rarity) === r.v)}>
+                      <RarityDot r={r} className="w-2 h-2" />{r.l}
+                    </ChoiceChip>
+                  ))}
+                  <ChoiceChip on={regFilters.rarity.includes(RARITY_NONE)} onClick={() => toggleRegFilter("rarity", RARITY_NONE)} n={regCountBy((it) => !normalizeRarity(it.rarity))}>미지정</ChoiceChip>
+                </FilterSection>
+                <FilterSection label="효과 종류">
+                  {KIND_FILTERS.map((k) => (
+                    <ChoiceChip key={k.v} on={regFilters.kind.includes(k.v)} onClick={() => toggleRegFilter("kind", k.v)} n={regCountBy((it) => effectKindsOf(it).has(k.v))}>{k.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+                <FilterSection label="쓰임">
+                  {USE_FILTERS.map((u) => (
+                    <ChoiceChip key={u.v} on={regFilters.use.includes(u.v)} onClick={() => toggleRegFilter("use", u.v)}
+                      n={regCountBy((it) => (u.v === "shop" ? Number(it.usage) > 0 : u.v === "noshop" ? !(Number(it.usage) > 0) : Number(it.passUsage) > 0))}>{u.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+                <FilterSection label="인벤토리">
+                  {VIS_FILTERS.map((v) => (
+                    <ChoiceChip key={v.v} on={regFilters.vis.includes(v.v)} onClick={() => toggleRegFilter("vis", v.v)} n={regCountBy((it) => (it.visible === false ? "off" : "on") === v.v)}>{v.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+                {draft.draftMode && (
+                  <FilterSection label="초안">
+                    {DRAFT_FILTERS.map((v) => (
+                      <ChoiceChip key={v.v} on={regFilters.draft.includes(v.v)} onClick={() => toggleRegFilter("draft", v.v)} n={regCountBy((it) => it._draft === v.v)}>{v.l}</ChoiceChip>
+                    ))}
+                  </FilterSection>
+                )}
+              </FilterButton>
             </Toolbar>
-            <DataTable
-              columns={regModeCols}
-              rows={shownReg}
-              rowKey={(it) => it._id}
-              onRowClick={groupMode ? (it) => togglePick(String(it._id)) : openRegRow}
-              selectedKey={groupMode ? null : pane === "reg" ? itemForm.id : null}
-              // 그룹 지정 중 — 고른 줄을 바탕으로도 보인다
-              selectedKeys={groupMode ? groupPick : undefined}
-              // 순서 — 늘 손잡이로 끌어 놓으면 바로 저장. 머리줄은 덩어리째(saveRegMove), 아이템 줄은 놓은 자리가 곧 그룹(saveRegDrop —
-              //    덩어리 안 = 그 그룹 · 접힌 머리줄 위 = 그 덩어리 끝 · 단위 사이 = 그룹 없음). 한 그룹만 · 그룹 없음만 거른 표는 그 안에서만(saveRegMove).
-              //    그룹 지정 중엔 잠근다(줄 누르기 = 고르기 — 손잡이는 자리를 지킨 채 흐리게)
-              onReorder={(keys, _seg, moved) => { void saveRegMove(keys, moved); }}
-              onRowDrop={(d) => { void saveRegDrop(d); }}
-              reorderLocked={savingOrder === "reg" || groupMode || liveLocked}
-              // 그룹 머리줄 — 그 그룹 첫 아이템 자리(목록 순서 = 실제 순서). 검색 중엔 맞는 줄이 접힌 머리줄 속에 숨지 않게 모두 펼친 채(누르기 없음)
-              groupOf={regGrouped ? (it) => groupOfItem(it) : undefined}
-              openGroups={openGroups}
-              onToggleGroup={qq ? undefined : toggleGroup}
-              // 상위 머리줄 — 같은 상위의 그룹들 위에 하나(누르면 접고 편다 · 검색 중엔 펼친 채). 상위 하나만 거른 표는 머리줄 없이 그 그룹들
-              sectionOf={regGroupV === GROUP_ALL ? parentOfGroup : undefined}
-              closedSections={closedSections}
-              onToggleSection={qq ? undefined : toggleSection}
-              groupLead={regGroupLead}
-              empty={regItems.length === 0 ? "등록된 아이템이 없습니다." : noResult}
-            />
+            {/* 켠 거르기 · 정렬 칩(누르면 그것만 끔 · 둘 이상이면 「지우기」) */}
+            <ActiveFilters items={regActive} onClear={clearRegFilters} />
+            {/* 목록 — ↑ ↓ 로 옆 줄(편집기가 열려 있으면 그 줄을 연다) */}
+            <div onKeyDown={onRegListKey}>
+              {!regLoaded ? (
+                <EmptyRow>불러오는 중...</EmptyRow>
+              ) : regView === "card" ? (
+                <CardGrid
+                  items={regSorted}
+                  itemKey={(it) => String(it._id)}
+                  renderCard={(it) => (
+                    <ItemCard it={it} visBusy={visBusy === String(it._id)} locked={liveLocked} onToggleVis={() => toggleRegVisible(it)}
+                      draftMark={<>{editedDot("reg", it._id)}{it._draft ? <DraftMark onRevert={() => askRevertRow("item", it, it.name || "이름 없음")} disabled={!!draftBusy} /> : null}</>} />
+                  )}
+                  onItemClick={openRegRow}
+                  selectedKey={pane === "reg" ? itemForm.id : null}
+                  {...selProps}
+                  groupOf={regGrouped ? regGroupOf : undefined}
+                  openGroups={openGroups}
+                  onToggleGroup={qq ? undefined : toggleGroup}
+                  empty={regItems.length === 0 ? "등록된 아이템이 없습니다." : noResult}
+                />
+              ) : (
+                <DataTable
+                  columns={regCols}
+                  rows={shownReg}
+                  rowKey={(it) => String(it._id)}
+                  onRowClick={openRegRow}
+                  selectedKey={pane === "reg" ? itemForm.id : null}
+                  // 고르기 칸 — 늘 있다(Shift 범위 · 머리 칸 = 지금 거른 줄 전부 · 그룹 머리줄 칸 = 그 그룹 통째로). 고르면 아래 띠
+                  {...selProps}
+                  // 열 머리 정렬(이름 · 희귀도 · 연결 역할 · 사용 · 인벤토리) — 정렬 중엔 끌어 옮기기가 잠긴다
+                  sortState={regSort}
+                  onSortChange={(s) => { sfxTick(); setRegSort(s); }}
+                  // 순서 — 늘 손잡이로 끌어 놓으면 바로 저장. 머리줄은 덩어리째(saveRegMove), 아이템 줄은 놓은 자리가 곧 그룹(saveRegDrop —
+                  //    덩어리 안 = 그 그룹 · 접힌 머리줄 위 = 그 덩어리 끝 · 단위 사이 = 그룹 없음). 한 그룹만 · 그룹 없음만 거른 표는 그 안에서만(saveRegMove)
+                  //    고른 줄을 끌면 고른 줄 모두가 한 덩어리로(block — sendRegBlock)
+                  onReorder={(keys, _seg, moved, block) => { void saveRegMove(keys, moved, block); }}
+                  onRowDrop={(d) => { void saveRegDrop(d); }}
+                  reorderLocked={savingOrder === "reg" || liveLocked}
+                  // 그룹 머리줄 — 그 그룹 첫 아이템 자리(목록 순서 = 실제 순서). 검색 중엔 맞는 줄이 접힌 머리줄 속에 숨지 않게 모두 펼친 채(누르기 없음)
+                  groupOf={regGrouped ? (it) => groupOfItem(it) : undefined}
+                  openGroups={openGroups}
+                  onToggleGroup={qq ? undefined : toggleGroup}
+                  // 상위 머리줄 — 같은 상위의 그룹들 위에 하나(누르면 접고 편다 · 검색 중엔 펼친 채). 상위 하나만 거른 표는 머리줄 없이 그 그룹들
+                  sectionOf={regGroupV === GROUP_ALL ? parentOfGroup : undefined}
+                  closedSections={closedSections}
+                  onToggleSection={qq ? undefined : toggleSection}
+                  empty={regItems.length === 0 ? "등록된 아이템이 없습니다." : noResult}
+                />
+              )}
+            </div>
 
+            {/* 📌 편집기 — 1280 이상은 목록 옆에 붙는 칸(폭을 끌어 바꾸고 기억 · 넓히면 두 열), 그 아래는 오른쪽 칸 · 모바일 아래 판.
+                ‹ › · Alt+↑ ↓ 이전 · 다음(화면 차례) · Ctrl/⌘+S 저장 · Esc 닫기. 고친 채 넘어가면 한 번 묻는다 */}
             <DetailPane
+              shaded
               open={pane === "reg"}
               onClose={closeEditPane}
-              width={520}
+              width={regPaneW}
+              docked
+              dockKey="shop-items"
               title={itemForm.id ? "아이템 수정" : "아이템 등록"}
+              nav={itemForm.id ? regNav : undefined}
+              dirty={regDirty}
+              onSave={liveLocked ? undefined : submitRegForm}
               footer={
                 <>
-                  <Btn onClick={submitNearest} disabled={isSavingReg || liveLocked}>{isSavingReg ? "저장 중..." : itemForm.id ? "수정 저장" : "등록"}</Btn>
+                  <Btn className="min-w-[96px]" onClick={submitNearest} disabled={isSavingReg || liveLocked}>{isSavingReg ? "저장 중" : itemForm.id ? "저장" : "등록"}</Btn>
+                  {itemForm.id && <Btn variant="secondary" onClick={openRegCopy} disabled={liveLocked}>복제</Btn>}
                   {itemForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "reg", id: itemForm.id })} disabled={liveLocked}>삭제</Btn>}
                 </>
               }
             >
-              <div className="mb-5">
-                <div className={labelClass}>인벤토리 미리보기</div>
-                <InventoryItemPreview item={regPreviewItem} effectLines={regEffectLines} />
-              </div>
-              <form onSubmit={saveRegItem}>
-                <Field label={<>이름<Req /></>}>
-                  <input type="text" value={itemForm.name} maxLength={40} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="예: 펭귄 칭호" className={inputClass} />
-                </Field>
-                <Field label="설명">
-                  {/* 줄바꿈 그대로 저장 · 표시 (인벤토리 · 상품 상세는 whitespace-pre-line) */}
-                  <textarea rows={3} value={itemForm.description} maxLength={300} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                    placeholder="인벤토리에 보이는 설명" className={`${inputClass} resize-none`} />
-                  <p className="mt-1 text-right text-[12px] text-[#8a8a8a] tabular-nums">{itemForm.description.length}/300</p>
-                </Field>
-                <Field label={<>유형<Req /></>}>
-                  <Segmented options={ITEM_TYPE_OPTIONS} value={itemForm.type}
-                    onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" || v === "cosmetic" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
-                </Field>
+              {/* 📌 2026-10-17 shop-tidy — 회색 바탕 위 흰 판 묶음(머리 줄 = 제목 · 지금 값 · 접기). 덜 쓰는 판은 처음 접힘(수정 중 · 이 브라우저에 기억), 새로 만들기는 다 펼침.
+                  꾸미기 아이템은 착용 미리보기부터(내 프로필 카드 · 디스코드 /레벨 카드) — 입은 모습을 보고 희귀도를 정한다. 꾸미기 효과는 「기본」 안(그 아이템이 무엇인지) */}
+              <form ref={revealInvalid} data-reg-form onSubmit={saveRegItem}>
+                <PaneColumns>
+                  {() => [
+                    <>
+                      {regWear && (
+                        <PaneSection title="착용 미리보기" summary="내 프로필로" flush>
+                          <WearPreview skin={regWear.skin} scene={regWear.scene} frame={regWear.frame} />
+                        </PaneSection>
+                      )}
+                      <PaneSection title="인벤토리 미리보기" summary={itemForm.visible ? "표시" : "숨김"}
+                        {...foldOf(!!itemForm.id, regWear ? "shop:item:inv-wear" : "shop:item:inv", !regWear)}>
+                        <InventoryItemPreview item={regPreviewItem} effectLines={regEffectLines} />
+                      </PaneSection>
+                      <PaneSection title="기본" summary={`${shortNameOf(itemForm.name.trim()) || "이름 없음"} · ${regCategory}`} {...foldOf(!!itemForm.id, regWear ? "shop:item:basic-wear" : "shop:item:basic", !regWear)}>
+                        <Field label={<>이름<Req /></>}>
+                          <input type="text" value={itemForm.name} maxLength={ITEM_NAME_MAX} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="예: 펭귄 칭호" className={inputClass} />
+                        </Field>
+                        {/* 📌 분류 — 자동(꾸미기 효과 · 유형) · 목록 · 직접 입력. key — 다른 아이템을 열면 직접 입력 칸 상태를 새로 */}
+                        <Field label="분류">
+                          <CategoryPicker key={itemForm.id || "new"} value={itemForm.category} auto={regCategoryAuto} onChange={(v) => setItemForm((f) => ({ ...f, category: v }))} />
+                        </Field>
+                        <Field label="설명">
+                          {/* 줄바꿈 그대로 저장 · 표시 (인벤토리 · 상품 상세는 whitespace-pre-line) */}
+                          <textarea rows={3} value={itemForm.description} maxLength={DESCRIPTION_MAX} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                            placeholder="인벤토리에 보이는 설명" className={`${inputClass} resize-none`} />
+                          <p className="mt-1 text-right text-[12px] text-[#8a8a8a] tabular-nums">{itemForm.description.length}/{DESCRIPTION_MAX}</p>
+                        </Field>
+                        <Field label={<>유형<Req /></>}>
+                          <Segmented options={ITEM_TYPE_OPTIONS} value={itemForm.type}
+                            onChange={(v) => setItemForm({ ...itemForm, type: v, roleId: v === "physical" || v === "cosmetic" ? "" : itemForm.roleId, detachOnSeason: v === "role" ? itemForm.detachOnSeason : false })} />
+                        </Field>
 
-                {itemForm.type !== "physical" && itemForm.type !== "cosmetic" && (
-                  <Field
-                    label={<>연결 역할{itemForm.type === "item" ? <Opt /> : <Req />}</>}
-                    hint={itemForm.type === "item" ? "역할이 있으면 보유자 인벤토리에 자동 표시되고 지급 시 역할도 붙습니다." : undefined}
-                  >
-                    <Dropdown
-                      theme="light"
-                      buttonClassName={DD_BTN}
-                      value={itemForm.roleId}
-                      onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
-                      placeholder="역할을 선택하세요"
-                      options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
-                    />
-                  </Field>
-                )}
-
-                <Field label="아이콘" hint="이미지가 없을 때 쓰입니다">
-                  {/* 📌 key — 칸을 연 채 다른 아이템 줄을 누르면 다시 마운트해 탭이 그 아이템 아이콘의 묶음으로 열리게 */}
-                  {/* suggest — 꾸미기 효과(카드 스킨 · 아바타 테두리)에 맞는 아이콘을 먼저 보인다 */}
-                  <IconPicker key={itemForm.id || "new"} value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass}
-                    suggest={regArtSuggest} />
-                </Field>
-                <Field label="이미지 URL">
-                  <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
-                </Field>
-
-                <Field label="표기 색상" hint="비우면 유형 기본색">
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
-                      className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1" />
-                    <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
-                  </div>
-                </Field>
-
-                {itemForm.type === "role" && (
-                  <Field label="시즌 전환">
-                    <Toggle on={itemForm.detachOnSeason} onClick={() => setItemForm({ ...itemForm, detachOnSeason: !itemForm.detachOnSeason })}
-                      onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
-                  </Field>
-                )}
-                <Field label="인벤토리 표시">
-                  <Toggle on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
-                </Field>
-                {/* 그룹 — 상점 관리 목록에서 묶어 보일 이름(관리 화면 정리용 · 인벤토리엔 안 보인다) */}
-                <Field label="그룹">
-                  <GroupPicker key={itemForm.id || "new"} value={itemForm.group} groups={regGroups} counts={regGroupCount} onChange={(v) => setItemForm((f) => ({ ...f, group: v }))} />
-                </Field>
-
-                {/* ── 효과 — 아이템 자체에 저장, 이 아이템을 인벤토리에 가진 사람에게 적용(디스코드 역할 없어도). 기프트카드는 효과가 없어 숨긴다 ── */}
-                {itemForm.type !== "physical" && (
-                  <section className="mt-2 pt-4 border-t border-[#ededed]">
-                    <h3 className="text-[14px] font-black tracking-tight mb-3">효과</h3>
-                    <EffectsEditor
-                      chatBuffXp={itemForm.chatBuffXp}
-                      voiceBuffXp={itemForm.voiceBuffXp}
-                      attendBuffXp={itemForm.attendBuffXp}
-                      list={itemForm.effects}
-                      channels={guildChannels}
-                      // 새 아이템이면 꾸미기 효과에 맞춰 비어 있는 이름 · 아이콘 · 그룹을 채운다(withCosmeticAuto)
-                      onChange={(patch) => setItemForm((f) => withCosmeticAuto(f, { ...f, ...patch }))}
-                    />
-                    {regRoleBuff.length > 0 && (
-                      <div className="mt-5">
-                        <div className={labelClass}>역할 버프</div>
-                        <div className="flex items-start justify-between gap-3 rounded-lg bg-[#f7f7f7] px-3.5 py-3 text-[13px]">
-                          <span className="min-w-0 font-bold text-[#131313] break-keep">{regRoleBuff.map((l) => <span key={l} className="block">{l}</span>)}</span>
-                          <Link href="/admin/bot?tab=roles" className="shrink-0 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313]">레벨 설정 →</Link>
-                        </div>
-                      </div>
-                    )}
-                  </section>
-                )}
-                {/* ── 몸값 참고 — 맨 아래(폰에서 위 칸을 밀지 않게) · 머리를 눌러 접고 편다 ── */}
-                <WorthRef itemId={String(itemForm.id || "")} group={itemForm.group} type={itemForm.type} regItems={regItems} shops={items}
-                  open={worthOpen} onToggle={() => setWorthOpen((v) => !v)} />
+                        {itemForm.type !== "physical" && itemForm.type !== "cosmetic" && (
+                          <Field
+                            label={<>연결 역할{itemForm.type === "item" ? <Opt /> : <Req />}</>}
+                            hint={itemForm.type === "item" ? "역할이 있으면 보유자 인벤토리에 자동 표시되고 지급 시 역할도 붙습니다." : undefined}
+                          >
+                            <Dropdown
+                              theme="light"
+                              buttonClassName={DD_BTN}
+                              value={itemForm.roleId}
+                              onChange={(v) => setItemForm({ ...itemForm, roleId: v })}
+                              placeholder="역할을 선택하세요"
+                              options={[...(itemForm.type === "item" ? [{ value: "", label: "역할 없음 (사이트 보유)" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
+                            />
+                          </Field>
+                        )}
+                        {/* 꾸미기 — 꾸미기 효과(카드 테두리 · 카드 배경 · 프로필 테두리 …)가 곧 그 아이템이라 기본 판 안에 */}
+                        {itemForm.type === "cosmetic" && (
+                            <EffectsEditor
+                              chatBuffXp={itemForm.chatBuffXp}
+                              voiceBuffXp={itemForm.voiceBuffXp}
+                              attendBuffXp={itemForm.attendBuffXp}
+                              list={itemForm.effects}
+                              channels={guildChannels}
+                              botCaps={botCaps}
+                              // 새 아이템이면 꾸미기 효과에 맞춰 비어 있는 이름 · 아이콘 · 그룹을 채운다(withCosmeticAuto)
+                              onChange={(patch) => setItemForm((f) => withCosmeticAuto(f, { ...f, ...patch }))}
+                            />
+                        )}
+                      </PaneSection>
+                      {/* 📌 희귀도(2026-10-17) — 인벤토리 칸 · 상세 알약 · 「희귀도순」에 쓰인다(상점 카드에는 안 씀 · 상품 상세 · 봇 /인벤토리 카드는 씀). 늘 펼친 판 */}
+                      <PaneSection title="희귀도" summary={regRarityLabel}>
+                        <RarityPicker value={itemForm.rarity} onChange={(v) => setItemForm((f) => ({ ...f, rarity: v }))} />
+                      </PaneSection>
+                    </>,
+                    <>
+                      {/* ── 효과 — 아이템 자체에 저장, 이 아이템을 인벤토리에 가진 사람에게 적용(디스코드 역할 없어도). 기프트카드는 효과가 없어 숨긴다 · 꾸미기는 기본 판 안 ── */}
+                      {itemForm.type !== "physical" && itemForm.type !== "cosmetic" && (
+                        <PaneSection title="효과" summary={regFxSummary} {...foldOf(!!itemForm.id, "shop:item:fx", true)}>
+                          <EffectsEditor
+                            chatBuffXp={itemForm.chatBuffXp}
+                            voiceBuffXp={itemForm.voiceBuffXp}
+                            attendBuffXp={itemForm.attendBuffXp}
+                            list={itemForm.effects}
+                            channels={guildChannels}
+                            botCaps={botCaps}
+                            // 새 아이템이면 꾸미기 효과에 맞춰 비어 있는 이름 · 아이콘 · 그룹을 채운다(withCosmeticAuto)
+                            onChange={(patch) => setItemForm((f) => withCosmeticAuto(f, { ...f, ...patch }))}
+                          />
+                          {/* 📌 2026-10-18 효과 문구 — 자동 줄 · 「직접 쓰기」 · 「자동으로 되돌리기」(역할 버프 줄은 역할 설정 몫이라 따로 아래) */}
+                          <EffectTextField className="mt-5" custom={itemForm.effectCustom} text={itemForm.effectText} auto={regFxAuto} onTemplates={openFxTextForItem}
+                            onChange={(p) => setItemForm((f) => ({ ...f, ...p }))} />
+                          {regRoleBuff.length > 0 && (
+                            <div className="mt-5">
+                              <div className={labelClass}>역할 버프</div>
+                              <div className="flex items-start justify-between gap-3 bg-[#f2f2f2] px-3.5 py-3 text-[13px]">
+                                <span className="min-w-0 font-bold text-[#131313] break-keep">{regRoleBuff.map((l) => <span key={l} className="block">{l}</span>)}</span>
+                                <Link href="/admin/bot?tab=roles" className="shrink-0 text-[12px] font-bold text-[#5a5a5a] hover:text-[#131313]">레벨 설정 →</Link>
+                              </div>
+                            </div>
+                          )}
+                        </PaneSection>
+                      )}
+                      {/* 📌 꾸미기 유형 — 효과 편집은 기본 판 안이라, 꾸미기 말고 다른 효과(XP 등)가 있거나 직접 쓴 문구가 있을 때만 효과 문구 판 */}
+                      {itemForm.type === "cosmetic" && (regFxAuto.length > 0 || itemForm.effectCustom) && (
+                        <PaneSection title="효과 문구" summary={regFxLines.length ? `${regFxLines[0]}${regFxLines.length > 1 ? ` 외 ${regFxLines.length - 1}` : ""}` : "없음"} {...foldOf(!!itemForm.id, "shop:item:fxtext", true)}>
+                          <EffectTextField custom={itemForm.effectCustom} text={itemForm.effectText} auto={regFxAuto} onTemplates={openFxTextForItem}
+                            onChange={(p) => setItemForm((f) => ({ ...f, ...p }))} />
+                        </PaneSection>
+                      )}
+                      {/* 📌 2026-10-18 적용 범위 — 꾸미기 효과(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지)가 있는 아이템만(유형과 무관). 자동 = 꾸미기 종류마다 */}
+                      {regEffOn && regCosmetic && (
+                        <PaneSection title="적용 범위" summary={regScopeLabel} {...foldOf(!!itemForm.id, "shop:item:scope", true)}>
+                          <ScopeEditor value={itemForm.scope} auto={regScopeAuto} notes={scopeNotesOf(regFxShape)} onChange={(v) => setItemForm((f) => ({ ...f, scope: v }))} />
+                        </PaneSection>
+                      )}
+                      <PaneSection title="분류 · 표시" {...foldOf(!!itemForm.id, "shop:item:class")}
+                        summary={`${normalizeItemGroup(itemForm.group) ? `그룹 ${normalizeItemGroup(itemForm.group)}` : "그룹 없음"} · ${itemForm.visible ? "표시" : "숨김"}${itemForm.type === "role" ? ` · ${itemForm.detachOnSeason ? "시즌에 역할 뗌" : "역할 유지"}` : ""}`}>
+                        {/* 그룹 — 상점 관리 목록에서 묶어 보일 이름(관리 화면 정리용 · 인벤토리엔 안 보인다) */}
+                        <Field label="그룹">
+                          <GroupPicker key={itemForm.id || "new"} value={itemForm.group} groups={regGroups} counts={regGroupCount} onChange={(v) => setItemForm((f) => ({ ...f, group: v }))} />
+                        </Field>
+                        <Field label="인벤토리 표시">
+                          <Toggle on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
+                        </Field>
+                        {itemForm.type === "role" && (
+                          <Field label="시즌 전환">
+                            <Toggle on={itemForm.detachOnSeason} onClick={() => setItemForm({ ...itemForm, detachOnSeason: !itemForm.detachOnSeason })}
+                              onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
+                          </Field>
+                        )}
+                      </PaneSection>
+                      <PaneSection title="모양" {...foldOf(!!itemForm.id, "shop:item:look")}
+                        summary={`${itemForm.imageUrl.trim() ? "이미지" : itemForm.icon ? "아이콘" : "기본 아이콘"} · ${/^#[0-9a-f]{6}$/i.test(itemForm.color) ? itemForm.color : "유형 기본색"}`}>
+                        <Field label="아이콘" hint="이미지가 없을 때 쓰입니다">
+                          {/* 📌 key — 칸을 연 채 다른 아이템 줄을 누르면 다시 마운트해 탭이 그 아이템 아이콘의 묶음으로 열리게 */}
+                          {/* suggest — 꾸미기 효과(카드 스킨 · 아바타 테두리)에 맞는 아이콘을 먼저 보인다 */}
+                          <IconPicker key={itemForm.id || "new"} value={itemForm.icon} onChange={(v) => setItemForm({ ...itemForm, icon: v })} color={itemForm.color || itemTypeColor(itemForm.type)} inputClassName={inputClass}
+                            suggest={regArtSuggest} />
+                        </Field>
+                        <Field label="이미지 URL">
+                          <input type="text" value={itemForm.imageUrl} onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })} placeholder="https://..." className={inputClass} />
+                        </Field>
+                        <Field label="표기 색상" hint="비우면 유형 기본색">
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={itemForm.color || itemTypeColor(itemForm.type)} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })}
+                              className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1" />
+                            <input type="text" value={itemForm.color} maxLength={7} onChange={(e) => setItemForm({ ...itemForm, color: e.target.value })} placeholder={itemTypeColor(itemForm.type)} className={inputClass} />
+                          </div>
+                        </Field>
+                      </PaneSection>
+                      {/* ── 몸값 참고 — 맨 아래 · 처음 접힘(머리 줄에 센 수) ── */}
+                      <WorthRef itemId={String(itemForm.id || "")} group={itemForm.group} type={itemForm.type} regItems={regItems} shops={items} />
+                    </>,
+                  ]}
+                </PaneColumns>
                 <HiddenSubmit />
               </form>
             </DetailPane>
@@ -3718,384 +6302,494 @@ export default function AdminShopPage() {
         {/* ═══ 상품 관리 ═══ */}
         {tab === "products" && (
           <>
+            {/* 📌 도구 줄 한 줄(시안 B) — 검색 · 유형 ▾ · 거르기(판매 상태 · 이벤트 테마 · 할인 · 결제 · 연결 — 칩 수는 전체 상품 기준) | 표 · 카드 ·
+                「⋯」(아이템 순서대로 맞추기 — 한 번 묻는다 · 테마 관리 · 모두 펼치기 · 보이는 열 고르기) · 새로 만들기 */}
             <Toolbar right={
               <>
-                {/* 📌 아이템 순서대로 — 상품 순서를 아이템 순서에 맞춘다(한 번 묻는다). 모바일은 두 글자 */}
-                {!pane && (
-                  <Btn variant="secondary" className={SHORT_BTN} onClick={() => setSyncAsk(true)} disabled={items.length === 0 || liveLocked || !!savingOrder}>
-                    <span className="md:hidden">정렬</span>
-                    <span className="hidden md:inline">아이템 순서대로</span>
-                  </Btn>
-                )}
-                {/* 📌 테마 관리 — 이벤트 테마(ARCTIC 테마 탭) 만들기 · 이름 · 켜기 · 차례 · 삭제(창 — 그룹 관리와 같은 모양). 모바일은 두 글자 */}
-                {!pane && (
-                  <Btn variant="secondary" className={SHORT_BTN} onClick={() => setThemeManageOpen(true)} disabled={liveLocked}>
-                    <span className="md:hidden">테마</span>
-                    <span className="hidden md:inline">테마 관리</span>
-                  </Btn>
-                )}
-                {newBtn(openNewProduct, ORDER_BTN, liveLocked)}
+                <ViewToggle value={prodViewMode === "card" ? "card" : "table"} onChange={(v) => { sfxTick(); setProdViewMode(v); }} />
+                <MoreMenu align="end" width={240} items={prodMore} onOpenChange={(o) => { if (!o) setColsMenuOpen(false); }} />
+                {newBtn(openNewProduct, NEW_BTN, liveLocked)}
               </>
             }>
-              <SearchInput value={q} onChange={setQ} placeholder="상품명 · 역할 · 테마" />
-              <Segmented options={productTypeOptions} value={productType} onChange={setProductType} />
-              <Segmented
-                options={[
-                  { v: "", l: "전체", n: typeProducts.length },
-                  { v: "on", l: "판매 중", n: typeProducts.filter((it) => !!it.active).length },
-                  { v: "off", l: "숨김", n: typeProducts.filter((it) => !it.active).length },
-                ]}
-                value={productView}
-                onChange={setProductView}
-              />
+              <SearchInput value={q} onChange={setQ} placeholder="상품명 · 역할 · 테마 · 그룹" className={SEARCH_GROW} />
+              <MenuBtn size="md" width={220} {...pickMenu("유형", productTypeOptions, productType, setProductType)} />
+              <FilterButton count={prodFilterN} onClear={() => { sfxTick(); setProdFilters(NO_PROD_FILTERS); setProductView(""); }}>
+                {/* 판매 상태 — 하나만(다시 누르면 전체) */}
+                <FilterSection label="판매 상태">
+                  {PROD_STATUS_OPTIONS.map((o) => (
+                    <ChoiceChip key={o.v} on={productView === o.v} onClick={() => pickProdStatus(o.v)} n={prodCountBy((it) => prodStatusOf(it) === o.v)}>{o.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+                <FilterSection label="이벤트 테마">
+                  {themes.map((t) => (
+                    <ChoiceChip key={t.key} on={prodFilters.theme.includes(t.key)} onClick={() => toggleProdFilter("theme", t.key)} n={prodCountBy((it) => prodThemeOf(it, themeKeys) === t.key)}>{t.name}</ChoiceChip>
+                  ))}
+                  <ChoiceChip on={prodFilters.theme.includes(THEME_NONE)} onClick={() => toggleProdFilter("theme", THEME_NONE)} n={prodCountBy((it) => prodThemeOf(it, themeKeys) === THEME_NONE)}>테마 없음</ChoiceChip>
+                </FilterSection>
+                <FilterSection label="할인">
+                  {DISC_FILTERS.map((f) => (
+                    <ChoiceChip key={f.v} on={prodFilters.disc.includes(f.v)} onClick={() => toggleProdFilter("disc", f.v)} n={prodCountBy((it) => (discountPctOf(it) > 0 ? "on" : "off") === f.v)}>{f.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+                <FilterSection label="결제">
+                  {PAY_FILTERS.map((f) => (
+                    <ChoiceChip key={f.v} on={prodFilters.pay.includes(f.v)} onClick={() => toggleProdFilter("pay", f.v)} n={prodCountBy((it) => (it.pointOnly ? "point" : "both") === f.v)}>{f.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+                <FilterSection label="연결">
+                  {SRC_FILTERS.map((f) => (
+                    <ChoiceChip key={f.v} on={prodFilters.src.includes(f.v)} onClick={() => toggleProdFilter("src", f.v)} n={prodCountBy((it) => prodSrcOf(it) === f.v)}>{f.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+              </FilterButton>
             </Toolbar>
-            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
-              <DataTable
-                columns={productCols}
-                rows={shownProducts}
-                rowKey={(it) => it._id}
-                onRowClick={openProductRow}
-                selectedKey={pane === "product" ? form.id : null}
-                // 순서 — 늘 손잡이로 끌어 놓으면 바로 저장(거른 목록에서 옮겨도 전체 안의 제자리에). 머리줄은 그룹 덩어리째, 상품 줄은 그 그룹 안에서만(saveProductMove)
-                onReorder={(keys, seg, moved) => { void saveProductMove(keys, seg, moved); }}
-                reorderLocked={savingOrder === "product" || liveLocked}
-                // 📌 묶음(B안) — 연결 아이템의 그룹 머리줄 · 상위 머리줄(아이템 목록과 같은 모양). 검색 중엔 모두 펼친 채
-                groupOf={(it) => productGroupOf(it, prodIdx)}
-                openGroups={openProductGroups}
-                onToggleGroup={qq ? undefined : toggleProductGroup}
-                sectionOf={parentOfGroup}
-                closedSections={closedProductSections}
-                onToggleSection={qq ? undefined : toggleProductSection}
-                empty={items.length === 0 ? "등록된 상품이 없습니다." : noResult}
-              />
-            )}
+            {/* 켠 거르기 · 정렬 칩(누르면 그것만 끔 · 둘 이상이면 「지우기」) */}
+            <ActiveFilters items={prodActive} onClear={clearProdFilters} />
+            {/* 목록 — ↑ ↓ 로 옆 줄(편집기가 열려 있으면 그 줄을 연다) */}
+            <div onKeyDown={onProdListKey}>
+              {isLoading ? (
+                <EmptyRow>불러오는 중...</EmptyRow>
+              ) : prodViewMode === "card" ? (
+                <CardGrid
+                  items={prodSorted}
+                  itemKey={(it) => String(it._id)}
+                  renderCard={(it) => (
+                    <ProductTile it={it} busy={prodSwitchBusy === String(it._id)} locked={liveLocked} onToggle={() => { void toggleProductActive(it); }}
+                      draftMark={<>{editedDot("product", it._id)}{it._draft ? <DraftMark onRevert={() => askRevertRow("shopItem", it, it.name || "이름 없음")} disabled={!!draftBusy} /> : null}</>} />
+                  )}
+                  onItemClick={openProductRow}
+                  selectedKey={pane === "product" ? form.id : null}
+                  {...prodSelProps}
+                  groupOf={prodGroupOf}
+                  openGroups={openProductGroups}
+                  onToggleGroup={qq ? undefined : toggleProductGroup}
+                  empty={items.length === 0 ? "등록된 상품이 없습니다." : noResult}
+                />
+              ) : (
+                <DataTable
+                  columns={prodCols}
+                  rows={shownProducts}
+                  rowKey={(it) => String(it._id)}
+                  onRowClick={openProductRow}
+                  selectedKey={pane === "product" ? form.id : null}
+                  // 고르기 칸 — 늘 있다(Shift 범위 · 머리 칸 = 지금 거른 줄 전부 · 묶음 머리줄 칸 = 그 묶음 통째로). 고르면 아래 띠
+                  {...prodSelProps}
+                  // 열 머리 정렬(상품 · 판매 · 가격 · 재고 · 판매 수) — 정렬 중엔 끌어 옮기기가 잠긴다
+                  sortState={prodSort}
+                  onSortChange={(s) => { sfxTick(); setProdSort(s); }}
+                  // 순서 — 늘 손잡이로 끌어 놓으면 바로 저장(거른 목록에서 옮겨도 전체 안의 제자리에). 머리줄은 그룹 덩어리째(saveProductMove),
+                  //    상품 줄은 놓은 자리가 곧 그룹(saveProductDrop — 다른 그룹 · 그룹 밖에 놓으면 연결 아이템 그룹이 바뀐다 · 세트 · 직접 설정은 그 그룹 안 · 밖 순서만).
+                  //    고른 줄을 끌면 고른 상품 모두가 한 덩어리로(saveProductBlock)
+                  onReorder={(keys, seg, moved) => { void saveProductMove(keys, seg, moved); }}
+                  onRowDrop={(d) => { void saveProductDrop(d); }}
+                  reorderLocked={savingOrder === "product" || liveLocked}
+                  // 📌 묶음(B안) — 연결 아이템의 그룹 머리줄 · 상위 머리줄(아이템 목록과 같은 모양). 검색 중엔 모두 펼친 채
+                  groupOf={prodGroupOf}
+                  openGroups={openProductGroups}
+                  onToggleGroup={qq ? undefined : toggleProductGroup}
+                  sectionOf={parentOfGroup}
+                  closedSections={closedProductSections}
+                  onToggleSection={qq ? undefined : toggleProductSection}
+                  empty={items.length === 0 ? "등록된 상품이 없습니다." : noResult}
+                />
+              )}
+            </div>
 
+            {/* 📌 편집기 — 1280 이상은 목록 옆에 붙는 칸(폭을 끌어 바꾸고 기억 · 넓히면 두 열: 미리보기 · 기본 정보 | 가격 · 재고 · 판매), 그 아래는 오른쪽 칸 · 모바일 아래 판.
+                ‹ › · Alt+↑ ↓ 이전 · 다음(화면 차례) · Ctrl/⌘+S 저장 · Esc 닫기. 고친 채 넘어가면 한 번 묻는다 */}
             <DetailPane
+              shaded
               open={pane === "product"}
               onClose={closeEditPane}
-              width={520}
+              width={regPaneW}
+              docked
+              dockKey="shop-products"
               title={form.id ? "상품 수정" : "상품 등록"}
+              nav={form.id ? prodNav : undefined}
+              dirty={prodDirty}
+              onSave={liveLocked ? undefined : () => submitVisible("form[data-prod-form]")}
               footer={
                 <>
-                  <Btn onClick={submitNearest} disabled={liveLocked}>{form.id ? "수정 저장" : "상품 등록"}</Btn>
+                  <Btn className="min-w-[96px]" onClick={submitNearest} disabled={savingProduct || liveLocked}>{savingProduct ? "저장 중" : form.id ? "저장" : "등록"}</Btn>
+                  {form.id && <Btn variant="secondary" onClick={openProductCopy} disabled={liveLocked}>복제</Btn>}
                   {form.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "item", id: form.id })} disabled={liveLocked}>삭제</Btn>}
                 </>
               }
             >
-              {/* 📌 카드 미리보기 — 상점 카드(ProductCard)를 폼 값 그대로 늘 보여 준다(아이템 등록의 인벤토리 미리보기와 같은 자리).
-                     예전엔 아래 버튼을 눌러 창으로 열었고, 그 창은 옛 상자형 카드라 실제 상점과 달랐다. 누를 수 없게 막아 둔다 */}
-              <div className="mb-5">
-                <div className={labelClass}>카드 미리보기</div>
-                <div aria-hidden className="rounded-xl border border-[#ededed] bg-white px-4 py-5 flex justify-center pointer-events-none select-none">
-                  <div className="w-[200px]">
-                    <ProductCard
-                      it={{ ...toPayload(form, ""), _id: form.id || "preview", stock: form.stock === "" ? -1 : Number(form.stock) || 0, ...(previewBundleItems ? { bundleItems: previewBundleItems } : {}) }}
-                      href="#" wished={false} onWish={() => {}}
-                      overlay={!form.active ? <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span> : null}
-                    />
-                  </div>
-                </div>
-              </div>
-              <form onSubmit={saveItem}>
-                {/* ── 기본 정보 ── */}
-                <PaneSection title="기본 정보">
-                  {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기 필드는 채워지고 잠긴다. 세트는 아이템 하나에 연결하지 않는다(구성 편집) */}
-                  {!bundleOn && <div className="mb-4">
-                    <Segmented options={SOURCE_OPTIONS} value={linked || linkPick === formKey ? "item" : sourceOf(form)}
-                      onChange={(v) => {
-                        if (v === "custom") {
-                          setLinkPick(null);
-                          const sn = customSnap;
-                          if (linked) setForm(unlinkItem(form, sn && sn.key === formKey ? sn.snap : null));
-                          setCustomSnap(null);
-                          return;
-                        }
-                        if (linked || linkPick === formKey) return; // 이미 그 상태
-                        // 아이템은 저절로 고르지 않는다 — 고르기 칸만 연다(이름 · 설명이 미리 채워지지 않게)
-                        if (regItems.length) setLinkPick(formKey);
-                        else notify("등록된 아이템이 없습니다. 아이템 탭에서 먼저 등록해 주세요.", true);
-                      }} />
-                    {(linked || linkPick === formKey) && (
-                      <div className="mt-3">
-                        <Dropdown
-                          theme="light"
-                          buttonClassName={DD_BTN}
-                          value={form.itemId}
-                          onChange={(v) => {
-                            const it = regItems.find((x) => x._id === v);
-                            if (!it) return;
-                            // 직접 설정에서 처음 고를 때 그 값을 잡아 둔다(직접 설정으로 돌아가면 되돌림)
-                            if (!linked && customSnap?.key !== formKey) setCustomSnap({ key: formKey, snap: customSnapOf(form) });
-                            setForm(applyItem(form, it));
-                          }}
-                          placeholder="아이템을 선택하세요"
-                          options={regItems.map((x) => ({
-                            value: x._id, label: x.name, hint: (() => { const ls = itemEffectLines(x); return ls.length ? `${itemTypeLabel(x.type)} · ${ls[0]}${ls.length > 1 ? ` 외 ${ls.length - 1}` : ""}` : itemTypeLabel(x.type); })(),
-                            icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
-                          }))}
-                        />
-                        {/* 📌 고른 아이템의 효과 — 상품을 만들 때 무엇을 파는지 바로 보이게(인벤토리 · 상세와 같은 문장) */}
-                        {(() => {
-                          const itA = regItems.find((x) => x._id === form.itemId);
-                          if (!itA) return null;
-                          const lines = itemEffectLines(itA);
-                          return (
-                            <div className="mt-2 rounded-lg bg-[#f7f7f7] px-3 py-2.5">
-                              <p className="text-[11px] font-bold text-[#8a8a8a] mb-1">효과</p>
-                              {lines.length ? (
-                                <ul className="space-y-0.5">
-                                  {lines.map((l, i) => <li key={i} className="text-[12px] font-bold text-[#131313] leading-relaxed break-keep">{l}</li>)}
-                                </ul>
+              {/* 📌 2026-10-17 shop-tidy — 회색 바탕 위 흰 판 묶음(머리 줄 = 제목 · 지금 값 · 접기). 덜 쓰는 판은 처음 접힘(수정 중 · 이 브라우저에 기억), 새로 만들기는 다 펼침.
+                  한 열로 쌓이면 카드 미리보기 · 판매 대상 · (구성) · 가격 · 모양 · 재고 · (시즌 동작) · 판매 상태 차례 */}
+              <form ref={revealInvalid} data-prod-form onSubmit={saveItem}>
+                <PaneColumns>
+                  {() => {
+                    const editing = !!form.id;
+                    // 머리 줄 값 — 접힌 판도 지금 값이 보이게
+                    const priceSum = (() => {
+                      const pv = (v: unknown) => Number(v) || 0;
+                      const main = form.timed
+                        ? [["7일", form.price7], ["30일", form.price30], ...(form.withInf ? [["무제한", form.priceInf]] : [])]
+                            .filter(([, v]) => pv(v) > 0).map(([l, v]) => `${l} ${pv(v).toLocaleString()}`).join(" · ")
+                        : pv(form.price) > 0 ? pv(form.price).toLocaleString() : "";
+                      const mode = !form.timed && form.type !== "physical" && !bundleOn ? SALE_MODES.find((m) => m.v === saleModeOf(form))?.l || "" : "";
+                      return [main ? `${main} ${unit}` : "가격 없음", discountPct > 0 ? `${discountPct}% 할인` : "", mode].filter(Boolean).join(" · ");
+                    })();
+                    const backdropName = (BACKDROP_OF as Record<string, { label?: string } | undefined>)[form.backdrop]?.label || "";
+                    const stockN = form.stock === "" ? -1 : Number(form.stock);
+                    const untilOf = (s: string) => {
+                      const m = /^\d{4}-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(s || "");
+                      return m ? `~ ${Number(m[1])}. ${Number(m[2])}. ${m[3]}` : "";
+                    };
+                    const themeName = form.theme ? themeNameOf(themes, form.theme) : "";
+                    const linkedGroup = linkedItem ? normalizeItemGroup(groupOfItem(linkedItem)) : "";
+                    // 📌 분류(2026-10-17) — 연결 상품은 연결 아이템의 분류(아이템을 따른다 — 고치는 곳은 아이템), 직접 설정 · 세트는 이 폼의 분류 칸
+                    const prodCategory = linked
+                      ? linkedItem ? categoryOfRow(linkedItem) : resolveCategory({ type: form.type, name: form.name })
+                      : resolveCategory({ type: form.type, name: form.name, category: form.category || "" });
+                    const prodCategoryAuto = resolveCategory({ type: form.type, name: form.name, category: "" });
+                    return [
+                    <>
+                      {/* 📌 카드 미리보기 — 상점 카드(ProductCard)를 폼 값 그대로(누를 수 없게) */}
+                      <PaneSection title="카드 미리보기" summary={prodCategory} flush>
+                        <div aria-hidden inert className="bg-[#f2f2f2] p-3 flex justify-center pointer-events-none select-none">
+                          <div className="w-[176px]">
+                            <ProductCard
+                              it={{
+                                ...toPayload(form, ""), _id: form.id || "preview", stock: form.stock === "" ? -1 : Number(form.stock) || 0, ...(previewBundleItems ? { bundleItems: previewBundleItems } : {}),
+                                // 상점 카드의 분류 글자 · 이름(목록 API categoryLabel · shortName 과 같은 값)
+                                categoryLabel: prodCategory, shortName: linked && linkedItem ? shortOfRow(linkedItem) : shortNameOf(form.name),
+                              }}
+                              href="#" wished={false} onWish={() => {}}
+                              overlay={!form.active ? <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/95 text-[#131313]">숨김</span> : null}
+                            />
+                          </div>
+                        </div>
+                      </PaneSection>
+                      {/* ── 판매 대상 ── 직접 설정 | 등록된 아이템 · 연결 아이템 요약 · 그룹(연결 아이템의 그룹) · 직접 설정이면 표기 칸 */}
+                      <PaneSection title="판매 대상" summary={bundleOn ? "세트" : linked || linkPick === formKey ? "등록된 아이템" : "직접 설정"}>
+                        {/* 📌 직접 설정 | 등록된 아이템 — 아이템을 고르면 표기(이름 · 설명 · 아이콘 · 색상 · 역할 · 시즌 동작)는 아이템이 원천이라
+                               잠긴 칸 대신 아이템 요약 한 덩어리로 보인다(고치는 곳은 아이템 등록). 세트는 아이템 하나에 연결하지 않는다(구성 편집) */}
+                        {!bundleOn && <div className="mb-4">
+                          <Segmented options={SOURCE_OPTIONS} value={linked || linkPick === formKey ? "item" : sourceOf(form)}
+                            onChange={(v) => {
+                              if (v === "custom") {
+                                setLinkPick(null);
+                                const sn = customSnap;
+                                if (linked) setForm(unlinkItem(form, sn && sn.key === formKey ? sn.snap : null));
+                                setCustomSnap(null);
+                                return;
+                              }
+                              if (linked || linkPick === formKey) return; // 이미 그 상태
+                              // 아이템은 저절로 고르지 않는다 — 고르기 칸만 연다(이름 · 설명이 미리 채워지지 않게)
+                              if (regItems.length) setLinkPick(formKey);
+                              else fail("등록된 아이템이 없습니다. 아이템 탭에서 먼저 등록해 주세요.");
+                            }} />
+                          {(linked || linkPick === formKey) && (
+                            <div className="mt-3">
+                              <Dropdown
+                                theme="light"
+                                buttonClassName={DD_BTN}
+                                value={form.itemId}
+                                onChange={(v) => {
+                                  const it = regItems.find((x) => x._id === v);
+                                  if (!it) return;
+                                  // 직접 설정에서 처음 고를 때 그 값을 잡아 둔다(직접 설정으로 돌아가면 되돌림)
+                                  if (!linked && customSnap?.key !== formKey) setCustomSnap({ key: formKey, snap: customSnapOf(form) });
+                                  setForm(applyItem(form, it));
+                                }}
+                                placeholder="아이템을 선택하세요"
+                                options={regItems.map((x) => ({
+                                  // 짧은 이름 · 분류(같은 이름이 분류만 달라도 가려 보이게)
+                                  value: x._id, label: shortOfRow(x), hint: (() => { const k = categoryOfRow(x); const ls = rowEffectLines(x); return ls.length ? `${k} · ${ls[0]}${ls.length > 1 ? ` 외 ${ls.length - 1}` : ""}` : k; })(),
+                                  icon: <ItemIcon icon={x.icon} imageUrl={x.imageUrl} type={x.type} size={18} color={x.color || itemTypeColor(x.type)} />,
+                                }))}
+                              />
+                              {/* 📌 연결 아이템 요약 — 그림 · 이름 · 유형 · 희귀도 · 역할 · 효과(인벤토리 · 상세와 같은 문장) · 「아이템 수정 ›」(아이템 탭에서 그 아이템을 연다) */}
+                              {linked && (linkedItem ? (
+                                <>
+                                  <div className="mt-3 flex items-start gap-3 bg-[#f2f2f2] px-3 py-3">
+                                    <span className="relative block w-12 h-12 rounded-lg bg-white overflow-hidden shrink-0">
+                                      <CardArt it={withCosmeticIcon(linkedItem, linkedItem)} iconSize={26} />
+                                    </span>
+                                    <span className="block min-w-0 flex-1">
+                                      <span className="flex items-center gap-2 min-w-0">
+                                        <span className="truncate text-[14px] font-black text-[#131313]" title={linkedItem.name}>{shortOfRow(linkedItem)}</span>
+                                        {/* 분류 — 아이템을 따른다(읽기 전용 · 고치는 곳은 「아이템 수정 ›」) */}
+                                        <TypeBadge type={linkedItem.type} label={categoryOfRow(linkedItem)} className="shrink-0 px-2 py-0.5 text-[10px]" />
+                                        <RarityMark v={linkedItem.rarity} />
+                                      </span>
+                                      {linkedItem.roleId && <span className="block mt-0.5 text-[12px] text-[#5a5a5a] truncate">역할 · {roleNameOf(linkedItem.roleId, linkedItem.roleName)}</span>}
+                                      {(() => {
+                                        // 📌 2026-10-18 보일 효과 줄(직접 쓴 문구 > 자동) · 꾸미기는 적용 범위 — 목록 API 가 정한 값(effectLines · scopeLabel), 옛 응답은 여기서 셈
+                                        const lines = rowEffectLines(linkedItem);
+                                        const scope = rowScopeLabel(linkedItem);
+                                        return lines.length || scope ? (
+                                          <span className="block mt-1.5">
+                                            {scope && <span className="block text-[12px] font-bold text-[#5a5a5a] leading-relaxed break-keep">적용 범위 · {scope}</span>}
+                                            {lines.map((l, i) => <span key={i} className="block text-[12px] font-bold text-[#131313] leading-relaxed break-keep">{l}</span>)}
+                                          </span>
+                                        ) : <span className="block mt-1.5 text-[12px] text-[#a3a3a3]">효과 없음</span>;
+                                      })()}
+                                    </span>
+                                    <Link href={`/admin/shop?tab=items&item=${linkedItem._id}`} className="shrink-0 mt-0.5 text-[12px] font-bold text-[#e91e3f] hover:underline whitespace-nowrap">
+                                      <span className="hidden sm:inline">아이템 </span>수정 ›
+                                    </Link>
+                                  </div>
+                                  {/* 📌 그룹(shop-tidy ⑥) — 상품 그룹 = 연결 아이템의 그룹. 고르면 그 아이템의 그룹을 바로 바꾼다(아이템 탭에서도 옮겨진다 · 상품 저장과 따로).
+                                         저장된 연결일 때만 — 새 상품 · 저장 전에 다른 아이템을 고른 폼은 숨긴다(고르다 만 아이템의 그룹이 바뀌지 않게) */}
+                                  {prodSavedRow && String(prodSavedRow.itemId || "") === String(form.itemId || "") && (
+                                  <div className="mt-3 flex items-center gap-3">
+                                    <span className="shrink-0 w-10 text-[13px] font-bold text-[#131313]">그룹</span>
+                                    <div className="min-w-0 flex-1">
+                                      <Dropdown
+                                        theme="light"
+                                        buttonClassName={DD_BTN}
+                                        value={linkedGroup ? `g:${linkedGroup}` : "n:"}
+                                        maxHeight={300}
+                                        onChange={(v) => { void paneSetProdGroup(String(linkedItem._id), v === "n:" ? "" : v.slice(2)); }}
+                                        options={[
+                                          { value: "n:", label: "그룹 없음" },
+                                          ...(linkedGroup && !regGroups.includes(linkedGroup) ? [linkedGroup] : []).concat(regGroups)
+                                            .map((g) => ({ value: `g:${g}`, label: g, hint: String(regGroupCount.get(g) || 0), icon: <FolderMark /> })),
+                                        ]}
+                                      />
+                                    </div>
+                                  </div>
+                                  )}
+                                </>
                               ) : (
-                                <p className="text-[12px] text-[#a3a3a3]">효과 없음</p>
-                              )}
-                            </div>
-                          );
-                        })()}
-                        <p className={fieldNote}>
-                          <Link href="/admin/shop?tab=items" className="font-bold text-[#e91e3f] hover:underline">아이템 등록에서 수정</Link>
-                        </p>
-                      </div>
-                    )}
-                  </div>}
-
-                  <Field label={<>상품명<Req /></>}>
-                    <input type="text" value={form.name} disabled={linked} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={inputClass} />
-                  </Field>
-
-                  <Field label={<>상품 유형<Req /></>}>
-                    {linked
-                      ? <TypeBadge type={form.type} className="inline-block px-3 py-1.5 text-[11px]" />
-                      : <Segmented options={PRODUCT_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />}
-                  </Field>
-
-                  <Field label="상품 설명">
-                    <textarea rows={2} value={form.description} disabled={linked} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none`} />
-                  </Field>
-
-                  {/* 상품 이미지는 상품 고유 값 — 아이템을 연동해도 따로 넣을 수 있다 */}
-                  <Field label="상품 이미지 URL" hint="비우면 아이템 이미지·아이콘">
-                    <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                      placeholder="https://..." className={inputClass} />
-                  </Field>
-
-                  <Field label="아이콘" hint="이미지가 없을 때 카드에 크게">
-                    <IconPicker key={`${form.id || "new"}:${form.itemId}`} value={form.icon} disabled={linked} onChange={(v) => setForm({ ...form, icon: v })}
-                      color={form.color || itemTypeColor(form.type)} inputClassName={inputClass} />
-                  </Field>
-
-                  <Field label="색상" hint="비우면 유형 기본색">
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={form.color || itemTypeColor(form.type)} disabled={linked} onChange={(e) => setForm({ ...form, color: e.target.value })}
-                        className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1 disabled:opacity-40" />
-                      <input type="text" value={form.color} disabled={linked} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })}
-                        placeholder={itemTypeColor(form.type)} className={inputClass} />
-                    </div>
-                  </Field>
-
-                  {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 이미지가 있으면 장면 위에 이미지를 세운다 */}
-                  <Field label="배경">
-                    <BackdropPicker value={form.backdrop} onChange={(v) => setForm({ ...form, backdrop: v })}
-                      color={form.color || itemTypeColor(form.type)} buttonClassName={inputClass} />
-                  </Field>
-
-                  {/* 역할 상품일 때만 역할 선택 — 드롭다운이 아래 요소를 덮도록 열릴 때 z를 올린다 */}
-                  {(form.type === "role" || form.type === "perk" || form.type === "item") && (
-                    <Field label={<>지급할 역할{form.type === "item" ? <Opt /> : <Req />}</>}>
-                      <div className={`relative ${isRoleOpen ? "z-50" : ""}`}>
-                        <button type="button" disabled={linked} onClick={() => setIsRoleOpen(!isRoleOpen)} className={`${inputClass} flex items-center justify-between gap-3 text-left`}>
-                          {selectedRole ? (
-                            <span className="flex items-center gap-2.5 min-w-0">
-                              <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedRole.color }}></span>
-                              <span className="font-bold truncate">{selectedRole.name}</span>
-                            </span>
-                          ) : <span className={linked ? "text-[#8a8a8a]" : "text-[#a3a3a3]"}>{linked ? form.roleName || "역할 없음" : "역할을 선택하세요"}</span>}
-                          {!linked && (
-                            <svg className={`w-3.5 h-3.5 shrink-0 text-[#a3a3a3] transition-transform ${isRoleOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                            </svg>
-                          )}
-                        </button>
-                        {isRoleOpen && !linked && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={() => setIsRoleOpen(false)}></div>
-                            <div className="absolute top-full left-0 w-full mt-1.5 bg-white border border-[#ededed] rounded-lg overflow-hidden shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] z-50 max-h-64 overflow-y-auto">
-                              {guildRoles.map((r) => (
-                                <button key={r.id} type="button" onClick={() => { setForm(pickRole(form, r.id)); setIsRoleOpen(false); }}
-                                  className={`w-full text-left px-3 py-2.5 text-[14px] flex items-center gap-2.5 transition-colors ${form.roleId === r.id ? "bg-[#f2f2f2] text-[#131313] font-bold" : "text-[#5a5a5a] hover:bg-[#f7f7f7] hover:text-[#131313]"}`}>
-                                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }}></span>
-                                  {r.name}
-                                </button>
+                                <p className="mt-2 text-[12px] font-bold text-[#d01634]">등록된 아이템을 찾을 수 없습니다.</p>
                               ))}
                             </div>
+                          )}
+                        </div>}
+
+                        {/* 직접 설정 상품만 — 표기 칸(연결 상품은 위 요약) */}
+                        {!linked && (
+                          <>
+                            <Field label={<>상품명<Req /></>}>
+                              <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: [XP] Boost+" className={inputClass} />
+                            </Field>
+                            {/* 📌 분류 — 아이템 폼과 같은 고르기(자동 = 유형 · 세트). key — 다른 상품을 열면 직접 입력 칸 상태를 새로 */}
+                            <Field label="분류">
+                              <CategoryPicker key={form.id || "new"} value={form.category || ""} auto={prodCategoryAuto} onChange={(v) => setForm((f) => ({ ...f, category: v }))} />
+                            </Field>
+                            <Field label={<>상품 유형<Req /></>}>
+                              <Segmented options={PRODUCT_TYPE_OPTIONS} value={form.type} onChange={(v) => setForm(pickProductType(form, v))} />
+                            </Field>
+                            <Field label="상품 설명">
+                              <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                placeholder="상점 카드에 표시될 설명" className={`${inputClass} resize-none`} />
+                            </Field>
                           </>
                         )}
-                      </div>
-                    </Field>
-                  )}
-                </PaneSection>
 
-                {/* ── 구성 ── 세트만(lib/bundle.js). 줄마다 기간 · 개수 · 몸값 */}
-                {bundleOn && (
-                  <PaneSection title="구성">
-                    {/* 📌 세트 그림 미리보기(2026-10-11 운영자 "구성 칸을 옮길 때 미리 보기가 보여야") — 상점 카드 그림은 구성 차례로 그려진다. 줄을 끌거나 더하면 바로 바뀐다 */}
-                    <div className="mb-4 flex justify-center">
-                      <span className="relative block w-[160px] aspect-square rounded-2xl overflow-hidden border border-[#ededed] bg-white">
-                        <StoreCardArt stage it={{
-                          type: "bundle", color: form.color, imageUrl: form.imageUrl, backdrop: form.backdrop, icon: form.icon, setArt: form.setArt,
-                          bundleItems: form.bundle.map((r) => {
-                            const ri = regItems.find((x) => String(x._id) === String(r.itemId));
-                            return ri ? { itemId: String(ri._id), name: ri.name, icon: ri.icon, imageUrl: ri.imageUrl, color: ri.color, type: ri.type, ...cosmeticKeysProp(ri) } : null;
-                          }).filter(Boolean),
-                        }} />
-                      </span>
-                    </div>
-                    {/* 📌 그림 모양 — 겹친 카드(기본) · 구성 합치기(예전 방식 — 운영자 "지금 있는 방식도 같이 남기라") */}
-                    <div className="mb-4 flex justify-center">
-                      <Segmented options={[{ v: "", l: "겹친 카드" }, { v: "combo", l: "구성 합치기" }]} value={form.setArt === "combo" ? "combo" : ""}
-                        onChange={(v) => setForm((f) => ({ ...f, setArt: v }))} />
-                    </div>
-                    <div className="mb-4">
-                      <BundleEditor rows={form.bundle} regItems={regItems} shops={items} onChange={(rows) => setForm((f) => ({ ...f, bundle: rows }))} />
-                      {/* 몸값을 일부만 적으면 저장이 막힌다(productForm bundleError — 저장 API 와 같은 문구) */}
-                      {bundleBlankValues(form) > 0 && <p className="mt-2 text-[12px] font-bold text-[#d01634] break-keep">{BUNDLE_VALUE_ERROR}</p>}
-                    </div>
-                  </PaneSection>
-                )}
+                        {/* 지급할 역할 — 직접 설정의 역할 · 권한 · 아이템 상품만(다른 폼과 같은 고르기 칸) */}
+                        {!linked && (form.type === "role" || form.type === "perk" || form.type === "item") && (
+                          <Field label={<>지급할 역할{form.type === "item" ? <Opt /> : <Req />}</>}>
+                            <Dropdown
+                              theme="light"
+                              buttonClassName={DD_BTN}
+                              value={form.roleId}
+                              onChange={(v) => setForm(pickRole(form, v))}
+                              placeholder="역할을 선택하세요"
+                              maxHeight={280}
+                              options={[...(form.type === "item" ? [{ value: "", label: "역할 없음" }] : []), ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]}
+                            />
+                          </Field>
+                        )}
+                      </PaneSection>
 
-                {/* ── 가격 · 기간 ── */}
-                <PaneSection title="가격 · 기간">
-                  {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×10,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
-                  <div className="mb-4">
-                    <Toggle on={!!form.pointOnly} onClick={() => setForm(setPointOnly(form, !form.pointOnly))}
-                      onLabel="빙옥 전용" offLabel="XP · 빙옥 결제" />
-                  </div>
-                  {/* 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매, lib/unitSale.js). 역할·권한·아이템·꾸미기만 (기프트카드는 기간 · 수량 개념이 없다).
-                         고른 방식의 가격 칸만 아래에 나온다. 1개 단위는 역할 없는 아이템 · 꾸미기만 — 못 고르는 상품이면 칸은 그대로 두고 누르면 알린다(칸 수가 바뀌어 줄이 흔들리지 않게) */}
-                  {form.type !== "physical" && !bundleOn && (
-                    <div className="mb-4">
-                      <Segmented options={SALE_MODES} value={saleModeOf(form)} disabledValues={unitSaleOk(form) ? undefined : ["unit"]}
-                        onChange={(v) => {
-                          if (v === "unit" && !unitSaleOk(form)) return notify("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다.", true);
-                          setForm(setSaleMode(form, v as any));
-                        }} />
-                    </div>
-                  )}
-                  <Two>
-                    {/* 무제한 · 1개 단위 · 기프트카드 — 정가 한 칸. 칸 바로 아래 계산 한 줄은 사용자가 요청한 빙옥 계산 안내 */}
-                    {!form.timed && (
-                      <Field label={<>정가 ({unit})<Req /></>} hint={priceCalc(form, form.price) || undefined}>
-                        <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder={form.pointOnly ? "예: 500" : "예: 500000"} className={inputClass} />
-                      </Field>
-                    )}
-                    {/* 기간제 — 7일 · 30일(+ 무제한). 비운 기간은 팔지 않는다 */}
-                    {form.timed && ([
-                      { k: "price7", l: "7일", ex: form.pointOnly ? "예: 30" : "예: 30000" },
-                      { k: "price30", l: "30일", ex: form.pointOnly ? "예: 100" : "예: 100000" },
-                      ...(form.withInf ? [{ k: "priceInf", l: "무제한", ex: form.pointOnly ? "예: 500" : "예: 500000" }] : []),
-                    ] as { k: "price7" | "price30" | "priceInf"; l: string; ex: string }[]).map(({ k, l, ex }) => {
-                      const raw = Number(form[k]) || 0;
-                      return (
-                        <Field key={k} label={<>{l} 가격 ({unit}){k === "priceInf" && <Req />}</>}
-                          hint={raw > 0
-                            ? discountPct > 0
-                              ? `판매가 ${formSalePrice(form, raw, discountPct).toLocaleString()} ${unit} (${discountPct}% 할인)`
-                              : `판매가 ${raw.toLocaleString()} ${unit}`
-                            : k === "priceInf" ? undefined : "비우면 이 기간은 팔지 않습니다"}>
-                          <input type="number" min={0} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} placeholder={ex} className={inputClass} />
-                        </Field>
-                      );
-                    })}
-                    <Field label="할인율 (%)" hint={!form.timed && discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} {unit}</span> : undefined}>
-                      <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
-                    </Field>
-                  </Two>
-                  {form.timed && (
-                    <>
-                      {/* 기간 칸은 반 폭이라 계산은 한 줄 요약으로 · 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
-                      {durationsCalc(form) && <p className={`${fieldNote} -mt-2`}>{durationsCalc(form)}</p>}
-                      <p className={`${fieldNote} mb-3`}>기간이 지나면 봇이 역할을 자동 회수합니다{form.withInf ? " (무제한은 회수하지 않습니다)" : ""}.</p>
-                      {saleModeError(form) && <p className="-mt-1 mb-3 text-[12px] font-bold text-amber-700">{saleModeError(form)}</p>}
-                    </>
-                  )}
-                  {/* 📌 할인 종료 — 그 시각(KST)이 지나면 할인이 저절로 끝난다. 비우면 계속 */}
-                  {discountPct > 0 && (
-                    <Field label="할인 종료" hint={form.discountUntil && new Date(`${form.discountUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
-                      <div className="flex items-center gap-2">
-                        <input type="datetime-local" value={form.discountUntil} onChange={(e) => setForm({ ...form, discountUntil: e.target.value })} className={inputClass} />
-                        {form.discountUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>}
-                      </div>
-                    </Field>
-                  )}
-                  {/* 📌 세트 — 구성 몸값 합(정가 합)과 세트 판매가를 나란히. 몇 % 싼지는 XP 로 견준다(빙옥 전용은 1 빙옥 = 10,000 XP) */}
-                  {bundleOn && bundleSum > 0 && (
-                    <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-[#f7f7f7] px-3 py-2.5 text-[13px] text-[#5a5a5a] tabular-nums">
-                      <span>정가 합 <span className="font-bold text-[#131313]">{bundleSum.toLocaleString()} XP</span></span>
-                      {salePreview > 0 && (
-                        <>
-                          <span className="text-[#a3a3a3]">·</span>
-                          <span>세트 <span className="font-bold text-[#131313]">{salePreview.toLocaleString()} {unit}</span></span>
-                          {bundlePct > 0 && <span className="font-black text-[#e91e3f]">{bundlePct}% 싸게</span>}
-                        </>
+                      {/* ── 구성 ── 세트만(lib/bundle.js). 줄마다 기간 · 개수 · 몸값 */}
+                      {bundleOn && (
+                        <PaneSection title="구성" summary={`${form.bundle.length.toLocaleString()}개`} {...foldOf(editing, "shop:prod:bundle", true)}>
+                          {/* 📌 세트 그림 미리보기(2026-10-11 운영자 "구성 칸을 옮길 때 미리 보기가 보여야") — 상점 카드 그림은 구성 차례로 그려진다. 줄을 끌거나 더하면 바로 바뀐다 */}
+                          <div className="mb-4 flex justify-center">
+                            <span className="relative block w-[160px] aspect-square rounded-2xl overflow-hidden border border-[#ededed] bg-white">
+                              <StoreCardArt stage it={{
+                                type: "bundle", color: form.color, imageUrl: form.imageUrl, backdrop: form.backdrop, icon: form.icon, setArt: form.setArt,
+                                bundleItems: form.bundle.map((r) => {
+                                  const ri = regItems.find((x) => String(x._id) === String(r.itemId));
+                                  return ri ? { itemId: String(ri._id), name: ri.name, icon: ri.icon, imageUrl: ri.imageUrl, color: ri.color, type: ri.type, ...cosmeticKeysProp(ri) } : null;
+                                }).filter(Boolean),
+                              }} />
+                            </span>
+                          </div>
+                          {/* 📌 그림 모양 — 겹친 카드(기본) · 구성 합치기(예전 방식 — 운영자 "지금 있는 방식도 같이 남기라") */}
+                          <div className="mb-4 flex justify-center">
+                            <Segmented options={[{ v: "", l: "겹친 카드" }, { v: "combo", l: "구성 합치기" }]} value={form.setArt === "combo" ? "combo" : ""}
+                              onChange={(v) => setForm((f) => ({ ...f, setArt: v }))} />
+                          </div>
+                          <div className="mb-4">
+                            <BundleEditor rows={form.bundle} regItems={regItems} shops={items} onChange={(rows) => setForm((f) => ({ ...f, bundle: rows }))} />
+                            {/* 몸값을 일부만 적으면 저장이 막힌다(productForm bundleError — 저장 API 와 같은 문구) */}
+                            {bundleBlankValues(form) > 0 && <p className="mt-2 text-[12px] font-bold text-[#d01634] break-keep">{BUNDLE_VALUE_ERROR}</p>}
+                          </div>
+                        </PaneSection>
                       )}
-                    </div>
-                  )}
+                    </>,
+                    <>
+                      {/* ── 가격 ── 결제 · 판매 방식 · 정가(기간별) · 할인 */}
+                      <PaneSection title="가격" summary={priceSum} {...foldOf(editing, "shop:prod:price", true)}>
+                        {/* 📌 빙옥 전용 — 켜면 가격 칸은 빙옥으로 받고 ×10,000 해 XP 로 저장한다. 새 기프트카드는 켜진 채로 시작한다 */}
+                        <div className="mb-4">
+                          <Toggle on={!!form.pointOnly} onClick={() => setForm(setPointOnly(form, !form.pointOnly))}
+                            onLabel="빙옥 전용" offLabel="XP · 빙옥 결제" />
+                        </div>
+                        {/* 📌 판매 방식 — 무제한 · 기간제 · 기간제 + 무제한 · 1개 단위(수량 판매, lib/unitSale.js). 역할·권한·아이템·꾸미기만 (기프트카드는 기간 · 수량 개념이 없다).
+                               고른 방식의 가격 칸만 아래에 나온다. 1개 단위는 역할 없는 아이템 · 꾸미기만 — 못 고르는 상품이면 칸은 그대로 두고 누르면 알린다(칸 수가 바뀌어 줄이 흔들리지 않게) */}
+                        {form.type !== "physical" && !bundleOn && (
+                          <div className="mb-4">
+                            <Segmented options={SALE_MODES} value={saleModeOf(form)} disabledValues={unitSaleOk(form) ? undefined : ["unit"]}
+                              onChange={(v) => {
+                                if (v === "unit" && !unitSaleOk(form)) return fail("1개 단위 판매는 역할이 없는 아이템 · 꾸미기만 할 수 있습니다.");
+                                setForm(setSaleMode(form, v as SaleMode));
+                              }} />
+                          </div>
+                        )}
+                        <Two>
+                          {/* 무제한 · 1개 단위 · 기프트카드 — 정가 한 칸. 칸 바로 아래 계산 한 줄은 사용자가 요청한 빙옥 계산 안내 */}
+                          {!form.timed && (
+                            <Field label={<>정가 ({unit})<Req /></>} hint={priceCalc(form, form.price) || undefined}>
+                              <input type="number" min={1} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder={form.pointOnly ? "예: 500" : "예: 500000"} className={inputClass} />
+                            </Field>
+                          )}
+                          {/* 기간제 — 7일 · 30일(+ 무제한). 비운 기간은 팔지 않는다 */}
+                          {form.timed && ([
+                            { k: "price7", l: "7일", ex: form.pointOnly ? "예: 30" : "예: 30000" },
+                            { k: "price30", l: "30일", ex: form.pointOnly ? "예: 100" : "예: 100000" },
+                            ...(form.withInf ? [{ k: "priceInf", l: "무제한", ex: form.pointOnly ? "예: 500" : "예: 500000" }] : []),
+                          ] as { k: "price7" | "price30" | "priceInf"; l: string; ex: string }[]).map(({ k, l, ex }) => {
+                            const raw = Number(form[k]) || 0;
+                            return (
+                              <Field key={k} label={<>{l} 가격 ({unit}){k === "priceInf" && <Req />}</>}
+                                hint={raw > 0
+                                  ? discountPct > 0
+                                    ? `판매가 ${formSalePrice(form, raw, discountPct).toLocaleString()} ${unit} (${discountPct}% 할인)`
+                                    : `판매가 ${raw.toLocaleString()} ${unit}`
+                                  : k === "priceInf" ? undefined : "비우면 이 기간은 팔지 않습니다"}>
+                                <input type="number" min={0} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} placeholder={ex} className={inputClass} />
+                              </Field>
+                            );
+                          })}
+                          <Field label="할인율 (%)" hint={!form.timed && discountPct > 0 && Number(form.price) > 0 ? <span className="font-bold text-[#e91e3f]">판매가 {salePreview.toLocaleString()} {unit}</span> : undefined}>
+                            <input type="number" min={0} max={100} value={form.discountPct} onChange={(e) => setForm({ ...form, discountPct: e.target.value })} placeholder="0" className={inputClass} />
+                          </Field>
+                        </Two>
+                        {form.timed && (
+                          <>
+                            {/* 기간 칸은 반 폭이라 계산은 한 줄 요약으로 · 회수는 화면 밖에서 일어나는 일이라 이것만 남긴다 */}
+                            {durationsCalc(form) && <p className={`${fieldNote} -mt-2`}>{durationsCalc(form)}</p>}
+                            <p className={`${fieldNote} mb-3`}>기간이 지나면 봇이 역할을 자동 회수합니다{form.withInf ? " (무제한은 회수하지 않습니다)" : ""}.</p>
+                            {saleModeError(form) && <p className="-mt-1 mb-3 text-[12px] font-bold text-amber-700">{saleModeError(form)}</p>}
+                          </>
+                        )}
+                        {/* 📌 할인 종료 — 그 시각(KST)이 지나면 할인이 저절로 끝난다. 비우면 계속 */}
+                        {discountPct > 0 && (
+                          <Field label="할인 종료" hint={form.discountUntil && new Date(`${form.discountUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
+                            <div className="flex items-center gap-2">
+                              <input type="datetime-local" value={form.discountUntil} onChange={(e) => setForm({ ...form, discountUntil: e.target.value })} className={inputClass} />
+                              {form.discountUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, discountUntil: "" })}>지우기</Btn>}
+                            </div>
+                          </Field>
+                        )}
+                        {/* 📌 세트 — 구성 몸값 합(정가 합)과 세트 판매가를 나란히. 몇 % 싼지는 XP 로 견준다(빙옥 전용은 1 빙옥 = 10,000 XP) */}
+                        {bundleOn && bundleSum > 0 && (
+                          <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 bg-[#f2f2f2] px-3 py-2.5 text-[13px] text-[#5a5a5a] tabular-nums">
+                            <span>정가 합 <span className="font-bold text-[#131313]">{bundleSum.toLocaleString()} XP</span></span>
+                            {salePreview > 0 && (
+                              <>
+                                <span className="text-[#a3a3a3]">·</span>
+                                <span>세트 <span className="font-bold text-[#131313]">{salePreview.toLocaleString()} {unit}</span></span>
+                                {bundlePct > 0 && <span className="font-black text-[#e91e3f]">{bundlePct}% 싸게</span>}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </PaneSection>
 
-                </PaneSection>
+                      {/* ── 모양 ── 상품 이미지 · 배경은 상품 고유 값(아이템을 연동해도 따로) · 아이콘 · 색상은 직접 설정만 */}
+                      <PaneSection title="모양" {...foldOf(editing, "shop:prod:look")}
+                        summary={`${backdropName ? `배경 · ${backdropName}` : "배경 없음"}${form.imageUrl.trim() ? " · 이미지" : ""}`}>
+                        <Field label="상품 이미지 URL" hint="비우면 아이템 이미지·아이콘">
+                          <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                            placeholder="https://..." className={inputClass} />
+                        </Field>
 
-                {/* ── 재고 ── 순서는 목록의 '순서 바꾸기'로 끌어서 정한다 */}
-                <PaneSection title="재고">
-                  <Two>
-                    <Field label="재고">
-                      <input type="number" min={-1} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="비우면 무제한" className={inputClass} />
-                    </Field>
-                    {/* 1개 단위 — 한 결제에서 살 수 있는 최대 개수(재고 옆 칸이라 켜고 꺼도 줄 높이가 같다) */}
-                    {form.unitSale && (
-                      <Field label="1회 최대">
-                        <input type="number" min={1} max={MAX_PER_ORDER} value={form.maxPerOrder} onChange={(e) => setForm({ ...form, maxPerOrder: e.target.value })} placeholder="10" className={inputClass} />
-                      </Field>
-                    )}
-                  </Two>
-                </PaneSection>
+                        {!linked && (
+                          <>
+                            <Field label="아이콘" hint="이미지가 없을 때 카드에 크게">
+                              <IconPicker key={`${form.id || "new"}:${form.itemId}`} value={form.icon} onChange={(v) => setForm({ ...form, icon: v })}
+                                color={form.color || itemTypeColor(form.type)} inputClassName={inputClass} />
+                            </Field>
+                            <Field label="색상" hint="비우면 유형 기본색">
+                              <div className="flex items-center gap-2">
+                                <input type="color" value={form.color || itemTypeColor(form.type)} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                                  className="w-10 h-10 shrink-0 rounded-lg border border-[#a3a3a3] bg-white p-1" />
+                                <input type="text" value={form.color} maxLength={7} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                                  placeholder={itemTypeColor(form.type)} className={inputClass} />
+                              </div>
+                            </Field>
+                          </>
+                        )}
 
-                {/* ── 시즌 동작 ── 기프트카드 · 꾸미기는 뗄 역할이 없으므로 아예 감춘다(세트도 쓰지 않는다 — 서버가 끈다) */}
-                {form.type !== "physical" && form.type !== "cosmetic" && !bundleOn && (
-                  <PaneSection title="시즌 동작">
-                    {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 (등록된 아이템이면 아이템 설정을 따른다) */}
-                    <div className="mb-4">
-                      <Toggle disabled={form.type === "perk" || linked} on={form.type !== "perk" && form.detachOnSeason} onClick={() => setForm({ ...form, detachOnSeason: !form.detachOnSeason })}
-                        onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
-                      <p className={fieldNote}>
-                        {linked
-                          ? "등록된 아이템의 설정을 따릅니다."
-                          : form.detachOnSeason
-                          ? "소유와 인벤토리는 그대로 두고 디스코드 표기만 뗍니다."
-                          : "역할 자체가 기능인 권한 상품은 이대로 두세요."}
-                      </p>
-                    </div>
-                  </PaneSection>
-                )}
+                        {/* 📌 카드 배경 장면(lib/itemBackdrops.js) — 상품 고유 값이라 아이템을 연동해도 고른다. 이미지가 있으면 장면 위에 이미지를 세운다 */}
+                        <Field label="배경">
+                          <BackdropPicker value={form.backdrop} onChange={(v) => setForm({ ...form, backdrop: v })}
+                            color={form.color || itemTypeColor(form.type)} buttonClassName={inputClass} />
+                        </Field>
+                      </PaneSection>
 
-                {/* 📌 판매 상태는 늘 보이는 마지막 소제목으로 */}
-                <PaneSection title="판매 상태">
-                  <div className="mb-4">
-                    <Toggle on={form.active} onClick={() => setForm({ ...form, active: !form.active })} onLabel="판매 중" offLabel="숨김" />
-                  </div>
-                  {/* 📌 판매 종료 — 그 시각(KST)이 지나면 상점에서 빠지고 구매가 막힌다(할인 종료와 같은 칸). 비우면 계속 */}
-                  <Field label="판매 종료" hint={form.saleUntil && new Date(`${form.saleUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
-                    <div className="flex items-center gap-2">
-                      <input type="datetime-local" value={form.saleUntil} onChange={(e) => setForm({ ...form, saleUntil: e.target.value })} className={inputClass} />
-                      {form.saleUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, saleUntil: "" })}>지우기</Btn>}
-                    </div>
-                  </Field>
-                  {/* 📌 이벤트 테마 — 고른 테마의 ARCTIC 탭에 모인다(상점 화면 편집 폼과 같은 값 ShopItem.theme · 보기는 lib/shopThemes themePickOptions).
-                      꺼진 테마도 고를 수 있다(「꺼짐」 — 켜면 그때 탭에 선다). 테마는 「테마 관리」에서 */}
-                  <Field label="이벤트 테마">
-                    <Dropdown theme="light" buttonClassName={DD_BTN}
-                      value={form.theme} options={themePickOptions(themes, form.theme)} onChange={(v) => setForm({ ...form, theme: v })} maxHeight={240} />
-                  </Field>
-                </PaneSection>
+                      {/* ── 재고 ── 순서는 목록에서 손잡이로 끌어서 정한다 */}
+                      <PaneSection title="재고" {...foldOf(editing, "shop:prod:stock")}
+                        summary={`${stockN < 0 || !Number.isFinite(stockN) ? "무제한" : `${stockN.toLocaleString()}개`}${form.unitSale && Number(form.maxPerOrder) > 0 ? ` · 1회 최대 ${Number(form.maxPerOrder).toLocaleString()}` : ""}`}>
+                        <Two>
+                          <Field label="재고">
+                            <input type="number" min={-1} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="비우면 무제한" className={inputClass} />
+                          </Field>
+                          {/* 1개 단위 — 한 결제에서 살 수 있는 최대 개수(재고 옆 칸이라 켜고 꺼도 줄 높이가 같다) */}
+                          {form.unitSale && (
+                            <Field label="1회 최대">
+                              <input type="number" min={1} max={MAX_PER_ORDER} value={form.maxPerOrder} onChange={(e) => setForm({ ...form, maxPerOrder: e.target.value })} placeholder="10" className={inputClass} />
+                            </Field>
+                          )}
+                        </Two>
+                      </PaneSection>
+
+                      {/* ── 시즌 동작 ── 직접 설정의 역할 · 권한 · 아이템 상품만(연결 상품은 아이템 설정을 따른다 · 기프트카드 · 꾸미기 · 세트는 뗄 역할이 없다) */}
+                      {!linked && form.type !== "physical" && form.type !== "cosmetic" && !bundleOn && (
+                        <PaneSection title="시즌 동작" {...foldOf(editing, "shop:prod:season")}
+                          summary={form.type !== "perk" && form.detachOnSeason ? "시즌에 역할 뗌" : "역할 유지"}>
+                          {/* 시즌 전환 때 디스코드 역할만 떼고 사이트 인벤토리에는 남긴다 */}
+                          <div className="mb-4">
+                            <Toggle disabled={form.type === "perk"} on={form.type !== "perk" && form.detachOnSeason} onClick={() => setForm({ ...form, detachOnSeason: !form.detachOnSeason })}
+                              onLabel="시즌 바뀌면 디스코드 역할 뗌" offLabel="디스코드 역할 계속 유지" />
+                          </div>
+                        </PaneSection>
+                      )}
+
+                      {/* 📌 판매 상태 — 마지막 판(판매 중 · 판매 종료 · 이벤트 테마) */}
+                      <PaneSection title="판매 상태" {...foldOf(editing, "shop:prod:sale")}
+                        summary={[form.active ? "판매 중" : "숨김", untilOf(form.saleUntil) || "종료 없음", themeName].filter(Boolean).join(" · ")}>
+                        <div className="mb-4">
+                          <Toggle on={form.active} onClick={() => setForm({ ...form, active: !form.active })} onLabel="판매 중" offLabel="숨김" />
+                        </div>
+                        {/* 📌 판매 종료 — 그 시각(KST)이 지나면 상점에서 빠지고 구매가 막힌다(할인 종료와 같은 칸). 비우면 계속 */}
+                        <Field label="판매 종료" hint={form.saleUntil && new Date(`${form.saleUntil}:00+09:00`).getTime() <= Date.now() ? <span className="font-bold text-[#d01634]">이미 지난 시각입니다</span> : "비우면 계속"}>
+                          <div className="flex items-center gap-2">
+                            <input type="datetime-local" value={form.saleUntil} onChange={(e) => setForm({ ...form, saleUntil: e.target.value })} className={inputClass} />
+                            {form.saleUntil && <Btn variant="ghost" size="sm" onClick={() => setForm({ ...form, saleUntil: "" })}>지우기</Btn>}
+                          </div>
+                        </Field>
+                        {/* 📌 이벤트 테마 — 고른 테마의 ARCTIC 탭에 모인다(ShopItem.theme · 보기는 lib/shopThemes themePickOptions).
+                            꺼진 테마도 고를 수 있다(「꺼짐」 — 켜면 그때 탭에 선다). 테마는 「테마 관리」에서 */}
+                        <Field label="이벤트 테마">
+                          <Dropdown theme="light" buttonClassName={DD_BTN}
+                            value={form.theme} options={themePickOptions(themes, form.theme)} onChange={(v) => setForm({ ...form, theme: v })} maxHeight={240} />
+                        </Field>
+                      </PaneSection>
+                    </>,
+                    ];
+                  }}
+                </PaneColumns>
                 <HiddenSubmit />
               </form>
             </DetailPane>
@@ -4105,117 +6799,194 @@ export default function AdminShopPage() {
         {/* ═══ 이미지 배너 ═══ */}
         {tab === "banners" && (
           <>
-            <Toolbar right={newBtn(openNewBanner, "", liveLocked)}>
-              <SearchInput value={q} onChange={setQ} placeholder="제목 · 부제 · 링크" />
-              {/* 📌 노출 위치 — 홈(ARCTIC 홈 맨 위) · 시즌 탭 · 테마마다 「<이름> 탭」(스토어 그 탭 맨 위). 목록 차례 = 그 위치의 노출 차례 */}
-              <Segmented
-                options={placeTabs.map((p) => ({ v: p.v, l: p.l, n: bannersAt(p.v).length }))}
-                value={placeNow}
-                onChange={setBannerPlace}
-              />
-              <Segmented
-                options={[
-                  { v: "", l: "전체", n: placeBanners.length },
-                  { v: "on", l: "노출 중", n: placeBanners.filter((b) => !!b.active).length },
-                  { v: "off", l: "숨김", n: placeBanners.filter((b) => !b.active).length },
-                ]}
-                value={bannerView}
-                onChange={setBannerView}
-              />
+            {/* 📌 도구 줄 한 줄 — 검색 · 위치 ▾ · 거르기(노출) | 표 · 카드(그림 격자 — 끌어서 차례 바꾸기는 표에서) · 새로 만들기
+                위치 — 홈(ARCTIC 홈 맨 위) · 시즌 탭 · 테마마다 「<이름> 탭」(스토어 그 탭 맨 위). 목록 차례 = 그 위치의 노출 차례 */}
+            <Toolbar right={
+              <>
+                <ViewToggle value={bannerViewMode === "card" ? "card" : "table"} onChange={(v) => { sfxTick(); setBannerViewMode(v); }} />
+                {newBtn(openNewBanner, NEW_BTN, liveLocked)}
+              </>
+            }>
+              <SearchInput value={q} onChange={setQ} placeholder="제목 · 부제 · 링크" className={SEARCH_GROW} />
+              <MenuBtn size="md" width={240} {...pickMenu("위치", placeTabs.map((p) => ({ v: p.v, l: p.l, n: bannersAt(p.v).length })), placeNow, setBannerPlace, false)} />
+              <FilterButton count={bannerView ? 1 : 0} onClear={() => { sfxTick(); setBannerView(""); }}>
+                <FilterSection label="노출">
+                  {BANNER_VIS.map((o) => (
+                    <ChoiceChip key={o.v} on={bannerView === o.v} onClick={() => { sfxTick(); setBannerView(bannerView === o.v ? "" : o.v); }}
+                      n={placeBanners.filter((b) => (o.v === "on" ? !!b.active : !b.active)).length}>{o.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+              </FilterButton>
             </Toolbar>
-            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
-              <DataTable
-                columns={bannerCols}
-                rows={shownBanners}
-                rowKey={(b) => b._id}
-                onRowClick={openBannerRow}
-                // 순서 — 손잡이로 끌어 놓으면 바로 저장(그 위치 안에서). 숨긴 배너도 자리는 지킨다(켜면 그 자리에서 나온다)
-                onReorder={(keys) => { void saveBannerOrder(keys); }}
-                reorderLocked={savingOrder === "banner" || liveLocked || placeNow === GONE_PLACE}
-                selectedKey={pane === "banner" ? bannerForm.id : null}
-                empty={placeBanners.length === 0 ? (placeNow === BUILTIN_BANNER_THEME ? hwDefaultRow : "등록된 배너가 없습니다.") : noResult}
-              />
-            )}
+            <ActiveFilters items={bannerView ? [{ key: "v", label: `노출 · ${labelOf(BANNER_VIS, bannerView)}`, onRemove: () => { sfxTick(); setBannerView(""); } }] : []} />
+            <div onKeyDown={onBannerListKey}>
+              {isLoading ? (
+                <EmptyRow>불러오는 중...</EmptyRow>
+              ) : bannerViewMode === "card" ? (
+                <CardGrid
+                  items={shownBanners}
+                  itemKey={(b) => String(b._id)}
+                  renderCard={(b) => (
+                    <BannerTile b={b} busy={bannerSwitchBusy === String(b._id)} locked={liveLocked} onToggle={() => { void toggleBannerActive(b); }}
+                      draftMark={<>{editedDot("banner", b._id)}{b._draft ? <DraftMark onRevert={() => askRevertRow("banner", b, String(b.title || "").trim() || "제목 없는 배너")} disabled={!!draftBusy} /> : null}</>} />
+                  )}
+                  onItemClick={openBannerRow}
+                  selectedKey={pane === "banner" ? bannerForm.id : null}
+                  empty={placeBanners.length === 0 ? (placeNow === BUILTIN_BANNER_THEME ? hwDefaultRow : "등록된 배너가 없습니다.") : noResult}
+                  min={240}
+                  max={360}
+                />
+              ) : (
+                <DataTable
+                  columns={bannerCols}
+                  rows={shownBanners}
+                  rowKey={(b) => String(b._id)}
+                  onRowClick={openBannerRow}
+                  // 순서 — 손잡이로 끌어 놓으면 바로 저장(그 위치 안에서). 숨긴 배너도 자리는 지킨다(켜면 그 자리에서 나온다)
+                  onReorder={(keys) => { void saveBannerOrder(keys); }}
+                  reorderLocked={savingOrder === "banner" || liveLocked || placeNow === GONE_PLACE}
+                  selectedKey={pane === "banner" ? bannerForm.id : null}
+                  empty={placeBanners.length === 0 ? (placeNow === BUILTIN_BANNER_THEME ? hwDefaultRow : "등록된 배너가 없습니다.") : noResult}
+                />
+              )}
+            </div>
             {/* 등록 안 된 기본 배너 — 목록이 있을 때는 목록 아래(스토어에서 등록된 배너 뒤에 도는 차례 그대로). 숨김 보기 · 검색 중엔 안 보인다 */}
             {!isLoading && placeNow === BUILTIN_BANNER_THEME && placeBanners.length > 0 && hwPending.length > 0 && bannerView !== "off" && !q.trim() && (
               <div className="mt-4 py-5 border-t border-[#ededed]">{hwDefaultRow}</div>
             )}
 
             <DetailPane
+              shaded
               open={pane === "banner"}
               onClose={closeEditPane}
-              width={520}
+              width={paneXl ? 640 : 520}
+              docked
+              dockKey="shop-banners"
               title={bannerForm.id ? "배너 수정" : "배너 등록"}
+              nav={bannerForm.id ? bannerNav : undefined}
+              dirty={banDirty}
+              onSave={liveLocked ? undefined : () => submitVisible("form[data-banner-form]")}
               footer={
                 <>
-                  <Btn onClick={submitNearest} disabled={liveLocked}>{bannerForm.id ? "수정 저장" : "배너 등록"}</Btn>
+                  <Btn className="min-w-[96px]" onClick={submitNearest} disabled={savingBanner || liveLocked}>{savingBanner ? "저장 중" : bannerForm.id ? "저장" : "등록"}</Btn>
+                  {bannerForm.id && <Btn variant="secondary" onClick={openBannerCopy} disabled={liveLocked}>복제</Btn>}
                   {bannerForm.id && <Btn variant="ghost" className={DEL_BTN} onClick={() => setDeleteTarget({ kind: "banner", id: bannerForm.id })} disabled={liveLocked}>삭제</Btn>}
                 </>
               }
             >
-              <form onSubmit={saveBanner}>
-                {/* 📌 노출 위치 — 홈: ARCTIC 홈 맨 위 · 시즌 탭 · 테마 탭: 스토어 그 탭 맨 위. 같은 위치의 배너끼리 한 슬라이드로 돈다(권장 크기는 모두 같다).
-                    지운 테마의 배너는 아무 칸도 안 골라진 채 열린다 — 위치를 골라야 저장된다(서버가 지운 테마를 막는다) */}
-                <Field label="노출 위치">
-                  <Segmented options={bannerPlaces.map((p) => ({ v: p.v, l: p.l }))} value={bannerForm.placement}
-                    onChange={(v) => setBannerForm({ ...bannerForm, placement: v })} />
-                </Field>
+              {/* 📌 2026-10-17 shop-tidy — 회색 바탕 위 흰 판 묶음(미리보기 · 노출 · 이미지 · 문구 · 이동). 머리 줄에 지금 값 · 덜 쓰는 판은 수정 중 처음 접힘 */}
+              <form ref={revealInvalid} data-banner-form onSubmit={saveBanner}>
+                {/* 미리보기 — 이미지를 넣으면 맨 위에(PC · 모바일) */}
+                {(bannerForm.imageUrl || bannerForm.mobileImageUrl) && (
+                  <PaneSection title="미리보기" summary={[bannerForm.imageUrl ? "PC" : "", bannerForm.mobileImageUrl ? "모바일" : ""].filter(Boolean).join(" · ")}>
+                    {bannerForm.imageUrl && (
+                      <Field label="PC">
+                        <div className="relative rounded-lg overflow-hidden border border-[#ededed] aspect-[4/1] bg-white">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={bannerForm.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                          {(bannerForm.title || bannerForm.subtitle) && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
+                              {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
+                              {bannerForm.subtitle && <p className="text-[12px] text-[#131313]/85">{bannerForm.subtitle}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </Field>
+                    )}
+                    {bannerForm.mobileImageUrl && (
+                      <Field label="모바일">
+                        <div className="relative w-[280px] max-w-full rounded-lg overflow-hidden border border-[#ededed] bg-white" style={{ aspectRatio: String(mBannerRatio) }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={bannerForm.mobileImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                          {(bannerForm.title || bannerForm.subtitle) && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
+                              {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
+                              {bannerForm.subtitle && <p className="text-[11px] text-[#131313]/85">{bannerForm.subtitle}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </Field>
+                    )}
+                  </PaneSection>
+                )}
 
-                <Field label={<>배너 이미지 URL<Req /></>}>
-                  <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
-                    placeholder="https://..." className={inputClass} />
-                  <p className={fieldNote}>
-                    권장 크기 <span className="font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
-                  </p>
-                  <p className={fieldNote}>
-                    모바일에서는 3:1로 잘립니다 — 글자 · 로고는 가운데 <span className="font-bold">가로 75%</span> 안에.
-                  </p>
-                  {bannerSize && (() => {
-                    const ratio = bannerSize.w / bannerSize.h;
-                    const tooSmall = bannerSize.w < 1200;
-                    const offRatio = ratio < 3.4 || ratio > 4.6;
-                    const ok = !tooSmall && !offRatio;
-                    return (
-                      <p className={`mt-1.5 text-[12px] font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
-                        현재 이미지 <span className="tabular-nums">{bannerSize.w} × {bannerSize.h} px</span> ({ratio.toFixed(2)}:1)
-                        {ok ? " · 적당합니다" : tooSmall ? " · 가로가 1200px보다 작아 흐리게 보일 수 있습니다" : " · 4:1에서 벗어나 위아래가 잘립니다"}
-                      </p>
-                    );
-                  })()}
-                </Field>
-
-                {/* 📌 모바일 이미지 — 틀은 이미지 비율 그대로(0.8:1 ~ 3:1). 범위를 벗어나면 그 끝 비율로 잘린다 */}
-                <Field label={<>모바일 이미지 URL<Opt /></>}>
-                  <input type="text" value={bannerForm.mobileImageUrl} onChange={(e) => setBannerForm({ ...bannerForm, mobileImageUrl: e.target.value })}
-                    placeholder="https://..." className={inputClass} />
-                  {/* 📌 폰에서는 모바일 이미지가 있는 배너만 돈다(하나도 없으면 PC 이미지) — app/arctic/BannerSlider.tsx */}
-                  <p className={fieldNote}>권장 <span className="font-bold tabular-nums">1080 × 720 px</span> (3:2) · 비우면 폰에서는 이 배너가 빠집니다</p>
-                  {mBannerSize && (() => {
-                    const ratio = mBannerSize.w / mBannerSize.h;
-                    const tooSmall = mBannerSize.w < 750;
-                    const ok = !tooSmall && ratio >= M_BANNER_MIN && ratio <= M_BANNER_MAX;
-                    return (
-                      <p className={`mt-1.5 text-[12px] font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
-                        현재 이미지 <span className="tabular-nums">{mBannerSize.w} × {mBannerSize.h} px</span> ({ratio.toFixed(2)}:1)
-                        {ok ? " · 적당합니다" : tooSmall ? " · 가로가 750px보다 작아 흐리게 보일 수 있습니다" : ratio > M_BANNER_MAX ? " · 3:1보다 넓어 좌우가 잘립니다" : " · 0.8:1보다 좁아 위아래가 잘립니다"}
-                      </p>
-                    );
-                  })()}
-                </Field>
-
-                <Two>
-                  <Field label={<>제목<Opt /></>}>
-                    <input type="text" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
-                      placeholder="예: 시즌 한정 기프트카드" className={inputClass} />
+                {/* ── 노출 ── 위치 · 상태(노출 순서는 목록에서 끌어서 — 위치 탭마다) */}
+                <PaneSection title="노출" summary={`${bannerPlaces.find((p) => p.v === bannerForm.placement)?.l || "위치 없음"} · ${bannerForm.active ? "노출 중" : "숨김"}`}>
+                  {/* 📌 노출 위치 — 홈: ARCTIC 홈 맨 위 · 시즌 탭 · 테마 탭: 스토어 그 탭 맨 위. 같은 위치의 배너끼리 한 슬라이드로 돈다(권장 크기는 모두 같다).
+                      지운 테마의 배너는 아무 칸도 안 골라진 채 열린다 — 위치를 골라야 저장된다(서버가 지운 테마를 막는다) */}
+                  <Field label="노출 위치">
+                    <Segmented options={bannerPlaces.map((p) => ({ v: p.v, l: p.l }))} value={bannerForm.placement}
+                      onChange={(v) => setBannerForm({ ...bannerForm, placement: v })} />
                   </Field>
-                  <Field label={<>부제<Opt /></>}>
-                    <input type="text" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
-                      placeholder="예: 한정 수량 소진 시 조기 마감" className={inputClass} />
+                  <Field label="노출 상태">
+                    <Toggle on={bannerForm.active} onClick={() => setBannerForm({ ...bannerForm, active: !bannerForm.active })}
+                      onLabel="노출 중" offLabel="숨김" />
                   </Field>
-                </Two>
-                {/* 제목 · 부제가 어떻게 얹히는지는 아래 미리보기가 그대로 보여 준다 */}
+                </PaneSection>
 
-                <Field label={<>클릭 시 이동<Opt /></>}>
+                {/* ── 이미지 ── PC(필수) · 모바일 */}
+                <PaneSection title="이미지" {...foldOf(!!bannerForm.id, "shop:banner:img", true)}
+                  summary={[bannerForm.imageUrl ? "PC" : "", bannerForm.mobileImageUrl ? "모바일" : ""].filter(Boolean).join(" · ") || "없음"}>
+                  <Field label={<>배너 이미지 URL<Req /></>}>
+                    <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
+                      placeholder="https://..." className={inputClass} />
+                    <p className={fieldNote}>
+                      권장 크기 <span className="font-bold tabular-nums">2400 × 600 px</span> (4:1) · 최소 1200 × 300 px · JPG/PNG/WebP
+                    </p>
+                    <p className={fieldNote}>
+                      모바일에서는 3:1로 잘립니다 — 글자 · 로고는 가운데 <span className="font-bold">가로 75%</span> 안에.
+                    </p>
+                    {bannerSize && (() => {
+                      const ratio = bannerSize.w / bannerSize.h;
+                      const tooSmall = bannerSize.w < 1200;
+                      const offRatio = ratio < 3.4 || ratio > 4.6;
+                      const ok = !tooSmall && !offRatio;
+                      return (
+                        <p className={`mt-1.5 text-[12px] font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
+                          현재 이미지 <span className="tabular-nums">{bannerSize.w} × {bannerSize.h} px</span> ({ratio.toFixed(2)}:1)
+                          {ok ? " · 적당합니다" : tooSmall ? " · 가로가 1200px보다 작아 흐리게 보일 수 있습니다" : " · 4:1에서 벗어나 위아래가 잘립니다"}
+                        </p>
+                      );
+                    })()}
+                  </Field>
+
+                  {/* 📌 모바일 이미지 — 틀은 이미지 비율 그대로(0.8:1 ~ 3:1). 범위를 벗어나면 그 끝 비율로 잘린다 */}
+                  <Field label={<>모바일 이미지 URL<Opt /></>}>
+                    <input type="text" value={bannerForm.mobileImageUrl} onChange={(e) => setBannerForm({ ...bannerForm, mobileImageUrl: e.target.value })}
+                      placeholder="https://..." className={inputClass} />
+                    {/* 📌 폰에서는 모바일 이미지가 있는 배너만 돈다(하나도 없으면 PC 이미지) — app/arctic/BannerSlider.tsx */}
+                    <p className={fieldNote}>권장 <span className="font-bold tabular-nums">1080 × 720 px</span> (3:2) · 비우면 폰에서는 이 배너가 빠집니다</p>
+                    {mBannerSize && (() => {
+                      const ratio = mBannerSize.w / mBannerSize.h;
+                      const tooSmall = mBannerSize.w < 750;
+                      const ok = !tooSmall && ratio >= M_BANNER_MIN && ratio <= M_BANNER_MAX;
+                      return (
+                        <p className={`mt-1.5 text-[12px] font-bold ${ok ? "text-emerald-700" : "text-amber-700"}`}>
+                          현재 이미지 <span className="tabular-nums">{mBannerSize.w} × {mBannerSize.h} px</span> ({ratio.toFixed(2)}:1)
+                          {ok ? " · 적당합니다" : tooSmall ? " · 가로가 750px보다 작아 흐리게 보일 수 있습니다" : ratio > M_BANNER_MAX ? " · 3:1보다 넓어 좌우가 잘립니다" : " · 0.8:1보다 좁아 위아래가 잘립니다"}
+                        </p>
+                      );
+                    })()}
+                  </Field>
+                </PaneSection>
+
+                {/* ── 문구 ── 제목 · 부제(어떻게 얹히는지는 위 미리보기가 그대로 보여 준다) */}
+                <PaneSection title="문구" summary={bannerForm.title.trim() || "없음"} {...foldOf(!!bannerForm.id, "shop:banner:text", true)}>
+                  <Two>
+                    <Field label={<>제목<Opt /></>}>
+                      <input type="text" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
+                        placeholder="예: 시즌 한정 기프트카드" className={inputClass} />
+                    </Field>
+                    <Field label={<>부제<Opt /></>}>
+                      <input type="text" value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
+                        placeholder="예: 한정 수량 소진 시 조기 마감" className={inputClass} />
+                    </Field>
+                  </Two>
+                </PaneSection>
+
+                {/* ── 이동 ── 누르면 갈 곳 */}
+                <PaneSection title="이동" summary={bannerForm.link.trim() || "없음"} {...foldOf(!!bannerForm.id, "shop:banner:link")}>
+                  <Field label={<>클릭 시 이동<Opt /></>}>
                     {/* 바로 고르기 — 고르면 아래 칸이 그 주소로 채워진다. 목록에 없는 주소면 "직접 입력" */}
                     <Dropdown
                       theme="light"
@@ -4228,42 +6999,7 @@ export default function AdminShopPage() {
                     <input type="text" value={bannerForm.link} onChange={(e) => setBannerForm({ ...bannerForm, link: e.target.value })}
                       placeholder="/arctic?type=cosmetic 또는 https://…" className={`${inputClass} mt-2`} />
                   </Field>
-                  {/* 노출 순서는 목록에서 끌어서(위치 탭마다) — 숫자 칸은 걷었다(2026-10-11) */}
-
-                <Field label="노출 상태">
-                  <Toggle on={bannerForm.active} onClick={() => setBannerForm({ ...bannerForm, active: !bannerForm.active })}
-                    onLabel="노출 중" offLabel="숨김" />
-                </Field>
-
-                {/* 미리보기 */}
-                {bannerForm.imageUrl && (
-                  <Field label="미리보기">
-                    <div className="relative rounded-lg overflow-hidden border border-[#ededed] aspect-[4/1] bg-white">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={bannerForm.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                      {(bannerForm.title || bannerForm.subtitle) && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
-                          {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
-                          {bannerForm.subtitle && <p className="text-[12px] text-[#131313]/85">{bannerForm.subtitle}</p>}
-                        </div>
-                      )}
-                    </div>
-                  </Field>
-                )}
-                {bannerForm.mobileImageUrl && (
-                  <Field label="모바일 미리보기">
-                    <div className="relative w-[280px] max-w-full rounded-lg overflow-hidden border border-[#ededed] bg-white" style={{ aspectRatio: String(mBannerRatio) }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={bannerForm.mobileImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                      {(bannerForm.title || bannerForm.subtitle) && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col justify-center px-5">
-                          {bannerForm.title && <h3 className="text-[16px] font-black tracking-tight text-[#131313] mb-1">{bannerForm.title}</h3>}
-                          {bannerForm.subtitle && <p className="text-[11px] text-[#131313]/85">{bannerForm.subtitle}</p>}
-                        </div>
-                      )}
-                    </div>
-                  </Field>
-                )}
+                </PaneSection>
                 <HiddenSubmit />
               </form>
             </DetailPane>
@@ -4273,47 +7009,46 @@ export default function AdminShopPage() {
         {/* ═══ 쿠폰 관리 ═══ */}
         {tab === "coupons" && (
           <>
-            <Toolbar
-              right={
-                <>
-                  {legacyLeft > 0 && (
-                    <Btn variant="secondary" onClick={migrateCodes} disabled={isMigrating}>
-                      <SwapLabel swap={isMigrating} to="이전 중...">예전 코드 가져오기</SwapLabel>
-                    </Btn>
-                  )}
-                  {newBtn(openNewCoupon)}
-                </>
-              }
-            >
-              <SearchInput value={q} onChange={setQ} placeholder="코드 · 이름" />
-              <Segmented
-                options={[
-                  { v: "", l: "전체", n: coupons.length },
-                  ...["사용 가능", "중지", "만료", "소진"].map((s) => ({ v: s, l: s, n: coupons.filter((c) => couponState(c) === s).length })),
-                ]}
-                value={couponView}
-                onChange={setCouponView}
-              />
+            {/* 📌 도구 줄 한 줄 — 검색 · 상태 ▾ | 새로 만들기 */}
+            <Toolbar right={newBtn(openNewCoupon, NEW_BTN)}>
+              <SearchInput value={q} onChange={setQ} placeholder="코드 · 이름" className={SEARCH_GROW} />
+              <MenuBtn size="md" width={200}
+                {...pickMenu("상태", [{ v: "", l: "전체", n: coupons.length }, ...COUPON_STATES.map((s) => ({ v: s, l: s, n: coupons.filter((c) => couponState(c) === s).length }))], couponView, setCouponView)} />
             </Toolbar>
-            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
-              <DataTable
-                columns={couponCols}
-                rows={shownCoupons}
-                rowKey={(c) => c._id}
-                onRowClick={(c) => { fillCouponForm(c); setPane("coupon"); }}
-                selectedKey={pane === "coupon" ? couponForm.id : null}
-                empty={coupons.length === 0 ? "발급된 쿠폰이 없습니다." : noResult}
-              />
-            )}
+            <ActiveFilters items={couponActive} />
+            <div onKeyDown={onCouponListKey}>
+              {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
+                <DataTable
+                  columns={couponCols}
+                  rows={shownCoupons}
+                  rowKey={(c) => String(c._id)}
+                  onRowClick={openCouponRow}
+                  selectedKey={pane === "coupon" ? couponForm.id : null}
+                  // 열 머리 정렬(사용 · 코드 · 사용 수 · 만료)
+                  sortState={couponSort}
+                  onSortChange={(s) => { sfxTick(); setCouponSort(s); }}
+                  empty={coupons.length === 0 ? "발급된 쿠폰이 없습니다." : noResult}
+                />
+              )}
+            </div>
 
             <DetailPane
+              shaded
               open={pane === "coupon"}
-              onClose={closePane}
-              width={520}
+              onClose={closeEditPane}
+              width={paneXl ? 640 : 520}
+              docked
+              dockKey="shop-coupons"
               title={couponForm.id ? "쿠폰 수정" : "쿠폰 발급"}
+              nav={couponForm.id ? couponNav : undefined}
+              dirty={coupDirty}
+              onSave={() => submitVisible("form[data-coupon-form]")}
               footer={
                 <>
-                  <Btn onClick={submitNearest}>{couponForm.id ? "수정 저장" : "쿠폰 발급"}</Btn>
+                  <Btn className="min-w-[96px] tabular-nums" onClick={submitNearest} disabled={couponSaving}>
+                    {couponSaving ? "저장 중" : couponForm.id ? "저장" : couponBulk.on ? `${Math.max(0, Math.floor(Number(couponBulk.count) || 0)).toLocaleString()}장 발급` : "발급"}
+                  </Btn>
+                  {couponForm.id && <Btn variant="secondary" onClick={openCouponCopy}>복제</Btn>}
                   {couponSel && couponSel.kind !== "reward" && (
                     <Btn variant="secondary" onClick={() => { setIssueTarget(couponSel); setIssueInput(""); }}>지급</Btn>
                   )}
@@ -4321,18 +7056,50 @@ export default function AdminShopPage() {
                 </>
               }
             >
-              <form onSubmit={saveCoupon}>
-                <PaneSection title="쿠폰">
-                  <Two>
-                    <Field label={<>쿠폰 코드<Req /></>} hint="대문자로 저장됩니다">
-                      <input type="text" value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
-                        placeholder="예: WELCOME10" className={`${inputClass} uppercase`} />
-                    </Field>
-                    <Field label="쿠폰 이름" hint="주문서에 표시될 이름">
-                      <input type="text" value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })}
-                        placeholder="예: 신규 가입 축하 쿠폰" className={inputClass} />
-                    </Field>
-                  </Two>
+              {/* 📌 2026-10-17 shop-tidy — 회색 바탕 위 흰 판 묶음(쿠폰 · 보상 | 할인 · 한도 · 상태). 머리 줄에 지금 값 · 한도 · 상태는 수정 중 처음 접힘 */}
+              <form ref={revealInvalid} data-coupon-form onSubmit={saveCoupon}>
+                <PaneSection title="쿠폰"
+                  summary={!couponForm.id && couponBulk.on
+                    ? `${Math.max(0, Math.floor(Number(couponBulk.count) || 0)).toLocaleString()}장${couponBulk.prefix.trim() ? ` · ${couponBulk.prefix.trim().toUpperCase()}` : ""}`
+                    : `${couponForm.code.trim() || "코드 없음"} · ${COUPON_KINDS.find((o) => o.v === (couponForm.kind || "discount"))?.l || ""}`}>
+                  {/* 📌 새 쿠폰 — 한 장(코드 직접) · 여러 장(앞머리 + 장수 + 무작위 글자 수 — 같은 혜택 · 한도 · 만료로 N장, 만든 코드는 복사 · CSV) */}
+                  {!couponForm.id && (
+                    <div className="mb-4">
+                      <Segmented options={[{ v: "one", l: "한 장" }, { v: "bulk", l: "여러 장" }]} value={couponBulk.on ? "bulk" : "one"}
+                        onChange={(v) => { sfxTick(); setCouponBulk((b) => ({ ...b, on: v === "bulk" })); }} />
+                    </div>
+                  )}
+                  {!couponForm.id && couponBulk.on ? (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-3">
+                        <Field label="코드 앞머리" hint={`${couponBulk.prefix.trim().toUpperCase().replace(/\s+/g, "")}${"X".repeat(Math.min(16, Math.max(0, Math.floor(Number(couponBulk.length) || 0))))}`}>
+                          <input type="text" value={couponBulk.prefix} maxLength={20} onChange={(e) => setCouponBulk((b) => ({ ...b, prefix: e.target.value.toUpperCase() }))}
+                            placeholder="예: HW-" className={`${inputClass} uppercase`} />
+                        </Field>
+                        <Field label="장수">
+                          <input type="number" min={2} max={BULK_COUNT_MAX} step={1} value={couponBulk.count} onChange={(e) => setCouponBulk((b) => ({ ...b, count: e.target.value }))} className={inputClass} />
+                        </Field>
+                        <Field label="무작위 글자 수">
+                          <input type="number" min={4} max={16} step={1} value={couponBulk.length} onChange={(e) => setCouponBulk((b) => ({ ...b, length: e.target.value }))} className={inputClass} />
+                        </Field>
+                      </div>
+                      <Field label="쿠폰 이름" hint="주문서에 표시될 이름">
+                        <input type="text" value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })}
+                          placeholder="예: 신규 가입 축하 쿠폰" className={inputClass} />
+                      </Field>
+                    </>
+                  ) : (
+                    <Two>
+                      <Field label={<>쿠폰 코드<Req /></>} hint="대문자로 저장됩니다">
+                        <input type="text" value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                          placeholder="예: WELCOME10" className={`${inputClass} uppercase`} />
+                      </Field>
+                      <Field label="쿠폰 이름" hint="주문서에 표시될 이름">
+                        <input type="text" value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })}
+                          placeholder="예: 신규 가입 축하 쿠폰" className={inputClass} />
+                      </Field>
+                    </Two>
+                  )}
 
                   {/* 쿠폰 종류 — 보상형(역할·XP 지급) / 할인형(결제 할인) */}
                   <Field label={<>쿠폰 종류<Req /></>}>
@@ -4355,19 +7122,18 @@ export default function AdminShopPage() {
 
                 {couponForm.kind === "reward" ? (
                   /* ── 보상형 설정 ── */
-                  <PaneSection title="보상">
+                  <PaneSection title="보상" {...foldOf(!!couponForm.id, "shop:coupon:reward", true)}
+                    summary={[couponForm.rewardRoleId ? couponForm.rewardRoleName || guildRoles.find((r) => r.id === couponForm.rewardRoleId)?.name || "역할" : "", Number(couponForm.rewardXp) > 0 ? `${Number(couponForm.rewardXp).toLocaleString()} XP` : ""].filter(Boolean).join(" · ") || "없음"}>
                     <Field label="안내 문구" hint="유저가 쿠폰을 쓴 직후 보게 될 문구">
                       <input type="text" value={couponForm.reward || ""} onChange={(e) => setCouponForm({ ...couponForm, reward: e.target.value })}
                         placeholder="예: 시즌 참가 보상이 지급되었습니다" className={inputClass} />
                     </Field>
                     <Two>
+                      {/* 역할 고르기 — 다른 폼과 같은 고르기 칸(Dropdown) */}
                       <Field label="지급할 역할">
-                        <select value={couponForm.rewardRoleId || ""}
-                          onChange={(e) => setCouponForm({ ...couponForm, rewardRoleId: e.target.value, rewardRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
-                          className={inputClass}>
-                          <option value="">지급 안 함</option>
-                          {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
+                        <Dropdown theme="light" buttonClassName={DD_BTN} value={couponForm.rewardRoleId || ""} maxHeight={280}
+                          onChange={(v) => setCouponForm({ ...couponForm, rewardRoleId: v, rewardRoleName: guildRoles.find((r) => r.id === v)?.name || "" })}
+                          options={[{ value: "", label: "지급 안 함" }, ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]} />
                       </Field>
                       <Field label="지급할 XP" hint="역할·XP 중 하나는 지정해야 합니다">
                         <input type="number" min={0} value={couponForm.rewardXp || ""} onChange={(e) => setCouponForm({ ...couponForm, rewardXp: e.target.value })}
@@ -4375,17 +7141,20 @@ export default function AdminShopPage() {
                       </Field>
                     </Two>
                     <Field label="사용 조건 역할" hint="지정하면 해당 역할 보유자만 사용할 수 있습니다">
-                      <select value={couponForm.requiredRoleId || ""}
-                        onChange={(e) => setCouponForm({ ...couponForm, requiredRoleId: e.target.value, requiredRoleName: guildRoles.find((r) => r.id === e.target.value)?.name || "" })}
-                        className={inputClass}>
-                        <option value="">제한 없음</option>
-                        {guildRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
+                      <Dropdown theme="light" buttonClassName={DD_BTN} value={couponForm.requiredRoleId || ""} maxHeight={280}
+                        onChange={(v) => setCouponForm({ ...couponForm, requiredRoleId: v, requiredRoleName: guildRoles.find((r) => r.id === v)?.name || "" })}
+                        options={[{ value: "", label: "제한 없음" }, ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color }))]} />
                     </Field>
                   </PaneSection>
                 ) : (
                   /* ── 할인형 설정 ── */
-                  <PaneSection title="할인">
+                  <PaneSection title="할인" {...foldOf(!!couponForm.id, "shop:coupon:disc", true)}
+                    summary={[
+                      couponForm.type === "percent"
+                        ? `${Number(couponForm.value) || 0}%${Number(couponForm.maxDiscount) > 0 ? ` · 최대 ${Number(couponForm.maxDiscount).toLocaleString()} XP` : ""}`
+                        : `${(Number(couponForm.value) || 0).toLocaleString()} XP`,
+                      COUPON_SCOPES.find((s) => s.v === (couponForm.payScope || "both"))?.l || "",
+                    ].filter(Boolean).join(" · ")}>
                     <Field label={<>할인 방식<Req /></>}>
                       <Segmented
                         options={[{ v: "percent", l: "정률 (%)" }, { v: "flat", l: "정액 (XP)" }]}
@@ -4412,7 +7181,12 @@ export default function AdminShopPage() {
                   </PaneSection>
                 )}
 
-                <PaneSection title="한도 · 상태">
+                <PaneSection title="한도 · 상태" {...foldOf(!!couponForm.id, "shop:coupon:limit")}
+                  summary={[
+                    couponForm.active ? "사용 가능" : "사용 중지",
+                    Number(couponForm.maxUses) > 0 ? `${Number(couponForm.maxUses).toLocaleString()}회` : "",
+                    (() => { const m = /^\d{4}-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(couponForm.expiresAt || ""); return m ? `~ ${Number(m[1])}. ${Number(m[2])}. ${m[3]}` : "무기한"; })(),
+                  ].filter(Boolean).join(" · ")}>
                   <Two>
                     {couponForm.kind !== "reward" && (
                       <Field label="최소 주문 금액">
@@ -4447,31 +7221,54 @@ export default function AdminShopPage() {
         {/* ═══ 구매 내역 ═══ */}
         {tab === "orders" && (
           <>
-            <Toolbar>
-              <SearchInput value={q} onChange={setQ} placeholder="상품 · 구매자 · 메모" />
-              <Segmented
-                options={[
-                  { v: "", l: "전체", n: groupOrderRows(orders).length },
-                  { v: "pending", l: "대기", n: pendingCount },
+            {/* 📌 도구 줄 한 줄 — 검색 · 상태 ▾ · 기간 ▾(오늘 · 7일 · 30일 · 전체 · 직접) · 거르기(상품 유형) | CSV(지금 거른 주문).
+                「직접」 날짜 두 칸은 도구 줄 아래 줄에(도구 줄 단추가 밀리지 않게) */}
+            <Toolbar right={<Btn variant="secondary" onClick={exportOrders} disabled={isLoading || !shownOrders.length}>CSV</Btn>}>
+              <SearchInput value={q} onChange={setQ} placeholder="상품 · 구매자 · 메모" className={SEARCH_GROW} />
+              <MenuBtn size="md" width={200}
+                {...pickMenu("상태", [
+                  { v: "", l: "전체", n: groupOrderRows(viewOrders).length },
+                  { v: "pending", l: "대기", n: groupCount("pending") },
                   { v: "completed", l: "완료", n: groupCount("completed") },
                   { v: "cancelled", l: "취소", n: groupCount("cancelled") },
                   { v: "refunded", l: "환불", n: groupCount("refunded") },
                   { v: "expired", l: "만료", n: groupCount("expired") },
-                ]}
-                value={orderFilter}
-                onChange={setOrderFilter}
-              />
+                ], orderFilter, setOrderFilter)} />
+              <MenuBtn size="md" width={180} active={orderPeriod.v !== "all"}
+                label={pickLabel("기간", labelOf(ORDER_PERIODS, orderPeriod.v))}
+                reserve={ORDER_PERIODS.map((o) => pickLabel("기간", o.l))}
+                items={ORDER_PERIODS.map((o) => ({ key: o.v, label: o.l, on: orderPeriod.v === o.v, onSelect: () => pickOrderPeriod(o.v) }))} />
+              <FilterButton count={orderTypes.length} onClear={() => { sfxTick(); setOrderTypes([]); }}>
+                <FilterSection label="상품 유형">
+                  {ORDER_TYPE_FILTERS.map((t) => (
+                    <ChoiceChip key={t.v} on={orderTypes.includes(t.v)} onClick={() => toggleOrderType(t.v)} n={groupOrderRows(orders.filter((o) => orderTypeOf(o) === t.v)).length}>{t.l}</ChoiceChip>
+                  ))}
+                </FilterSection>
+              </FilterButton>
             </Toolbar>
-            {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
-              <DataTable
-                columns={orderCols}
-                rows={shownOrders}
-                rowKey={(o) => o._id}
-                onRowClick={(o) => { setOrderSelId(o._id); setPane("order"); }}
-                selectedKey={pane === "order" ? orderSelId : null}
-                empty={orders.length === 0 || !qq ? "구매 내역이 없습니다." : noResult}
-              />
+            {orderPeriod.v === "custom" && (
+              <div className="flex items-center gap-2 mb-4 max-w-full sm:max-w-[420px]">
+                <input type="date" aria-label="시작일" value={orderFrom} max={orderTo || undefined} onChange={(e) => setOrderFrom(e.target.value)} className={`${inputClass} !w-auto min-w-0 flex-1`} />
+                <span aria-hidden className="text-[#8a8a8a]">~</span>
+                <input type="date" aria-label="종료일" value={orderTo} min={orderFrom || undefined} onChange={(e) => setOrderTo(e.target.value)} className={`${inputClass} !w-auto min-w-0 flex-1`} />
+              </div>
             )}
+            <ActiveFilters
+              items={orderTypes.map((v) => ({ key: v, label: `유형 · ${labelOf(ORDER_TYPE_FILTERS, v)}`, onRemove: () => toggleOrderType(v) }))}
+              onClear={() => { sfxTick(); setOrderTypes([]); }}
+            />
+            <div onKeyDown={onOrderListKey}>
+              {isLoading ? <EmptyRow>불러오는 중...</EmptyRow> : (
+                <DataTable
+                  columns={orderCols}
+                  rows={shownOrders}
+                  rowKey={(o) => o._id}
+                  onRowClick={(o) => { setOrderSelId(o._id); setPane("order"); }}
+                  selectedKey={pane === "order" ? orderSelId : null}
+                  empty={orders.length === 0 || !qq ? "구매 내역이 없습니다." : noResult}
+                />
+              )}
+            </div>
             {/* 📌 더 보기 — 2026-10-04 추천대로: 오래된 주문도 이 목록에서 찾아 환불할 수 있게(한 번에 500건) */}
             {!isLoading && ordersNext && (
               <div className="mt-4 flex justify-center">
@@ -4479,10 +7276,14 @@ export default function AdminShopPage() {
               </div>
             )}
 
-            {/* 📌 줄을 누르면 수령 정보 · 메모 · 처리 단추가 상세 칸에 모인다 (예전엔 줄마다 펼쳐 놓아 목록이 길어졌다) */}
+            {/* 📌 줄을 누르면 수령 정보 · 메모 · 처리 단추가 상세 칸에 모인다 (예전엔 줄마다 펼쳐 놓아 목록이 길어졌다). 넓은 화면은 목록 옆에 붙는다 */}
             <DetailPane
               open={pane === "order" && !!orderSel}
               onClose={closePane}
+              width={480}
+              docked
+              dockKey="shop-orders"
+              nav={orderSel ? orderNav : undefined}
               title={orderSel ? `${orderName(orderSel)}${orderSel.qty > 1 ? ` ×${orderSel.qty}` : ""}` : ""}
               sub={orderSel ? `${orderSel.userName} · ${fmtDateTime(orderSel.createdAt)}` : undefined}
               badge={orderSel ? <StatusChip tone={STATUS_TONE[orderSel.status] || "neutral"}>{STATUS_LABEL[orderSel.status]}</StatusChip> : undefined}
@@ -4504,7 +7305,7 @@ export default function AdminShopPage() {
             >
               {orderSel && (
                 <dl>
-                  <DefRow k="유형">{typeLabel(orderSel.itemType)}</DefRow>
+                  <DefRow k="분류">{orderTypeLabel(orderSel)}</DefRow>
                   <DefRow k="구매자">{orderSel.userName}</DefRow>
                   {/* 1개 단위 주문 — 수량과 쓴 · 돌려준 개수 */}
                   {orderSel.qty > 1 && <DefRow k="수량"><span className="tabular-nums">{orderSel.qty}개{orderSummary(orderSel) ? ` · ${orderSummary(orderSel)}` : ""}</span></DefRow>}
@@ -4518,75 +7319,6 @@ export default function AdminShopPage() {
               )}
             </DetailPane>
           </>
-        )}
-
-        {/* ═══ 시즌 전환 ═══ */}
-        {tab === "season" && (
-          <Panel
-            title="디스코드 역할 떼기"
-            desc="소유와 사이트 인벤토리는 그대로 두고 디스코드 표기만 내립니다. 권한 상품과 보호 역할은 빠지며, 실제 제거는 봇이 30초 주기로 처리합니다."
-            right={
-              <>
-                <Btn variant="secondary" disabled={!!detachBusy}
-                  onClick={async () => { const d = await callDetach(true); if (d) setDetachPreview(d); }}>
-                  <SwapLabel swap={detachBusy === "preview"} to="확인 중...">대상 미리보기</SwapLabel>
-                </Btn>
-                <Btn variant="danger" onClick={() => setDetachConfirm(true)}
-                  disabled={!detachPreview || detachPreview.matched === 0 || !!detachBusy}>
-                  <SwapLabel swap={detachBusy === "run"} to="처리 중...">디스코드 역할 떼기 실행</SwapLabel>
-                </Btn>
-              </>
-            }
-            flush
-          >
-            {!detachPreview ? (
-              <p className="px-5 py-4 text-[13px] text-[#5a5a5a]">먼저 대상을 미리보기 해야 실행할 수 있습니다.</p>
-            ) : detachPreview.matched === 0 ? (
-              <p className="px-5 py-10 text-center text-[13px] text-[#5a5a5a]">표기를 뗄 대상이 없습니다.</p>
-            ) : (
-              <div className="divide-y divide-[#ededed]">
-                {detachPreview.items.map((row: any) => (
-                  <div key={`${row.roleId}-${row.itemName}`} className="flex items-center gap-4 px-5 py-3 text-[13px]">
-                    <div className="min-w-0 flex-1 md:flex md:items-center md:gap-4">
-                      <p className="font-bold truncate md:w-72 md:shrink-0">{row.itemName}</p>
-                      <p className="mt-0.5 md:mt-0 text-[12px] md:text-[13px] text-[#5a5a5a] truncate md:flex-1 md:min-w-0">
-                        {guildRoles.find((r) => r.id === row.roleId)?.name || row.roleId}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-bold tabular-nums">{row.count.toLocaleString()}건</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-5 py-3.5 text-[13px] font-black">
-                  <span>합계</span>
-                  <span className="tabular-nums text-[#e91e3f]">{detachPreview.matched.toLocaleString()}건</span>
-                </div>
-              </div>
-            )}
-          </Panel>
-        )}
-
-        {/* ═══ 설정 — 결제 캐시백 ═══ */}
-        {tab === "settings" && (
-          <PanelGrid>
-            <Panel title="결제 캐시백" flush>
-              {!shopSet || !shopSetSnap ? (
-                <EmptyRow>불러오는 중...</EmptyRow>
-              ) : (
-                <>
-                  <FieldRow label="캐시백 합 상한" changed={shopSet.cap !== shopSetSnap.cap} hint="캐시백 아이템 효과를 합한 최대치 · 기본 30%">
-                    <Inline>
-                      <input type="number" min={0} max={100} step={1} inputMode="numeric" aria-label="캐시백 합 상한" value={shopSet.cap}
-                        onChange={(e) => setShopSet({ ...shopSet, cap: e.target.value })} className={numClass} />
-                      <span>%</span>
-                    </Inline>
-                  </FieldRow>
-                  <FieldRow label="빙옥 결제분" changed={shopSet.onPoint !== shopSetSnap.onPoint} hint={`포함하면 빙옥으로 낸 금액도 1 빙옥 = ${POINT_RATE.toLocaleString()} XP로 환산해 캐시백 · 기본 제외`}>
-                    <Toggle on={shopSet.onPoint} onClick={() => setShopSet({ ...shopSet, onPoint: !shopSet.onPoint })} onLabel="캐시백 포함" offLabel="캐시백 제외" />
-                  </FieldRow>
-                </>
-              )}
-            </Panel>
-          </PanelGrid>
         )}
       </AdminPage>
 
@@ -4646,6 +7378,122 @@ export default function AdminShopPage() {
         onConfirm={executeDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* ── 고친 채 넘어가기 — 한 번 묻는다(버리면 할 일을 이어서) ── */}
+      <ConfirmDialog
+        open={!!leaveAsk}
+        danger
+        title="저장하지 않은 수정"
+        confirmLabel="버리기"
+        cancelLabel="계속 수정"
+        body={leaveAsk ? <><span className="block font-bold text-[#131313] break-all">{leaveAsk.name}</span>고친 내용이 사라집니다.</> : null}
+        onConfirm={() => { const go = leaveAsk?.go; setLeaveAsk(null); go?.(); }}
+        onCancel={() => setLeaveAsk(null)}
+      />
+
+      {/* ── 아이템 일괄 삭제 — 확인 한 번(지울 이름 · 막힌 것은 상품 N · 패스 N) ── */}
+      <ConfirmDialog
+        open={batchDelAsk}
+        danger
+        busy={batchBusy}
+        title={`아이템 삭제 · ${regDelOk.length.toLocaleString()}개`}
+        confirmLabel="삭제"
+        confirmDisabled={!regDelOk.length}
+        body={
+          <>
+            {regDelOk.length > 0 && (
+              <span className="block max-h-40 overflow-y-auto overscroll-contain border-y border-[#ededed] py-1.5">
+                {regDelOk.map((it) => <span key={String(it._id)} className="block py-0.5 truncate font-bold text-[#131313]">{it.name || "이름 없음"}</span>)}
+              </span>
+            )}
+            {regDelBlocked.length > 0 && (
+              <span className="block mt-3">
+                <span className="block text-[12px] font-black text-[#d01634] tabular-nums">남김 {regDelBlocked.length.toLocaleString()}</span>
+                <span className="block mt-1 max-h-28 overflow-y-auto overscroll-contain">
+                  {regDelBlocked.map((it) => (
+                    <span key={String(it._id)} className="flex items-center gap-2 py-0.5 text-[12px]">
+                      <span className="min-w-0 flex-1 truncate">{it.name || "이름 없음"}</span>
+                      <span className="shrink-0 tabular-nums text-[#8a8a8a]">상품 {Number(it.usage) || 0} · 패스 {Number(it.passUsage) || 0}</span>
+                    </span>
+                  ))}
+                </span>
+              </span>
+            )}
+          </>
+        }
+        onConfirm={() => { void batchDelete(); }}
+        onCancel={() => setBatchDelAsk(false)}
+      />
+
+      {/* ── 상품 일괄 삭제 — 확인 한 번(지울 이름) ── */}
+      <ConfirmDialog
+        open={prodDelAsk}
+        danger
+        busy={prodBusy}
+        title={`상품 삭제 · ${prodPicked.length.toLocaleString()}개`}
+        confirmLabel="삭제"
+        confirmDisabled={!prodPicked.length}
+        body={
+          <span className="block max-h-40 overflow-y-auto overscroll-contain border-y border-[#ededed] py-1.5">
+            {prodPicked.map((it) => <span key={String(it._id)} className="block py-0.5 truncate font-bold text-[#131313]">{it.name || "이름 없음"}</span>)}
+          </span>
+        }
+        onConfirm={() => { void deleteProducts(); }}
+        onCancel={() => setProdDelAsk(false)}
+      />
+      {/* ── 상품 일괄 편집 창(할인 · 판매 종료 · 가격 · 재고) ── */}
+      {prodSheet && (
+        <ProdBatchSheet key={prodSheet} mode={prodSheet} items={prodPicked} busy={prodBusy} at={prodSheetAt}
+          onClose={() => { if (!prodBusy) setProdSheet(""); }}
+          onSubmit={(entries) => { void submitProdSheet(entries); }} />
+      )}
+      {/* ── 쿠폰 여러 장 — 만든 코드(복사 · CSV) ── */}
+      {couponCodes && (
+        <CouponCodesSheet name={couponCodes.name} codes={couponCodes.codes} onClose={() => setCouponCodes(null)}
+          onCopy={() => { void copyCodes(couponCodes.codes); }} onCsv={() => codesCsv(couponCodes.name, couponCodes.codes)} />
+      )}
+
+      {/* ── 아이템 이름 바꾸기 · 복제(아래 띠) ── */}
+      {(sheet === "rename" || sheet === "duplicate") && (
+        <RenameSheet mode={sheet} items={regPicked} allItems={regItems} busy={batchBusy}
+          onClose={() => { if (!batchBusy) setSheet(""); }}
+          onSubmit={(rows, withDesc) => { void (sheet === "rename" ? submitRename(rows, withDesc) : submitDuplicate(rows, withDesc)); }} />
+      )}
+      {/* ── 설명 바꾸기 · 분류 바꾸기(아이템 · 상품 아래 띠 「⋯」) ── */}
+      {textSheet?.mode === "desc" && (
+        <DescSheet key={`desc:${textSheet.of}`} targets={textTargetsOf(textSheet.of)} busy={batchBusy || prodBusy}
+          onClose={() => { if (!(batchBusy || prodBusy)) setTextSheet(null); }}
+          onSubmit={(entries) => { void submitTextSheet(textSheet.of, entries); }} />
+      )}
+      {textSheet?.mode === "category" && (
+        <CategorySheet key={`category:${textSheet.of}`} targets={textTargetsOf(textSheet.of)} busy={batchBusy || prodBusy}
+          onClose={() => { if (!(batchBusy || prodBusy)) setTextSheet(null); }}
+          onSubmit={(entries) => { void submitTextSheet(textSheet.of, entries); }} />
+      )}
+      {/* ── 고른 아이템을 새 그룹으로(아래 띠 「그룹 ▾ · + 새 그룹」) ── */}
+      <FormSheet
+        open={sheet === "group"}
+        onClose={() => { if (!batchBusy) setSheet(""); }}
+        busy={batchBusy}
+        title="새 그룹"
+        sub={`${sel.size.toLocaleString()}개`}
+        width={560}
+        onSubmit={() => {
+          const g = normalizeItemGroup(newGroupName);
+          if (!g) return;
+          void batchGroup(g).then((ok) => { if (ok) setSheet(""); });
+        }}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setSheet("")}>취소</Btn>
+            <Btn type="submit" className="min-w-[96px]" disabled={!normalizeItemGroup(newGroupName)}>옮기기</Btn>
+          </>
+        }
+      >
+        <Field label="그룹 이름">
+          <input type="text" autoFocus value={newGroupName} maxLength={ITEM_GROUP_MAX} onChange={(e) => setNewGroupName(e.target.value)} className={inputClass} />
+        </Field>
+      </FormSheet>
 
       {/* ── 실사이트 반영 확인 — 종류별 수 · 초안 목록(줄마다 되돌리기 — 삭제 예정 · 순서는 여기서만 보인다) · 경고(처음 쓰는 키 · https 아님) ── */}
       <ConfirmDialog
@@ -4788,36 +7636,6 @@ export default function AdminShopPage() {
         onCancel={() => setCancelTarget(null)}
       />
 
-      {/* ── 시즌 전환 실행 확인 — 무엇이 얼마나 바뀌는지 보여 준 뒤 묻는다 ── */}
-      <ConfirmDialog
-        open={detachConfirm}
-        danger
-        busy={detachBusy === "run"}
-        title="디스코드 역할 떼기"
-        confirmLabel="실행"
-        body={detachPreview ? (
-          <>
-            <span className="block mb-3">
-              구매 <span className="font-bold text-[#131313] tabular-nums">{detachPreview.matched.toLocaleString()}건</span>의 디스코드 역할 표기를 내립니다.
-            </span>
-            <span className="block border-y border-[#ededed] py-2 mb-3 max-h-40 overflow-y-auto no-bar">
-              {detachPreview.items.slice(0, 6).map((row: any) => (
-                <span key={`${row.roleId}-${row.itemName}`} className="flex items-center justify-between gap-3 py-1 text-[12px]">
-                  <span className="truncate font-bold text-[#131313]">{row.itemName}</span>
-                  <span className="shrink-0 font-bold text-[#e91e3f] tabular-nums">{row.count.toLocaleString()}건</span>
-                </span>
-              ))}
-              {detachPreview.items.length > 6 && (
-                <span className="block pt-1 text-[12px] text-[#8a8a8a]">외 {detachPreview.items.length - 6}종</span>
-              )}
-            </span>
-            소유와 사이트 인벤토리는 그대로 유지되지만, 되돌리려면 역할을 손으로 다시 붙여야 합니다.
-          </>
-        ) : null}
-        onConfirm={runDetach}
-        onCancel={() => setDetachConfirm(false)}
-      />
-
       {/* ── 쿠폰 지급 ── 모바일 상세 판(z-120) 위에 뜨도록 z-125, 확인 모달(z-130)보다는 아래 */}
       {issueTarget && (
         <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4 overlay-in">
@@ -4875,7 +7693,7 @@ export default function AdminShopPage() {
         <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4 overlay-in">
           <div role="dialog" aria-modal="true" aria-label="발송 처리" className="bg-white border border-[#ededed] rounded-2xl w-full max-w-sm p-6 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)] text-[#131313]">
             <h2 className="text-[17px] font-black tracking-tight">발송 처리</h2>
-            <p className="mt-1 text-[13px] text-[#5a5a5a] break-keep">{noteTarget.userName} · {noteTarget.itemName}</p>
+            <p className="mt-1 text-[13px] text-[#5a5a5a] break-keep">{noteTarget.userName} · {orderName(noteTarget)}</p>
             {noteTarget.contact && (
               <div className="mt-4 text-[13px] text-[#5a5a5a] bg-[#f2f2f2] rounded-lg px-3 py-2 whitespace-pre-wrap break-words">{noteTarget.contact}</div>
             )}
@@ -4888,6 +7706,71 @@ export default function AdminShopPage() {
           </div>
         </div>
       )}
+
+      {/* ── 상점 설정(머리 「설정」) — ARCTIC 상점 공개 · 결제 캐시백. 바뀐 칸만 저장(Enter · Ctrl+S) ── (z-125: 확인 · 알림 모달(z-130) 아래) */}
+      <FormSheet
+        open={shopSetOpen}
+        onClose={closeShopSettings}
+        busy={savingShopSet}
+        title="상점 설정"
+        width={560}
+        onSubmit={() => { void saveShopSet(); }}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={closeShopSettings}>취소</Btn>
+            <Btn type="submit" className="min-w-[96px]" disabled={!shopSetDirty || shopSetLoading}>{savingShopSet ? "저장 중…" : "저장"}</Btn>
+          </>
+        }
+      >
+        {!shopSet || !shopSetSnap ? (
+          <div className="py-8 text-center text-[13px] text-[#5a5a5a]">
+            {shopSetLoading ? "불러오는 중…" : (
+              <>
+                불러오지 못했습니다.
+                <span className="block mt-3">
+                  <Btn variant="secondary" size="sm" onClick={() => { setShopSetLoading(true); setShopSetReload((n) => n + 1); }}>다시 읽기</Btn>
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+          // FieldRow(설정 줄)를 창 끝까지 — 창 본문 여백(px-5 py-4)을 걷고 줄마다 제 여백 · 구분선
+          <div className="-mx-5 -my-4">
+            <FieldRow label="ARCTIC 상점 공개" changed={shopSet.pub !== shopSetSnap.pub}>
+              <Toggle on={shopSet.pub} disabled={shopSetLoading} onClick={() => setShopSet((v) => (v ? { ...v, pub: !v.pub } : v))} onLabel="공개 중" offLabel="비공개 (관리자만)" />
+            </FieldRow>
+            <FieldRow label="캐시백 합 상한" changed={shopSet.cap.trim() !== shopSetSnap.cap} hint="캐시백 아이템 효과를 합한 최대치 · 기본 30%">
+              <Inline>
+                {/* min · max 는 두지 않는다 — 창이 <form> 이라 브라우저 검사가 먼저 막아 아래 알림(효과음)이 안 뜬다. 범위는 saveShopSet 이 본다 */}
+                <input type="number" inputMode="numeric" aria-label="캐시백 합 상한" value={shopSet.cap} disabled={shopSetLoading}
+                  onChange={(e) => { const cap = e.target.value; setShopSet((v) => (v ? { ...v, cap } : v)); }} className={numClass} />
+                <span>%</span>
+              </Inline>
+            </FieldRow>
+            <FieldRow label="빙옥 결제분" changed={shopSet.onPoint !== shopSetSnap.onPoint} hint={`포함하면 빙옥으로 낸 금액도 1 빙옥 = ${POINT_RATE.toLocaleString()} XP로 환산해 캐시백 · 기본 제외`}>
+              <Toggle on={shopSet.onPoint} disabled={shopSetLoading} onClick={() => setShopSet((v) => (v ? { ...v, onPoint: !v.onPoint } : v))} onLabel="캐시백 포함" offLabel="캐시백 제외" />
+            </FieldRow>
+            {/* 📌 종류별 효과 문구 — 따로 창(저장도 따로 · 이 창의 저장과 무관) */}
+            <FieldRow label="효과 문구" hint="효과 종류마다 자동 문구의 틀">
+              <Inline>
+                <span className="font-bold text-[#131313]">{fxTextCount ? `바꾼 틀 ${fxTextCount}개` : "기본 문구"}</span>
+                <Btn variant="secondary" size="sm" onClick={() => openFxText()}>편집</Btn>
+              </Inline>
+            </FieldRow>
+          </div>
+        )}
+      </FormSheet>
+
+      {/* ── 종류별 효과 문구(상점 설정 창 「효과 문구」 · 기능 검색) ── */}
+      <EffectTemplatesSheet
+        open={fxTextOpen}
+        focus={fxTextFocus}
+        onClose={() => setFxTextOpen(false)}
+        saved={fxTpl.saved}
+        onSaved={(t) => { const was = JSON.stringify(fxTpl.saved || {}); fxTpl.remember(t); if (JSON.stringify(t) !== was) fetchRegItems(); }}
+        toast={toast}
+        fail={fail}
+      />
 
       {/* ── 추천 아이템 불러오기 ── (z-125: 알림 모달(z-130) 아래) */}
       {presetOpen && <PresetDialog onClose={() => setPresetOpen(false)} onDone={onPresetDone} notify={notify} />}

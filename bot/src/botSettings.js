@@ -30,6 +30,13 @@ const DEFAULTS = {
   afkCheckMinMin: 20,
   afkCheckMaxMin: 60,
   afkCheckReplyMin: 5,
+  // 핫타임(hotTime.js — 사이트 models/BotSetting.js 와 같은 기본값)
+  hotTimeOn: false,
+  hotTimeName: "",
+  hotTimeFrom: null,
+  hotTimeUntil: null,
+  hotTimeWeekdayMult: 1.5,
+  hotTimeWeekendMult: 2,
   muteReducePct: 90,
   muteTarget: "both",
   resetOnLeave: false,

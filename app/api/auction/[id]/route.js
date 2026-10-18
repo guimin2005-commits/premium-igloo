@@ -8,6 +8,8 @@ import { totalSlots, slotLimitOf, phase1RoleOf, roleNames } from "@/lib/auctionG
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { isAdminName } from "@/lib/admins";
+// 📌 진행자 시야(숨은 포지션 · 모스트 · 공개 전 discordId) · 리더 대신 조작은 「유저 화면으로 보기」를 따른다. host:* 권한은 isAdminName 그대로
+import { isAdminViewer } from "@/lib/adminViewServer";
 import { denyIfMaintenance } from "@/lib/apiAuth";
 
 const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot).length;
@@ -47,8 +49,10 @@ export async function GET(request, { params }) {
     const session = await getServerSession(authOptions);
     const viewerId = session?.user?.id;
     const asParam = new URL(request.url).searchParams.get("as");
-    // 관리자라도 리더 역할로 관전 중이면(as 지정) 해당 리더 시야로 제한 — 테스트 시 정보 유출 방지
-    const isHostViewer = isAdminName(session?.user?.name) && (asParam === null || asParam === "");
+    // 관리자라도 리더 역할로 관전 중이면(as 지정) 해당 리더 시야로 제한 — 테스트 시 정보 유출 방지 (as=spec 은 관전자 시야)
+    //   유저 화면으로 보는 관리자는 진행자가 아니다 — 같은 계정의 일반 유저와 같은 시야
+    const asAdmin = await isAdminViewer(session);
+    const isHostViewer = asAdmin && (asParam === null || asParam === "");
     const data = auction.toObject();
     // 모든 응답에 hasMost(공개할 모스트 보유 여부) 포함 — 진행자·종료 시에도 동일 기준
     data.players = data.players.map((p) => ({ ...p, hasMost: Array.isArray(p.mostChampions) && p.mostChampions.filter(Boolean).length > 0 }));
@@ -58,7 +62,7 @@ export async function GET(request, { params }) {
       if (viewerIdx < 0 && asParam !== null && asParam !== "") {
         const asIdx = Number(asParam);
         // 관리자가 리더 역할로 관전 중일 때만 허용 (ID 미등록 리더는 관리자만 조작할 수 있으므로)
-        const canUseAs = Number.isInteger(asIdx) && data.leaders[asIdx] && isAdminName(session?.user?.name);
+        const canUseAs = Number.isInteger(asIdx) && data.leaders[asIdx] && asAdmin;
         if (canUseAs) viewerIdx = asIdx;
       }
       data.players = data.players.map((p) => {
@@ -93,8 +97,10 @@ export async function POST(request, { params }) {
     //  · 리더 조작은 디스코드 ID 가 일치하는 리더 본인만 (ID 미등록 리더는 진행자가 리더 시점으로 대신 조작)
     const session = await getServerSession(authOptions);
     const isAdmin = isAdminName(session?.user?.name);
+    // 리더 대신 조작(ID 미등록 리더 · 남의 리더 자리)은 관리자로 볼 때만 — 유저 화면에선 본인 리더만
+    const asAdmin = await isAdminViewer(session);
     const myId = session?.user?.id || "";
-    const isLeaderSelf = (leader) => isAdmin || (!!leader?.discordId && leader.discordId === myId);
+    const isLeaderSelf = (leader) => asAdmin || (!!leader?.discordId && leader.discordId === myId);
     if (typeof action === "string" && action.startsWith("host:") && action !== "host:posSwap" && !isAdmin) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
@@ -317,7 +323,7 @@ export async function POST(request, { params }) {
         if (!leader || !roleNames(S).includes(position)) return NextResponse.json({ success: false }, { status: 400 });
 
         // 남의 리더 자리를 대신 고르지 못하게 — ID가 등록된 리더는 본인(또는 진행자)만
-        if (leader.discordId && leader.discordId !== myId && !isAdmin) {
+        if (leader.discordId && leader.discordId !== myId && !asAdmin) {
           return NextResponse.json({ success: false, message: "본인 리더만 선택할 수 있습니다." }, { status: 403 });
         }
         // 📌 최초 선택은 자유, 그 뒤 변경은 팀당 단 한 번.

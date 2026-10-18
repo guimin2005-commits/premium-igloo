@@ -214,7 +214,8 @@ async function processPurchases(guild) {
 
 // ── XP 지급 대기열 처리 ──────────────────────
 // 시즌 패스 진행도를 올리지 않는 지급 — 기준선(passBaseXp)을 같은 폭으로 함께 올린다(아래)
-const PASS_NEUTRAL = new Set(["pass", "role-refund"]);
+//    📌 2026-10-17 이벤트 패스 XP 보상(source "event-pass")도 — 사이트 lib/season.js PASS_NEUTRAL_SOURCES · lib/eventPass.js 와 같은 글자(없으면 시즌 패스 진행도에 섞인다)
+const PASS_NEUTRAL = new Set(["pass", "role-refund", "event-pass"]);
 // 📌 보상 역할을 알림 없이 맞추는 지급 — 역할 환불(관리자 역할 이전)은 한 번에 수십 명이 들어온다.
 //    지난 시즌 역할 값을 돌려준 것이라 "NEW ROLE" 알림이 채널을 도배하지 않게(processRoleSyncs 와 같은 notify:false). 역할은 그대로 맞춘다
 const QUIET_ROLE_SYNC = new Set(["role-refund"]);
@@ -225,7 +226,7 @@ const PASS_BOOSTED = new Set(["quest"]);
 // 📌 XP 획득 중단(관리자 — xpStop.js) 중이면 넣지 않는 자동 출처 — 2026-10-04 "5일 전체 XP 획득 중단". 퀘스트 · 시즌 패스 · 쿠폰 · 코드 보상.
 //    지급하지 않고 failed 로 남긴다(중단이 끝난 뒤에도 들어가지 않는다 — 관리 › 유저 조회 지급 탭에 사유가 보인다).
 //    운영진 지급(manual · 서포터즈 등) · 회수(음수)는 그대로 들어간다
-const STOP_BLOCKED = new Set(["quest", "pass", "coupon", "code"]);
+const STOP_BLOCKED = new Set(["quest", "pass", "coupon", "code", "event-pass"]); // event-pass — 이벤트 패스 보상(2026-10-17, 자동 출처)
 async function processPayouts(guild) {
   // 빙옥(currency "point") 건은 사이트가 즉시 반영한 것 — 어떤 경우에도 XP 로 지급하지 않는다
   const rows = await Payout.find({ status: "pending", currency: { $ne: "point" } }).limit(50);
@@ -327,15 +328,21 @@ async function processPayouts(guild) {
       try {
         const newLevel = getLevelByXp(doc.xp);
         // 지급 직후 xp 그대로일 때만 레벨을 쓴다 — 그 사이 채팅 · 음성 지급이 xp 를 바꿨으면 그쪽이 맞춘다(레벨 역행 방지)
-        const lv = await UserXp.updateOne({ userId, xp: doc.xp }, { $set: { level: newLevel } });
-        // 최고 도달 레벨 — 큐로 오른 레벨도 기록한다(기록으로만 둔다 — 레벨 업 퀘스트는 2026-10-04 부터 이 값을 보지 않는다).
-        //    기록이 잠깐 실패해도 레벨 업 퀘스트 · 역할 · 알림 · 효과를 막지 않게 오류는 삼킨다
-        await UserXp.updateOne({ userId }, { $max: { maxLevel: newLevel } }).catch(() => {});
+        // 📌 최고 도달 레벨(maxLevel)도 같은 한 번의 쓰기에서 $max 로 올리고 바꾸기 전 값(peak)을 돌려받는다(레벨업 효과는 이 값을 넘은 레벨만 — 아래 · xp.js grantXp 와 같은 규칙).
+        //    따로 $max 를 하면 동시 지급의 도착 순서가 엇갈려 가운데 레벨의 효과를 아무도 못 받거나, 그 사이 관리자 초기화(maxLevel 0)를 옛 값으로 되돌릴 수 있다.
+        //    xp 가 그 사이 바뀌었으면(wrote 없음) 레벨 · 최고 레벨 둘 다 바꾼 쪽이 적는다
+        const wrote = await UserXp.findOneAndUpdate(
+          { userId, xp: doc.xp },
+          { $set: { level: newLevel }, $max: { maxLevel: newLevel } },
+          { new: false, projection: { maxLevel: 1 } }
+        ).lean();
+        const peak = Math.floor(Number(wrote?.maxLevel) || 0);
         // 📌 레벨이 오른 것으로 치는 기준 — 레벨 업 퀘스트 · 레벨업 알림 · 레벨업 효과가 같이 쓴다(채팅 · 음성 grantXp 와 같은 규칙).
-        //    doc.level 은 이번 지급 전 레벨. 레벨 0 → 1(시작 레벨)은 빼고, 오른 레벨마다 매번(XP 를 써서 내려갔다가 다시 올라도).
+        //    doc.level 은 이번 지급 전 레벨. 레벨 0 → 1(시작 레벨)은 빼고, 퀘스트 · 알림은 오른 레벨마다 매번(XP 를 써서 내려갔다가 다시 올라도),
+        //    레벨업 효과만 2026-10-17 부터 처음 오른 레벨(peak 를 넘은 만큼 — 아래).
         //    레벨을 못 썼으면(그 사이 xp 가 바뀜) 바꾼 쪽이 센다. 레벨 비공개 중 · 역할 환불(source "role-refund")은 치지 않는다
         const before = Math.max(1, Math.floor(Number(doc.level) || 0));
-        const leveled = !!lv.matchedCount && p.amount > 0 && isLevelOpen() && !QUIET_ROLE_SYNC.has(p.source) && newLevel > before;
+        const leveled = !!wrote && p.amount > 0 && isLevelOpen() && !QUIET_ROLE_SYNC.has(p.source) && newLevel > before;
         // 📌 레벨 업 퀘스트(features/activityStats.js "levelup") — 2026-10-04 "XP를 써서 내려갔다가 다시 오른 레벨도 레벨이다 / 시작 레벨은 동일 유지".
         //    예전엔 처음 도달한 레벨(그 전 최고치를 넘은 만큼)만 셌다
         if (leveled) bumpActivity(userId, "levelup", newLevel - before);
@@ -344,14 +351,16 @@ async function processPayouts(guild) {
         const member = await fetchMember(guild, userId);
         if (member) {
           // 레벨을 못 썼으면(그 사이 xp 가 바뀜) 옛 레벨로 역할을 맞추지 않는다 — 바꾼 쪽이 맞춘다
-          if (lv.matchedCount) {
+          if (wrote) {
             await syncRewardRoles(member, newLevel, QUIET_ROLE_SYNC.has(p.source) ? { notify: false } : {}).catch(() => {});
           }
           // 📌 2026-10-04 "지급 대기열로 오른 레벨에도 레벨업 알림 · 레벨업 아이템 효과" — 퀘스트 · 패스 · 관리자 지급으로 올라도 채팅 · 음성과 똑같이.
           //    기준은 위 leveled — 역할 환불(source "role-refund")은 돌려준 값이라 상점 주문 환불처럼 알림 · 효과 둘 다 없다
+          //    📌 효과는 처음 오른 레벨(시즌 최고 레벨 peak 를 넘은 만큼)은 그대로, 다시 오른 레벨은 절반(2026-10-18 — xp.js grantLevelUpEffects). 알림은 그대로 오른 레벨마다
           if (leveled) {
             announceLevelUp(member, before, newLevel, doc.xp);
-            await grantLevelUpEffects(member, newLevel - before);
+            const first = Math.max(0, newLevel - Math.max(before, peak));
+            await grantLevelUpEffects(member, first, newLevel - before - first);
           }
           // 큐로만 XP 가 들어온 계정은 이름이 비어 있어 랭킹에 "이름 없음" 으로 뜬다.
           // grantXp 와 달리 여기서는 이름을 채우지 않았기 때문 — 멤버를 이미 받아왔으니 같이 채운다.

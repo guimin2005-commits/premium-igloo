@@ -27,6 +27,12 @@ const UserXpSchema = new mongoose.Schema({
   voiceTodayDate: { type: String, default: "" },
   // 📌 진행 중인 음성 XP 바퀴 — 봇만 쓴다(bot/src/features/voiceTime.js). 사람마다 5분을 채우면 1회분, 못 채우고 나가면 머문 만큼 주고 지운다
   voiceCycle: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  // 📌 사탕 바구니(아이템 효과 voiceCandy — 2026-10-14 할로윈 「유령 펭귄의 초대」) — 음성 XP 를 받은 시간(초)을 쌓는 칸. 봇만 쓴다(bot/src/features/voiceXp.js payVoiceCycle).
+  //    효과의 N분이 찰 때마다 사탕 하나(100~5,000 XP)를 주고 그만큼 뺀다 — 나머지는 남겨 재시작에도 이어 간다. models/UserXp.js · bot/src/db.js 와 같은 칸
+  voiceCandySec: { type: Number, default: 0 },
+  // 📌 머물수록 증가(아이템 효과 voiceStay — 2026-10-18 마녀의 모래시계) — 같은 음성 채널에 이어서 머문 초 { ch, sec, at }. 봇만 쓴다(bot/src/features/voiceTime.js).
+  //    나가거나 옮기면 지운다. 재시작 때 같은 채널에 그대로 있고 10분 안의 기록이면 이어 간다. models/UserXp.js · bot/src/db.js 와 같은 칸
+  voiceStay: { type: mongoose.Schema.Types.Mixed, default: undefined },
   // 📌 마지막 활동 시각 — 봇만 쓴다(bot/src/features/activity.js). 음성에 있는 동안의 마지막 채팅 · 음성 상태 바뀜 · 명령 · 버튼을 20초마다 적고 음성에서 나가면 비운다.
   //    봇이 재시작돼도 음성 XP 로그의 무활동(ctx.idle)을 이어 센다. bot/src/db.js 와 같은 칸
   lastActiveAt: { type: Date, default: null },
@@ -50,8 +56,9 @@ const UserXpSchema = new mongoose.Schema({
   afkMoves: { type: Number, default: 0 },
   afkSanctionMoves: { type: Number, default: 0 },
   afkMovedAt: { type: Date, default: null },
-  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 최고 도달 레벨(기록으로만 — 봇이 $max 로 적는다.
-  //    2026-10-04 레벨 업 퀘스트는 이 값을 보지 않고 다시 오른 레벨도 매번 센다)
+  // 📌 아이템 효과(봇이 씀) — 효과별 "하루 1번" 기록("<roleId>:<effectId>" → 날짜) · 이번 시즌 최고 도달 레벨(봇이 레벨 쓰기와 같이 $max 로 적는다.
+  //    2026-10-17 레벨업 아이템 효과는 이 값을 넘은 레벨만 준다 · 관리자 초기화가 0 으로 비운다 — 시즌 XP 초기화 때도 같이 비울 것.
+  //    레벨 업 퀘스트 · 알림은 이 값을 보지 않고 다시 오른 레벨도 매번 센다. 업적 레벨은 max(level, 이 값))
   effectDaily: { type: Map, of: String, default: {} },
   maxLevel: { type: Number, default: 0 },
   // 📌 시즌 패스 — 새 재화를 만들지 않고 "이번 시즌에 번 XP"(xp - passBaseXp)를 진행도로 쓴다.
@@ -62,6 +69,9 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 고른 카드 스킨 — "" 안 고름(기본 카드 — 2026-10-04 자동 착용 없음) · "none" 끔(기본 카드) · 스킨 키. 인벤토리에서 착용 · 해제 (app/api/xp/card-skin)
   //    봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
   cardSkinPick: { type: String, default: "" },
+  // 📌 고른 카드 배경(2026-10-15) — 카드 스킨과 같은 규칙("" 안 고름 · "none" 끔 · 배경 키 sc_*). 카드 테두리(cardSkinPick)와 따로 고르고 함께 입는다.
+  //    인벤토리에서 착용 · 해제 (app/api/xp/card-scene). 봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
+  cardScenePick: { type: String, default: "" },
   // 📌 고른 아바타 테두리 — 카드 스킨과 같은 규칙("" 안 고름 · "none" 끔 · 테두리 키 = 등급 키). 인벤토리에서 착용 · 해제 (app/api/xp/avatar-frame)
   //    봇(bot/src/db.js)도 같은 칸
   avatarFramePick: { type: String, default: "" },

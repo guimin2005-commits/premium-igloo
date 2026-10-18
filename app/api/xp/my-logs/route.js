@@ -32,6 +32,7 @@ const PAYOUT_SOURCE = {
   admin: "운영진 지급",
   quest: "퀘스트 보상",
   pass: "시즌 패스 보상",
+  "event-pass": "이벤트 패스 보상",
   code: "쿠폰 보상",
   supporter: "서포터즈 보상",
   referral: "초대 보상",

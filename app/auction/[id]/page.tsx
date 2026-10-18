@@ -8,7 +8,7 @@ import { AuctionStyles } from "../../components/AuctionStyles";
 import { openLogin, LOGIN_CTX } from "../../components/LoginPrompt";
 import { roleNames, totalSlots as totalSlotsFn, slotLimitOf as slotLimitOfFn, phase1RoleOf } from "@/lib/auctionGames";
 
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../../components/AdminView";
 const POLL_MS = 1500;      // 평상시
 const POLL_FAST_MS = 600;  // 매물이 호명돼 입찰이 오가는 동안
 
@@ -119,7 +119,8 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const { data: session, status } = useSession();
   const router = useRouter();
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 관리자로 볼 때만 진행자 기본 시점 · 시점 고르기 · 제목 수정 — 「유저 화면으로 보기」를 켜면 리더/관전자로 들어온다(서버 시야도 같은 기준)
+  const { admin: isAdmin } = useAdminView();
   const myDiscordId = (session?.user as any)?.id;
 
   const [auction, setAuction] = useState<any>(null);
@@ -328,9 +329,11 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
       pollBusy.current = true;
       try {
         // as=리더인덱스 — 디스코드 ID 미등록 리더가 본인 스카우터 정보를 받기 위한 힌트
+        //   as=spec — 관리자가 고른 관전자 시점도 서버에서 관전자 시야로 받는다(진행자 정보가 응답에 실리지 않게)
         const qs = new URLSearchParams();
         if (lastChatAt.current) qs.set("chatSince", lastChatAt.current);
         if (roleRef.current !== null) qs.set("as", String(roleRef.current));
+        else if (roleKeyRef.current === "spec") qs.set("as", "spec");
         const url = `/api/auction/${id}${qs.toString() ? `?${qs.toString()}` : ""}`;
         const t0 = Date.now();
         const res = await fetch(url, { cache: "no-store" });
@@ -535,10 +538,9 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (!auction || autoRoleDone.current) return;
     const idx = myDiscordId ? auction.leaders.findIndex((l: any) => l.discordId && l.discordId === myDiscordId) : -1;
-    const admin = session?.user?.name && ADMIN_USERS.includes(session.user.name);
     if (idx >= 0) { setRole(String(idx)); autoRoleDone.current = true; }
-    else if (!admin && session) { setRole("spec"); autoRoleDone.current = true; } // 미등록 유저 → 관전자
-  }, [auction, myDiscordId, session]);
+    else if (!isAdmin && session) { setRole("spec"); autoRoleDone.current = true; } // 미등록 유저(유저 화면의 관리자 포함) → 관전자
+  }, [auction, myDiscordId, session, isAdmin]);
 
   // 📌 진행자 조작(시간 관련)이 폴링(최대 1.5초)을 기다려 늦게 반영되던 문제 —
   //    서버가 성공을 돌려주면 같은 값을 로컬에도 즉시 반영한다. (서버 시각 기준 serverNow 사용)

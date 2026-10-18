@@ -16,11 +16,13 @@
 //       같은 채널에 그대로 있으면 이어 가고, 그 사이 나갔으면 그때까지 머문 만큼 준다. 꺼져 있던 동안(보통 수십 초)은 못 센다.
 //       종료(SIGTERM) 때는 지급하지 않고 닫힌 바퀴까지 voiceCycle.pend 에 적어 둔다 — 지급 도중 끊겨 사라지지 않게(다음 기동 때 준다).
 //       Railway 기본 설정은 SIGTERM 뒤 곧바로 SIGKILL 이라(RAILWAY_DEPLOYMENT_DRAINING_SECONDS=0) 마지막 기록 뒤 몇 초는 잃을 수 있다 — 그래서 기록 주기를 20초로 짧게 둔다
+//    📌 2026-10-18 머물수록 증가(아이템 효과 voiceStay — 마녀의 모래시계) — 같은 채널에 이어서 머문 초(stays)를 사람마다 세어 구간마다 붙인다(addPiece).
+//       나감 · 다른 채널로 옮김이면 0 부터(cut), 세지 않는 동안(음소거 막기 · 제외 채널)은 멈춘다. UserXp.voiceStay 에 기록마다 적어 재시작에도 이어 간다
 import { Events } from "discord.js";
 import { UserXp } from "../db.js";
 import { kstToday, VOICE_TIME_START } from "../leveling.js";
 import { getChannelPolicy } from "../channelConfigs.js";
-import { getSettings, getMuteMultiplier } from "../botSettings.js";
+import { getSettings, getMuteMultiplier, isLevelOpen } from "../botSettings.js";
 import { relieveMute, voiceRate, payVoiceCycle } from "./voiceXp.js";
 import { idleMinutes } from "./activity.js";
 import { noteXpStop, stopUntilOf, notStopped } from "../xpStop.js";
@@ -42,6 +44,21 @@ let closing = []; // 닫았지만 아직 못 준 바퀴 [{ userId, member, cycle
 const discard = new Set(); // 주지 않고 버릴 바퀴(음성 XP 정지 · 퇴장 초기화) — DB 에서도 지운다
 const gone = new Set(); // 퇴장 초기화로 문서가 지워진 사람 — 지급이 문서를 되살리지 않게(음성에 다시 들어오면 뺀다)
 const xpCarry = new Map(); // userId → 지급하고 남은 1 XP 미만 — 짧은 바퀴를 반복해도 반올림으로 늘거나 줄지 않게(서버를 나가 퇴장 초기화될 때만 지운다)
+// 📌 2026-10-18 머물수록 증가(아이템 효과 voiceStay — 마녀의 모래시계) — userId → { ch, sec: 그 채널에 이어서 머문 초(센 시간만 — 음소거 막기 · 제외 채널 동안은 멈춤), dirty }.
+//    다른 채널로 옮기거나 음성에서 나가면 지운다(0 부터 — 잠수 채널로 옮겨져도). 구간(piece)마다 시작 때 값(stay)을 붙여 1회분 계산(voiceRate)에 넘긴다.
+//    UserXp.voiceStay 에 기록마다 적어 재시작(배포)에도 이어 간다 — 같은 채널에 그대로 있고 10분 안의 기록일 때만(restoreCycles)
+//    음성 XP 정지 · XP 획득 중단 · 레벨 비공개 동안은 쌓지 않고 0 으로(끝나면 그때부터 새로 — doFlush). 멈춘(음소거 막기 등) 사람도 5분마다 at 을 새로 적어
+//    재시작 때 「10분 넘게 안 적힘」으로 잘못 지우지 않게 한다
+const stays = new Map();
+const dbStay = new Set(); // DB(UserXp.voiceStay)에 적혀 있(을 수 있)는 사람
+const stayDrop = new Set(); // 지웠으니 DB 에서도 지울 사람
+const stayCutPre = new Set(); // 처음 복원 전에 나감 · 옮김을 본 사람 — 복원이 DB 의 옛 머문 초를 되살리지 않게(restoreCycles)
+const STAY_STALE_MS = 10 * 60 * 1000;
+const resetStay = (userId) => {
+  stays.delete(userId);
+  if (dbStay.has(userId)) stayDrop.add(userId);
+  if (!restored) stayCutPre.add(userId);
+};
 let guildRef = null;
 let started = false;
 let restored = false;
@@ -73,25 +90,34 @@ function entry(userId) {
 }
 
 // 닫힌 구간 하나 — 음성 시간(ms)과 XP 구간(pieces)에 같이 넣는다. 상태가 같은 연이은 구간은 합친다
+//    머문 초(stays)도 여기서 쌓고, 구간에는 시작 때 머문 초(stay)를 붙인다 — 이어지지 않은 구간(그 사이 나갔다 옴)은 합치지 않는다
 function addPiece(userId, ms, seg, member) {
   if (!(ms > 0)) return;
   const t = Math.min(ms, SEG_MAX_MS);
   const p = entry(userId);
   p.ms += t;
   if (member) p.member = member;
+  const st = stays.get(userId);
+  const stay = st && st.ch === seg.ch ? st.sec : 0;
+  stays.set(userId, { ch: seg.ch, sec: stay + t / 1000, dirty: true });
   const last = p.pieces[p.pieces.length - 1];
-  if (last && last.ch === seg.ch && last.n === seg.n && last.mult === seg.mult && last.mu === seg.mu && last.df === seg.df && last.lv === seg.lv) last.ms += t;
-  else p.pieces.push({ ms: t, ch: seg.ch, n: seg.n, mult: seg.mult, mu: seg.mu, df: seg.df, lv: seg.lv });
+  // 합친 구간은 시작 때 머문 초로 통째 계산되므로 한 구간 상한(SEG_MAX_MS)까지만 합친다(지급이 밀려도 구간마다 그때 % 로)
+  if (last && last.ch === seg.ch && last.n === seg.n && last.mult === seg.mult && last.mu === seg.mu && last.df === seg.df && last.lv === seg.lv
+    && Math.abs(last.stay + last.ms / 1000 - stay) < 1e-3 && last.ms + t <= SEG_MAX_MS) last.ms += t;
+  else p.pieces.push({ ms: t, ch: seg.ch, n: seg.n, mult: seg.mult, mu: seg.mu, df: seg.df, lv: seg.lv, stay });
 }
 
 // 지금 구간을 닫아(세는 구간이었으면 pending 에) 넣고 vs 기준으로 새 구간을 연다. 음성 채널이 없으면 세션을 끝낸다
+//    📌 나감 · 다른 채널로 옮김이면 머문 초(stays)를 지운다 — 머물수록 증가(voiceStay)는 0 부터
 function cut(userId, vs, now = Date.now()) {
   const s = sessions.get(userId);
   if (s && s.since != null) addPiece(userId, now - s.since, s, vs?.member || s.member);
   if (!vs?.channelId) {
     sessions.delete(userId);
+    resetStay(userId);
     return;
   }
+  if (s && s.ch !== vs.channelId) resetStay(userId);
   const mult = multOf(vs);
   sessions.set(userId, { since: mult > 0 ? now : null, member: vs.member || s?.member || null, ch: vs.channelId, n: headcount(vs.channel), mult, ...flagsOf(vs) });
 }
@@ -173,7 +199,10 @@ async function doFlush(final) {
     for (const userId of [...sessions.keys()]) {
       const vs = guild.voiceStates.cache.get(userId);
       if (vs?.channelId) cut(userId, vs, now);
-      else sessions.delete(userId);
+      else {
+        sessions.delete(userId);
+        resetStay(userId); // 나감을 놓쳤다 — 머문 초도 0 부터
+      }
     }
     for (const [userId, vs] of guild.voiceStates.cache) {
       if (!vs.channelId || sessions.has(userId) || vs.member?.user?.bot) continue;
@@ -186,6 +215,7 @@ async function doFlush(final) {
     if (!guild) return;
     await restoreCycles(guild);
     restored = true;
+    stayCutPre.clear();
   }
   const s = getSettings();
   const interval = Math.max(30, Number(s.voiceIntervalSec) || 300);
@@ -250,8 +280,14 @@ async function doFlush(final) {
     else if (dbCycle.has(userId)) discard.add(userId); // 1초도 안 된 바퀴는 주지 않고 DB 에서만 지운다
   };
   const full = (c) => c.sec >= interval - 1e-6;
+  // 📌 머문 초(voiceStay)는 음성 XP 를 받는 시간만 — 레벨 비공개 · 음성 XP 정지 · XP 획득 중단 · 퇴장 초기화면 0 으로(끝나면 그때부터 새로)
+  const levelOpen = isLevelOpen();
   for (const [userId, { pieces, member: pm }] of pieceOf) {
-    if (isOff(userId) || gone.has(userId)) continue; // 정지 · 퇴장 초기화 — 구간은 버리고 바퀴는 아래에서 지운다
+    if (!levelOpen) resetStay(userId);
+    if (isOff(userId) || gone.has(userId)) {
+      resetStay(userId);
+      continue; // 정지 · 퇴장 초기화 — 구간은 버리고 바퀴는 아래에서 지운다
+    }
     const member = guild?.members.cache.get(userId) || pm;
     if (!member) continue;
     const d = docOf.get(userId);
@@ -262,7 +298,7 @@ async function doFlush(final) {
         close(userId, c); // 다른 채널로 옮겼다 — 앞 채널에서 머문 만큼 준다
         c = null;
       }
-      const rate = voiceRate(member, channel, d, s, pc.n) * pc.mult;
+      const rate = voiceRate(member, channel, d, s, pc.n, pc.stay || 0) * pc.mult;
       let left = pc.ms / 1000;
       while (left > 0) {
         if (c && full(c)) {
@@ -369,6 +405,45 @@ async function doFlush(final) {
     discard.delete(userId);
   }
 
+  // ── 쓰기 3: 머문 초(머물수록 증가 voiceStay — 재시작 대비) — 바뀐 사람은 덮어쓰고, 지운 사람은 DB 에서도 지운다. 몇 번을 다시 해도 같은 결과.
+  //    실패하면 다음 기록 때 다시(문서가 없는 사람 — 새 사람 · 퇴장 초기화 — 은 아무것도 안 된다) ──
+  const stOps = [];
+  const stUsers = [];
+  for (const [userId, st] of stays) {
+    // 멈춘 사람(같은 채널 · 세지 않는 중)도 5분마다 at 을 새로 — 재시작 때 오래된 기록으로 잘못 지우지 않게
+    if (!st.dirty && sessions.get(userId)?.ch === st.ch && now - (st.wroteAt || 0) >= STAY_STALE_MS / 2) st.dirty = true;
+    if (!st.dirty || !levelOpen || isOff(userId) || gone.has(userId)) continue; // 쌓지 않는 사람은 적지 않는다(위에서 0 으로 — 매번 덮어쓰지 않게)
+    stOps.push({ updateOne: { filter: { userId }, update: { $set: { voiceStay: { ch: st.ch, sec: Math.round(st.sec * 10) / 10, at: new Date(now) } } } } });
+    stUsers.push([userId, st]);
+  }
+  for (const userId of stayDrop) {
+    if (stays.has(userId)) continue; // 지운 뒤 그새 다시 쌓기 시작했다 — 위 덮어쓰기가 대신한다
+    stOps.push({ updateOne: { filter: { userId }, update: { $unset: { voiceStay: 1 } } } });
+    stUsers.push([userId, null]);
+  }
+  if (stOps.length) {
+    try {
+      await UserXp.bulkWrite(stOps, { ordered: false });
+      for (const [userId, st] of stUsers) {
+        if (st) {
+          dbStay.add(userId);
+          if (stays.get(userId) === st) {
+            st.dirty = false;
+            st.wroteAt = now;
+            stayDrop.delete(userId);
+          } else if (!stays.has(userId)) stayDrop.add(userId); // 쓰는 사이 나갔다 — 방금 적은 기록을 다음 번에 지운다
+          // (그사이 새 구간이 들어와 값이 바뀌었으면 새 값이 dirty 라 다음 번에 덮어쓴다)
+        } else if (!stays.has(userId)) {
+          dbStay.delete(userId);
+          stayDrop.delete(userId);
+        }
+      }
+    } catch (e) {
+      for (const [userId, st] of stUsers) if (st) dbStay.add(userId); // 들어갔을 수도 있다 — 나중에 지울 때 꼭 지우게
+      console.error("머문 시간 기록 오류:", e?.message || e);
+    }
+  }
+
   // ── 지급 — DB 정리가 끝난 바퀴만(재시작 때 같은 바퀴를 두 번 주지 않게). 실패한 사람은 다음 기록 때 다시. 종료 때는 주지 않는다(pend 로 적었다) ──
   //    실패했는데 정지 · 퇴장 초기화된 사람 것은 버리되 DB 정리는 다음 기록에 맡긴다(discard)
   const keep = [];
@@ -405,8 +480,22 @@ async function doFlush(final) {
 //    같은 채널에 그대로 있으면 이어 가고, 그 사이 나갔으면 그때까지 머문 만큼 준다. 서버에 없는 사람(Unknown Member) 것은 지우기만.
 //    멤버 조회가 다른 이유로 실패하면 통째로 다시 하게 던진다 — 끝까지 다 읽은 뒤에만 한꺼번에 반영한다(중간에 실패해 다시 해도 두 번 넣지 않게)
 async function restoreCycles(guild) {
-  const docs = await UserXp.find({ $or: [{ "voiceCycle.sec": { $gt: 0 } }, { "voiceCycle.pend.0": { $exists: true } }] }, { userId: 1, voiceCycle: 1 }).lean();
+  const [docs, stayDocs] = await Promise.all([
+    UserXp.find({ $or: [{ "voiceCycle.sec": { $gt: 0 } }, { "voiceCycle.pend.0": { $exists: true } }] }, { userId: 1, voiceCycle: 1 }).lean(),
+    UserXp.find({ voiceStay: { $exists: true } }, { userId: 1, voiceStay: 1 }).lean(),
+  ]);
   const add = { db: [], cycles: [], closing: [], discard: [] };
+  // 📌 머문 초(voiceStay) — 같은 채널에 그대로 있고 10분 안의 기록이면 이어 간다(그새 이 프로세스가 센 초에 더한다). 아니면 DB 에서 지운다
+  const stayAdd = [];
+  const stayDel = [];
+  for (const d of stayDocs) {
+    const v = d.voiceStay || {};
+    const vs = guild.voiceStates.cache.get(d.userId);
+    const at = new Date(v.at || 0).getTime();
+    const sec = Math.max(0, Number(v.sec) || 0);
+    if (vs?.channelId && vs.channelId === String(v.ch || "") && sec > 0 && Date.now() - at < STAY_STALE_MS) stayAdd.push([d.userId, String(v.ch), sec]);
+    else stayDel.push(d.userId);
+  }
   for (const d of docs) {
     add.db.push(d.userId);
     const v = d.voiceCycle || {};
@@ -442,6 +531,22 @@ async function restoreCycles(guild) {
   add.cycles.forEach(([u, c]) => cycles.set(u, c));
   closing.push(...add.closing);
   add.discard.forEach((u) => discard.add(u));
+  for (const [u, ch, sec] of stayAdd) {
+    dbStay.add(u);
+    // 복원 전 · 복원하는 사이에 나감 · 옮김을 봤거나 지금 그 채널 세션이 아니면 되살리지 않는다(0 부터 — DB 기록은 지운다)
+    if (stayCutPre.has(u) || sessions.get(u)?.ch !== ch) {
+      if (!stays.has(u)) stayDrop.add(u);
+      continue;
+    }
+    const cur = stays.get(u);
+    stays.set(u, { ch, sec: sec + (cur && cur.ch === ch ? cur.sec : 0), dirty: true });
+    // 이 프로세스가 0 부터 센 아직 안 가져간 구간에도 복원한 초를 더한다(재시작 직후 구간이 0% 로 계산되지 않게)
+    for (const pc of pending.get(u)?.pieces || []) if (pc.ch === ch) pc.stay = (pc.stay || 0) + sec;
+  }
+  for (const u of stayDel) {
+    dbStay.add(u);
+    if (!stays.has(u)) stayDrop.add(u);
+  }
   if (docs.length) console.log(`🔊 음성 바퀴 이어 받기 — ${add.cycles.length}명 이어 감, ${add.closing.length}건 지급 대기`);
 }
 

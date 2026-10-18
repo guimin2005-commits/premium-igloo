@@ -7,36 +7,81 @@ import Link from "next/link";
 import { salePrice, basePrice, isTimed, durationOptions, durationLabel, cardPick, discountPctOf, discountUntilLabel, isPointOnly, shownPrice, priceUnit, priceText, affordFor } from "@/lib/shopPricing";
 import { saleEnded, saleUntilLabel } from "@/lib/saleWindow";
 import { itemTypeColor } from "@/lib/items";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "../../../components/AdminView";
 import ArcticDock from "../../ArcticDock";
 import ArcticStoreBar from "../../ArcticStoreBar";
 import ArcticFooter from "../../ArcticFooter";
-import ProductCard, { typeLabelOf, typeColorOf } from "../../ProductCard";
+import ProductCard, { typeLabelOf, typeColorOf, categoryLabelOf, itemShortName } from "../../ProductCard";
 import ItemIcon from "../../../components/ItemIcon";
 import CardArt from "../../CardArt";
 import AppliedPreview from "../../AppliedPreview";
 import { ownStateOf, renewBaseOf, renewPickOf, expiryLabel, ownedCountOf, bundleViewOf, bundlePickOf } from "../../owned";
 import { isBundle } from "@/lib/bundle";
-import { splitItemName } from "@/lib/itemName";
 import { isUnitSale, maxPerOrderOf, qtyCapOf } from "@/lib/unitSale";
 import { openLogin, LOGIN_CTX } from "../../../components/LoginPrompt";
 import { CART_KEY, WISH_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from "../../shopStore";
 import { onCartChange } from "../../cardCart";
 import { productIconOf } from "@/lib/cosmeticArt";
+import { rarityOf } from "@/lib/rarity";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천(세트만 ProductCard 의 typeLabelOf · typeColorOf)
-//    label — 이름 머리말에서 뗀 분류(「카드 스킨」 …, lib/itemName). 없으면 유형 이름
+//    label — 분류(ProductCard categoryLabelOf — API categoryLabel, 옛 응답은 이름 머리말). 없으면 유형 이름
+//    📌 칩 · 알약 폭은 정수 px 로 올림(SNAP_W) — 소수 폭이면 옆 알약이 0.5px 자리에 놓여 글자가 쏠려 보였다(2026-10-17). 못 읽는 브라우저는 그대로
+const SNAP_W: React.CSSProperties = { width: "calc-size(fit-content, round(up, size, 1px))" };
 const TypeBadge = ({ type, label = "", className = "" }: { type: string; label?: string; className?: string }) => (
-  <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: typeColorOf(type) }}>
+  <span className={`rounded-full font-black text-white ${className}`} style={{ backgroundColor: typeColorOf(type), ...SNAP_W }}>
     {label || typeLabelOf(type)}
   </span>
 );
 
+// 📌 2026-10-17 희귀도 알약(lib/rarity.js 표 한 곳) — 상품 상세에서만(운영자 "걍 템 클릭하면 그 안에서만 희귀도 보이면 되잖아" — 상점 카드는 없음).
+//    밝은 판용: 등급 색 테(60%) · 옅은 바탕(10%) · 글자는 등급 색을 그 바탕 위 4.5:1 이 될 때까지 어둡게(유물 · 일반처럼 밝은 색도 읽히게). 단색만
+//    v null(연결 아이템이 없는 상품 · 세트 머리 — API rarity)이면 그리지 않는다 — 예전 모습. base 는 알약 밑 판 색(구성 칸은 #f2f2f2)
+const rgbOf = (hex: string) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [154, 163, 178];
+};
+const lumOf = (rgb: number[]) => {
+  const [r, g, b] = rgb.map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrastOf = (a: number[], b: number[]) => {
+  const [x, y] = [lumOf(a), lumOf(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+const rarityPillStyle = (hex: string, base: number[]): React.CSSProperties => {
+  const c = rgbOf(hex);
+  const bg = c.map((v, i) => Math.round(v * 0.1 + base[i] * 0.9));
+  let ink = [0, 0, 0];
+  for (let k = 1; k >= 0; k -= 0.02) {
+    const t = c.map((v) => Math.round(v * k));
+    if (contrastOf(t, bg) >= 4.6) { ink = t; break; }
+  }
+  return { color: `rgb(${ink.join(",")})`, border: `1px solid rgba(${c.join(",")},0.6)`, background: `rgba(${c.join(",")},0.1)` };
+};
+const RarityPill = ({ v, base = [255, 255, 255] }: { v?: string | null; base?: number[] }) => {
+  if (v == null) return null;
+  const r = rarityOf(v);
+  // 글자 줄 높이 = 테 안 높이(18px) — 알약이 소수 위치에 놓여도 글자가 위로 뜨지 않는다(인벤토리 알약과 같은 값)
+  return <span className="shrink-0 inline-flex items-center justify-center h-5 px-2 rounded-full text-[11px] font-black leading-[18px] whitespace-nowrap" style={{ ...rarityPillStyle(r.c, base), ...SNAP_W }}>{r.l}</span>;
+};
+
 // 📌 세트 구성 한 칸의 상태 표기 — 가진 것(owned)은 빠지고 그만큼 값이 깎인다(lib/bundle.js). 기간제로만 가진 것은 — 기간제 구성이면 그 뒤에 이어 붙여 연장,
 //    무제한 구성이면 무제한으로 새로 받는다(가진 기간제는 그대로 · 값은 안 깎인다). 2026-10-11 운영자 "무제한 전환은 뭐야?" → 무엇을 가져서 무엇이 되는지 그대로 쓴다
 const BUNDLE_MARK: Record<string, string> = { owned: "보유 중 · 빠짐", renew: "기간제 보유 · 기간 연장", upgrade: "기간제 보유 · 무제한으로" };
-type EffectPart = { label: string; amount: string; unit: string; cond?: string[]; once?: boolean; cosmetic?: boolean };
-type BundleInfo = { itemId: string; name?: string; icon?: string; imageUrl?: string; color?: string; type?: string; hasRole?: boolean; consumable?: boolean; effects?: EffectPart[]; cosmeticKeys?: { skin?: string; frame?: string } };
+// 📌 효과 타일 한 칸(API effects · bundleItems[].effects — lib/itemEffects effectTilesOf). line = 같은 말 한 줄, custom = 관리자가 직접 쓴 줄(크기를 못 찾으면 amount "")
+type EffectPart = { label: string; amount: string; unit: string; cond?: string[]; once?: boolean; cosmetic?: boolean; line?: string; custom?: boolean };
+type BundleInfo = {
+  itemId: string; name?: string; categoryLabel?: string; shortName?: string; icon?: string; imageUrl?: string; color?: string; type?: string; hasRole?: boolean; consumable?: boolean;
+  effects?: EffectPart[]; cosmeticKeys?: { skin?: string; scene?: string; frame?: string }; rarity?: string | null;
+  // 📌 2026-10-18 적용 범위(lib/itemEffects effectDisplayOf) — 꾸미기 구성은 효과 대신 「적용 범위」 아래 줄에 「대시보드 / 명령어 카드 / 알림 카드」
+  isCosmetic?: boolean; scopeLabel?: string;
+};
+// 📌 2026-10-18 꾸미기(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지)의 적용 범위 글자 — API isCosmetic · scopeLabel. 꾸미기가 아니거나 옛 응답이면 ""
+const scopeTextOf = (x: { isCosmetic?: boolean; scopeLabel?: string } | null | undefined) => (x?.isCosmetic && x.scopeLabel ? String(x.scopeLabel) : "");
+// 효과 타일 목록 — 지금 API 는 꾸미기 조각을 싣지 않는다. 옛 응답의 꾸미기 조각(이름 · 분류와 같은 말)은 dropCosmetic 이면 뺀다
+const fxTilesOf = (list: unknown, dropCosmetic: boolean): EffectPart[] =>
+  (Array.isArray(list) ? (list as EffectPart[]) : []).filter((e) => e && !(dropCosmetic && e.cosmetic));
 
 
 // 📌 상품 상세 — 카드에서 눌러 들어오는 화면
@@ -46,7 +91,8 @@ export default function ItemDetailPage() {
   const params = useParams();
   const id = String(params?.id || "");
   const isLoggedIn = status === "authenticated";
-  const isAdmin = isAdminName(session?.user?.name);
+  // 📌 관리자로 보는 중(계정 메뉴 「유저 화면으로 보기」를 켜면 false) — 숨김 상품 목록(?all=1)도 이 값. 숨김 상품 상세는 서버(getShopAccess)가 같은 쿠키로 가른다
+  const { admin: isAdmin } = useAdminView();
 
   const [item, setItem] = useState<any>(null);
   const [notFound, setNotFound] = useState(false);
@@ -240,7 +286,7 @@ export default function ItemDetailPage() {
   const cartLocked = soldOut || owned || (ended && !inCart) || (pointShort && !inCart);
 
   // 관련 상품 — 한 줄 4개. 추천(relIds)이 오면 그 순서, 오기 전 · 실패 · 모자라면 지금 규칙(같은 유형 먼저, 나머지로 채움)으로.
-  //    현재 상품 · 품절 · 판매 중 아님은 뺀다
+  //    현재 상품 · 품절 · 판매 중 아님(숨김 · 판매 종료 — 관리자 목록 ?all=1 에만 실린다)은 뺀다
   const others = allItems.filter((x) => x._id !== item._id && x.active && x.stock !== 0);
   const fallback = [
     ...others.filter((x) => x.type === item.type),
@@ -287,7 +333,7 @@ export default function ItemDetailPage() {
   return (
     <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
       <ArcticStoreBar
-        crumbs={[{ label: typeLabelOf(item.type), href: bundle ? "/arctic?type=all" : `/arctic?type=${item.type}` }, { label: splitItemName(item.name).short }]}
+        crumbs={[{ label: typeLabelOf(item.type), href: bundle ? "/arctic?type=all" : `/arctic?type=${item.type}` }, { label: itemShortName(item) }]}
         cartCount={cartCount}
         wishCount={wish.length}
       />
@@ -306,10 +352,14 @@ export default function ItemDetailPage() {
 
           {/* 우 — 정보 */}
           <div className="flex flex-col">
-            <TypeBadge type={item.type} label={splitItemName(item.name).kind} className="self-start px-2.5 py-1 text-[10px] mb-3" />
+            {/* 📌 2026-10-17 유형 칩 옆 희귀도 알약(연결 아이템이 있을 때만 — API rarity). 좁으면 다음 줄로 */}
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              <TypeBadge type={item.type} label={categoryLabelOf(item)} className="inline-flex items-center justify-center h-6 px-2.5 text-[10px] leading-[24px]" />
+              <RarityPill v={item.rarity} />
+            </div>
 
-            {/* 이름은 머리말 뗀 짧은 이름 — 분류는 위 칩(「카드 스킨」 …)에 한 번만 */}
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{splitItemName(item.name).short}</h1>
+            {/* 이름은 짧은 이름(API shortName) — 분류는 위 칩(「카드 테두리」 …)에 한 번만 */}
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#131313] mb-3 break-keep">{itemShortName(item)}</h1>
 
             <div className="mb-6">
               {/* 정가 취소선은 가격 위에 — 상품 카드(ProductCard)와 같은 순서(사용자: 할인 전 가격이 밑으로 가면 어색) */}
@@ -361,8 +411,9 @@ export default function ItemDetailPage() {
               </div>
             )}
 
+            {/* 설명 줄 높이 23px(정수) — leading-relaxed(22.75px)는 줄 수에 따라 아래 전체를 0.5px 자리로 밀어 칩 · 알약 글자가 쏠렸다(2026-10-17) */}
             {item.description && (
-              <p className="text-[14px] text-[#5a5a5a] leading-relaxed mb-6 whitespace-pre-wrap break-keep">{item.description}</p>
+              <p className="text-[14px] text-[#5a5a5a] leading-[23px] mb-6 whitespace-pre-wrap break-keep">{item.description}</p>
             )}
 
 
@@ -495,9 +546,12 @@ export default function ItemDetailPage() {
                 const info = bundleInfos[i];
                 const st = String(bv.states[i]?.state || "new");
                 const mark = BUNDLE_MARK[st] || "";
-                // 꾸미기 조각(카드 스킨 · 테두리 · 배지)은 이름 · 분류와 같은 말이라 빼고 진짜 효과만(2026-10-11 운영자 "같은 내용은 몇 개인 거고")
-                const fx = (Array.isArray(info.effects) ? info.effects : []).filter((e) => !e?.cosmetic);
-                const nm = splitItemName(info.name);
+                // 꾸미기 조각(카드 스킨 · 테두리 · 배지)은 이름 · 분류와 같은 말이라 빼고 진짜 효과만(2026-10-11 운영자 "같은 내용은 몇 개인 거고").
+                //    📌 2026-10-18 효과 줄은 관리자가 직접 쓴 문구 > 자동(API 가 정한다), 꾸미기 구성은 효과 대신 「적용 범위 · …」 한 줄(운영자 "효과라는 건 약간 이상하잖아")
+                const fx = fxTilesOf(info.effects, true);
+                const scopeTxt = scopeTextOf(info);
+                // 📌 구성 분류 · 짧은 이름 — API bundleItems[].categoryLabel · shortName(2026-10-17), 옛 응답은 이름 머리말 → 유형 이름
+                const nm = { kind: categoryLabelOf({ ...info, type: info.type || "item" }), short: itemShortName(info) };
                 // 📌 구성 아이콘도 큰 그림(CardArt)과 같은 고르기(cosmeticKeys — lib/bundleServer · lib/cosmeticArt productIconOf). 공용 반짝 카드로 남지 않게
                 const face = productIconOf(info);
                 return (
@@ -507,25 +561,37 @@ export default function ItemDetailPage() {
                     </span>
                     <div className="flex-1 min-w-0">
                       {/* 분류 칩(이름 위) — 이름이 같은 구성(검은 고양이 테두리 · 카드 스킨 · 배지)도 한눈에 갈린다 */}
+                      {/* 📌 2026-10-17 분류 칩 옆 구성 희귀도 알약(API bundleItems[].rarity — 없으면 칩만). 표시 칸과 겹치면 다음 줄로 */}
                       <div className="flex items-start justify-between gap-3">
-                        <span className="inline-flex items-center h-5 px-2 rounded-full bg-white text-[10.5px] font-black text-[#5a5a5a] whitespace-nowrap">{nm.kind || typeLabelOf(info.type || "item")}</span>
+                        <span className="flex flex-wrap items-center gap-1.5 min-w-0">
+                          <span className="inline-flex items-center justify-center h-5 px-2 rounded-full bg-white text-[10.5px] font-black leading-[20px] text-[#5a5a5a] whitespace-nowrap" style={SNAP_W}>{nm.kind}</span>
+                          <RarityPill v={info.rarity} base={[242, 242, 242]} />
+                        </span>
                         {mark && <span className={`shrink-0 mt-0.5 text-[11px] font-black whitespace-nowrap ${st === "owned" ? "text-[#8a8a8a]" : "text-[#e91e3f]"}`}>{mark}</span>}
                       </div>
                       <span className="block mt-1.5 text-[14px] font-black text-[#131313] break-keep">{nm.short || "아이템"}</span>
                       <span className="block mt-0.5 text-[11px] font-bold text-[#8a8a8a] tabular-nums">
                         {durationLabel(c.days)}{c.qty > 1 ? ` · ${c.qty.toLocaleString()}개` : ""}
                       </span>
-                      {fx.length > 0 && (
+                      {(fx.length > 0 || !!scopeTxt) && (
                         <div className="mt-2.5 space-y-1">
                           {fx.map((e, k) => {
                             const cond = [...(Array.isArray(e.cond) ? e.cond : []), e.once ? "하루 1번" : ""].filter(Boolean);
                             return (
                               <p key={k} className="text-[12px] font-bold text-[#5a5a5a] break-keep">
-                                {e.label} <span className="font-black text-[#131313] tabular-nums">{e.amount}{e.unit === "XP" ? " XP" : e.unit}</span>
+                                {/* 직접 쓴 줄에서 크기를 못 찾으면(amount "") 줄 전체가 label — 그대로 한 줄 */}
+                                {e.label}{e.amount ? <> <span className="font-black text-[#131313] tabular-nums">{e.amount}{e.unit === "XP" ? " XP" : e.unit}</span></> : null}
                                 {cond.length > 0 && <span className="text-[11px] text-[#8a8a8a]"> · {cond.join(" · ")}</span>}
                               </p>
                             );
                           })}
+                          {/* 적용 범위 — 이름 한 줄 위, 값 「대시보드 / 명령어 카드」 아래 줄(2026-10-18 운영자) */}
+                          {scopeTxt && (
+                            <div className="break-keep">
+                              <p className="text-[12px] font-bold text-[#5a5a5a]">적용 범위</p>
+                              <p className="mt-0.5 text-[12px] font-black text-[#131313]">{scopeTxt}</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -537,28 +603,49 @@ export default function ItemDetailPage() {
         )}
 
         {/* ── 효과 — 사면 붙는 것(등록 아이템 효과 + 지급 역할의 역할 버프). 오른쪽 정보 칸에 몰리지 않게 아래 전체 폭으로.
-               칸 하나에 효과 하나: 무엇을 하면 · 얼마나 · 조건(요일 · 시간 · 채널 · 하루 1번) ── */}
-        {Array.isArray(item.effects) && item.effects.length > 0 && (
-          <div className="mt-14 pt-10 border-t border-[#ededed]">
-            <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">효과</h2>
-            {/* 칸 수는 개수에 맞춘다(PC 최대 4) — 빈 칸이 남지 않게. 모바일 2열에서 홀수면 마지막 칸이 한 줄을 다 쓴다 */}
-            <div className={`grid grid-cols-2 gap-2 ${item.effects.length >= 4 ? "md:grid-cols-4" : item.effects.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-              {item.effects.map((e: any, i: number) => {
-                const cond = [...(Array.isArray(e.cond) ? e.cond : []), e.once ? "하루 1번" : ""].filter(Boolean);
-                const wide = item.effects.length % 2 === 1 && i === item.effects.length - 1;
-                return (
-                  <div key={i} className={`flex flex-col bg-[#f2f2f2] px-5 py-5 ${wide ? "col-span-2 md:col-span-1" : ""}`}>
-                    <span className="text-[12px] font-bold text-[#5a5a5a] break-keep">{e.label}</span>
-                    <span className="mt-2.5 text-[24px] font-black text-[#131313] tabular-nums leading-none tracking-tight">
-                      {e.amount}<span className="ml-1 text-[12px] font-bold text-[#8a8a8a]">{e.unit}</span>
-                    </span>
-                    {cond.length > 0 && <span className="mt-3 text-[11px] font-bold text-[#8a8a8a] break-keep">{cond.join(" · ")}</span>}
+               칸 하나에 효과 하나: 무엇을 하면 · 얼마나 · 조건(요일 · 시간 · 채널 · 하루 1번). 문구는 관리자가 직접 쓴 것 > 자동(API effects).
+               📌 2026-10-18 꾸미기는 효과 대신 「적용 범위」 칸 하나(API scopeLabel — 「대시보드 / 명령어 카드 / 알림 카드」). 꾸미기만 있으면 제목도 「적용 범위」 ── */}
+        {(() => {
+          const scopeTxt = scopeTextOf(item);
+          const fx = fxTilesOf(item.effects, !!scopeTxt);
+          const n = fx.length + (scopeTxt ? 1 : 0);
+          if (!n) return null;
+          return (
+            <div className="mt-14 pt-10 border-t border-[#ededed]">
+              <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">{fx.length ? "효과" : "적용 범위"}</h2>
+              {/* 칸 수는 개수에 맞춘다(PC 최대 4) — 빈 칸이 남지 않게. 모바일 2열에서 효과 칸이 홀수면 마지막 효과 칸이, 적용 범위 칸은 늘 한 줄을 다 쓴다(글자가 길다) */}
+              <div className={`grid grid-cols-2 gap-2 ${n >= 4 ? "md:grid-cols-4" : n === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                {fx.map((e, i) => {
+                  const cond = [...(Array.isArray(e.cond) ? e.cond : []), e.once ? "하루 1번" : ""].filter(Boolean);
+                  const wide = fx.length % 2 === 1 && i === fx.length - 1;
+                  return (
+                    <div key={i} className={`flex flex-col bg-[#f2f2f2] px-5 py-5 ${wide ? "col-span-2 md:col-span-1" : ""}`}>
+                      {e.amount ? (
+                        <>
+                          <span className="text-[12px] font-bold text-[#5a5a5a] break-keep">{e.label}</span>
+                          <span className="mt-2.5 text-[24px] font-black text-[#131313] tabular-nums leading-none tracking-tight">
+                            {e.amount}<span className="ml-1 text-[12px] font-bold text-[#8a8a8a]">{e.unit}</span>
+                          </span>
+                        </>
+                      ) : (
+                        // 직접 쓴 줄에서 크기를 못 찾았다(lib/itemEffects effectTileOfLine) — 줄 전체를 크게
+                        <span className="text-[17px] font-black text-[#131313] leading-[24px] tracking-tight break-keep">{e.label}</span>
+                      )}
+                      {cond.length > 0 && <span className="mt-3 text-[11px] font-bold text-[#8a8a8a] break-keep">{cond.join(" · ")}</span>}
+                    </div>
+                  );
+                })}
+                {/* 적용 범위 칸 — 제목이 이미 「적용 범위」면(꾸미기만) 칸 이름은 빼고 값만(같은 말 두 번 금지) */}
+                {scopeTxt && (
+                  <div className="col-span-2 md:col-span-1 flex flex-col bg-[#f2f2f2] px-5 py-5">
+                    {fx.length > 0 && <span className="mb-2.5 text-[12px] font-bold text-[#5a5a5a]">적용 범위</span>}
+                    <span className="text-[17px] font-black text-[#131313] leading-[24px] tracking-tight break-keep">{scopeTxt}</span>
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── 적용 미리보기 — 꾸미기 상품만(카드 스킨 · 프로필 배지). 로그인했으면 내 프로필로 ── */}
         <AppliedPreview key={item._id} item={item} user={isLoggedIn ? session?.user : null} me={isLoggedIn ? meData : null} />

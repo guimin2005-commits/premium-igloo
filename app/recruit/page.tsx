@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 
 // 📌 구인 목록 — 화이트 & 블랙. 제목 줄 · 밑줄 탭 · 헤어라인 줄 목록.
 //    지원하는 것도 페이지(이동 규칙 1): 줄을 누르면 /recruit/[id] 로 간다. 목록 안 펼침·지원 모달은 없다.
@@ -63,9 +62,8 @@ const getRecruitStatus = (post: RecruitPost) => {
 export default function RecruitPage() {
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-  const { data: session, status } = useSession() as any;
-  const isLoggedIn = status === "authenticated";
-  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 관리자로 보는 중일 때만 — 「유저 화면으로 보기」 켜면 지원자 · 구인글 작성 · 수정 · 삭제 · ?admin=1 대시보드 없이 유저와 같게
+  const { admin: isAdmin } = useAdminView();
 
   const [viewMode, setViewMode] = useState<"user" | "admin">("user");
   const [posts, setPosts] = useState<RecruitPost[]>([]);

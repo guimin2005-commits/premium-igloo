@@ -6,9 +6,9 @@ import Link from "next/link";
 import { ICON_PATHS } from "../../components/Icons";
 import { openLogin, LOGIN_CTX } from "../../components/LoginPrompt";
 import { isTimed, durationOptions, durationLabel, cardPick, isPointOnly, affordFor } from "@/lib/shopPricing";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "../../components/AdminView";
 import ArcticStoreBar from "../ArcticStoreBar";
-import ProductCard from "../ProductCard";
+import ProductCard, { itemShortName } from "../ProductCard";
 import { ownedIdsOf, renewableIdsOf, bundlePickOf } from "../owned";
 import ArcticDock from "../ArcticDock";
 import ArcticFooter from "../ArcticFooter";
@@ -23,9 +23,10 @@ import { useGuestShopLogin } from "../useGuestShopLogin";
 type CartRow = { itemId: string; qty: number; days?: number };
 
 export default function WishPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const isLoggedIn = status === "authenticated";
-  const isAdmin = isAdminName(session?.user?.name);
+  // 📌 관리자로 보는 중일 때만 숨김 · 판매 종료 상품까지(?all=1) — 「유저 화면으로 보기」면 유저처럼 빠진다
+  const { admin: isAdmin } = useAdminView();
   const router = useRouter();
 
   const [items, setItems] = useState<any[]>([]);
@@ -118,7 +119,7 @@ export default function WishPage() {
   };
   const unwish = (it: any) => {
     setWish((prev) => prev.filter((x) => x !== it._id));
-    say(`${it.name} 상품의 찜을 해제했습니다`);
+    say(`${itemShortName(it)} 상품의 찜을 해제했습니다`);
   };
   // 📌 빙옥 전용 상품 — 카드에 걸린 값(담길 값)을 빙옥으로 낼 수 없으면 담기 잠금
   //    세트는 이 사람이 낼 값(가진 구성만큼 깎은 값 — owned.ts bundlePickOf)으로
@@ -137,13 +138,13 @@ export default function WishPage() {
     if (locked(it._id)) return say("이미 구매하신 상품입니다");
     if (cart.some((c) => c.itemId === it._id)) {
       setCart((prev) => prev.filter((c) => c.itemId !== it._id));
-      return say(`${it.name} 상품을 장바구니에서 뺐습니다`);
+      return say(`${itemShortName(it)} 상품을 장바구니에서 뺐습니다`);
     }
     if (pointShort(it)) return say("빙옥이 부족합니다");
     // 카드에 보이는 기간(기본 무제한)으로 담는다 — 보이는 값과 담기는 값이 같게
     const days = isTimed(it) ? (cardPick(it)?.days ?? durationOptions(it)[0]?.days ?? 0) : 0;
     setCart((prev) => [...prev, { itemId: it._id, qty: 1, days }]);
-    say(`${it.name}${days > 0 ? ` (${durationLabel(days)})` : ""} ${days > 0 && renewable.has(it._id) ? "연장을" : "상품을"} 장바구니에 담았습니다`);
+    say(`${itemShortName(it)}${days > 0 ? ` (${durationLabel(days)})` : ""} ${days > 0 && renewable.has(it._id) ? "연장을" : "상품을"} 장바구니에 담았습니다`);
   };
 
   // 개수는 상품 목록에 있는 것만 — 저장소 원본을 세면 장바구니 화면엔 없는 상품까지 센다

@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { LuxStyles } from "../../../components/Lux";
 import { EsportsStyles } from "../../../components/Esports";
 
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../../../components/AdminView";
 
 const TYPE_LABEL: Record<string, string> = { short: "단답형", long: "장문형", single: "객관식", multi: "복수선택" };
 
@@ -17,8 +17,9 @@ export default function SurveyStatsPage() {
   const router = useRouter();
   const params = useParams();
   const postId = String(params?.id || "");
-  const { data: session, status } = useSession() as any;
-  const isAdmin = status === "authenticated" && session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { status } = useSession() as any;
+  // 📌 관리자로 보는 중일 때만 — 「유저 화면으로 보기」를 켜면 일반 유저처럼 막힌다
+  const { admin: isAdmin } = useAdminView();
 
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);

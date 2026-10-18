@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
-import { isAdminName } from "@/lib/admins";
-import { isSupporterSession } from "@/lib/supporters";
+import { isAdminViewer } from "@/lib/adminViewServer";
+import { isSupporterViewer } from "@/lib/adminViewServer";
 import { bracketVisible } from "@/lib/tournamentPhase";
 import Post from "@/models/Post";
 import { readDiscordInput, syncNotice, dropNotice, announceView } from "@/lib/noticeAnnounce";
@@ -27,19 +27,22 @@ export async function GET(request, { params }) {
     // 세션은 필요한 요청에서만, 한 번만 읽는다
     let session;
     const getSession = async () => (session === undefined ? (session = await getServerSession(authOptions)) : session);
+    // 📌 관리자로 보는 중인지 — 「유저 화면으로 보기」 켜면 가린 · 예약 글 · 작성자 · 비공개 대진표 없이 유저와 같게(글쓰기 /write 의 수정 불러오기는 늘 관리자)
+    let viewer;
+    const isViewer = async () => (viewer === undefined ? (viewer = await isAdminViewer(await getSession())) : viewer);
 
     // 📌 가린 글·공개 시각 전 예약 글은 링크를 알아도 열리지 않는다 — 관리자만 통과.
     //    서포터즈 글도 마찬가지 — 목록만 막고 상세를 열어 두면 ID 공유로 새어 나간다.
     const scheduled = !!post.publishAt && new Date(post.publishAt) > new Date();
     if (post.hidden || scheduled || post.category === "서포터즈") {
       const s = await getSession();
-      const ok = (post.hidden || scheduled) ? isAdminName(s?.user?.name) : isSupporterSession(s);
+      const ok = (post.hidden || scheduled) ? await isViewer() : await isSupporterViewer(s);
       if (!ok) {
         return NextResponse.json({ error: "존재하지 않는 글입니다." }, { status: 404 });
       }
     }
     // 📌 관리자가 아니면 — 비공개 대진표는 비우고(목록 API 와 같은 기준), 작성자(관리자 디스코드 이름)는 빼고 보낸다(2026-10-04)
-    if (!isAdminName((await getSession())?.user?.name)) {
+    if (!(await isViewer())) {
       const o = post.toObject();
       if (o.tournamentBracket && !bracketVisible(post)) o.tournamentBracket = "";
       delete o.author;

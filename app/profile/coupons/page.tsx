@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import BackLink from "../../components/BackLink";
 import ArcticDock from "../../arctic/ArcticDock";
 import { ICON_PATHS } from "../../components/Icons";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView } from "../../components/AdminView";
 import { couponScopeTail } from "@/lib/shopPricing";
 import { openLogin } from "../../components/LoginPrompt";
 
@@ -35,7 +35,8 @@ export default function CouponBoxPage() {
   const { data: session, status } = useSession();
   const fromArctic = useSearchParams().get("from") === "arctic";
   const q = fromArctic ? "?from=arctic" : "";
-  const isAdmin = isAdminName(session?.user?.name);
+  // 📌 「쿠폰 관리」 링크는 관리자로 볼 때만(「유저 화면으로 보기」를 켜면 숨김)
+  const { admin: isAdmin } = useAdminView();
 
   const [rows, setRows] = useState<Coupon[] | null>(null);
   const [code, setCode] = useState("");

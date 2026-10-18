@@ -16,6 +16,9 @@ const ShopItemSchema = new mongoose.Schema({
   itemId: { type: String, default: "" },
   itemImageUrl: { type: String, default: "" },   // Item.imageUrl 스냅샷 — 상품 이미지가 비었을 때 카드에 쓴다
   icon: { type: String, default: "" },           // 이모지·짧은 텍스트 — 이미지가 없을 때 카드에 크게 찍힌다
+  // 📌 분류(2026-10-17 — models/Item.js category 와 같은 뜻 · 같은 규칙 lib/itemCategory.js). "" = 자동(유형 · 세트는 「세트」).
+  //    직접 설정 상품 · 세트만 이 칸을 쓴다 — 아이템 연결 상품(itemId)은 그 아이템의 분류를 따르고 이 칸은 ""(스냅샷이 아니다 — 그룹과 같다)
+  category: { type: String, default: "", maxlength: 20 },
   // 📌 카드 배경 장면 — lib/itemBackdrops.js 의 키(public/backdrops/<key>.png). "" 이면 지금처럼 등록 색을 옅게 깐 바탕.
   //    상품 고유 값이라 아이템 연동(itemId)과 무관하게 관리자가 고른다. 이미지(imageUrl · itemImageUrl)가 있으면 이미지가 이긴다
   backdrop: { type: String, default: "" },

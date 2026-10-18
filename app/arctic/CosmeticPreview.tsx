@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import SkinFrame from "../components/SkinFrame";
+import { SceneBack, sceneBarOf, GhostTrailBar } from "../components/SceneBack";
+import { sceneMetaOf } from "@/lib/cardScenes";
 import TierEmblem from "../components/TierEmblem";
 import AvatarFrame, { frameRoom } from "../components/AvatarFrame";
 import ItemIcon from "../components/ItemIcon";
@@ -147,13 +149,16 @@ export function Avatar({ who, px, text }: { who: Who; px: number; text: string }
   );
 }
 
-// ── 카드 스킨 — 레벨 페이지 프로필 카드(PC 모양)와 같은 잉크 판에 SkinFrame 으로 스킨을 입힌다 ──
-//    아바타 테두리(frame)는 사진(68px) 가운데에 겹친다 — 이름 칸은 relative 라 테두리 위에 그려진다
-export function ProfileCardPreview({ who, skin, frame }: { who: Who; skin: string; frame?: string }) {
+// ── 카드 테두리 · 카드 배경 — 레벨 페이지 프로필 카드(PC 모양)와 같은 잉크 판에 SkinFrame 으로 입힌다(배경 위에 테두리) ──
+//    프로필 테두리(frame)는 사진(68px) 가운데에 겹친다 — 이름 칸은 relative 라 테두리 위에 그려진다
+//    📌 카드 배경(scene) — 레벨 페이지 카드와 같은 겹: 맨 아래 장면(SceneBack) + 그 위 등급 빛(옅게) · 바둑판 무늬는 뺀다 · 레벨 막대도 배경 몫(sceneBarOf — 유령 꼬리)
+export function ProfileCardPreview({ who, skin, scene = "", frame }: { who: Who; skin: string; scene?: string; frame?: string }) {
   const tIdx = getTierIndex(who.level);
   const tier = VOICE_TIERS[tIdx];
   const next = VOICE_TIERS[tIdx + 1] || null;
   const pct = Math.min(100, Math.floor((who.cur / Math.max(1, who.req)) * 100));
+  const sceneOn = !!sceneMetaOf(scene);
+  const glow = `radial-gradient(420px 320px at 86% 30%, ${hexA(tier.c, 0.26)} 0%, ${hexA(tier.c, 0)} 72%)`;
   const topPct = who.total ? Math.max(1, Math.ceil((who.rank / who.total) * 100)) : null;
   const max = who.level >= 1000;
   // 📌 레벨 페이지 프로필 카드와 같은 네 칸 · 같은 차례(2026-10-11 운영자 "적용 미리보기에서 시즌으로 표기되는 것" — 실제 카드엔 「시즌」 칸이 없고 「오늘 획득」이 있다)
@@ -168,11 +173,11 @@ export function ProfileCardPreview({ who, skin, frame }: { who: Who; skin: strin
       className="relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)] text-left"
       style={{
         width: 360,
-        background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tier.c, 0.26)} 0%, ${hexA(tier.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)`,
+        background: `${glow}, linear-gradient(180deg, #1b1b1b 0%, #131313 55%)`,
       }}
     >
-      <div className="absolute inset-0 opacity-70 pointer-events-none" style={GRID_DARK}></div>
-      {skin && <SkinFrame skin={skin} />}
+      {sceneOn ? <SceneBack scene={scene} glow={glow} /> : <div className="absolute inset-0 opacity-70 pointer-events-none" style={GRID_DARK}></div>}
+      {skin && <SkinFrame skin={skin} scene={scene} />}
       <span className="absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{who.level}</span>
 
       <div className="relative z-10 p-7">
@@ -221,9 +226,13 @@ export function ProfileCardPreview({ who, skin, frame }: { who: Who; skin: strin
 
         {/* 경험치 */}
         <div className="mt-6">
-          <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${max ? 100 : pct}%` }}></div>
-          </div>
+          {sceneBarOf(scene) === "ghostTrail" ? (
+            <div data-skin-bar className="ml-[12px]"><GhostTrailBar pct={max ? 100 : pct} /></div>
+          ) : (
+            <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${max ? 100 : pct}%` }}></div>
+            </div>
+          )}
           <div className="flex justify-between items-baseline mt-2.5">
             <span className="text-[11px] font-bold text-white/45 tabular-nums">{who.cur.toLocaleString()} / {who.req.toLocaleString()} XP</span>
             <span className="text-[11px] font-bold text-white/60">

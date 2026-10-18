@@ -1,4 +1,4 @@
-// 📌 프로필 꾸미기 테두리 그림 생성 — 할로윈(hwf_*) · A New World 카드 짝(nwf_*). 등급 테두리(scripts/gen-avatar-frames.mjs)와 따로 둔다(그쪽 결과는 그대로).
+// 📌 프로필 꾸미기 테두리 그림 생성 — 할로윈(hwf_*) · A New World 카드 짝(nwf_*) · 이벤트(evf_* — 유령 펭귄의 초대). 등급 테두리(scripts/gen-avatar-frames.mjs)와 따로 둔다(그쪽 결과는 그대로).
 //    실행: node scripts/gen-deco-frames.mjs   (그림을 고치면 다시 돌려 결과를 커밋한다. 끝에 찍히는 DECO_FRAME_REACH 를 app/components/AvatarFrame.js FRAME_REACH 에 옮긴다)
 //    만드는 것: public/avatar-borders/<키>.svg(사이트 — app/components/AvatarFrame) · lib/avatarDecoArt.js · bot/src/avatarDecoArt.js(디스코드 카드 정지 그림, 두 파일 같음 —
 //    lib/avatarFrameArt.js 가 FRAME_ART · FRAME_REACH 에 합쳐 내보낸다).
@@ -62,7 +62,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   mkdirSync(out, { recursive: true });
   const art = {}, reach = {};
   for (const d of DECO_FRAMES) {
-    if (!/^(hwf|nwf)_[a-z]+$/.test(d.key)) throw new Error(`꾸미기 테두리 키는 hwf_ · nwf_ + 영문 소문자: ${d.key}`); // 등급 키와 겹치지 않게 · 착용 API 가 소문자로 바꾼다
+    if (!/^(hwf|nwf|evf)_[a-z]+$/.test(d.key)) throw new Error(`꾸미기 테두리 키는 hwf_ · nwf_ · evf_ + 영문 소문자: ${d.key}`); // 등급 키와 겹치지 않게 · 착용 API 가 소문자로 바꾼다
     const svg = decoSvg(d);
     writeFileSync(join(out, `${d.key}.svg`), svg);
     art[d.key] = svg; // 움직임이 없어 사이트 그림과 같은 SVG

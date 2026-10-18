@@ -541,12 +541,12 @@ async function main() {
     eq([row(ID.S3)?.name, row(NEW.Sbad)?.name, row(ID.B1)?.name, row(GROUPS_ID)?.name], ["구매된 상품", "고아 상품", "새 배너 제목", "그룹 순서"], "이름");
     eq(s.rows.map((r) => r.kind).filter((k, i, a) => a.indexOf(k) === i), ["item", "shopItem", "banner", "setting"], "종류 차례");
   });
-  await test("draftSummary warnings — 처음 쓰는 아이콘 · 스킨, https 아닌 이미지(실사이트가 쓰는 art:shield · hw_ghost 는 경고 없음)", async () => {
+  await test("draftSummary warnings — 처음 쓰는 아이콘 · 카드 테두리, https 아닌 이미지(실사이트가 쓰는 art:shield · hw_ghost 는 경고 없음)", async () => {
     const s = await cd.draftSummary();
     const got = s.warnings.map((w) => `${w.kind}|${w.id}|${w.why}`).sort();
     const want = [
       `item|${S(NEW.I)}|처음 쓰는 아이콘 · art:brandnew_key`,
-      `item|${S(NEW.I)}|처음 쓰는 스킨 · hw_newskin`,
+      `item|${S(NEW.I)}|처음 쓰는 카드 테두리 · hw_newskin`,
       `shopItem|${S(NEW.S)}|https 아닌 이미지 주소`,
     ].sort();
     eq(got, want, "warnings");

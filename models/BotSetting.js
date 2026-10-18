@@ -42,7 +42,15 @@ const BotSettingSchema = new mongoose.Schema({
   afkCheckSanctionMin: { type: Number, default: 30 }, // 제재받은 사람(음성 XP 정지 · XP 획득 중단 기록)의 첫 확인 — "제재 먹은 인원은 최소 시간 30분"
   afkCheckMinMin: { type: Number, default: 20 },
   afkCheckMaxMin: { type: Number, default: 60 },
-  afkCheckReplyMin: { type: Number, default: 5 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
+  afkCheckReplyMin: { type: Number, default: 5 },
+  // 📌 2026-10-14 핫타임(lib/hotTime.js · 봇 hotTime.js) — 기간 [hotTimeFrom, hotTimeUntil) 안에는 채팅 · 음성 「기본 XP + 강화 + 음성 등급 가산」 × 배수.
+  //    금 · 토 · 일(KST)은 hotTimeWeekendMult, 그 밖의 날은 hotTimeWeekdayMult. 역할 버프 · 채널 · 기간제 부스트 · 아이템 효과에는 안 붙는다
+  hotTimeOn: { type: Boolean, default: false },
+  hotTimeName: { type: String, default: "" },
+  hotTimeFrom: { type: Date, default: null },
+  hotTimeUntil: { type: Date, default: null },
+  hotTimeWeekdayMult: { type: Number, default: 1.5 },
+  hotTimeWeekendMult: { type: Number, default: 2 },   // 일일 출석 인정 기준 — 음성 접속 누적 분       // 출석 1회 지급량
   // 📌 연속 출석 보너스 — 기본 꺼짐. days 일 연속 달성 시 xp·point 지급, repeat 면 days 의 배수마다 (bot/src/attend.js)
   attendStreakEnabled: { type: Boolean, default: false },
   attendStreakRules: { type: [AttendStreakRuleSchema], default: [] },

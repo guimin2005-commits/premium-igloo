@@ -1,6 +1,6 @@
 "use client";
 // 📌 글쓰기 본문 편집기 (2026-10-11 운영자 "* 하면 점이 너무 얇고 · 굵게 하는 것도 불편 · 글쓰는 창은 아래가 많이 남는데 왜 이리 작은지 · 글자 크기도 내 맘대로 못 하고 · 편의 기능 팍팍")
-//  · 도구 줄 — 글자 크기(본문 · 큰 제목 · 중간 제목 · 작은 제목 · 작은 글씨) · 굵게 · 밑줄 · 취소선 · 강조 · 목록 · 번호 · 인용 · 구분선 · 링크 · 복사 칸 · 표 · 이미지 · 기호 · 되돌리기 · 다시 하기.
+//  · 도구 줄 — 글자 크기(본문 · 큰 제목 · 중간 제목 · 작은 제목 · 작은 글씨) · 굵게 · 밑줄 · 취소선 · 강조 · 목록 · 번호 · 인용 · 구분선 · 링크 · 복사 칸 · 표 · 이미지 · 아이템 · 기호 · 되돌리기 · 다시 하기.
 //    스크롤해도 화면 위(사이트 머리 바로 아래)에 붙어 있다. 커서 자리에 켜진 서식은 눌린 모양. 폰은 옆으로 밀어 본다
 //  · 단축키 — Ctrl/⌘ + B 굵게 · U 밑줄 · Shift+X 취소선 · Shift+H 강조 · K 링크 · Alt+1~3 제목 · Alt+0 본문 · Shift+8 목록 · Shift+7 번호.
 //    Enter 는 목록 · 번호 · 인용을 이어 쓰고(빈 항목이면 끝), Tab · Shift+Tab 은 목록을 들이고 내어쓴다. 한글 조합 중 Enter 는 건드리지 않는다
@@ -67,6 +67,7 @@ const I = {
   code: "M8 4c-1.7 0-2.5.8-2.5 2.5v3c0 1.2-.8 2-2 2.5 1.2.5 2 1.3 2 2.5v3C5.5 19.2 6.3 20 8 20M16 4c1.7 0 2.5.8 2.5 2.5v3c0 1.2.8 2 2 2.5-1.2.5-2 1.3-2 2.5v3c0 1.7-.8 2.5-2.5 2.5",
   table: "M3.5 5.5h17v13h-17zM3.5 10h17M3.5 14.5h17M9.5 5.5v13",
   image: "M3.5 5.5h17v13h-17zM3.5 15.5l4.5-4.5 4 4 2.5-2.5 6 6M15.5 9.5h.01",
+  item: "M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6ZM4 7.6 12 12l8-4.4M12 12v8.8",
   undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
   redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
   chevron: "m6 9 6 6 6-6",
@@ -85,7 +86,7 @@ function Tool({ on = false, title, onClick, disabled, keepFocus = true, children
 }
 
 export default function RichEditor({
-  value, onChange, taRef, previewing, overlay, viewToggle, onTable, onImage, placeholder = "내용을 입력하세요...",
+  value, onChange, taRef, previewing, overlay, viewToggle, onTable, onImage, onItem, placeholder = "내용을 입력하세요...",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -95,6 +96,7 @@ export default function RichEditor({
   viewToggle?: ReactNode; // [작성 · 미리보기]
   onTable: () => void;
   onImage: () => void;
+  onItem?: () => void; // 아이템 태그 넣기(./ItemTagDialog — lib/itemTag). 없으면 단추 없음
   placeholder?: string;
 }) {
   const [sel, setSel] = useState({ s: 0, e: 0 });
@@ -230,6 +232,8 @@ export default function RichEditor({
             <Tool on={false} title={"복사 칸 — 누르면 복사되는 글자"} disabled={previewing} onClick={() => run((v, s, e) => (s === e ? insertAt(s, e, "{}", 1) : insertAt(s, e, `{${v.slice(s, e).replace(/[{}\n]/g, "")}}`)))}><Ico d={I.code} /></Tool>
             <Tool on={false} title={"표"} disabled={previewing} keepFocus={false} onClick={onTable}><Ico d={I.table} /></Tool>
             <Tool on={false} title={"이미지"} disabled={previewing} keepFocus={false} onClick={onImage}><Ico d={I.image} /></Tool>
+            {/* 📌 아이템 태그(2026-10-18) — 글에서 알약 · 카드로 그린다(lib/itemTag · app/components/ItemTag) */}
+            {onItem && <Tool on={false} title={"아이템"} disabled={previewing} keepFocus={false} onClick={onItem}><Ico d={I.item} /></Tool>}
             <Tool on={pop === "symbol"} title={"기호"} disabled={previewing} onClick={() => setPop(pop === "symbol" ? null : "symbol")}><span className="text-[14px] font-bold">※</span></Tool>
             <Sep />
             <Tool on={false} title={`되돌리기 (${mod}+Z)`} disabled={previewing} onClick={() => cmd("undo")}><Ico d={I.undo} /></Tool>

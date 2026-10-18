@@ -2,10 +2,11 @@
 //  · completed 기간제(역할 · 퍽 · 아이템 · 꾸미기) 중 N시간 안에 끝나는 건에 한 번만 DM (reminderSentAt 조건부 선점)
 //  · 같은 역할 · 아이템이 더 늦게까지 이어지면(연장분 · 다른 구매) 보내지 않는다
 //  · 소모된 건(consumedAt)은 대상도, 이어지는 구매도 아니다
-//  · 설정: BotSetting.expiryReminderEnabled(기본 켜짐) · expiryReminderHours(기본 24)
+//  · 설정: 켜고 끄기는 봇 메시지 「보내기」(expiryReminder 템플릿 enabled) 하나 · 시점은 BotSetting.expiryReminderHours(기본 24)
+//    📌 2026-10-17 옛 레벨 설정 「알림 사용」(BotSetting.expiryReminderEnabled)은 더 보지 않는다 — 관리 화면에서 걷었다(스위치가 둘이라 한쪽만 켜면 안 나갔다)
 import { Purchase, BotSetting, ShopItem } from "../db.js";
 import { config } from "../config.js";
-import { buildMessage, commonVars, formatUntil, SITE_URL } from "../botMessages.js";
+import { buildMessageFrom, commonVars, formatUntil, loadTemplate, sampleVars, SITE_URL } from "../botMessages.js";
 import { findContinuation } from "./grantQueue.js";
 
 const TICK_MS = 10 * 60 * 1000;
@@ -15,13 +16,20 @@ const BATCH = 50; // 한 틱에 보내는 DM 수
 const SCAN = 500;
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
 
-// 📌 옛 BotSetting 문서에는 새 필드가 없다(lean 이라 스키마 기본값도 안 붙는다) — undefined 는 켜짐 · 24시간
+// 📌 옛 BotSetting 문서에는 새 필드가 없다(lean 이라 스키마 기본값도 안 붙는다) — undefined 는 24시간
+//    켜짐은 봇 메시지 템플릿(DB 에서 바로 읽는다 — 방금 끈 것도 이번 틱부터). 꺼져 있으면 틱째 쉰다 —
+//    선점(reminderSentAt)을 쓰지 않으므로 다시 켜면 아직 구간 안인 건이 나간다(꺼진 채 선점만 하면 그 건들은 영영 안 간다)
+//    📌 DM 도 이 템플릿(tpl)으로 만든다 — 봇 메시지 1분 캐시(buildMessage)는 방금 켠 직후엔 아직 꺼진 값이라 선점만 하고 빈 DM 이 됐다
 async function readSetting() {
-  const s = await BotSetting.findOne({ key: "main" }, { expiryReminderEnabled: 1, expiryReminderHours: 1 }).lean();
+  const [s, tpl] = await Promise.all([
+    BotSetting.findOne({ key: "main" }, { expiryReminderHours: 1 }).lean(),
+    loadTemplate("expiryReminder").catch(() => null),
+  ]);
   const h = Number(s?.expiryReminderHours);
   return {
-    enabled: s?.expiryReminderEnabled !== false,
+    enabled: !!tpl?.enabled,
     hours: Number.isFinite(h) && h > 0 ? Math.min(168, Math.max(1, h)) : 24,
+    tpl,
   };
 }
 
@@ -58,8 +66,13 @@ async function fetchMember(guild, userId) {
 async function tick(client) {
   const guild = client.guilds.cache.get(config.guildId);
   if (!guild) return;
-  const { enabled, hours } = await readSetting();
+  const { enabled, hours, tpl } = await readSetting();
   if (!enabled) return;
+  // 📌 켜 두었어도 보낼 내용이 없는 디자인이면 틱째 쉰다 — 아니면 줄마다 만들다 말고 선점도 안 해 매 틱 500건을 다시 훑었다
+  if (!buildMessageFrom("expiryReminder", tpl, sampleVars("expiryReminder"), { fallback: true })) {
+    console.warn("⏰ 만료 임박 DM: 보낼 내용이 없는 디자인 — 건너뜀");
+    return;
+  }
 
   const now = new Date();
   const windowMs = hours * 3600e3;
@@ -88,6 +101,22 @@ async function tick(client) {
       // 같은 역할 · 아이템이 이 구매보다 늦게까지 이어지면(연장분 등) 끝나는 게 아니다
       if (await findContinuation(p, p.expiresAt)) continue;
 
+      // 서버를 나간 유저는 보낼 곳이 없다 — 아래 선점만 남겨 다시 집지 않는다
+      const member = await fetchMember(guild, p.userId);
+      const hoursLeft = Math.max(1, Math.round((new Date(p.expiresAt).getTime() - Date.now()) / 3600e3));
+      // 📌 DM 은 선점 전에 만든다 — 만들 게 없으면(글을 다 비운 디자인 등) 선점하지 않는다(선점만 남으면 그 건은 영영 안 간다)
+      let msg = null;
+      if (member) {
+        msg = buildMessageFrom("expiryReminder", tpl, {
+          ...commonVars(member, guild),
+          item: p.itemName,
+          until: formatUntil(p.expiresAt),
+          hoursLeft,
+          renewUrl: await renewUrlOf(p),
+        }, { fallback: true });
+        if (!msg) continue;
+      }
+
       // 📌 조건부 선점 — 봇이 둘 떠 있거나 틱이 겹쳐도 한 번만.
       //    연장은 새 구매 문서(renewOf)라 이 건의 만료는 그대로다 — 연장분은 자기 reminderSentAt 으로 따로 알린다
       const claim = await Purchase.updateOne(
@@ -96,20 +125,8 @@ async function tick(client) {
       );
       if (!claim.modifiedCount) continue;
       sent += 1;
-
-      // 서버를 나간 유저는 보낼 곳이 없다 — 선점만 남겨 다시 집지 않는다
-      const member = await fetchMember(guild, p.userId);
       if (!member) continue;
 
-      const hoursLeft = Math.max(1, Math.round((new Date(p.expiresAt).getTime() - Date.now()) / 3600e3));
-      const msg = buildMessage("expiryReminder", {
-        ...commonVars(member, guild),
-        item: p.itemName,
-        until: formatUntil(p.expiresAt),
-        hoursLeft,
-        renewUrl: await renewUrlOf(p),
-      });
-      if (!msg) continue;
       await member.send(msg).catch(() => {}); // DM 이 막혀 있으면 조용히 넘어간다
       console.log(`⏰ 만료 임박 DM: ${p.userName} / ${p.itemName} (약 ${hoursLeft}시간)`);
     } catch (e) {

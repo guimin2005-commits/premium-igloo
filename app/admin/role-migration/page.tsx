@@ -1,18 +1,24 @@
 "use client";
 
-// 📌 역할 이전 — 지난 시즌 디스코드 역할을 사이트 인벤토리 아이템으로 옮기거나 XP · 빙옥으로 환불한다(app/api/admin/role-migration).
-//    목록 틀: 머리 + 탭(역할 · 진행) → 검색 · 보기 한 줄 → 역할 표 → 줄을 누르면 오른쪽 상세 칸(처리 · 이전 방식 · 기간 · 환불 금액).
+// 📌 시즌 전환 — 시즌이 바뀔 때 쓰는 디스코드 역할 정리를 한 화면에(2026-10-17 관리 화면 정리). 탭(?tab=):
+//      역할 이전(기본) · 진행 — 지난 시즌 디스코드 역할을 사이트 인벤토리 아이템으로 옮기거나 XP · 빙옥으로 환불한다(app/api/admin/role-migration)
+//      역할 떼기(detach) — 「시즌 전환」 표시 상품의 디스코드 표기만 내린다(app/api/season/detach — 상점 관리 「시즌 전환」 탭에서 옮김)
+//      RANKER(ranker) — 시즌 결산 RANKER 역할 · 결과 · 수동 지급(app/api/admin/season-results — 레벨 설정 › 역할에서 옮김)
+//    역할 이전 목록 틀: 머리 + 탭 → 검색 · 보기 한 줄 → 역할 표 → 줄을 누르면 오른쪽 상세 칸(처리 · 이전 방식 · 기간 · 환불 금액).
 //    [미리보기](쓰기 없음) → 역할별 분류 · 숫자 → [이전 실행] 확인 창 → 결과 · 진행(봇이 역할을 뗀 수 / 남은 수).
 //    진행 탭: 역할마다 이전 기록의 기간 → 줄을 누르면 [기간 적용] · [환불로 바꾸기] · [빠진 지급](지급 빠짐이 있을 때) — 미리보기 → 확인 창 → 실행.
 //    📌 돈이 나가는 실행(환불이 든 이전 · 환불로 바꾸기 · 빠진 지급)은 미리보기의 대상 요약(key)을 함께 보낸다 — 서버가 다시 센 대상이 다르면
 //       쓰지 않고 새 숫자를 돌려주고(409 stale), 확인 창이 그 숫자로 다시 묻는다.
 //    역할을 실제로 떼는 것은 봇 큐(processDetachments · 환불은 processRefunds)다 — 이 화면 · API 는 디스코드 역할을 직접 바꾸지 않는다.
+//    역할 떼기 · RANKER 지급은 되돌리기 어렵다 — 미리보기(떼기) · 대상 확인 창을 한 번 거친다.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Dropdown from "../../components/Dropdown";
 import {
   AdminPage, AdminTabs, Toolbar, SearchInput, Segmented, Btn, SwapLabel, DataTable, DetailPane, DefRow,
-  StatusChip, StatRow, Panel, ConfirmDialog, EmptyRow, Switch, inputClass, numClass, labelClass, useAdminGuard, useNotice, type Column,
+  StatusChip, StatRow, Panel, FieldRow, SaveBar, ConfirmDialog, EmptyRow, Switch, inputClass, numClass, labelClass,
+  useAdminGuard, useNotice, useToast, type Column,
 } from "../ui";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { REFUND_MAX, REFUND_UNIT, isLargeRefund } from "@/lib/roleMigrationTerms";
@@ -86,14 +92,38 @@ type TermRes = {
   roleId: string; period: Period; total: number; change: number; same: number; excluded: number; chained: number;
   minEnd: number | null; maxEnd: number | null;
 };
-type TabId = "roles" | "progress";
+type TabId = "roles" | "progress" | "detach" | "ranker";
 type View = "target" | "excluded" | "all";
+// 역할 떼기 미리보기 · 결과(app/api/season/detach) — 상품 이름 · 역할별 구매 건수
+type DetachRow = { itemName: string; roleId: string; count: number };
+type DetachRes = { matched: number; updated?: number; items: DetachRow[] };
+// 시즌 결산 기록(app/api/admin/season-results) — 상위 3인 · RANKER 역할 지급 상태
+type SeasonTop = { rank: number; userId: string; name?: string; level?: number; xp?: number };
+type SeasonResult = {
+  season: number; name?: string; top?: SeasonTop[]; rankerRoleId?: string;
+  roleGrantRequested?: boolean; roleGrantedAt?: string | null; error?: string;
+};
+type GuildRole = { id: string; name: string; color?: string; managed?: boolean };
 
 const API = "/api/admin/role-migration";
 const TABS: { id: TabId; short: string }[] = [
-  { id: "roles", short: "역할" },
+  { id: "roles", short: "역할 이전" },
   { id: "progress", short: "진행" },
+  { id: "detach", short: "역할 떼기" },
+  { id: "ranker", short: "RANKER" },
 ];
+const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
+
+// 시즌 결과의 RANKER 역할 지급 상태
+//    📌 봇(seasonSettle)은 요청된 것뿐 아니라 결산 때 역할이 정해진(rankerRoleId) 결과도 스스로 집는다 — 둘 다 '대기'
+const rankerQueued = (r: SeasonResult) => !r.roleGrantedAt && !r.error && (!!r.roleGrantRequested || !!r.rankerRoleId);
+const rankerStatus = (r: SeasonResult): { l: string; tone: "ok" | "warn" | "bad" | "neutral" } =>
+  r.roleGrantedAt ? { l: "지급 완료", tone: "ok" }
+  : r.error ? { l: "지급 실패", tone: "bad" }
+  : rankerQueued(r) ? { l: "지급 대기", tone: "warn" }
+  : { l: "미지급", tone: "neutral" };
+// 공용 Dropdown(라이트)을 입력칸(inputClass)과 같은 높이 · 테두리로 (app/admin/bot 과 같은 값)
+const DD = "!px-3 !py-2 min-h-10 !text-[14px] !border-[#a3a3a3]";
 const EXCLUDE_LABEL: Record<string, string> = {
   everyone: "@everyone",
   managed: "연동 역할",
@@ -224,7 +254,8 @@ const priceLabel = (p: Price) => (p.days === 0 ? "무제한" : `${p.days}일`);
 const quickAmount = (p: Price, c: Currency) => (c === "point" ? xpToPoint(p.xp) : p.xp);
 
 // 환불 고르기 — [XP · 빙옥] + 1인당 금액 칸 + 연결 상품 정가(빠른 선택). 화폐를 바꾸면 금액을 비운다(단위가 1만 배 달라 그대로 두면 위험)
-function RefundPicker({ id, value, onChange, prices }: { id: string; value: RefundIn; onChange: (v: RefundIn) => void; prices: Price[] }) {
+//    📌 칸 이름은 aria-label — 상세 칸이 PC 칸 · 모바일 판을 둘 다 그려 id 를 달면 겹친다(라벨을 누르면 숨은 칸으로 포커스가 갔다)
+function RefundPicker({ value, onChange, prices }: { value: RefundIn; onChange: (v: RefundIn) => void; prices: Price[] }) {
   const bad = !refundOut(value) ? " !border-[#d01634]" : "";
   const dup = new Set(prices.map(priceLabel).filter((l, i, a) => a.indexOf(l) !== i));
   return (
@@ -237,7 +268,6 @@ function RefundPicker({ id, value, onChange, prices }: { id: string; value: Refu
       />
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <input
-          id={id}
           type="text"
           inputMode="numeric"
           aria-label="1인당 금액"
@@ -323,7 +353,7 @@ function FailList({ items }: { items: { key: string; name: string; id: string; r
 }
 
 // 기간 고르기 — [무기한 · N일 · 종료일] + 일수 칸(연결 상품의 기간 옵션을 빠른 선택으로) 또는 날짜 칸. 잘못된 값은 칸 테두리만 붉게
-function PeriodPicker({ id, value, onChange, quick, nowMs }: { id: string; value: PeriodIn; onChange: (v: PeriodIn) => void; quick: number[]; nowMs: number }) {
+function PeriodPicker({ value, onChange, quick, nowMs }: { value: PeriodIn; onChange: (v: PeriodIn) => void; quick: number[]; nowMs: number }) {
   const bad = !periodOut(value, nowMs) ? " !border-[#d01634]" : "";
   return (
     <>
@@ -331,7 +361,6 @@ function PeriodPicker({ id, value, onChange, quick, nowMs }: { id: string; value
       {value.mode === "days" && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <input
-            id={id}
             type="text"
             inputMode="numeric"
             aria-label="일수"
@@ -350,7 +379,6 @@ function PeriodPicker({ id, value, onChange, quick, nowMs }: { id: string; value
       )}
       {value.mode === "until" && (
         <input
-          id={id}
           type="date"
           aria-label="종료일"
           min={kstToday(nowMs)}
@@ -381,8 +409,10 @@ const pickableRole = (r: Role) => !r.excluded && r.holders > 0;
 export default function AdminRoleMigrationPage() {
   const { isAdmin, gate } = useAdminGuard();
   const { notify, noticeEl } = useNotice();
+  const { toast, toastEl } = useToast();
   const searchParams = useSearchParams();
-  const tab: TabId = searchParams.get("tab") === "progress" ? "progress" : "roles";
+  const rawTab = searchParams.get("tab") || "";
+  const tab: TabId = TAB_IDS.has(rawTab) ? (rawTab as TabId) : "roles";
 
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(false);
@@ -419,6 +449,23 @@ export default function AdminRoleMigrationPage() {
   const [moneyPreview, setMoneyPreview] = useState<{ kind: MoneyKind; res: MoneyRes } | null>(null);
   const [moneyRunning, setMoneyRunning] = useState(false);
   const [moneyDone, setMoneyDone] = useState<{ kind: MoneyKind; name: string; list: FailItem[]; error: string } | null>(null);
+
+  // ── 역할 떼기 · RANKER 공통 — 디스코드 역할 이름 · 색(관리 역할 포함 — 표시용) ──
+  const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
+  const [rolesAsked, setRolesAsked] = useState(false);
+  // ── 역할 떼기(디스코드 표기 내리기) — 되돌리려면 역할을 손으로 다시 붙여야 하므로, 미리보기를 거쳐야 실행 단추가 열린다 ──
+  const [detachPreview, setDetachPreview] = useState<DetachRes | null>(null);
+  // "" | "preview" | "run" — 어느 쪽을 누른 건지 알아야 단추마다 다른 글자를 띄운다
+  const [detachBusy, setDetachBusy] = useState("");
+  const [detachConfirm, setDetachConfirm] = useState(false);
+  // ── RANKER — 역할(BotSetting.rankerRoleId · PATCH 로 그 칸만) · 시즌 결과(봇 결산) · 수동 지급 요청 ──
+  const [rankerSaved, setRankerSaved] = useState<string | null>(null);
+  const [rankerDraft, setRankerDraft] = useState<string | null>(null);
+  const [rankerSaving, setRankerSaving] = useState(false);
+  const [seasonResults, setSeasonResults] = useState<SeasonResult[] | null>(null);
+  const [rankerLoading, setRankerLoading] = useState(false);
+  const [rankerConfirm, setRankerConfirm] = useState<number | null>(null);
+  const [rankerBusy, setRankerBusy] = useState(false);
 
   // 기간 판정 · 짧은 날짜의 기준 시각 — 1분마다 새로(종료일이 1시간 안으로 들어오면 '기간 확인'으로 바뀐다)
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -462,6 +509,35 @@ export default function AdminRoleMigrationPage() {
   useEffect(() => {
     if (isAdmin && tab === "progress" && !status) loadStatus();
   }, [isAdmin, tab, status, loadStatus]);
+
+  // 역할 떼기 · RANKER 탭 — 디스코드 역할 목록(한 번)
+  useEffect(() => {
+    if (!isAdmin || rolesAsked || (tab !== "detach" && tab !== "ranker")) return;
+    fetch("/api/discord-roles?includeManaged=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setGuildRoles(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {})
+      .finally(() => setRolesAsked(true));
+  }, [isAdmin, tab, rolesAsked]);
+
+  // RANKER — 저장된 역할 · 시즌 결과. 탭을 열 때 · 새로고침 · 지급 요청 뒤
+  const loadRanker = useCallback(() => {
+    setRankerLoading(true);
+    Promise.all([
+      fetch("/api/bot-settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch("/api/admin/season-results", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]).then(([st, sr]) => {
+      if (st?.success && st.data) setRankerSaved(typeof st.data.rankerRoleId === "string" ? st.data.rankerRoleId : "");
+      setSeasonResults(sr?.success && Array.isArray(sr.data) ? sr.data : []);
+      if (!sr?.success) toast("시즌 결과를 불러오지 못했습니다.", true);
+    }).finally(() => setRankerLoading(false));
+  }, [toast]);
+  useEffect(() => {
+    if (isAdmin && tab === "ranker" && seasonResults === null && !rankerLoading) {
+      const t = setTimeout(loadRanker, 0);
+      return () => clearTimeout(t);
+    }
+  }, [isAdmin, tab, seasonResults, rankerLoading, loadRanker]);
 
   const roles = useMemo(() => data?.roles || [], [data]);
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
@@ -572,6 +648,81 @@ export default function AdminRoleMigrationPage() {
       setRunning(false);
     }
   };
+
+  // ── 역할 떼기 ──
+  const callDetach = async (dryRun: boolean): Promise<DetachRes | null> => {
+    if (detachBusy) return null;
+    setDetachBusy(dryRun ? "preview" : "run");
+    const res = await fetch("/api/season/detach", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dryRun }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setDetachBusy("");
+    if (res?.ok && d?.success) return { matched: Number(d.matched) || 0, updated: Number(d.updated) || 0, items: Array.isArray(d.items) ? d.items : [] };
+    if (dryRun) toast(d?.message || "미리보기에 실패했습니다.", true);
+    else notify(d?.message || "처리에 실패했습니다.", true);
+    return null;
+  };
+  const previewDetach = async () => {
+    const d = await callDetach(true);
+    if (!d) return;
+    setDetachPreview(d);
+    toast(d.matched ? `대상 ${num(d.matched)}건` : "뗄 대상이 없습니다.");
+  };
+  const runDetach = async () => {
+    if (!detachPreview || detachPreview.matched === 0) return;
+    const d = await callDetach(false);
+    setDetachConfirm(false);
+    if (!d) return;
+    // 실행한 목록으로 다시 실행하지 못하게 미리보기를 비운다
+    setDetachPreview(null);
+    notify(`${num(d.updated)}건의 디스코드 표기를 내렸습니다.\n봇이 30초 안에 실제 역할을 정리합니다.`);
+  };
+
+  // ── RANKER ──
+  const rankerValue = rankerDraft ?? rankerSaved ?? "";
+  const rankerDirty = rankerDraft !== null && rankerSaved !== null && rankerDraft !== rankerSaved;
+  const roleName = (id: string) => guildRoles.find((r) => r.id === id)?.name || id;
+  const saveRanker = async () => {
+    if (!rankerDirty || rankerSaving || rankerDraft === null) return;
+    setRankerSaving(true);
+    const res = await fetch("/api/bot-settings", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rankerRoleId: rankerDraft }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setRankerSaving(false);
+    if (res?.ok && d?.success) {
+      setRankerSaved(typeof d.data?.rankerRoleId === "string" ? d.data.rankerRoleId : rankerDraft);
+      setRankerDraft(null);
+      toast("저장했습니다.");
+    } else toast(d?.message || "저장에 실패했습니다.", true);
+  };
+  // 지급 — 서버는 DB 의 설정을 읽는다(저장된 역할, 없으면 결산 때 역할). 고르고 저장 안 한 역할로 지급된 줄 알면 안 된다
+  const rankerRoleFor = (r: SeasonResult | null | undefined) => rankerSaved || r?.rankerRoleId || "";
+  const askRankerGrant = (r: SeasonResult) => {
+    if (rankerDirty) return toast("RANKER 역할을 먼저 저장해 주세요.", true);
+    if (!rankerRoleFor(r)) return toast("RANKER 역할을 먼저 선택해 주세요.", true);
+    setRankerConfirm(r.season);
+  };
+  const requestRankerGrant = async (season: number) => {
+    if (rankerBusy) return;
+    setRankerBusy(true);
+    try {
+      const res = await fetch("/api/admin/season-results", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ season }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.success) toast(d.message || "지급을 요청했습니다.");
+      else toast(d?.message || "요청에 실패했습니다.", true);
+      loadRanker();
+    } catch {
+      toast("서버와 통신 중 오류가 발생했습니다.", true);
+    } finally {
+      setRankerBusy(false);
+      setRankerConfirm(null);
+    }
+  };
+  const rankerTarget = rankerConfirm !== null ? (seasonResults || []).find((r) => r.season === rankerConfirm) || null : null;
 
   // ── 기간 적용 ──
   const termRow = termId ? status?.roles.find((s) => s.roleId === termId) || null : null;
@@ -995,6 +1146,77 @@ export default function AdminRoleMigrationPage() {
     },
   ];
 
+  const detachColumns: Column<DetachRow>[] = [
+    { key: "item", label: "상품", mobile: "title", render: (r) => <span className="font-bold truncate">{r.itemName}</span> },
+    {
+      key: "role",
+      label: "역할",
+      render: (r) => {
+        const g = guildRoles.find((x) => x.id === r.roleId);
+        return <RoleName name={g?.name || r.roleId} color={g?.color && g.color !== "#000000" ? g.color : ""} />;
+      },
+    },
+    { key: "count", label: "건수", align: "right", render: (r) => <span className="font-bold tabular-nums">{num(r.count)}<span className="md:hidden">건</span></span> },
+  ];
+  const seasonColumns: Column<SeasonResult>[] = [
+    {
+      key: "season",
+      label: "시즌",
+      mobile: "title",
+      render: (r) => (
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <span className="shrink-0 text-[12px] font-black text-[#8a8a8a] tabular-nums">S{r.season}</span>
+          <span className="font-bold truncate">{r.name || `시즌 ${r.season}`}</span>
+        </span>
+      ),
+    },
+    {
+      key: "top",
+      label: "상위 3명",
+      wrap: true,
+      render: (r) => {
+        const top = Array.isArray(r.top) ? r.top : [];
+        return top.length ? (
+          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+            {top.map((t) => (
+              <span key={t.rank} title={`${num(t.xp)} XP`} className="inline-flex items-center gap-1.5 min-w-0">
+                <span className={`text-[12px] font-black tabular-nums ${t.rank === 1 ? "text-[#e91e3f]" : "text-[#8a8a8a]"}`}>{t.rank}</span>
+                <span className="font-bold truncate max-w-[10rem]">{t.name || t.userId}</span>
+                {t.level != null && <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">Lv.{t.level}</span>}
+              </span>
+            ))}
+          </span>
+        ) : <Empty />;
+      },
+    },
+    {
+      key: "state",
+      label: "상태",
+      wrap: true,
+      render: (r) => {
+        const st = rankerStatus(r);
+        return (
+          <span className="inline-flex flex-col items-start gap-1">
+            <StatusChip tone={st.tone}>{st.l}</StatusChip>
+            {/* 📌 지급을 마친 뒤 남은 error 는 실패가 아니라 메모(서버에 없던 랭커 · 발표 실패 등) — 빨강 대신 회색 */}
+            {r.error && <span className={`text-[12px] break-keep ${r.roleGrantedAt ? "text-[#5a5a5a]" : "text-[#d01634]"}`}>{r.error}</span>}
+          </span>
+        );
+      },
+    },
+    {
+      key: "act",
+      label: <span className="sr-only">동작</span>,
+      align: "right",
+      className: "w-px",
+      render: (r) => {
+        // 지급 전이고, 봇 대기열에 없거나 지난 시도가 실패한 것만 요청할 수 있다 (app/api/admin/season-results 와 같은 조건)
+        const canGrant = !r.roleGrantedAt && !rankerQueued(r) && (r.top || []).length > 0;
+        return canGrant ? <Btn variant="secondary" size="sm" disabled={rankerBusy} onClick={() => askRankerGrant(r)}>RANKER 역할 지급</Btn> : null;
+      },
+    },
+  ];
+
   // ── 상세 칸 ──
   const open = openId ? roleById.get(openId) || null : null;
   const openChoice = open ? choiceOf(open) : null;
@@ -1013,15 +1235,32 @@ export default function AdminRoleMigrationPage() {
 
   return (
     <AdminPage
-      section="ARCTIC"
-      // 📌 제목 · 동작은 탭과 무관하게 고정 — 탭 줄이 움직이지 않게(메모: tabs-never-move)
-      title="역할 이전"
+      section="SYSTEM : LEVEL"
+      // 📌 제목 · 동작은 탭과 무관하게 고정 — 탭 줄이 움직이지 않게(메모: tabs-never-move). 새로고침은 탭마다 그 탭의 목록을 다시 읽는다(떼기는 다시 센다)
+      title="시즌 전환"
       actions={
-        <Btn variant="secondary" size="sm" className="w-[84px]" disabled={loading || statusLoading} onClick={() => (tab === "progress" ? loadStatus() : loadRoles(true))}>
-          <SwapLabel swap={loading || statusLoading} to="읽는 중…">새로고침</SwapLabel>
+        <Btn
+          variant="secondary"
+          size="sm"
+          className="w-[84px]"
+          disabled={loading || statusLoading || !!detachBusy || rankerLoading}
+          onClick={() => (tab === "progress" ? loadStatus() : tab === "detach" ? previewDetach() : tab === "ranker" ? loadRanker() : loadRoles(true))}
+        >
+          <SwapLabel swap={loading || statusLoading || detachBusy === "preview" || rankerLoading} to="읽는 중…">새로고침</SwapLabel>
         </Btn>
       }
       tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={(id) => (id === "roles" ? "/admin/role-migration" : `/admin/role-migration?tab=${id}`)} />}
+      footer={
+        tab === "ranker" ? (
+          <SaveBar
+            dirty={rankerDirty}
+            changes={rankerDirty ? [`RANKER 역할 ${rankerSaved ? roleName(rankerSaved) : "지정 안 함"} → ${rankerDraft ? roleName(rankerDraft) : "지정 안 함"}`] : []}
+            onSave={saveRanker}
+            onReset={() => setRankerDraft(null)}
+            saving={rankerSaving}
+          />
+        ) : undefined
+      }
     >
       {/* ═══ 역할 ═══ */}
       {tab === "roles" && (
@@ -1150,6 +1389,76 @@ export default function AdminRoleMigrationPage() {
         </>
       )}
 
+      {/* ═══ 역할 떼기 ═══
+          📌 상점 관리 「시즌 전환」 탭을 옮겼다. 「시즌 전환」 표시 상품(역할 · 권한 상품 제외 · 보호 역할 제외)의 구매를 사이트 보유로 넘기고
+             디스코드 표기만 내린다 — 소유 · 인벤토리는 그대로. 실제 제거는 봇 큐(processDetachments). 미리보기 → 확인 창 → 실행 */}
+      {tab === "detach" && (
+        <>
+          <Toolbar
+            right={
+              <>
+                {detachPreview && detachPreview.matched > 0 && (
+                  <span className="text-[12px] text-[#5a5a5a] tabular-nums">합계 <b className="text-[#131313]">{num(detachPreview.matched)}</b>건</span>
+                )}
+                <Btn variant="danger" size="sm" onClick={() => setDetachConfirm(true)} disabled={!detachPreview || detachPreview.matched === 0 || !!detachBusy}>
+                  <SwapLabel swap={detachBusy === "run"} to="처리 중…">역할 떼기 실행</SwapLabel>
+                </Btn>
+              </>
+            }
+          >
+            <Btn variant="secondary" size="sm" disabled={!!detachBusy} onClick={previewDetach}>
+              <SwapLabel swap={detachBusy === "preview"} to="확인 중…">대상 미리보기</SwapLabel>
+            </Btn>
+          </Toolbar>
+          {!detachPreview ? (
+            <EmptyRow>미리보기 전</EmptyRow>
+          ) : (
+            <DataTable
+              columns={detachColumns}
+              rows={detachPreview.items}
+              rowKey={(r) => `${r.roleId}-${r.itemName}`}
+              empty="뗄 대상이 없습니다."
+            />
+          )}
+        </>
+      )}
+
+      {/* ═══ RANKER ═══
+          📌 레벨 설정 › 역할에서 옮겼다. 역할만 정해 두면 봇이 시즌 결산 때 상위 3명에게 준다(bot/src/features/seasonSettle.js).
+             수동 지급은 실패했거나 결산 뒤에 역할을 정한 경우의 예비. 역할 저장은 저장 줄(그 칸만 PATCH) */}
+      {tab === "ranker" && (
+        rankerSaved === null && seasonResults === null ? (
+          <p className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
+        ) : (
+          <div className="space-y-5">
+            <Panel title="RANKER 역할" flush>
+              <FieldRow label="역할" changed={rankerDirty}>
+                <Dropdown
+                  theme="light"
+                  buttonClassName={DD}
+                  value={rankerValue}
+                  onChange={(v) => setRankerDraft(v)}
+                  placeholder="역할을 선택하세요"
+                  options={[
+                    { value: "", label: "지정 안 함" },
+                    // 봇이 줄 수 있는 역할만 — 디스코드가 관리하는 역할(서버 부스트 등)은 줄 수 없다
+                    ...guildRoles.filter((r) => !r.managed).map((r) => ({ value: r.id, label: r.name, color: r.color })),
+                    ...(rankerValue && guildRoles.length && !guildRoles.some((r) => r.id === rankerValue) ? [{ value: rankerValue, label: `삭제된 역할 (${rankerValue})` }] : []),
+                  ]}
+                />
+              </FieldRow>
+            </Panel>
+            <Panel title={<>시즌 결과<span className="ml-1.5 text-[13px] font-bold text-[#8a8a8a] tabular-nums">{(seasonResults || []).length}</span></>} flush>
+              {seasonResults === null ? (
+                <p className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
+              ) : (
+                <DataTable className="!border-0 !rounded-none" columns={seasonColumns} rows={seasonResults} rowKey={(r) => String(r.season)} empty="결산 기록이 없습니다." />
+              )}
+            </Panel>
+          </div>
+        )
+      )}
+
       {/* ── 진행 상세 — 이미 옮긴 기록의 기간 적용 · 환불로 바꾸기 · 빠진 지급 ── */}
       <DetailPane
         open={tab === "progress" && !!termRow}
@@ -1205,7 +1514,6 @@ export default function AdminRoleMigrationPage() {
           <>
             <p className={labelClass}>기간</p>
             <PeriodPicker
-              id="rm-term"
               value={termValue}
               onChange={(v) => setTermIn((prev) => ({ ...prev, [termRow.roleId]: v }))}
               quick={uniqSorted(termRow.durations || [])}
@@ -1215,7 +1523,6 @@ export default function AdminRoleMigrationPage() {
               <>
                 <p className={labelClass}>환불</p>
                 <RefundPicker
-                  id="rm-refund"
                   value={refundValue}
                   onChange={(v) => setRefundIn((prev) => ({ ...prev, [termRow.roleId]: v }))}
                   prices={termRow.prices || []}
@@ -1328,7 +1635,6 @@ export default function AdminRoleMigrationPage() {
                   <>
                     <p className={labelClass}>1인당 환불</p>
                     <RefundPicker
-                      id="rm-refund-plan"
                       value={openChoice.refund}
                       onChange={(v) => setChoice(open, { refund: v })}
                       prices={open.prices || []}
@@ -1355,15 +1661,16 @@ export default function AdminRoleMigrationPage() {
 
                     {openChoice.mode === "new" ? (
                       <>
-                        <label className={labelClass} htmlFor="rm-name">이름</label>
-                        <input
-                          id="rm-name"
-                          className={`${inputClass} mb-4 text-base md:text-[14px]`}
-                          maxLength={40}
-                          value={openChoice.name}
-                          placeholder={open.name}
-                          onChange={(e) => setChoice(open, { name: e.target.value })}
-                        />
+                        <label className="block">
+                          <span className={labelClass}>이름</span>
+                          <input
+                            className={`${inputClass} mb-4 text-base md:text-[14px]`}
+                            maxLength={40}
+                            value={openChoice.name}
+                            placeholder={open.name}
+                            onChange={(e) => setChoice(open, { name: e.target.value })}
+                          />
+                        </label>
                         <p className={labelClass}>유형</p>
                         <Segmented
                           className="mb-4"
@@ -1374,26 +1681,26 @@ export default function AdminRoleMigrationPage() {
                       </>
                     ) : (
                       <>
-                        <label className={labelClass} htmlFor="rm-item">기존 아이템</label>
-                        <select
-                          id="rm-item"
-                          className={`${inputClass} mb-4 text-base md:text-[14px]`}
-                          value={openChoice.itemId}
-                          onChange={(e) => setChoice(open, { itemId: e.target.value })}
-                        >
-                          <option value="">선택</option>
-                          {itemOptions.map((i) => (
-                            <option key={i.id} value={i.id}>
-                              {i.name} · {typeLabel(i.type)}{i.visible ? "" : " (숨김)"}
-                            </option>
-                          ))}
-                        </select>
+                        <label className="block">
+                          <span className={labelClass}>기존 아이템</span>
+                          <select
+                            className={`${inputClass} mb-4 text-base md:text-[14px]`}
+                            value={openChoice.itemId}
+                            onChange={(e) => setChoice(open, { itemId: e.target.value })}
+                          >
+                            <option value="">선택</option>
+                            {itemOptions.map((i) => (
+                              <option key={i.id} value={i.id}>
+                                {i.name} · {typeLabel(i.type)}{i.visible ? "" : " (숨김)"}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       </>
                   )}
 
                     <p className={labelClass}>기간</p>
                     <PeriodPicker
-                      id="rm-period"
                       value={openChoice.period}
                       onChange={(v) => setChoice(open, { period: v })}
                       quick={quickOf(open, openChoice)}
@@ -1451,7 +1758,54 @@ export default function AdminRoleMigrationPage() {
         onConfirm={runMigration}
         onCancel={() => setConfirmKey(null)}
       />
+      {/* ── 역할 떼기 실행 확인 — 무엇이 얼마나 바뀌는지 보여 준 뒤 한 번 묻는다 ── */}
+      <ConfirmDialog
+        open={detachConfirm}
+        danger
+        busy={detachBusy === "run"}
+        title="디스코드 역할 떼기"
+        confirmLabel="실행"
+        body={detachPreview ? (
+          <>
+            <span className="block mb-3">
+              구매 <span className="font-bold text-[#131313] tabular-nums">{num(detachPreview.matched)}건</span>의 디스코드 역할 표기를 내립니다.
+            </span>
+            <span className="block border-y border-[#ededed] py-2 mb-3 max-h-40 overflow-y-auto no-bar">
+              {detachPreview.items.slice(0, 6).map((row) => (
+                <span key={`${row.roleId}-${row.itemName}`} className="flex items-center justify-between gap-3 py-1 text-[12px]">
+                  <span className="truncate font-bold text-[#131313]">{row.itemName}</span>
+                  <span className="shrink-0 font-bold text-[#e91e3f] tabular-nums">{num(row.count)}건</span>
+                </span>
+              ))}
+              {detachPreview.items.length > 6 && (
+                <span className="block pt-1 text-[12px] text-[#8a8a8a]">외 {detachPreview.items.length - 6}종</span>
+              )}
+            </span>
+            소유와 사이트 인벤토리는 그대로 유지되지만, 되돌리려면 역할을 손으로 다시 붙여야 합니다.
+          </>
+        ) : null}
+        onConfirm={runDetach}
+        onCancel={() => setDetachConfirm(false)}
+      />
+
+      {/* RANKER 역할 지급 — 디스코드 역할이 바로 붙으므로 대상 · 역할을 보여 주고 한 번 확인 */}
+      <ConfirmDialog
+        open={rankerConfirm !== null}
+        title="RANKER 역할 지급"
+        confirmLabel="지급"
+        busy={rankerBusy}
+        onCancel={() => setRankerConfirm(null)}
+        onConfirm={() => { if (rankerConfirm !== null) requestRankerGrant(rankerConfirm); }}
+        body={
+          <p className="break-keep">
+            시즌 {rankerConfirm} 상위 {(rankerTarget?.top || []).map((t) => t.name || t.userId).join(" · ") || "-"} 님에게{" "}
+            <strong className="text-[#131313]">{roleName(rankerRoleFor(rankerTarget)) || "-"}</strong>
+            {" "}역할을 지급합니다.
+          </p>
+        }
+      />
       {noticeEl}
+      {toastEl}
     </AdminPage>
   );
 }

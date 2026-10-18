@@ -8,22 +8,24 @@
 //    (역할 버프 RoleConfig.buffXp · attendBuffXp 는 roleConfigs.js 가 따로, 역할 기준으로 그대로 더한다)
 //
 //    효과 하나: { id, on, mode: "add" | "percent", amount, minMinutes?, everyN?, days?, hourFrom?, hourTo?, channelIds?,
-//                chance?, minMembers?, seconds?, skin?, frame? }
+//                chance?, minMembers?, seconds?, skin?, frame?, scene? }
 //      · days      : KST 요일(0=일 … 6=토). 비면 매일
 //      · hourFrom/hourTo : KST 시각. from <= 지금 < to, from > to 면 자정을 넘는 구간(22~2)
 //      · channelIds : 채팅 · 음성에서만 — 그 채널(또는 그 카테고리 안)에서만
 //      · percent   : 그 1회 지급의 기본 XP(다른 효과 · 버프를 더하기 전 값)의 N%
-//      · chance(1~100 %) · minMembers(2~99) · seconds(1~3600) · skin(카드 스킨 키) · frame(아바타 테두리 키)
+//      · chance(1~100 %) · minMembers(2~99) · seconds(1~3600) · skin(카드 스킨 키) · frame(아바타 테두리 키) · scene(카드 배경 키 sc_*)
 //    기본 효과 세 칸은 같은 목록에 합쳐 둔다 —
 //      chatBuffXp → "채팅 1회당 +N"(basic-chat), voiceBuffXp → "음성 1회당 +N"(basic-voice), attendBuffXp → "출석 시 +N"(basic-attend)
 //
 //    📌 효과 종류 (계약: 발동형 · 상시형 · 소모형 · 꾸미기형)
 //      발동형  — 지급할 때 붙는다. 요일 · 시간대(· 채널) 조건을 탄다
 //               chatJackpot(features/chatXp) · voiceParty(features/voiceXp) · welcomeReply(features/chatXp) · attendLucky · attendPoint(attend.js)
+//               voiceCandy(features/voiceXp payVoiceCycle) · wispHunt(features/chatXp → features/wispHunt) — 2026-10-14 할로윈 부스터
 //      상시형  — 들고 있는 동안. 조건 없음, 같은 효과는 합산 후 상한 — perksOf
 //               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · questBonus
 //      소모형  — streakShield(attend.js) — 구매 하나를 consumeStreakShield 로 소모(Purchase.consumedAt)
-//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) / 사이트만: profileBadge · avatarFrame(perksOf().avatarFrames, pickAvatarFrame)
+//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) · cardScene(카드 배경 — perksOf().cardScenes, pickCardScene)
+//               / 사이트만: profileBadge · avatarFrame(perksOf().avatarFrames, pickAvatarFrame)
 //
 //    📌 보유 판정 (사이트 lib/ownedItems.js · app/api/shop/my-items (A)/(B) 와 같은 규칙)
 //      (A) 구매 건 — status pending(결제 끝, 지급 대기) · completed 이고 기간이 안 지났고 소모되지 않은 것(consumedAt 없음)
@@ -41,9 +43,10 @@ import { getSettings } from "./botSettings.js";
 const REFRESH_MS = 60 * 1000;
 const ROLE_LIKE = new Set(["role", "perk", "item"]);
 
-//    📌 사이트 lib/itemEffects.js TRIGGERS 의 사본(봇이 정리에 쓰는 칸만) — on 값 · kind · modes · needs · channels · cap · noAmount 가 같아야 한다.
+//    📌 사이트 lib/itemEffects.js TRIGGERS 의 사본(봇이 정리에 쓰는 칸만) — on 값 · kind · modes · needs · channels · cap · noAmount · exact 가 같아야 한다.
 //    kind: trigger(발동 — 요일 · 시간대 조건) · perk(상시 — 합산 후 상한) · consumable(소모) · cosmetic(꾸미기)
 //    needs: 반드시 있어야 하는 값 / noAmount: 크기 없이 쓰는 효과(amount 1 고정) / cap: 상시형 한 칸 · 합의 최대
+//    exact: 분 · 확률이 범위 밖이면 자르지 않고 버린다(사이트 normalizeEffects 와 같다)
 const EFFECT_TRIGGERS = {
   // ── 발동형 ──
   chat: { kind: "trigger", modes: ["add", "percent"], channels: true },          // 채팅 1회당
@@ -52,9 +55,14 @@ const EFFECT_TRIGGERS = {
   firstChat: { kind: "trigger", modes: ["add"], once: true },                    // 하루 첫 채팅 (하루 1번)
   attend: { kind: "trigger", modes: ["add"] },                                   // 출석 시
   attendEvery: { kind: "trigger", modes: ["add"], needs: "everyN" },             // 출석 N번째마다 (누적 출석 수 기준)
-  levelUp: { kind: "trigger", modes: ["add"] },                                  // 레벨이 오를 때마다
+  levelUp: { kind: "trigger", modes: ["add"], again: true },                     // 레벨이 오를 때마다(again: 다시 오른 레벨 몫 칸 againAmount — 2026-10-18)
   chatJackpot: { kind: "trigger", modes: ["add"], needs: "chance", channels: true },              // 채팅 XP 가 나갈 때 chance% 로 +amount
   voiceParty: { kind: "trigger", modes: ["add", "percent"], needs: "minMembers", channels: true }, // 음성 채널(봇 제외) minMembers 명 이상일 때 1회당
+  // 📌 2026-10-18 「마녀의 모래시계」 — 같은 음성 채널에 이어서 머문 시간(음성 XP 를 받은 시간) minMinutes 분마다 +amount%, 최대 maxPct%(voiceStayXp · features/voiceTime.js)
+  voiceStay: { kind: "trigger", modes: ["percent"], needs: "minMinutes", channels: "voice", maxPct: true },
+  // 📌 2026-10-14 할로윈 「유령 펭귄의 초대」 부스터(보상 값은 아래 할로윈 효과 공용 블록). channels 는 사이트와 글자까지 같게 "voice"(봇은 있음 · 없음만 본다)
+  voiceCandy: { kind: "trigger", modes: ["add"], needs: "minMinutes", channels: "voice", noAmount: true, exact: true, tiers: true }, // 음성 XP 를 받은 시간 N분마다 무작위 XP(구간 표 candyTiers — 기본 100~3,000)
+  wispHunt: { kind: "trigger", modes: ["add"], needs: "chance", channels: true, exact: true },                         // 채팅 XP 메시지에서 chance% 로 도깨비불 — 잡은 사람 +500~1,500 · 주인 +amount
   welcomeReply: { kind: "trigger", modes: ["add"], channels: true },                               // 입장 7일 이내 멤버에게 첫 답장 — 그 멤버당 한 번
   attendLucky: { kind: "trigger", modes: ["percent"], needs: "chance" },                           // 출석 때 chance% 로 기본 출석 XP 의 amount%
   attendPoint: { kind: "trigger", modes: ["add"] },                                                // 출석 때 빙옥 +amount
@@ -67,6 +75,7 @@ const EFFECT_TRIGGERS = {
   muteRelief: { kind: "perk", modes: ["percent"], cap: 100 },      // 음소거 감소율 −%p (실제 상한은 감소율 전체 — perksOf)
   // ── 소모형 · 꾸미기형 ──
   streakShield: { kind: "consumable", modes: ["add"], noAmount: true },          // 연속 출석 보호막 1회
+  cardScene: { kind: "cosmetic", modes: ["add"], needs: "scene", noAmount: true }, // 카드 배경(2026-10-15 — 카드 테두리와 따로 고르고 함께 입는다)
   cardSkin: { kind: "cosmetic", modes: ["add"], needs: "skin", noAmount: true }, // 이미지 카드 스킨
   profileBadge: { kind: "cosmetic", modes: ["add"], noAmount: true },            // 사이트 — 프로필 배지
   avatarFrame: { kind: "cosmetic", modes: ["add"], needs: "frame", noAmount: true }, // 사이트 — 아바타 테두리
@@ -77,7 +86,9 @@ const RANK_SKIN_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "mast
 const SKIN_RANK_ALL = "rank_all";
 //    할로윈 시즌 카드 스킨 hw_<짧은 영문>(2026-10 — 사이트 SKINS 와 같은 키, 그림 cardSkins/hw_*.js)
 const HW_SKIN_KEYS = ["hw_pumpkin", "hw_ghost", "hw_witch", "hw_candy", "hw_grave", "hw_blackcat"];
-const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship", ...RANK_SKIN_KEYS, SKIN_RANK_ALL, ...HW_SKIN_KEYS]);
+// 📌 할로윈 「유령 펭귄의 초대」 이벤트 카드 테두리(2026-10) — 키 ev_<영문>
+const EV_SKIN_KEYS = ["ev_ghost"];
+const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship", ...RANK_SKIN_KEYS, SKIN_RANK_ALL, ...HW_SKIN_KEYS, ...EV_SKIN_KEYS]);
 // 효과의 skin 값 → 가진 것으로 치는 스킨 키들 — 사이트 skinsOf 와 같다
 export const skinsOf = (skin) => (skin === SKIN_RANK_ALL ? RANK_SKIN_KEYS : SKIN_KEYS.has(skin) ? [skin] : []);
 // 📌 유저가 고른 스킨 적용 — 사이트 lib/itemEffects.js pickCardSkin 과 같은 규칙
@@ -88,10 +99,16 @@ export function pickCardSkin(skins, pick) {
   if (!pick || pick === "none") return "";
   return list.includes(pick) ? pick : "";
 }
+// 📌 카드 배경 키 sc_<영문>(2026-10-15) — 사이트 lib/itemEffects.js SCENES · botCards.js CARD_SCENES 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
+const SCENE_KEYS = new Set(["sc_ghost"]);
+// 효과의 scene 값 → 가진 것으로 치는 배경 키들 — 사이트 scenesOf 와 같다
+export const scenesOf = (scene) => (SCENE_KEYS.has(scene) ? [scene] : []);
+// 📌 유저가 고른 배경(UserXp.cardScenePick) — 사이트 pickCardScene 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
+export const pickCardScene = (scenes, pick) => pickCardSkin(scenes, pick);
 // 📌 아바타 테두리 키(등급 키) — 사이트 lib/itemEffects.js FRAMES 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
-//    앞 9개는 등급 키(시즌 티어 보상), 뒤는 꾸미기 테두리(할로윈 hwf_* · A New World nwf_*)
+//    앞 9개는 등급 키(시즌 티어 보상), 뒤는 꾸미기 테두리(할로윈 hwf_* · A New World nwf_* · 이벤트 evf_*)
 const TIER_FRAME_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
-const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship"]);
+const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship", "evf_ghost"]);
 // 📌 유저가 고른 테두리(UserXp.avatarFramePick) — 사이트 pickAvatarFrame 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
 export const pickAvatarFrame = (frames, pick) => pickCardSkin(frames, pick);
 // 📌 "all" — 테두리 9종 전부(관리자 테스트 아이템, 사이트 FRAME_ALL 과 같다). 효과의 frame 값 → 가진 것으로 치는 키들
@@ -106,7 +123,7 @@ export const withSeasonSkin = (skins, doc) => { const list = Array.isArray(skins
 const MAX_EFFECTS = 20;
 const LIMIT = { add: 1_000_000, percent: 500, minutes: 1440, everyN: 365 };
 // 새 칸의 범위 — 사이트 FIELD_RANGE 와 같다
-const FIELD_RANGE = { chance: [1, 100], minMembers: [2, 99], seconds: [1, 3600] };
+const FIELD_RANGE = { chance: [1, 100], minMembers: [2, 99], seconds: [1, 3600], maxPct: [1, 100] };
 
 const toInt = (v, lo, hi) => {
   const n = Math.floor(Number(v));
@@ -118,6 +135,12 @@ const need = (v, lo, hi) => {
   if (v === "" || v == null) return null;
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n > 0 ? Math.min(hi, Math.max(lo, n)) : null;
+};
+// 📌 exact 효과(voiceCandy · wispHunt)의 분 · 확률 — 비었거나 범위 밖이면 없음(자르지 않는다). 사이트 within 과 같다
+const within = (v, lo, hi) => {
+  if (v === "" || v == null) return null;
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
 };
 // 효과 한 칸의 크기 최대 — 상시형은 cap, 나머지는 방식별 (사이트 amountMaxOf 와 같다)
 const amountMaxOf = (t, mode) => (t?.cap ? t.cap : mode === "percent" ? LIMIT.percent : LIMIT.add);
@@ -142,7 +165,7 @@ function cleanEffects(list) {
     if (!amount) return;
     const e = { id: String(raw?.id || "").slice(0, 24) || `${raw.on}-${i}`, on: raw.on, mode, amount };
     if (t.needs === "minMinutes") {
-      const m = toInt(raw?.minMinutes, 1, LIMIT.minutes);
+      const m = t.exact ? within(raw?.minMinutes, 1, LIMIT.minutes) : toInt(raw?.minMinutes, 1, LIMIT.minutes);
       if (!m) return;
       e.minMinutes = m;
     }
@@ -152,7 +175,7 @@ function cleanEffects(list) {
       e.everyN = n;
     }
     if (t.needs === "chance") {
-      const c = need(raw?.chance, ...FIELD_RANGE.chance);
+      const c = t.exact ? within(raw?.chance, ...FIELD_RANGE.chance) : need(raw?.chance, ...FIELD_RANGE.chance);
       if (!c) return;
       e.chance = c;
     }
@@ -162,6 +185,22 @@ function cleanEffects(list) {
       e.minMembers = m;
     }
     if (t.needs === "seconds") e.seconds = seconds;
+    // 📌 최대 %(voiceStay — maxPct) — 비었거나 0 이하면 효과를 버린다. 사이트 normalizeEffects 와 같다
+    if (t.maxPct) {
+      const mx = need(raw?.maxPct, ...FIELD_RANGE.maxPct);
+      if (!mx) return;
+      e.maxPct = mx;
+    }
+    // 📌 다시 오른 레벨 몫(levelUp — again) — 비우면 없음(= 크기의 절반), 0 이면 다시 오른 레벨엔 주지 않는다. 사이트 normalizeEffects 와 같다
+    if (t.again && raw?.againAmount !== "" && raw?.againAmount != null) {
+      const a = toInt(raw.againAmount, 0, amountMaxOf(t, mode));
+      if (a != null) e.againAmount = a;
+    }
+    // 📌 보상 구간 표(voiceCandy — tiers · 2026-10-18) — 맞는 표만(아래 할로윈 공용 블록 normalizeCandyTiers), 어긋나거나 없으면 칸 없음(= 기본 표). 사이트와 같다
+    if (t.tiers && raw?.candyTiers != null) {
+      const ct = normalizeCandyTiers(raw.candyTiers);
+      if (ct) e.candyTiers = ct;
+    }
     if (t.needs === "skin") {
       const s = String(raw?.skin || "");
       if (!SKIN_KEYS.has(s)) return;
@@ -173,6 +212,12 @@ function cleanEffects(list) {
       if (!FRAME_KEYS.has(fr) && fr !== FRAME_ALL) return;
       if (out.some((x) => x.frame)) return; // 테두리 효과는 아이템 하나에 하나(여러 개는 "all") — 사이트 normalizeEffects 와 같다
       e.frame = fr;
+    }
+    if (t.needs === "scene") {
+      const sc = String(raw?.scene || "");
+      if (!SCENE_KEYS.has(sc)) return;
+      if (out.some((x) => x.scene)) return; // 카드 배경은 아이템 하나에 하나(카드 스킨과는 함께 있어도 된다) — 사이트 normalizeEffects 와 같다
+      e.scene = sc;
     }
     // 요일 · 시간대는 발동형에만 — 상시 · 소모 · 꾸미기는 가지고 있는 동안 늘 붙는다
     if (t.kind === "trigger") {
@@ -462,6 +507,48 @@ export function effectXp(member, on, { base = 0, channel = null, kst = kstNow(),
   }
 }
 
+// 📌 레벨업 효과(levelUp) 한 레벨 몫 — { first: 처음 오른 레벨(효과 크기 합), again: 다시 오른 레벨 }. 요일 · 시간대를 통과한 칸만.
+//    again = 다시 오른 레벨 몫을 정한 칸(againAmount)은 그 값 합 + 정하지 않은 칸은 크기 합의 절반(버림 — 2026-10-18 운영자 설정 칸 · 비우면 예전 절반 그대로)
+//    사이트 lib/itemEffects againXpOf 와 같은 규칙. 오류면 0
+export function levelUpEffectXp(member, kst = kstNow()) {
+  try {
+    let first = 0;
+    let fixed = 0;
+    let halfBase = 0;
+    for (const e of heldEffects(member, "levelUp")) {
+      if (!effectTimeOk(e, kst) || !effectChannelOk(e, null)) continue;
+      first += e.amount;
+      if (e.againAmount != null) fixed += e.againAmount;
+      else halfBase += e.amount;
+    }
+    return { first, again: fixed + Math.floor(halfBase / 2) };
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (levelUp):", e.message);
+    return { first: 0, again: 0 };
+  }
+}
+
+// 📌 머물수록 증가(voiceStay — 2026-10-18 마녀의 모래시계) 지금 % — 같은 음성 채널에 이어서 머문 초(staySec — features/voiceTime.js)로
+//    효과마다 min(최대 %, ⌊머문 분 ÷ N분⌋ × 크기 %)를 더한다. 요일 · 시간대 · 채널 조건을 통과한 것만
+export function voiceStayPct(member, staySec, { channel = null, kst = kstNow() } = {}) {
+  const min = Math.max(0, Number(staySec) || 0) / 60;
+  if (!(min > 0)) return 0;
+  try {
+    let pct = 0;
+    for (const e of heldEffects(member, "voiceStay")) {
+      if (!effectTimeOk(e, kst) || !effectChannelOk(e, channel)) continue;
+      pct += Math.min(e.maxPct, Math.floor(min / e.minMinutes) * e.amount);
+    }
+    return pct;
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (voiceStay):", e.message);
+    return 0;
+  }
+}
+// 1회분(5분)에 더할 머물수록 증가 XP — base(기본 + 강화)의 지금 %(내림). 음성 1회당 % 효과와 같은 기준
+export const voiceStayXp = (member, { base = 0, staySec = 0, channel = null, kst = kstNow() } = {}) =>
+  Math.floor((Math.max(0, Number(base) || 0) * voiceStayPct(member, staySec, { channel, kst })) / 100);
+
 // 출석 1회에 더할 효과 XP — "출석 시"(기본 효과 포함) 합 + "출석 N번째마다"(누적 출석 수가 N 의 배수일 때) 합
 export function getAttendEffectXp(member, attendCount, kst = kstNow()) {
   let total = effectXp(member, "attend", { kst });
@@ -533,18 +620,109 @@ export function attendPointOf(member, kst = kstNow()) {
   }
 }
 
+// ── 할로윈 효과 공용 블록 시작 (lib/itemEffects.js · bot/src/itemEffects.js 와 글자 그대로 같게) ──
+// 📌 2026-10-14 할로윈 「유령 펭귄의 초대」 부스터 효과의 보상 값 — 사이트(문구)와 봇(지급)이 같은 값을 쓴다. 핫타임 배수는 붙지 않는다
+//    음성 N분마다 무작위 XP(voiceCandy — 아이템 「사탕 바구니」): N분마다 하나 — 무게(w = 확률 %)로 구간을 고르고 그 안에서 정수 하나(양끝 포함).
+//    📌 2026-10-18 운영자 "100~5000 인데 그걸 왜 내가 수정을 못해" · "5%면 개많네" · "3000 정도" — 구간 표는 효과마다(candyTiers — 상점 관리 효과 칸),
+//       정하지 않은 효과는 아래 기본 표: 80% 100~800 · 19% 800~1,500 · 1% 1,500~3,000 XP("낮은 값이 자주")
+export const CANDY_TIERS = [
+  { w: 80, min: 100, max: 800 },
+  { w: 19, min: 800, max: 1500 },
+  { w: 1, min: 1500, max: 3000 },
+];
+export const CANDY_TIER_MAX = 5; // 구간 줄 수 최대
+export const CANDY_XP_MAX = 1000000; // 구간 값 최대
+// 구간 표 정리 — 줄마다 { w: 확률 %(0 초과 100 이하 · 소수 첫째 자리까지), min, max(정수 0~CANDY_XP_MAX · min ≤ max) }, 1~CANDY_TIER_MAX 줄, 확률 합 100.
+//    하나라도 어긋나면 null(그 효과는 기본 표) — 관리 화면은 저장 전에 막는다(candyTiersError)
+export function normalizeCandyTiers(v) {
+  if (!Array.isArray(v) || !v.length || v.length > CANDY_TIER_MAX) return null;
+  const out = [];
+  for (const t of v) {
+    const w = Math.round(Number(t?.w) * 10) / 10;
+    const min = Math.floor(Number(t?.min));
+    const max = Math.floor(Number(t?.max));
+    if (!(w > 0 && w <= 100) || !Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max > CANDY_XP_MAX || min > max) return null;
+    out.push({ w, min, max });
+  }
+  return Math.round(out.reduce((s, t) => s + t.w, 0) * 10) / 10 === 100 ? out : null;
+}
+// 효과 하나의 구간 표 — 정한 표(candyTiers) · 없거나 어긋나면 기본 표
+export const candyTiersOf = (e) => normalizeCandyTiers(e?.candyTiers) || CANDY_TIERS;
+// 구간 표의 범위 [가장 작은 값, 가장 큰 값] — 문구의 「100~3,000 XP」
+export const candyRangeOf = (tiers) => [Math.min(...tiers.map((t) => t.min)), Math.max(...tiers.map((t) => t.max))];
+export const CANDY_XP_RANGE = candyRangeOf(CANDY_TIERS);
+//    호박불 랜턴(wispHunt): 도깨비불을 먼저 잡은 사람이 받는 XP(정수, 양끝 포함). 랜턴 주인은 효과 크기(amount)만큼
+export const WISP_CATCH_XP = [500, 1500];
+// 정수 하나 [min, max] — rand 는 0 이상 1 미만(시험에서 바꿔 끼운다). 범위 밖 값이 와도 양끝 안으로
+export const randXp = (min, max, rand = Math.random) => Math.min(max, min + Math.floor(Math.max(0, Number(rand()) || 0) * (max - min + 1)));
+// 하나의 XP — 첫 rand 로 구간, 둘째 rand 로 그 안의 값. tiers: 그 효과의 구간 표(candyTiersOf — 어긋나면 기본 표)
+export function pickCandyXp(rand = Math.random, tiers = CANDY_TIERS) {
+  const list = normalizeCandyTiers(tiers) || CANDY_TIERS;
+  const total = list.reduce((s, t) => s + t.w, 0);
+  let r = Math.max(0, Number(rand()) || 0) * total;
+  for (const t of list) {
+    if (r < t.w) return randXp(t.min, t.max, rand);
+    r -= t.w;
+  }
+  const last = list[list.length - 1];
+  return randXp(last.min, last.max, rand);
+}
+// 도깨비불을 잡은 사람의 XP
+export const pickWispXp = (rand = Math.random) => randXp(WISP_CATCH_XP[0], WISP_CATCH_XP[1], rand);
+// ── 할로윈 효과 공용 블록 끝 ──
+
+// 📌 음성 N분마다 무작위 XP(voiceCandy — 아이템 「사탕 바구니」) — 요일 · 시간대 · 음성 채널 조건을 통과한 효과 중 가장 짧은 간격(분). 없으면 0 — 그 바퀴는 쌓지 않는다.
+//    여러 개를 들고 있어도 쌓는 칸은 하나(UserXp.voiceCandySec)라 가장 짧은 간격으로 센다. 쌓기 · 지급은 features/voiceXp.js payVoiceCycle
+export function voiceCandyMinutes(member, { channel = null, kst = kstNow() } = {}) {
+  return voiceCandyPick(member, { channel, kst }).minutes;
+}
+// 📌 그 간격을 정한 효과의 보상 구간 표(candyTiersOf — 2026-10-18 효과마다 · 없으면 기본 표). 같은 간격이 여럿이면 먼저 든 것
+export function voiceCandyTiers(member, { channel = null, kst = kstNow() } = {}) {
+  return voiceCandyPick(member, { channel, kst }).tiers;
+}
+function voiceCandyPick(member, { channel = null, kst = kstNow() } = {}) {
+  try {
+    let pick = null;
+    for (const e of heldEffects(member, "voiceCandy")) {
+      if (!effectTimeOk(e, kst) || !effectChannelOk(e, channel)) continue;
+      if (e.minMinutes > 0 && (!pick || e.minMinutes < pick.minMinutes)) pick = e;
+    }
+    return { minutes: pick ? pick.minMinutes : 0, tiers: candyTiersOf(pick) };
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (voiceCandy):", e.message);
+    return { minutes: 0, tiers: CANDY_TIERS };
+  }
+}
+
+// 📌 호박불 랜턴(wispHunt) — 채팅 XP 를 받은 메시지에서 효과마다 chance% 로 굴린다. 터진 것 중 주인 몫(amount)이 가장 큰 값(0 이면 안 터짐).
+//    도깨비불은 한 채널에 하나라 몫을 합치지 않는다 — 띄우기 · 잡기는 features/wispHunt.js
+export function wispHuntXp(member, { channel = null, kst = kstNow() } = {}) {
+  try {
+    let best = 0;
+    for (const e of heldEffects(member, "wispHunt")) {
+      if (!effectTimeOk(e, kst) || !effectChannelOk(e, channel)) continue;
+      if (rolled(e.chance) && e.amount > best) best = e.amount;
+    }
+    return best;
+  } catch (e) {
+    console.error("아이템 효과 계산 오류 (wispHunt):", e.message);
+    return 0;
+  }
+}
+
 // ── 상시형 · 꾸미기형 ─────────────────────────────
 /**
  * 📌 들고 있는 동안 붙는 효과의 합 — 사이트 lib/itemPerks.js getPerks 의 봇 쪽 사본(봇이 쓰는 칸만). 캐시만 본다.
  *    같은 효과는 합산 후 상한: cooldownCut ≤ 채팅 쿨타임의 절반(초), muteRelief ≤ 음소거 감소율(%p), passBoost ≤ 50(%)
  *    cardSkin: "" — 자동으로 입히는 스킨 없음(2026-10-04, 사이트 perksOfItems 와 같다)
  *    cardSkins: 가진 스킨 전부(관리자 순서 — 아이템 sortOrder · createdAt) — 유저가 고른 스킨은 pickCardSkin 으로 (botMessages withSkin)
+ *    cardScenes: 가진 카드 배경 전부(관리자 순서 · 중복 없음) — 고른 것은 pickCardScene (botMessages withSkin · 사이트 perksOfItems 와 같다)
  *    avatarFrames: 가진 아바타 테두리 전부(관리자 순서 · 중복 없음) — 고른 것은 pickAvatarFrame (사이트 perksOfItems 와 같다)
  *    오류가 나도 0 · "" 을 돌려준다.
- * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[], avatarFrames: string[] }}
+ * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[], cardScenes: string[], avatarFrames: string[] }}
  */
 export function perksOf(member) {
-  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [], avatarFrames: [] };
+  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [], cardScenes: [], avatarFrames: [] };
   try {
     if (!state.effectsById.size) return out;
     const owned = ownedItemIds(member);
@@ -553,6 +731,7 @@ export function perksOf(member) {
     let relief = 0;
     let boost = 0;
     const skins = [];
+    const scenes = [];
     const frames = [];
     for (const [itemId, list] of state.effectsById) {
       if (!owned.has(itemId)) continue;
@@ -561,6 +740,7 @@ export function perksOf(member) {
         else if (e.on === "muteRelief") relief += e.amount;
         else if (e.on === "passBoost") boost += e.amount;
         else if (e.on === "cardSkin") for (const sk of skinsOf(e.skin)) { if (!skins.includes(sk)) skins.push(sk); }
+        else if (e.on === "cardScene") for (const sc of scenesOf(e.scene)) { if (!scenes.includes(sc)) scenes.push(sc); }
         else if (e.on === "avatarFrame") for (const fk of framesOf(e.frame)) { if (!frames.includes(fk)) frames.push(fk); }
       }
     }
@@ -570,6 +750,7 @@ export function perksOf(member) {
     out.passBoost = Math.min(boost, EFFECT_TRIGGERS.passBoost.cap);
     out.cardSkin = pickCardSkin(skins, "");
     out.cardSkins = skins;
+    out.cardScenes = scenes;
     out.avatarFrames = frames;
   } catch (e) {
     console.error("아이템 효과 계산 오류 (perks):", e.message);

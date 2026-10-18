@@ -6,6 +6,7 @@ import { denyIfNotAdmin } from "@/lib/apiAuth";
 import Purchase from "@/models/Purchase";
 import mongoose from "mongoose";
 import { settleOrders } from "@/lib/orderRefund";
+import { withPurchaseCategories } from "@/lib/itemCategoryServer";
 
 // 📌 쪽 넘김(더 보기) — 최신순(createdAt · _id 내림차순)으로 limit 건씩. before 는 앞 쪽 응답의 next("<시각 ms>_<_id>") — 그보다 오래된 것부터.
 //    limit 기본 500(예전 한 번에 읽던 양) · 최대 5,000(처리 뒤 화면이 '더 보기'로 펼친 깊이만큼 다시 읽을 때)
@@ -22,6 +23,7 @@ const olderThan = (c) => ({ $or: [{ createdAt: { $lt: c.at } }, { createdAt: c.a
 
 // ── [조회] 전체 구매 내역 (관리자) ──
 //    응답: { data, pendingCount, hasMore, next } — hasMore 면 next 를 before 로 넘겨 다음 쪽
+//    📌 data 건마다 categoryLabel · shortName(세트 구성 건은 bundleCategoryLabel 도) — 2026-10-17 lib/itemCategoryServer.js
 export async function GET(request) {
   try {
     const deny = await denyIfNotAdmin();
@@ -49,7 +51,7 @@ export async function GET(request) {
       rows.push(...rest);
     }
     const next = hasMore && tail ? cursorOf(tail) : "";
-    return NextResponse.json({ success: true, data: rows, pendingCount, hasMore, next });
+    return NextResponse.json({ success: true, data: await withPurchaseCategories(rows), pendingCount, hasMore, next });
   } catch (e) {
     return NextResponse.json({ success: false, data: [] }, { status: 500 });
   }

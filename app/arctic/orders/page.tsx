@@ -14,14 +14,17 @@ import { BUNDLE_LABEL } from "../ProductCard";
 
 // 📌 세트 구성 건(bundleName — lib/bundle.js)은 한 결제가 같은 orderId + 같은 itemId(세트 상품 id)라 주문 묶음(lib/orderGroups.js)이 이미 한 줄로 모은다.
 //    그 줄은 세트 이름을 제목으로, 아래에 구성 아이템 이름(같은 아이템 여러 개는 ×N)을 적는다. 순서는 건 id 순(결제 API 가 구성 순서대로 만든다)
-type OrderRow = { _id?: unknown; itemRef?: unknown; itemName?: unknown };
+type OrderRow = { _id?: unknown; itemRef?: unknown; itemName?: unknown; shortName?: unknown };
+// 📌 2026-10-17 분류 · 짧은 이름 — 구매 내역 API(GET /api/shop/purchase)가 건마다 categoryLabel · shortName(세트 구성 건은 bundleCategoryLabel)을 싣는다.
+//    그 칸이 없는 옛 응답만 예전처럼 산 때 이름(itemName)의 머리말 → 유형 이름
+const shortOf = (r: OrderRow) => (typeof r.shortName === "string" && r.shortName) || splitItemName(String(r.itemName || "")).short;
 const bundleNamesOf = (rows: readonly OrderRow[]) => {
   const out: { key: string; name: string; n: number }[] = [];
   for (const r of [...rows].sort((a, b) => String(a._id).localeCompare(String(b._id)))) {
     const key = String(r.itemRef || r.itemName || "");
     const hit = out.find((x) => x.key === key);
     if (hit) hit.n += 1;
-    else out.push({ key, name: splitItemName(r.itemName).short || "아이템", n: 1 });
+    else out.push({ key, name: shortOf(r) || "아이템", n: 1 });
   }
   return out.map((x) => (x.n > 1 ? `${x.name} ×${x.n}` : x.name)).join(" · ");
 };
@@ -150,9 +153,9 @@ export default function OrdersPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${meta.cls}`}>{meta.label}</span>
-                        <span className="text-[10px] font-bold text-[#8a8a8a]">{bundle ? BUNDLE_LABEL : splitItemName(o.itemName).kind || TYPE_LABEL[o.itemType] || "상품"}</span>
+                        <span className="text-[10px] font-bold text-[#8a8a8a]">{bundle ? o.bundleCategoryLabel || BUNDLE_LABEL : o.categoryLabel || splitItemName(o.itemName).kind || TYPE_LABEL[o.itemType] || "상품"}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-[#131313] truncate">{bundle ? o.bundleName : splitItemName(o.itemName).short}</h3>
+                      <h3 className="text-sm font-bold text-[#131313] truncate">{bundle ? o.bundleName : shortOf(o)}</h3>
                       {/* 세트 — 구성 아이템 이름들 */}
                       {bundle && <p className="text-[12px] font-bold text-[#5a5a5a] mt-0.5 break-keep">{bundleNamesOf(o.rows || [])}</p>}
                       {/* 여러 개 산 줄 — 수량과 쓴 · 돌려받은 개수. 한 개짜리 소모권은 썼으면 "사용함" (세트는 위에 구성이 있어 수량을 적지 않는다) */}

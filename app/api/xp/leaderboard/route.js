@@ -10,10 +10,12 @@ import Purchase from "@/models/Purchase";
 import WalletLog from "@/models/WalletLog";
 import { kstMonthStart } from "@/lib/kst";
 import { currentSeason, seasonStartMs } from "@/lib/season";
-import { requireAdmin, getSession } from "@/lib/apiAuth";
+import { getSession } from "@/lib/apiAuth";
+import { isAdminViewer } from "@/lib/adminViewServer";
 import BotSetting from "@/models/BotSetting";
 import { fetchGuildMember } from "@/lib/discordMember";
 import { badgesOfUsers, framesOfUsers } from "@/lib/itemPerks";
+import { monthBoard as monthBoardOf, totalBoard as totalBoardOf, rankTotalSince } from "@/lib/rankBoards";
 
 // 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
 //    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
@@ -108,261 +110,19 @@ async function finish(rows, skip) {
   });
 }
 
-// 📌 관리자가 없앤 XP — [XP 제거] · 음수 수동 지급(app/api/xp/grant → 봇 processPayouts 가 반영해 paid) · 관리자 초기화(같은 라우트 mode reset).
-//    현재(UserXp.xp)는 봇 · 초기화가 이미 깎는다. 이번 달은 XpLog + 지급 합이라 여기서 따로 뺀다(monthBoard).
-//    XpLog 에 음수 줄을 쓰지 않는다 — 원장(app/api/xp/ledger)에 Payout 줄과 두 번 보이고, 퀘스트 · 패스 · 서포터즈도 XpLog 를 같이 센다.
-//    유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)와 다른 지급은 빼지 않는다 — 대기 · 처리 중은 아직 깎이지 않았으므로 paid 만
-//    초기화는 kind "reset", 그 표시가 없던 예전 기록은 수동 지급 중 사유 "관리자 초기화…"(원장 HIDDEN_PAYOUT 과 같은 기준). 보유 0 이던 사람의 기록은 금액 0 이라 따로 잡는다
-//    📌 2026-10-04 퇴장 초기화(봇 features/leaveReset.js)도 kind "reset" 을 남긴다 — 금액 0 · source "etc" · by "bot" · paid, 나간 시각.
-//       kind "reset" 은 금액 부호와 상관없이 '그 시각까지 0'이고 획득(plus)에 넣지 않는다. 사유로만 잡는 예전 기록은 금액 0 이하일 때만 초기화
-const ADMIN_TAKE = [
-  { source: { $in: ["manual", "admin"] }, amount: { $lt: 0 } },
-  { kind: "reset" },
-  { source: "manual", reason: /^관리자 초기화/ },
-];
-const IS_RESET = {
-  $or: [
-    { $eq: ["$kind", "reset"] },
-    {
-      $and: [
-        { $lte: ["$amount", 0] },
-        { $eq: ["$source", "manual"] },
-        { $regexMatch: { input: { $ifNull: ["$reason", ""] }, regex: "^관리자 초기화" } },
-      ],
-    },
-  ],
-};
-
-// 📌 이번 달 값 — 이번 달 XpLog(채팅 · 음성 · 출석 · 아이템 효과) + 이번 달 지급된(paid) 양수 XP 지급
-//    (퀘스트 · 시즌 패스 · 관리자 지급 · 쿠폰 · 서포터즈 · 역할 환불 — 봇 processPayouts 는 UserXp.xp 만 올리고 XpLog 를 쓰지 않는다)
-//    − 관리자 회수 · 초기화. 유저가 쓴 XP(상점 결제 · 강화 · 패스 해금)는 Payout 이 아니라 빼지 않는다.
-//    시각 순으로 쌓는다: 회수는 0 아래로 내리지 않고(그 뒤에 번 XP 는 다시 쌓인다 — 보유 XP 가 0 에서 멈추는 것과 같다),
-//    초기화(관리자 · 퇴장)는 금액과 상관없이 그 순간까지를 0 으로(보유 XP 를 통째로 지운 것 — 같은 달에 다시 들어와도 나가기 전 몫은 안 잡힌다).
-//    📌 "회수는 그 달 지급분에서 먼저"(2ffb4b2)와 같은 값이다 — 지급분 u · 번 값 v 로 나눠 u 부터 깎아도 합(u + v)은 max(0, 합 − 회수)라
-//       지급까지 더하는 지금은 한 값으로 센다(잘못 준 지급을 [XP 제거]로 되돌리면 그 지급이 빠질 뿐 채팅 · 음성으로 번 몫은 그대로).
-//    집계는 XpLog 1번 + Payout 1번 + (회수 · 초기화가 있는 사람만) 구간별 XpLog 1번.
-//    반환: [{ userId, xp, displayName }] — xp 내림차순 · userId 오름차순, 0 이하는 빠진다(이번 달 순위에 없음)
-async function monthBoard(monthStart) {
-  const [logs, pays] = await Promise.all([
-    XpLog.aggregate([
-      { $match: { createdAt: { $gte: monthStart } } },
-      { $group: { _id: "$userId", xp: { $sum: "$amount" }, displayName: { $last: "$displayName" } } },
-    ]),
-    Payout.aggregate([
-      {
-        $match: {
-          userId: { $nin: ["", null] },
-          status: "paid",
-          currency: { $ne: "point" },
-          $and: [
-            { $or: [{ paidAt: { $gte: monthStart } }, { createdAt: { $gte: monthStart } }] },
-            { $or: [{ amount: { $gt: 0 } }, ...ADMIN_TAKE] },
-          ],
-        },
-      },
-      { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
-      { $match: { at: { $gte: monthStart } } },
-      { $sort: { at: 1, _id: 1 } },
-      {
-        $group: {
-          _id: "$userId",
-          at: { $push: "$at" },
-          amt: { $push: "$amount" },
-          reset: { $push: IS_RESET },
-          plus: { $sum: { $cond: [{ $and: [{ $gt: ["$amount", 0] }, { $not: [IS_RESET] }] }, "$amount", 0] } },
-          takes: { $sum: { $cond: [{ $or: [{ $lte: ["$amount", 0] }, IS_RESET] }, 1, 0] } },
-        },
-      },
-    ]),
-  ]);
-
-  const byUser = new Map(); // userId → { xp, displayName }
-  for (const l of logs) {
-    if (!l._id) continue;
-    byUser.set(l._id, { xp: l.xp || 0, displayName: l.displayName || "" });
-  }
-  // 양수 지급만 있는 사람 — 이번 달 로그 합에 지급 합을 더하면 끝
-  for (const p of pays) {
-    if (p.takes > 0) continue;
-    const cur = byUser.get(p._id);
-    byUser.set(p._id, { xp: (cur?.xp || 0) + p.plus, displayName: cur?.displayName || "" });
-  }
-
-  // 회수 · 초기화가 한 번이라도 있는 사람 — 지급 · 회수 시각으로 이번 달 XpLog 를 구간별로 나눠 합한 뒤 시각 순으로 쌓는다.
-  //    구간 번호 = 그 로그 시각까지 지난 지급 · 회수 수(같은 시각의 로그는 그 지급 · 회수 뒤로 친다)
-  const cuts = pays.filter((p) => p.takes > 0);
-  if (cuts.length) {
-    const users = cuts.map((c) => c._id);
-    const times = cuts.map((c) => c.at);
-    const segs = await XpLog.aggregate([
-      { $match: { userId: { $in: users }, createdAt: { $gte: monthStart } } },
-      {
-        $group: {
-          _id: {
-            u: "$userId",
-            s: {
-              $size: {
-                $filter: {
-                  input: { $arrayElemAt: [{ $literal: times }, { $indexOfArray: [{ $literal: users }, "$userId"] }] },
-                  as: "t",
-                  cond: { $lte: ["$$t", "$createdAt"] },
-                },
-              },
-            },
-          },
-          xp: { $sum: "$amount" },
-        },
-      },
-    ]);
-    const segBy = new Map();
-    for (const r of segs) {
-      if (!segBy.has(r._id.u)) segBy.set(r._id.u, new Map());
-      segBy.get(r._id.u).set(r._id.s, r.xp);
-    }
-    for (const c of cuts) {
-      const sums = segBy.get(c._id);
-      let t = 0;
-      for (let i = 0; i <= c.amt.length; i++) {
-        t += sums?.get(i) || 0;
-        if (i === c.amt.length) break;
-        const a = c.amt[i];
-        if (c.reset[i]) t = 0;
-        else if (a > 0) t += a;
-        else t = Math.max(0, t + a);
-      }
-      byUser.set(c._id, { xp: t, displayName: byUser.get(c._id)?.displayName || "" });
-    }
-  }
-
-  return [...byUser]
-    .map(([userId, v]) => ({ userId, xp: v.xp, displayName: v.displayName }))
-    .filter((r) => r.xp > 0)
-    // 동점은 userId 오름차순 — 현재 · 음성(Mongo sort userId:1)과 같은 규칙(글자 비교 — Mongo 정렬 · $lt 와 같은 순서, 가입 순서 아님)
-    // 📌 2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — 내 정보(app/api/xp/me) · 봇 /레벨 · /랭크도 이 규칙
-    .sort((a, b) => b.xp - a.xp || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
-}
-
-// 📌 누적(period=total) — 이번 시즌 동안 얻은 XP 전부 = 지금 보유 XP(UserXp.xp) + 이번 시즌에 유저가 쓴 XP.
-//    쓴 XP = 상점 결제 · 연장(Purchase, createdAt) − 취소 · 환불로 돌려받은 XP(revokedAt → processedAt → createdAt)
-//            + 강화 · 패스 해금 비용(WalletLog enhance · pass-unlock 의 XP 쪽).
-//    낸 값 식(hasSplit · 옛 건은 정가를 XP 로) · 테스트 초기화 환불 제외는 원장(app/api/xp/ledger) · 재화 통계(lib/adminEconomy)와 같다 —
-//    빙옥으로 낸 몫은 XP 가 아니라 빠진다. ⚠ 원장 쪽 식을 바꾸면 여기도 같이 바꾼다.
-//    관리자 회수 · 캐시백 회수는 더하지 않는다 — 보유 XP 에서 빠진 그대로 누적에서도 빠진다(10/1 결정).
-//    세는 구간: 시즌 시작(lib/season)과 내역 기준 시각(BotSetting.ledgerSince) 중 늦은 쪽부터.
-//    초기화(관리자 · 퇴장 — Payout kind "reset")가 있었던 사람은 마지막 초기화 시각부터, 퇴장 초기화로 문서가 다시 생긴 사람은 그 생성 시각부터(늦은 쪽) —
-//    초기화가 보유 XP 를 통째로 지웠으므로 그 전에 쓴 것은 지금 값에 없다. 초기화 기록은 시작 시각으로만 쓰고 얻은 XP 에 더하지 않는다.
-//    📌 검산: 전원 합 = 구간 안 발행(XpLog + 양수 지급 + 캐시백) − 관리자 회수 · 캐시백 회수 — 구간 시작 때 보유가 0 이고 구간 안 초기화가 없으면 같은 값(10/3 실측 차이 0)
-//    집계는 Payout 1번(초기화 시각) + UserXp 2번(구간 안 생성 · 보유) + Purchase 2번 + WalletLog 1번, 30초 메모리 캐시.
-//    반환: [{ userId, xp(누적), name, level, attendCount }] — xp 내림차순 · userId 오름차순, 0 이하는 빠진다
+// 📌 이번 달 · 누적 순위표 계산은 lib/rankBoards.js — 봇 /랭크 「기준」(bot/src/rankBoards.js)과 글자 그대로 같은 공용 블록(2026-10-18 운영자
+//    "/랭크 명령어 뒤에 [현재] [누적] [이번 달] [음성 시간]"). 규칙 설명은 그 파일. 여기서는 모델을 넘기고, 누적만 30초 메모리 캐시로 감싼다
+const RANK_MODELS = { UserXp, XpLog, Payout, Purchase, WalletLog, ObjectId: mongoose.Types.ObjectId };
+const monthBoard = (monthStart) => monthBoardOf(RANK_MODELS, monthStart);
 const TOTAL_TTL = 30 * 1000;
 let totalCache = { at: 0, key: "", board: null };
-
-// 초기화 기록 — 원장 HIDDEN_PAYOUT 과 같은 두 표시. kind "reset" 은 금액과 상관없이, 사유로만 잡는 예전 기록은 금액 0 이하만(monthBoard IS_RESET 과 같다)
-const RESET_PAYOUT = [{ kind: "reset" }, { source: "manual", reason: /^관리자 초기화/, amount: { $lte: 0 } }];
-const hasSplit = {
-  $or: [
-    { $eq: ["$billed", true] },
-    { $gt: [{ $ifNull: ["$paidXp", 0] }, 0] },
-    { $gt: [{ $ifNull: ["$paidPoint", 0] }, 0] },
-  ],
-};
-const paidXpOf = { $cond: [hasSplit, { $ifNull: ["$paidXp", 0] }, { $ifNull: ["$price", 0] }] };
-const TEST_RESET = { adminNote: "관리자 테스트 초기화", billed: { $ne: true } };
-const SPEND_KINDS = ["enhance", "pass-unlock"];
-
 // 구간 시작 — 시즌 시작과 내역 기준 시각 중 늦은 쪽
-function totalSince(ledgerSince) {
-  const season = new Date(seasonStartMs(currentSeason()));
-  const floor = ledgerSince ? new Date(ledgerSince) : null;
-  return floor && !Number.isNaN(floor.getTime()) && floor > season ? floor : season;
-}
-
+const totalSince = (ledgerSince) => rankTotalSince(seasonStartMs(currentSeason()), ledgerSince);
 async function totalBoard(since) {
   const key = since.toISOString();
   if (totalCache.board && totalCache.key === key && Date.now() - totalCache.at < TOTAL_TTL) return totalCache.board;
-
-  // 1) 사람마다 세기 시작하는 시각 — 구간 안의 마지막 초기화(XP 쪽 · 반영된 것만)와 지금 문서가 생긴 시각 중 늦은 쪽
-  //    📌 2026-10-04 퇴장 초기화(bot features/leaveReset.js)도 문서를 지운 시각에 Payout(kind "reset" · 금액 0 · paid)을 남긴다 — 관리자 초기화와 같이 여기서 잡힌다.
-  //       그 기록이 없던 예전 퇴장(또는 기록 쓰기가 실패한 퇴장)은 다시 생긴 문서의 생성 시각(_id)부터 센다.
-  //       XP 를 쓰려면 잔액이 든 문서가 먼저 있어야 하므로 정상 지출은 생성 시각보다 앞서지 않는다(_id 는 초 단위로 내림)
-  const [resets, born] = await Promise.all([
-    Payout.aggregate([
-      { $match: { userId: { $nin: ["", null] }, status: "paid", currency: { $ne: "point" }, $or: RESET_PAYOUT } },
-      { $addFields: { at: { $ifNull: ["$paidAt", "$createdAt"] } } },
-      { $match: { at: { $gte: since } } },
-      { $group: { _id: "$userId", at: { $max: "$at" } } },
-    ]),
-    UserXp.find({ _id: { $gt: mongoose.Types.ObjectId.createFromTime(Math.floor(since.getTime() / 1000)) } }, { userId: 1 }).lean(),
-  ]);
-  const floor = new Map(resets.map((r) => [r._id, r.at]));
-  for (const d of born) {
-    const at = d._id.getTimestamp();
-    const cur = floor.get(d.userId);
-    if (d.userId && at > since && !(cur && cur >= at)) floor.set(d.userId, at);
-  }
-  const users = [...floor.keys()];
-  const times = users.map((u) => floor.get(u));
-  // 이 줄의 사람이 그 시각보다 앞선 줄은 버린다(같은 시각은 센다)
-  const afterReset = users.length
-    ? [{
-        $match: {
-          $expr: {
-            $let: {
-              vars: { i: { $indexOfArray: [{ $literal: users }, "$userId"] } },
-              in: { $or: [{ $lt: ["$$i", 0] }, { $gte: ["$at", { $arrayElemAt: [{ $literal: times }, "$$i"] }] }] },
-            },
-          },
-        },
-      }]
-    : [];
-
-  // 2) 쓴 XP — 출처마다 사람별 합(결제 · 비용은 +, 돌려받은 것은 −)
-  const [buys, backs, costs] = await Promise.all([
-    Purchase.aggregate([
-      { $match: { createdAt: { $gte: since }, userId: { $nin: ["", null] } } },
-      { $project: { userId: 1, at: "$createdAt", v: paidXpOf } },
-      { $match: { v: { $gt: 0 } } },
-      ...afterReset,
-      { $group: { _id: "$userId", v: { $sum: "$v" } } },
-    ]),
-    Purchase.aggregate([
-      { $match: { status: { $in: ["cancelled", "refunded"] }, userId: { $nin: ["", null] }, $nor: [TEST_RESET] } },
-      { $project: { userId: 1, at: { $ifNull: ["$revokedAt", { $ifNull: ["$processedAt", "$createdAt"] }] }, v: paidXpOf } },
-      { $match: { at: { $gte: since }, v: { $gt: 0 } } },
-      ...afterReset,
-      { $group: { _id: "$userId", v: { $sum: { $multiply: ["$v", -1] } } } },
-    ]),
-    WalletLog.aggregate([
-      { $match: { createdAt: { $gte: since }, kind: { $in: SPEND_KINDS }, currency: { $ne: "point" }, amount: { $ne: 0 } } },
-      { $project: { userId: 1, at: "$createdAt", v: { $multiply: ["$amount", -1] } } },
-      ...afterReset,
-      { $group: { _id: "$userId", v: { $sum: "$v" } } },
-    ]),
-  ]);
-  const spent = new Map();
-  for (const r of [...buys, ...backs, ...costs]) {
-    if (!r._id) continue;
-    spent.set(r._id, (spent.get(r._id) || 0) + (r.v || 0));
-  }
-
-  // 3) 보유 XP 가 있거나 쓴 기록이 있는 사람 — 다 써서 보유 0 인 사람도 누적에는 선다
-  const docs = await UserXp.find(
-    { $or: [{ xp: { $gt: 0 } }, ...(spent.size ? [{ userId: { $in: [...spent.keys()] } }] : [])] },
-    { userId: 1, displayName: 1, username: 1, xp: 1, level: 1, attendCount: 1 }
-  ).lean();
-
-  const board = docs
-    .map((d) => ({
-      userId: d.userId,
-      xp: (d.xp || 0) + (spent.get(d.userId) || 0),
-      name: d.displayName || d.username || NO_NAME,
-      level: d.level ?? 0,
-      attendCount: d.attendCount || 0,
-    }))
-    .filter((r) => r.userId && r.xp > 0)
-    // 동점은 userId 오름차순 — 다른 기준과 같은 규칙
-    .sort((a, b) => b.xp - a.xp || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
-
+  // 이름이 비면 "이름 없음"(공용 블록은 "" 로 준다 — 봇은 서버 멤버 이름으로 채운다)
+  const board = (await totalBoardOf(RANK_MODELS, since)).map((r) => (r.name ? r : { ...r, name: NO_NAME }));
   totalCache = { at: Date.now(), key, board };
   return board;
 }
@@ -385,8 +145,9 @@ export async function GET(request) {
   try {
     await connectToDatabase();
     // SYSTEM : LEVEL 비공개 동안은 전원 순위를 밖으로 내보내지 않는다 (화면만 가리면 API 로 새어 나간다)
+    //   관리자 우회는 「유저 화면으로 보기」를 따른다(isAdminViewer — 켜 두면 유저처럼 막힌다)
     const gate = await BotSetting.findOne({ key: "main" }, { levelPublic: 1, ledgerSince: 1 }).lean();
-    if (!gate?.levelPublic && (await requireAdmin()).deny) {
+    if (!gate?.levelPublic && !(await isAdminViewer())) {
       return NextResponse.json({ success: false, data: [], total: 0, message: "공개 전입니다." }, { status: 403 });
     }
     const sp = new URL(request.url).searchParams;

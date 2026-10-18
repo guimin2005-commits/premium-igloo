@@ -7,12 +7,18 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { requireAdmin } from "@/lib/apiAuth";
-import { buildCard, cardSizeOf, CARD_FONT, CARD_TIERS, isCardKind, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
+import { buildCard, cardSizeOf, CARD_FONT, CARD_TIERS, CARD_SKIN_KEYS, CARD_SCENE_KEYS, SKIN_CARD_KINDS, isCardKind, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
 import { itemArtSvg } from "@/lib/itemArt";
+import { FRAME_OF } from "@/lib/itemEffects";
+import { FRAME_ART } from "@/lib/avatarFrameArt";
+// 카드 배경 그림(장면 PNG) — 서버 경로만 읽어 buildCard 에 넣는다(lib/botCards 는 그림을 끌어오지 않는다 — app/api/shop/skin-card 와 같은 방식)
+import { sceneLayer } from "@/lib/cardScenes/art";
 
 // 📌 관리자 '봇 메시지' 이미지 카드 미리보기 — 봇이 붙이는 PNG 와 같은 템플릿(lib/botCards.js)을 샘플 값으로 그린다
 //    GET ?key=levelUp|roleGrant|cmdLevel|cmdRank|cmdAttend|cmdQuest|cmdInventory|cmdPass|rankerAnnounce&tier=<0-9, 없으면 브론즈>
 //    한 사람 카드는 미리보기를 여는 관리자 이름 · 사진으로 그린다(사진을 못 받으면 첫 글자 원형).
+//    📌 2026-10-16 운영자 "디코 메시지 창에 스킨 껴서 확인 가능하게" — &skin=<카드 테두리> · &scene=<카드 배경> · &frame=<프로필 테두리>(아는 키만, 아니면 400).
+//       카드 테두리 · 배경은 SKIN_CARD_KINDS 카드에만 그려진다(봇과 같다)
 
 const fail = (message, status = 400) => NextResponse.json({ success: false, message, error: message }, { status });
 
@@ -49,16 +55,22 @@ export async function GET(request) {
   const tierRaw = sp.get("tier");
   if (tierRaw !== null && tierRaw !== "" && !(/^\d+$/.test(tierRaw) && Number(tierRaw) < CARD_TIERS.length)) return fail("잘못된 등급입니다.");
   const tier = tierRaw === null || tierRaw === "" ? 1 : Number(tierRaw);
+  const skin = sp.get("skin") || "", scene = sp.get("scene") || "", frame = sp.get("frame") || "";
+  if (skin && !CARD_SKIN_KEYS.includes(skin)) return fail("잘못된 카드 테두리입니다.");
+  if (scene && !CARD_SCENE_KEYS.includes(scene)) return fail("잘못된 카드 배경입니다.");
+  if (frame && !(Object.prototype.hasOwnProperty.call(FRAME_OF, frame) && Object.prototype.hasOwnProperty.call(FRAME_ART, frame))) return fail("잘못된 프로필 테두리입니다.");
+  const dressed = SKIN_CARD_KINDS.includes(key);
 
   try {
     const one = key !== "rankerAnnounce";
     const [{ fonts, has }, avatar] = await Promise.all([loadFonts(), one ? fetchAvatarDataUri(auth.session?.user?.image) : null]);
-    const data = sampleCardData(key, tier, avatar);
+    const data = sampleCardData(key, tier, avatar, dressed ? skin : "", dressed ? scene : "");
     if (one && auth.name) data.name = auth.name;
+    if (frame) data.frame = frame;
     const { width, height } = cardSizeOf(key, data);
     // 도트 아이콘("art:<키>") — 봇과 같은 96px 그림
     const art = (k) => itemArtSvg(k, { size: 96 });
-    return new ImageResponse(buildCard(key, data, createElement, { has, art }), {
+    return new ImageResponse(buildCard(key, data, createElement, { has, art, scene: sceneLayer }), {
       width,
       height,
       fonts,

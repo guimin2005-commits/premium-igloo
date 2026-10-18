@@ -101,6 +101,9 @@ test("착용 — 빈 값 · none 은 착용 아님, 배지는 3개까지", () =>
   assert.equal(statsFromParts({ user: { cardSkinPick: "" } }).skinOn, 0);
   assert.equal(statsFromParts({ user: { cardSkinPick: "none" } }).skinOn, 0);
   assert.equal(statsFromParts({ user: { cardSkinPick: "gold" } }).skinOn, 1);
+  // 카드 배경만 입어도 「카드 스킨 착용」(카드 스킨 = 카드 배경 · 카드 테두리 묶음)
+  assert.equal(statsFromParts({ user: { cardScenePick: "sc_ghost" } }).skinOn, 1);
+  assert.equal(statsFromParts({ user: { cardScenePick: "none", cardSkinPick: "" } }).skinOn, 0);
   assert.equal(statsFromParts({ user: { avatarFramePick: "rank_gold" } }).frameOn, 1);
   assert.equal(statsFromParts({ user: { badgePick: ["a", "b", "c", "d"] } }).badges, 3);
   assert.equal(statsFromParts({ user: { badgePick: [] } }).badges, 0);

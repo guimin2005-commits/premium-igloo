@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal } from "../components/Lux";
-import { ADMIN_USERS } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 
 // 📌 이벤트 목록 — 화이트 & 블랙. 제목 · 밑줄 탭(개수) · 배너 격자.
 //    보이는 건 배너와 제목뿐 — 본문 미리보기는 두지 않는다(공지 목록과 같다).
@@ -19,9 +19,9 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
 
 export default function EventPage() {
   const router = useRouter();
-  const { data: session, status } = useSession() as any;
-  const isLoggedIn = status === "authenticated";
-  const isAdmin = isLoggedIn && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  const { status } = useSession();
+  // 📌 관리자로 보는 중일 때만(「유저 화면으로 보기」 켜면 유저와 같게 — 「N건」 · 공개 이벤트만 · 탭 숫자도 그 기준)
+  const { admin: isAdmin } = useAdminView();
 
   const [activeTab, setActiveTab] = useState("ongoing");
   const [posts, setPosts] = useState<any[]>([]);

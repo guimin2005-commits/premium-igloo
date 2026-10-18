@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin, getSession } from "@/lib/apiAuth";
-import { isAdminName } from "@/lib/admins";
+import { isAdminViewer } from "@/lib/adminViewServer";
 import Auction from "@/models/Auction";
 import AuctionChat from "@/models/AuctionChat";
 import { phase1RoleOf } from "@/lib/auctionGames";
@@ -14,8 +14,8 @@ export async function GET() {
     await connectToDatabase();
     // 📌 테스트 방은 관리자에게만 노출
     const session = await getSession();
-    // 테스트 방과 비공개 방은 관리자에게만 목록에 보인다
-    const query = isAdminName(session?.user?.name) ? {} : { isTest: { $ne: true }, isPrivate: { $ne: true } };
+    // 테스트 방과 비공개 방은 관리자로 볼 때만 목록에 보인다(「유저 화면으로 보기」를 켜면 빠진다 · 관리 콘솔 목록은 그대로)
+    const query = (await isAdminViewer(session)) ? {} : { isTest: { $ne: true }, isPrivate: { $ne: true } };
     const auctions = await Auction.find(query).sort({ createdAt: -1 }).select("title status createdAt leaders players game isTest isPrivate settings");
     const data = auctions.map((a) => ({
       _id: a._id,

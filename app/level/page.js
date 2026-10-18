@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallba
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { isAdminName } from "@/lib/admins";
+import { useAdminView, useAdminTools } from "../components/AdminView";
 import {
   HudSection, HudStyles, LiveDot, RingGauge,
   StatusChip, SegLadder, TickRuler, RankRows, EmptySlot,
@@ -17,22 +17,24 @@ import { buildEnhanceView, chatRange, enhanceCost } from "@/lib/enhance";
 import { ENH_PIXEL } from "@/lib/enhanceIcons";
 // 빙옥 가격 = XP 가격 ÷ 10,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
-import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS, FRAMES } from "@/lib/itemEffects";
+import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS, SCENES, FRAMES } from "@/lib/itemEffects";
 import TierEmblem from "../components/TierEmblem";
 import SystemGuide from "./SystemGuide";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
-import { PopShell, AdminReset, POP_THEME } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedBadges, keepSavedFrame, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
+import { PopShell, POP_THEME } from "../components/PopShell";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedScene, keepSavedBadges, keepSavedFrame, applyTrial, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
+import { SceneBack, sceneBarOf, GhostTrailBar } from "../components/SceneBack";
 import AvatarFrame, { frameRoom, frameSizeOf, FRAME_GRID, FRAME_REACH } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
 import PassPreview, { passCosmeticOf, passKindOf, passShortName, passDays, PassClock } from "./PassPreview";
 import { CURRENCY_PIXEL } from "@/lib/currencyIcons";
 import PromoOverlay from "./PromoOverlay";
 import AchievementsModal, { useAchievements, AchievementNotice } from "./AchievementsModal";
+import EventPassModal from "./EventPassModal";
 import { ACHIEVEMENTS_ON } from "@/lib/achievements";
 import { openLogin } from "../components/LoginPrompt";
 
@@ -535,7 +537,7 @@ const ENH_CSS = `
 @keyframes enhVal { 0%, 35% { color: #ffffff; } 100% { color: var(--kc); } }
 @keyframes enhRow { 0% { background: var(--kf); } 100% { background: transparent; } }
 `;
-const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin = 5, policy, onTone, onReset, resetBusy, discount = 0 }) => {
+const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin = 5, policy, onTone, discount = 0 }) => {
   const kinds = ["chat", "voice"].filter((k) => enh[k].max > 0);
   const [pick, setPick] = useState("chat");
   const kind = kinds.includes(pick) ? pick : kinds[0];
@@ -756,7 +758,6 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
             <p className="text-[11px] font-bold text-white/45">{perLabel}</p>
             <p className="mt-1.5 text-[20px] font-black text-white tabular-nums leading-none">{gainAt(0)} <span className="text-[11px] text-white/40">XP</span></p>
           </div>
-          {onReset && <AdminReset onReset={onReset} busy={resetBusy} label="관리자 · 강화 초기화" />}
         </>
       }
     >
@@ -846,16 +847,19 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
 //    역할 버프, 등급 보상)과 상시 효과(me.perks). 빈 묶음은 그리지 않는다.
 const fxFmt = (n) => (Number(n) || 0).toLocaleString();
 // 📌 꾸미기 문장(카드 스킨 · 프로필 배지 · 아바타 테두리)은 뺀다 — XP 효과가 아니고 아이템 이름과 같은 말이 한 번 더 붙는다("카드 스킨 · 골드" 아래 "카드 스킨 · 골드").
-//    서버가 만든 문장(lib/itemEffects describeEffect)과 같은 식으로 만들어 비교한다
+//    서버가 만든 문장(lib/itemEffects describeEffect)과 같은 식으로 만들어 비교한다.
+//    📌 2026-10-18 지금 my-items effectLines 는 꾸미기 문장을 싣지 않고, 관리자가 직접 쓴 문구(effectCustom)면 그 줄 그대로다 — 직접 쓴 줄은 거르지 않는다(옛 응답만 이 표로 거른다)
 const FX_COSMETIC_LINES = new Set([
   describeEffect({ on: "profileBadge" }),
   describeEffect({ on: "cardSkin" }),
   ...SKINS.map((s) => describeEffect({ on: "cardSkin", skin: s.v })),
+  describeEffect({ on: "cardScene" }),
+  ...SCENES.map((s) => describeEffect({ on: "cardScene", scene: s.v })),
   describeEffect({ on: "avatarFrame" }),
   ...FRAMES.map((f) => describeEffect({ on: "avatarFrame", frame: f.v })),
   describeEffect({ on: "avatarFrame", frame: "all" }), // 관리자 전체(9종) 테두리
 ]);
-const fxLinesOf = (it) => (Array.isArray(it.effectLines) ? it.effectLines.filter((l) => l && !FX_COSMETIC_LINES.has(l)) : []);
+const fxLinesOf = (it) => (Array.isArray(it.effectLines) ? it.effectLines.filter((l) => l && (it.effectCustom || !FX_COSMETIC_LINES.has(l))) : []);
 const FxRow = ({ l, v, dim }) => (
   <div className="flex items-center justify-between gap-3">
     <span className={`min-w-0 truncate text-[11px] font-bold ${dim ? "text-white/35" : "text-white/45"}`}>{l}</span>
@@ -1330,7 +1334,7 @@ const PassCell = ({ track, premium = false, locked = false, busy = false, onClai
   );
 };
 
-const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onClaimAll, onUnlock, balance, dday, onTone, onViewTone, user, onReset, resetBusy }) => {
+const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, claimable = 0, busyKey = "", onClaim, onClaimAll, onUnlock, balance, dday, onTone, onViewTone, user }) => {
   const [tab, setTab] = useState("all");
   // 📌 폰이면 세로 목록(usePassNarrow) — 가로 트랙(trackRef)은 PC 에서만 그려진다
   const narrow = usePassNarrow();
@@ -1883,8 +1887,6 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             </div>
           </div>
           )}
-          {/* 관리자 테스트 초기화 — 트랙 아래 오른쪽 작은 알약(탭 줄 오른쪽은 「모두 받기」 자리) */}
-          {onReset && <div className="flex justify-end px-5 sm:px-7 pb-4"><AdminReset compact onReset={onReset} busy={resetBusy} label="초기화 (관리자)" /></div>}
         </div>
         {peek && <PassPeek peek={peek} boxW={peek.boxW} />}
       </div>
@@ -2214,8 +2216,9 @@ const RankBadges = ({ badges }) =>
     </span>
   ) : null;
 
-// 조회 결과에 방금 저장한 카드 스킨 · 배지 · 아바타 테두리를 지킨다 — 저장보다 먼저 떠난 조회가 옛 값으로 되돌리지 않게(keepSavedSkin · keepSavedBadges · keepSavedFrame)
-const keepSaved = (data, t0, skin, badge, frame) => keepSavedFrame(keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge), t0, frame);
+// 조회 결과에 방금 저장한 카드 테두리 · 배지 · 프로필 테두리 · 카드 배경을 지킨다 — 저장보다 먼저 떠난 조회가 옛 값으로 되돌리지 않게(keepSavedSkin · keepSavedBadges · keepSavedFrame · keepSavedScene)
+// 📌 관리자 체험(테스트 사이트에서만 — Inventory applyTrial) 값이 있으면 그걸 얹는다 — trial = 관리자로 보는 중(유저 화면 · 다른 계정은 서버 값 그대로)
+const keepSaved = (data, t0, skin, badge, frame, scene, trial) => applyTrial(keepSavedScene(keepSavedFrame(keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge), t0, frame), t0, scene), trial);
 
 // ══ 진행 중 이벤트 판 — 대시보드 맨 아래 전체 폭(2026-10-03 "따로 새로 디자인해서 내 대시보드 아래에다가") ══
 //    이벤트 글(/api/posts?category=이벤트)의 그림 · 제목 · 기간 · 남은 날. 본문 미리보기는 두지 않는다(/event 목록과 같다).
@@ -2410,6 +2413,10 @@ export default function LevelPage() {
   // 처음엔 불러오는 중으로 둔다 — 랭킹 탭을 처음 열 때 "기록이 없습니다" 가 한 번 번쩍였다가 스켈레톤으로 바뀌지 않게
   const [rankLoading, setRankLoading] = useState(true);
   const { data: session, status: authStatus } = useSession();
+  // 📌 관리자 판정은 「관리자로 보는 중」(useAdminView().admin) — 「유저 화면으로 보기」를 켜 두면 같은 계정의 일반 유저와 똑같다(비공개 · 꺼진 이벤트 · 승급 미리보기 · 체험 전부)
+  const { admin: isAdminUser } = useAdminView();
+  const trialRef = useRef(false); // 조회 콜백(loadMe · refreshItems)이 체험 값을 얹을지 — 늘 지금 값을 읽게
+  useEffect(() => { trialRef.current = isAdminUser; }, [isAdminUser]);
 
   // 하이드레이션 불일치 방지 — 서버/클라이언트 첫 페인트는 항상 스켈레톤으로 통일하고,
   // 마운트 후에만 세션 상태에 따라 CTA/대시보드를 가른다
@@ -2439,6 +2446,38 @@ export default function LevelPage() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
   }, []);
 
+  // 이벤트 패스 「유령 펭귄의 초대」 — 카드 아래 바로가기 띠. 열리기 전엔 여는 날만 알리고, 그 뒤엔 패스 창(EventPassModal)
+  // 📌 켜짐 · 기간은 설정 문서(GET /api/event-pass?meta=1)를 따른다 — 관리 화면에서 기간을 바꾸면 띠도 같이 바뀐다.
+  //    꺼져 있으면 띠를 숨긴다(누구나 "준비 중"만 보게 되므로). 관리자는 꺼져 있어도 · 시작 전에도 띠가 보이고 창을 연다(미리 보기 · 「비공개」 칩) — 유저 화면 중엔 유저와 같게
+  const [eventPassMeta, setEventPassMeta] = useState(null); // { enabled, start, end, day, at(읽은 시각) } — 읽기 전 · 실패는 null(띠 없음)
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/event-pass?meta=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const start = Date.parse(j?.startsAt || ""), end = Date.parse(j?.endsAt || "");
+        if (!alive || !j?.ok || !Number.isFinite(start) || !Number.isFinite(end)) return;
+        const d = new Date(start + 9 * 60 * 60 * 1000);
+        setEventPassMeta({ enabled: !!j.enabled, start, end, day: `${d.getUTCMonth() + 1}. ${d.getUTCDate()}.`, at: Date.now() });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const eventPassAdmin = isAdminUser;
+  const eventPassOn = !!eventPassMeta && (eventPassMeta.enabled || eventPassAdmin) && eventPassMeta.at < eventPassMeta.end;
+  const [eventPassOpen, setEventPassOpen] = useState(false);
+  const openEventPass = useCallback(() => {
+    playTone(660, 0.06, "sine", 0.03);
+    if (!eventPassAdmin && eventPassMeta && Date.now() < eventPassMeta.start) { pushToast(`이벤트 패스는 ${eventPassMeta.day} 에 열립니다`); return; }
+    setEventPassOpen(true);
+  }, [pushToast, eventPassAdmin, eventPassMeta]);
+  // 닫는 소리 — 시즌 패스 창과 같다
+  const closeEventPass = useCallback(() => {
+    setEventPassOpen(false);
+    playTone(659.25, 0.06, "sine", 0.025);
+    setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
+  }, []);
+
   // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
@@ -2452,6 +2491,7 @@ export default function LevelPage() {
   const skinSavedRef = useRef({ at: 0, v: "" });      // 마지막 카드 스킨 저장 — 그 전에 떠난 조회가 옛 스킨으로 되돌리지 않게(keepSavedSkin)
   const badgeSavedRef = useRef({ at: 0, v: [] });     // 마지막 배지 저장 — 같은 이유(keepSavedBadges)
   const frameSavedRef = useRef({ at: 0, v: "" });     // 마지막 아바타 테두리 저장 — 같은 이유(keepSavedFrame)
+  const sceneSavedRef = useRef({ at: 0, v: "" });     // 마지막 카드 배경 저장 — 같은 이유(keepSavedScene)
   const questSavedRef = useRef(0);                    // 마지막 퀘스트 받기 · 바꾸기 응답을 그린 시각 — 그 전에 떠난 조회가 옛 목록 · 옛 바꾸기 횟수로 되돌리지 않게(applyQuests)
 
   // 📌 퀘스트 받기 · 바꾸기 응답을 그린다 — 그린 시각을 적어 두고, 그보다 먼저 떠난 조회(30초 폴링 · 창 포커스 loadMe)는 퀘스트를 덮지 않는다.
@@ -2480,7 +2520,7 @@ export default function LevelPage() {
       if (passRes?.body?.success) setPass(passRes.body);
       else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
       if (meRes?.success) {
-        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current);
+        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current);
         const prev = prevXpRef.current;
         if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
         if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); }
@@ -2490,7 +2530,7 @@ export default function LevelPage() {
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success && t0 >= questSavedRef.current) setQuests(qRes.data);
-      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current)));
+      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current)));
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
@@ -2501,7 +2541,7 @@ export default function LevelPage() {
     const t0 = Date.now();
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current))); })
+      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current))); })
       .catch(() => {});
   }, []);
 
@@ -2767,26 +2807,29 @@ export default function LevelPage() {
   }, [pushToast, loadMe]);
 
   // 관리자 테스트 초기화 — 서버가 관리자인지 다시 확인한다 (app/api/xp/reset)
-  const [resetBusy, setResetBusy] = useState("");
+  // 📌 2026-10-17 화면 안 단추(강화 창 · 시즌 패스 창 · 인벤토리)는 빼고 계정 메뉴 「관리 도구」로 올린다(useAdminTools).
+  //    한 번 확인 · 토스트 · 소리는 메뉴 줄이 한다 — 여기선 결과 글만 돌려주고, 실패는 throw
   const resetTest = useCallback(async (what) => {
-    setResetBusy(what);
+    let res = null;
     try {
-      const res = await fetch("/api/xp/reset", {
+      res = await fetch("/api/xp/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ what }),
       }).then((r) => r.json());
-      pushToast(res?.message || (res?.success ? "초기화했습니다." : "초기화하지 못했습니다."), !!res?.success);
-      if (res?.success) {
-        playTone(523.25, 0.07, "triangle", 0.03);
-        setTimeout(() => playTone(392, 0.1, "triangle", 0.03), 90);
-      }
     } catch {
-      pushToast("네트워크 오류로 초기화하지 못했습니다.");
+      throw new Error("네트워크 오류로 초기화하지 못했습니다.");
+    } finally {
+      await loadMe();
     }
-    await loadMe();
-    setResetBusy("");
-  }, [pushToast, loadMe]);
+    if (!res?.success) throw new Error(res?.message || "초기화하지 못했습니다.");
+    return res.message || "초기화했습니다.";
+  }, [loadMe]);
+  useAdminTools(isAdminUser ? [
+    { key: "level-reset-shop", label: "상점 구매 초기화", danger: true, run: () => resetTest("shop") },
+    { key: "level-reset-enhance", label: "강화 초기화", danger: true, run: () => resetTest("enhance") },
+    { key: "level-reset-pass", label: "시즌 패스 초기화", danger: true, run: () => resetTest("pass") },
+  ] : null);
 
   useEffect(() => {
     if (authStatus === "loading") return;
@@ -3254,8 +3297,7 @@ export default function LevelPage() {
   const tierCurXp = P.voiceXp + tierCur.bonus;
   const tierNextXp = tierNext ? P.voiceXp + tierNext.bonus : null;
 
-  // SYSTEM : LEVEL 공개 여부 — 리뉴얼 후 10월 공개. 비공개면 관리자 외에는 아래 예고 화면만 본다.
-  const isAdminUser = isAdminName(session?.user?.name);
+  // SYSTEM : LEVEL 공개 여부 — 리뉴얼 후 10월 공개. 비공개면 관리자 외에는 아래 예고 화면만 본다(isAdminUser = 관리자로 보는 중 — 유저 화면이면 예고 화면).
   const levelOpen = !!policy?.levelPublic || isAdminUser;
   // ARCTIC 상점 동선 — 공개 전에는 관리자에게만 노출 (policy.shopPublic). 레벨이 닫혀 있으면 함께 닫힌다.
   const canSeeShop = (!!policy?.shopPublic && levelOpen) || isAdminUser;
@@ -3512,7 +3554,7 @@ export default function LevelPage() {
       `}} />
 
       <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} history={me?.seasonHistory} />
-      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} discount={enhDisc} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={(k) => playTone(ENH_KIND[k]?.tone || 620, 0.04, "sine", 0.025)} onReset={isAdminUser ? () => resetTest("enhance") : null} resetBusy={resetBusy === "enhance"} />
+      <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} discount={enhDisc} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={(k) => playTone(ENH_KIND[k]?.tone || 620, 0.04, "sine", 0.025)} />
       <PassModal
         open={passOpen}
         onClose={closePass}
@@ -3531,13 +3573,18 @@ export default function LevelPage() {
         // 꾸미기 보상 미리보기 여는 소리 — 그 자리 팝업(내역 · 세부 효과)과 같은 소리
         onViewTone={() => playTone(660, 0.06, "sine", 0.03)}
         user={session?.user}
-        onReset={isAdminUser ? () => resetTest("pass") : null}
-        resetBusy={resetBusy === "pass"}
       />
       <ConfirmDialog state={confirmState} onDone={closeConfirm} />
       <WalletHistory open={walletOpen} onClose={closeWallet} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
       <GainFxModal open={fxOpen && !!me} onClose={closeFx} gain={gain} voiceMin={P_voiceMin} items={myItems?.items} loading={myItems === null} perks={me?.perks} policy={P} />
       <BagOverlay
+        // 📌 인벤토리 「꾸미기」 무대 카드 글자(시안 A — 레벨 페이지 카드와 같은 값)
+        cardInfo={me && !guest ? {
+          name: session?.user?.name || "", rank: me.rank, total: me.total, top: rankPct, level: me.level,
+          tierName: tierCur.name, tierColor: tierCur.c, pct: progPct,
+          cur: prog.current.toLocaleString(), req: prog.required.toLocaleString(), need: prog.needToNext.toLocaleString(),
+          stats: [["현재 XP", (me.xp || 0).toLocaleString()], ["오늘 획득", `+${todayTotal.toLocaleString()}`], ["누적 출석", `${(me.attendCount || 0).toLocaleString()}일`], ["누적 음성 시간", fmtVoiceTimeMin(me.voiceSeconds)]],
+        } : null}
         open={bagOpen}
         onClose={closeBag}
         groups={invGroups}
@@ -3546,14 +3593,19 @@ export default function LevelPage() {
         synced={myItems?.synced}
         loading={!!session?.user && myItems === null}
         onTone={() => playTone(620, 0.04, "sine", 0.025)}
-        onReset={isAdminUser ? () => resetTest("shop") : null}
-        resetBusy={resetBusy === "shop"}
         cardSkin={myItems?.cardSkin || ""}
         // 착용 · 해제 즉시 프로필 카드 장식도 바꾼다(다음 폴링을 기다리지 않게)
         onSkinChange={(k) => {
           skinSavedRef.current = { at: Date.now(), v: k };
           setMyItems((cur) => (cur ? { ...cur, cardSkin: k } : cur));
           setMe((cur) => (cur ? { ...cur, cardSkin: k } : cur));
+        }}
+        cardScene={myItems?.cardScene || ""}
+        // 카드 배경도 착용 · 해제 즉시 프로필 카드에(카드 테두리와 같은 흐름 — 따로 고르고 함께 입는다)
+        onSceneChange={(k) => {
+          sceneSavedRef.current = { at: Date.now(), v: k };
+          setMyItems((cur) => (cur ? { ...cur, cardScene: k } : cur));
+          setMe((cur) => (cur ? { ...cur, cardScene: k } : cur));
         }}
         badges={myItems?.badges}
         // 배지 착용 · 해제 즉시 내 정보 배지도 바꾼다(다음 폴링을 기다리지 않게).
@@ -3585,6 +3637,9 @@ export default function LevelPage() {
           onTone={() => playTone(620, 0.04, "sine", 0.025)}
         />
       )}
+
+      {/* 이벤트 패스 창 — 받으면 잔액 · XP 를 다시 읽는다 */}
+      <EventPassModal open={eventPassOpen} onClose={closeEventPass} pushToast={pushToast} onClaimed={loadMe} />
 
       {promo && <PromoOverlay from={promo.from} to={promo.to} onClose={closePromo} />}
 
@@ -3645,15 +3700,22 @@ export default function LevelPage() {
 
                 {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 제자리에 서 있고 오른쪽 내용만 지나간다(기둥 높이 = 그리드 첫 줄, 오른쪽 열 끝까지) */}
                 <div ref={cardColRef} className="contents lg:block lg:col-span-4 lg:self-stretch min-w-0">
+                    {/* 📌 카드 묶음(2026-10-17) — 프로필 카드 + 바로 아래 이벤트 패스 띠를 한 덩어리로 세운다(PC 고정 · 폰 맨 앞).
+                           잰 높이(fixTop) · 폰 섹션 이동(pickSec)은 이 묶음 기준 */}
+                    <div ref={dashCardRef} className="order-first lg:sticky lg:z-20" style={{ top: fixTop ?? undefined }}>
                     {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 → 등급 → 경험치 → 인벤토리 · 시즌 패스 · 강화 → 스탯 */}
                     <div
-                      ref={dashCardRef}
-                      className="order-first relative lg:sticky lg:z-20 rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
-                      style={{ top: fixTop ?? undefined, background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, guest ? 0.1 : 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
+                      className="relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
+                      style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, guest ? 0.1 : 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
                     >
-                      <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
-                      {/* 📌 착용한 카드 스킨 — 봇 이미지 카드와 같은 액자를 옅게(등급 색과 헷갈리지 않게 색이 아니라 테두리 · 무늬로) */}
-                      {me?.cardSkin && <SkinFrame skin={me.cardSkin} />}
+                      {/* 📌 카드 배경(2026-10-15) — 맨 아래 겹에 장면 · 그 위 등급 빛(옅게). 배경이 있으면 바둑판 무늬는 뺀다 */}
+                      {!guest && me?.cardScene ? (
+                        <SceneBack scene={me.cardScene} glow={`radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%)`} />
+                      ) : (
+                        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
+                      )}
+                      {/* 📌 착용한 카드 테두리 — 봇 이미지 카드와 같은 액자를 옅게(등급 색과 헷갈리지 않게 색이 아니라 테두리 · 무늬로) */}
+                      {me?.cardSkin && <SkinFrame skin={me.cardSkin} scene={me?.cardScene || ""} />}
                       {!guest && <span aria-hidden className="hidden lg:block absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>}
 
                       {/* 📌 로그인 전 — 카드는 그대로 두고 흐리게, 위에 자물쇠 + 로그인 하나(누르면 사이트 공통 로그인 창) */}
@@ -3768,9 +3830,14 @@ export default function LevelPage() {
 
                         {/* 경험치 — 막대 하나, 글자 둘 */}
                         <div className="mt-6">
-                          <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
-                            <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${progPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
-                          </div>
+                          {/* 📌 카드 배경이 막대 모양을 정하면(유령 펭귄의 밤 — 「유령 꼬리」) 그 막대로, 아니면 기본 막대 */}
+                          {!guest && sceneBarOf(me?.cardScene) === "ghostTrail" ? (
+                            <div data-skin-bar className="ml-[12px]"><GhostTrailBar pct={progPct} /></div>
+                          ) : (
+                            <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                              <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${progPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
+                            </div>
+                          )}
                           <div className="flex justify-between items-baseline mt-2.5">
                             <span className="text-[11px] font-bold text-white/45 tabular-nums">{guest ? "— / — XP" : `${prog.current.toLocaleString()} / ${prog.required.toLocaleString()} XP`}</span>
                             {guest ? (
@@ -3876,6 +3943,21 @@ export default function LevelPage() {
 
 
                       </div>
+                    </div>
+
+                    {/* 📌 이벤트 패스 바로가기(2026-10-17 운영자 시안 합격) — 카드 안이 아니라 카드 바로 아래 가로 띠. PC 카드 폭 · 폰 전체 폭, 같은 그림 한 장.
+                           그림: public/banners/event-pass-strip.png(992 × 240, .claude/mockups/event-pass/strip.mjs). 이벤트 끝(10. 31. 24:00 KST)나면 빠진다 */}
+                    {eventPassOn && (
+                      <button
+                        type="button"
+                        onClick={openEventPass}
+                        aria-label="유령 펭귄의 초대 · 이벤트 패스"
+                        className="mt-3 lg:mt-3.5 block w-full rounded-[18px] overflow-hidden shadow-[0_18px_40px_-22px_rgba(30,10,80,0.7)] transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#9ff8ff]/70"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/banners/event-pass-strip.png" alt="" width={992} height={240} draggable={false} className="block w-full h-auto select-none" />
+                      </button>
+                    )}
                     </div>
 
                 </div>

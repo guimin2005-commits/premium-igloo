@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LuxStyles } from "../components/Lux";
-import { ADMIN_USERS, isAdminName } from "@/lib/admins";
+import { useAdminView } from "../components/AdminView";
 import { VerifyBadge } from "../components/VerifyMark";
 import BackLink from "../components/BackLink";
 import ArcticDock from "../arctic/ArcticDock";
@@ -55,7 +55,8 @@ export default function MyInfoPage() {
   const [myTeam, setMyTeam] = useState<any>(null);
   const [scrimAdmin, setScrimAdmin] = useState(false);
 
-  const isShopAdmin = status === "authenticated" && !!session?.user?.name && ADMIN_USERS.includes(session.user.name);
+  // 📌 관리자 판정은 useAdminView().admin(관리자로 보는 중) — 「유저 화면으로 보기」를 켜면 비공개 레벨 · ARCTIC · 서포터즈 · 대회 룸 줄이 유저처럼 빠진다
+  const { admin: isShopAdmin } = useAdminView();
   // SYSTEM : LEVEL 비공개 동안은 레벨·순위·ARCTIC 이 일반 유저 프로필에 보이지 않는다 (10월 공개)
   const canSeeLevel = levelPublic || isShopAdmin;
   const canSeeShop = (shopPublic && levelPublic) || isShopAdmin;
@@ -67,7 +68,7 @@ export default function MyInfoPage() {
   const hasScrimRole = userSession?.hasScrimRole;
   const isBooster = userSession?.isBooster || false;
   const isSupporter = userSession?.isSupporter || false;
-  const canSeeSupporter = isSupporter || isAdminName(session?.user?.name);
+  const canSeeSupporter = isSupporter || isShopAdmin;
 
   useEffect(() => {
     fetch("/api/xp/policy", { cache: "no-store" })
@@ -183,7 +184,8 @@ export default function MyInfoPage() {
   }
   rows.push({ k: "booster", g: "member", l: "서버 부스터", icon: ICON_PATHS.sparkles, href: `/profile/booster${q}`, pill: isBooster ? "적용 중" : undefined, pillCls: "bg-[#e91e3f]/[0.08] text-[#e91e3f]" });
   if (canSeeSupporter) rows.push({ k: "supporter", g: "member", l: "서포터즈", icon: ICON_PATHS.shieldCheck, href: "/supporters", pill: isSupporter ? "활동 중" : undefined, pillCls: "bg-[#3f83b8]/[0.1] text-[#3f83b8]" });
-  if (myTeam || scrimAdmin) rows.push({ k: "team", g: "member", l: myTeam ? "팀 룸" : "대회 룸", icon: ICON_PATHS.users, href: myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room", pill: myTeam ? `PLAN ${myTeam.sent}/${myTeam.members.length}` : undefined, pillCls: "bg-black/[0.05] text-[#5a5a5a]" });
+  // 팀이 없을 때의 「대회 룸」(→ /admin/room)은 관리자로 볼 때만 — /api/room 의 isAdmin 은 스위치와 상관없는 계정 판정이라 화면에서 한 번 더 거른다
+  if (myTeam || (scrimAdmin && isShopAdmin)) rows.push({ k: "team", g: "member", l: myTeam ? "팀 룸" : "대회 룸", icon: ICON_PATHS.users, href: myTeam ? `/tournament/team/${myTeam._id}` : "/admin/room", pill: myTeam ? `PLAN ${myTeam.sent}/${myTeam.members.length}` : undefined, pillCls: "bg-black/[0.05] text-[#5a5a5a]" });
 
   const RowShell = ({ r, children, className }: { r: Row; children: React.ReactNode; className: string }) =>
     r.href ? <Link href={r.href} className={className}>{children}</Link> : <button type="button" onClick={r.onClick} className={className}>{children}</button>;

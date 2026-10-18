@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import Dropdown from "../../components/Dropdown";
 import {
   inputClass,
+  numClass,
   labelClass,
   AdminPage,
   AdminTabs,
@@ -17,17 +19,26 @@ import {
   EmptyRow,
   Btn,
   Toggle,
+  Panel,
+  PanelGrid,
+  FieldRow,
+  Inline,
+  SaveBar,
   useNotice,
+  useToast,
   ConfirmDialog,
   useAdminGuard,
   type Column,
 } from "../ui";
+import { ADMIN_COUNTS_EVENT } from "../adminIndex";
 
-// 📌 서포터즈 관리 화면 — 두 탭(?tab=).
+// 📌 서포터즈 관리 화면 — 세 탭(?tab=).
 //    평가: 역할 보유자 전원의 그 달 활동(채팅·음성)을 한 표로 놓고 등급·XP·POINT·코멘트를
 //          적어 임시 저장(draft)한 뒤, 확인을 거쳐 지급(paid)한다. 활동량은 근거일 뿐 금액을
 //          정하는 건 관리자다 — 그래서 자동 계산 없이 입력칸으로 둔다. 지급은 되돌릴 수 없어 paid 행은 잠근다.
 //    신고·피드백: 서포터즈가 올린 유저 신고·피드백을 읽고 답변·처리 상태를 남긴다.
+//    설정: 서포터즈 역할 · 월 기본 XP · 월 목표(2026-10-17 레벨 설정 › 역할에서 옮김). BotSetting 의 그 칸만 PATCH /api/bot-settings 로 저장한다
+//          (레벨 설정 저장(POST)은 이 칸을 쓰지 않는다 — 서로 되돌리지 않게)
 //
 // 📌 2026-09 관리자 개편 — 목록 화면 틀(머리 + 탭 → 한 줄 도구 → 전체 폭 표 → 오른쪽 상세 칸)로 옮겼다.
 //    예전엔 표 한 줄에 입력칸 · 저장 · 지급을 다 넣어 최소폭 1120px 로 가로 스크롤이 생겼고,
@@ -70,11 +81,31 @@ type Report = {
   createdAt: string;
 };
 
-type TabId = "eval" | "reports";
-const TAB_META: Record<TabId, { short: string; title: string }> = {
-  eval: { short: "평가", title: "서포터즈 평가" },
-  reports: { short: "신고·피드백", title: "서포터즈 신고·피드백" },
+type TabId = "eval" | "reports" | "settings";
+const TAB_META: Record<TabId, { short: string }> = {
+  eval: { short: "평가" },
+  reports: { short: "신고·피드백" },
+  settings: { short: "설정" },
 };
+
+// 설정 탭 칸 — BotSetting 의 서포터즈 칸(app/api/bot-settings PATCH 가 받는 이름 그대로). 입력 중엔 글자로 든다
+type SupSet = { supporterRoleId: string; supporterBaseXp: string; supporterGoalChat: string; supporterGoalVoiceMin: string };
+const SUP_KEYS = ["supporterRoleId", "supporterBaseXp", "supporterGoalChat", "supporterGoalVoiceMin"] as const;
+const SUP_LABEL: Record<keyof SupSet, string> = {
+  supporterRoleId: "서포터즈 역할",
+  supporterBaseXp: "월 기본 XP",
+  supporterGoalChat: "월 목표 채팅",
+  supporterGoalVoiceMin: "월 목표 음성",
+};
+const SUP_NUM_MAX: Record<string, number> = { supporterBaseXp: 1_000_000_000_000, supporterGoalChat: 10_000_000, supporterGoalVoiceMin: 10_000_000 };
+const supOf = (d: Record<string, unknown> | null | undefined): SupSet => ({
+  supporterRoleId: typeof d?.supporterRoleId === "string" ? d.supporterRoleId : "",
+  supporterBaseXp: String(d?.supporterBaseXp ?? 150000),
+  supporterGoalChat: String(d?.supporterGoalChat ?? 0),
+  supporterGoalVoiceMin: String(d?.supporterGoalVoiceMin ?? 0),
+});
+// 공용 Dropdown(라이트)을 입력칸(inputClass)과 같은 높이 · 테두리로 (app/admin/bot 과 같은 값)
+const DD = "!px-3 !py-2 min-h-10 !text-[14px] !border-[#a3a3a3]";
 
 // 서버(SupporterEval.note / SupporterReport.adminReply)가 1000자에서 자르므로 화면도 같은 값으로 막는다
 const NOTE_MAX = 1000;
@@ -154,9 +185,11 @@ export default function AdminSupportersPage() {
   // 화면 가리개일 뿐이다 — 실제 방어는 /api/admin/supporters* 가 서버에서 한 번 더 한다
   const { isAdmin, gate } = useAdminGuard();
   const { notify, noticeEl } = useNotice();
+  const { toast, toastEl } = useToast();
 
   const searchParams = useSearchParams();
-  const tab: TabId = searchParams.get("tab") === "reports" ? "reports" : "eval";
+  const rawTab = searchParams.get("tab");
+  const tab: TabId = rawTab === "reports" || rawTab === "settings" ? rawTab : "eval";
 
   const thisMonth = useMemo(() => monthKeyKST(0), []);
   const lastMonth = useMemo(() => monthKeyKST(-1), []);
@@ -195,6 +228,11 @@ export default function AdminSupportersPage() {
     const d = await res?.json().catch(() => null);
     if (res?.ok && d?.success) {
       setReports((prev) => prev.filter((x) => x._id !== delTarget._id));
+      // 「미처리 · 처리됨」 칸 숫자도 하나 줄인다
+      const st = delTarget.status === "done" ? "done" : "open";
+      setReportCounts((c) => ({ ...c, [st]: Math.max(0, c[st] - 1) }));
+      // 메뉴 · 대시보드의 미처리 신고 숫자를 바로 다시 센다
+      try { window.dispatchEvent(new Event(ADMIN_COUNTS_EVENT)); } catch {}
       notify("삭제했습니다.");
     } else {
       notify(d?.error || "삭제하지 못했습니다.", true);
@@ -205,6 +243,32 @@ export default function AdminSupportersPage() {
   const [replyText, setReplyText] = useState("");
   const [replyDone, setReplyDone] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
+
+  // ── 설정 ─────────────────────────────────────
+  //    supSaved: 불러온(또는 마지막으로 저장한) 값 · supDraft: 고친 값(null = 고친 것 없음). 역할 목록은 디스코드 역할
+  const [supSaved, setSupSaved] = useState<SupSet | null>(null);
+  const [supDraft, setSupDraft] = useState<SupSet | null>(null);
+  const [supSaving, setSupSaving] = useState(false);
+  const [supLoadFailed, setSupLoadFailed] = useState(false);
+  const [guildRoles, setGuildRoles] = useState<{ id: string; name: string; color?: string }[]>([]);
+  const loadSup = useCallback(() => {
+    fetch("/api/bot-settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .catch(() => null)
+      .then((d) => {
+        if (d?.success && d.data) {
+          setSupSaved(supOf(d.data));
+          setSupLoadFailed(false);
+        } else setSupLoadFailed(true);
+      });
+    fetch("/api/discord-roles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setGuildRoles(Array.isArray(d?.data) ? d.data : []))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (isAdmin && tab === "settings" && !supSaved) loadSup();
+  }, [isAdmin, tab, supSaved, loadSup]);
 
   const fetchRows = useCallback(
     (m: string, keepEdits = false) => {
@@ -394,6 +458,8 @@ export default function AdminSupportersPage() {
           open: Math.max(0, c.open + (saved.status === "open" ? 1 : -1)),
           done: Math.max(0, c.done + (saved.status === "done" ? 1 : -1)),
         }));
+        // 처리 상태가 바뀌었다 — 메뉴 · 대시보드의 미처리 신고 숫자를 바로 다시 센다
+        try { window.dispatchEvent(new Event(ADMIN_COUNTS_EVENT)); } catch {}
       }
       setReplyTarget(null);
       notify(saved.status === "done" ? "답변을 저장하고 처리됨으로 표시했습니다." : "답변을 저장했습니다.");
@@ -401,6 +467,42 @@ export default function AdminSupportersPage() {
       notify(d?.message || d?.error || "저장에 실패했습니다.", true);
     }
   };
+
+  const sup = supDraft || supSaved;
+  const supChanged = (k: keyof SupSet) => !!supDraft && !!supSaved && supDraft[k].trim() !== supSaved[k].trim();
+  const supDirty = SUP_KEYS.some(supChanged);
+  const setSup = (patch: Partial<SupSet>) => setSupDraft((d) => ({ ...(d || supSaved || supOf(null)), ...patch }));
+  const saveSup = async () => {
+    if (!supDraft || !supSaved || supSaving) return;
+    const body: Record<string, string | number> = {};
+    for (const k of SUP_KEYS) {
+      if (!supChanged(k)) continue;
+      const v = supDraft[k].trim();
+      if (k === "supporterRoleId") { body[k] = v; continue; }
+      const n = Number(v);
+      if (!/^\d+$/.test(v) || n > SUP_NUM_MAX[k]) return toast(`${SUP_LABEL[k]}은(는) 0~${SUP_NUM_MAX[k].toLocaleString()} 사이 정수로 입력해 주세요.`, true);
+      body[k] = n;
+    }
+    setSupSaving(true);
+    const res = await fetch("/api/bot-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    setSupSaving(false);
+    if (res?.ok && d?.success && d.data) {
+      setSupSaved(supOf(d.data));
+      setSupDraft(null);
+      toast("저장했습니다.");
+      // 평가 표의 기본 XP · 목표 · 역할이 바뀐다 — 저장 안 한 평가 입력은 그대로 두고 다시 받는다
+      fetchRows(month, true);
+    } else {
+      toast(d?.message || "저장에 실패했습니다.", true);
+    }
+  };
+  const roleNameOf = (id: string) => guildRoles.find((r) => r.id === id)?.name || id;
+  const supText = (k: keyof SupSet, v: string) =>
+    k === "supporterRoleId" ? (v ? roleNameOf(v) : "지정 안 함") : `${(Number(v) || 0).toLocaleString()}${k === "supporterGoalVoiceMin" ? "분" : k === "supporterGoalChat" ? "회" : ""}`;
+  const supChanges = supDirty && supDraft && supSaved
+    ? SUP_KEYS.filter(supChanged).map((k) => `${SUP_LABEL[k]} ${supText(k, supSaved[k])} → ${supText(k, supDraft[k])}`)
+    : [];
 
   if (gate) return gate;
 
@@ -622,6 +724,11 @@ export default function AdminSupportersPage() {
         section="운영"
         // 📌 제목은 탭과 무관하게 고정 — 탭마다 바꾸면 글자 수 따라 머리가 달라져 탭 줄이 밀린다(메모: tabs-never-move)
         title="서포터즈"
+        footer={
+          tab === "settings" ? (
+            <SaveBar dirty={supDirty} changes={supChanges} onSave={saveSup} onReset={() => setSupDraft(null)} saving={supSaving} />
+          ) : undefined
+        }
         tabs={
           <AdminTabs
             tabs={(Object.keys(TAB_META) as TabId[]).map((id) => ({
@@ -676,7 +783,7 @@ export default function AdminSupportersPage() {
             ) : !roleId && rows.length === 0 ? (
               <EmptyRow>
                 서포터즈 역할이 지정되지 않았습니다.{" "}
-                <Link href="/admin/bot?tab=roles&sec=supporter" className="text-[#e91e3f] font-bold underline underline-offset-2">
+                <Link href="/admin/supporters?tab=settings" className="text-[#e91e3f] font-bold underline underline-offset-2">
                   역할 지정
                 </Link>
               </EmptyRow>
@@ -692,6 +799,64 @@ export default function AdminSupportersPage() {
               />
             )}
           </>
+        )}
+
+        {/* ═══ 설정 ═══ */}
+        {tab === "settings" && (
+          supLoadFailed && !sup ? (
+            <EmptyRow>
+              설정을 불러오지 못했습니다.{" "}
+              <button onClick={loadSup} className="text-[#e91e3f] font-bold underline underline-offset-2 outline-none focus-visible:underline">
+                다시 불러오기
+              </button>
+            </EmptyRow>
+          ) : !sup ? (
+            <Loading />
+          ) : (
+            <PanelGrid>
+              <Panel title="서포터즈 역할" flush>
+                <FieldRow label="역할" changed={supChanged("supporterRoleId")} hint="환경변수 DISCORD_SUPPORTER_ROLE_ID 가 있으면 그 값이 우선합니다">
+                  <Dropdown
+                    theme="light"
+                    buttonClassName={DD}
+                    value={sup.supporterRoleId}
+                    onChange={(v) => setSup({ supporterRoleId: v })}
+                    placeholder="역할을 선택하세요"
+                    options={[
+                      { value: "", label: "지정 안 함" },
+                      ...guildRoles.map((r) => ({ value: r.id, label: r.name, color: r.color })),
+                      ...(sup.supporterRoleId && guildRoles.length && !guildRoles.some((r) => r.id === sup.supporterRoleId)
+                        ? [{ value: sup.supporterRoleId, label: `삭제된 역할 (${sup.supporterRoleId})` }]
+                        : []),
+                    ]}
+                  />
+                </FieldRow>
+              </Panel>
+              <Panel title="월 평가 기준" flush>
+                <FieldRow label="월 기본 XP" changed={supChanged("supporterBaseXp")} hint="평가 칸의 기본값">
+                  <Inline>
+                    <input type="number" min={0} inputMode="numeric" aria-label="월 기본 XP" value={sup.supporterBaseXp}
+                      onChange={(ev) => setSup({ supporterBaseXp: ev.target.value })} className={numClass} />
+                    XP
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="월 목표 채팅" changed={supChanged("supporterGoalChat")} hint="0 이면 목표 없음">
+                  <Inline>
+                    <input type="number" min={0} inputMode="numeric" aria-label="월 목표 채팅" value={sup.supporterGoalChat}
+                      onChange={(ev) => setSup({ supporterGoalChat: ev.target.value })} className={numClass} />
+                    회
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="월 목표 음성" changed={supChanged("supporterGoalVoiceMin")} hint="0 이면 목표 없음">
+                  <Inline>
+                    <input type="number" min={0} inputMode="numeric" aria-label="월 목표 음성" value={sup.supporterGoalVoiceMin}
+                      onChange={(ev) => setSup({ supporterGoalVoiceMin: ev.target.value })} className={numClass} />
+                    분
+                  </Inline>
+                </FieldRow>
+              </Panel>
+            </PanelGrid>
+          )
         )}
 
         {/* ═══ 신고·피드백 ═══ */}
@@ -964,6 +1129,7 @@ export default function AdminSupportersPage() {
       />
 
       {noticeEl}
+      {toastEl}
     </>
   );
 }

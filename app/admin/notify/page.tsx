@@ -1,13 +1,15 @@
 "use client";
 
-// 📌 회원 통지 발송 — 목록 화면 틀(머리 → 왼쪽 작성 패널 | 오른쪽 발송 이력 표 → 줄을 누르면 상세 칸).
+// 📌 알림 발송 — 목록 화면 틀(머리 → 왼쪽 작성 패널 | 오른쪽 발송 이력 표 → 줄을 누르면 상세 칸).
 //    예전엔 가운데 좁은 폭에 작성 카드와 이력이 위아래로 쌓여, 이력을 보려면 폼을 한참 지나 내려가야 했다.
 //    넓은 화면(xl)에서는 둘을 나란히 두고, 이력 한 줄의 본문 · 삭제는 오른쪽 상세 칸으로 옮겼다.
 //    두 열은 flex 로 — 임의 grid-template 은 이 빌드에서 컴파일되지 않는다(메모: tailwind-v4-quirks).
+//    📌 2026-10-17 — 메뉴 이름과 같게 「알림 발송」. 수신자 칸은 레벨 설정 수동 지급과 같은 틀(./targets.tsx — 여러 명 · 미리 확인 칩),
+//       확인이 끝난 사람에게만 보낸다(한 명씩 POST /api/notifications — 유저 ID 로). 여러 명이면 확인 창 한 번.
+//       발송 이력은 검색(제목 · 수신자 · 발신) · 유형으로 거른다
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { RenderFormattedText } from "../../components/FormattedText";
-// 알림 모달 · 확인 모달 · 입력칸은 관리자 공용 것을 쓴다 — 이 파일이 따로 들고 있던 복사본은 뺐다
 import {
   AdminPage,
   Panel,
@@ -16,6 +18,7 @@ import {
   Btn,
   SwapLabel,
   Toolbar,
+  SearchInput,
   StatusChip,
   DataTable,
   DetailPane,
@@ -23,11 +26,13 @@ import {
   inputClass,
   useAdminGuard,
   useNotice,
+  useToast,
   ConfirmDialog,
   type Column,
 } from "../ui";
+import { TargetInput, TargetChips, useTargetCheck, pickTargetKey, type Recipient } from "./targets";
 
-// 📌 통지 유형 → 공용 상태 칩 색. 예전 전용 배지(테두리 + 흐린 면) 대신 관리자 화면 칩 한 벌로 맞춘다
+// 📌 알림 유형 → 공용 상태 칩 색
 const TYPE_TONE: Record<string, "bad" | "warn" | "info" | "ok" | "neutral"> = {
   경고: "bad",
   제재: "warn",
@@ -37,6 +42,7 @@ const TYPE_TONE: Record<string, "bad" | "warn" | "info" | "ok" | "neutral"> = {
 };
 const TYPES = ["경고", "제재", "안내", "축하", "일반"];
 const TYPE_OPTIONS = TYPES.map((t) => ({ v: t, l: t }));
+const HIST_TYPES = [{ v: "", l: "전체" }, ...TYPE_OPTIONS];
 
 const fmtFull = (d: any) => new Date(d).toLocaleString("ko-KR");
 // 표 안 일시는 짧게 — 초 · 오전/오후를 빼 한 칸 폭을 줄인다(상세 칸에는 전체 형식)
@@ -72,36 +78,44 @@ const Req = () => <span className="text-[#e91e3f]">*</span>;
 
 export default function AdminNotifyPage() {
   // 화면 가리기 전용 — 실제 방어는 /api/notifications 가 서버에서 한 번 더 한다.
-  // 예전에는 이 파일이 관리자 목록을 직접 들고 있어, 관리자가 늘면 여기만 조용히 어긋났다.
   const { isAdmin, gate } = useAdminGuard();
   const { notify, noticeEl } = useNotice();
+  const { toast, toastEl } = useToast();
 
   const [sent, setSent] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [confirmSend, setConfirmSend] = useState<Recipient[] | null>(null); // 여러 명 발송 확인 창
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   // 상세 칸에 연 이력 — id 만 들고 목록에서 찾는다(삭제되면 저절로 닫힌다)
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 이력 거르기 — 유형("" = 전체) · 검색
+  const [histType, setHistType] = useState("");
+  const [histQ, setHistQ] = useState("");
 
-  const [recipient, setRecipient] = useState("");
+  const [target, setTarget] = useState("");
   const [type, setType] = useState("경고");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const check = useTargetCheck(target);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const fetchSent = () => {
+  const fetchSent = useCallback(() => {
     fetch("/api/notifications?sent=1", { cache: "no-store" })
       .then((res) => res.json())
-      .then((data) => setSent(Array.isArray(data?.data) ? data.data : []))
-      .catch(() => {})
+      .then((data) => {
+        if (!data?.success) throw new Error("sent");
+        setSent(Array.isArray(data?.data) ? data.data : []);
+      })
+      .catch(() => toast("발송 이력을 불러오지 못했습니다.", true))
       .finally(() => setIsLoading(false));
-  };
+  }, [toast]);
 
   useEffect(() => {
     if (isAdmin) fetchSent();
-  }, [isAdmin]);
+  }, [isAdmin, fetchSent]);
 
   // ── 마크다운 서식 삽입 (글 작성 페이지와 동일) ──
   const insertWrap = (symbol: string, placeholder = "텍스트") => {
@@ -136,41 +150,67 @@ export default function AdminNotifyPage() {
     setTimeout(() => ta.focus({ preventScroll: true }), 0);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    if (!recipient.trim() || !title.trim() || !content.trim()) {
-      notify("수신자 · 제목 · 본문을 모두 입력해 주세요.", true);
+  // 📌 한 명씩 보낸다(발송 API 는 한 명 — 수신자는 유저 ID). 실패한 사람만 칸에 남기고 제목 · 본문도 남겨 다시 보낼 수 있게
+  const send = async (list: Recipient[]) => {
+    if (sending || !list.length) return;
+    setSending(true);
+    const t = title.trim();
+    const c = content.trim();
+    let ok = 0;
+    const dmFail: Recipient[] = [];
+    const fail: (Recipient & { error: string })[] = [];
+    for (const r of list) {
+      try {
+        const res = await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipient: r.key, type, title: t, content: c }),
+        });
+        const d = await res.json().catch(() => null);
+        if (res.ok && d?.success) {
+          ok++;
+          if (!d.dmSent) dmFail.push(r);
+        } else fail.push({ ...r, error: d?.error || "발송에 실패했습니다." });
+      } catch {
+        fail.push({ ...r, error: "서버 통신 오류" });
+      }
+    }
+    setSending(false);
+    if (ok) fetchSent();
+    if (fail.length) {
+      // 실패한 사람만 칸에 남긴다(이름 대신 키 — 다시 확인하기 쉽게)
+      setTarget(fail.map((f) => f.key).join("\n"));
+      notify(
+        [
+          [ok ? `${ok}명 발송 · ${fail.length}명 실패` : `${fail.length}명 발송 실패`, dmFail.length ? `DM 실패 ${dmFail.length}명` : ""].filter(Boolean).join(" · "),
+          ...fail.slice(0, 8).map((f) => `${f.name} — ${f.error}`),
+          fail.length > 8 ? `외 ${fail.length - 8}명` : "",
+        ].filter(Boolean).join("\n"),
+        true,
+      );
       return;
     }
-    setIsSubmitting(true);
-    try {
-      const res = await fetch("/api/notifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipient, type, title, content }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTitle("");
-        setContent("");
-        // 수신자/유형은 연속 발송 편의를 위해 유지
-        fetchSent();
-        // 저장은 됐는데 DM 만 실패하는 경우가 있어, 어디까지 갔는지는 알려야 한다
-        const msg = data.userFound
-          ? data.dmSent
-            ? "통지를 발송했습니다."
-            : "통지를 저장했지만 DM 발송에 실패했습니다. 수신자가 DM을 막아 뒀을 수 있습니다."
-          : "통지를 저장했지만 디스코드에서 해당 사용자명을 찾지 못해 DM은 보내지 못했습니다.";
-        notify(msg);
-      } else {
-        notify(data.error || "발송에 실패했습니다.", true);
-      }
-    } catch {
-      notify("서버 통신 오류가 발생했습니다.", true);
-    } finally {
-      setIsSubmitting(false);
+    setTitle("");
+    setContent("");
+    // 수신자 · 유형은 연속 발송 편의를 위해 유지. 알림함 저장은 됐는데 DM 만 실패할 수 있다 — 어디까지 갔는지 알린다
+    if (dmFail.length) toast(list.length === 1 ? "알림을 저장했습니다 · DM 발송 실패" : `${ok}명 발송 · DM 실패 ${dmFail.length}명`, true);
+    else toast(list.length === 1 ? "알림을 발송했습니다." : `${ok}명에게 발송했습니다.`);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (sending) return;
+    if (!check.keys.length || !title.trim() || !content.trim()) {
+      toast("수신자 · 제목 · 본문을 모두 입력해 주세요.", true);
+      return;
     }
+    if (check.locked) {
+      toast(check.pending ? "수신자를 확인하는 중입니다." : "수신자를 확인해 주세요.", true);
+      return;
+    }
+    const list = check.recipients;
+    if (list.length > 1) setConfirmSend(list);
+    else void send(list);
   };
 
   const executeDelete = async () => {
@@ -180,17 +220,24 @@ export default function AdminNotifyPage() {
       const res = await fetch(`/api/notifications?id=${deleteConfirmId}`, { method: "DELETE" });
       if (res.ok) {
         setSent((prev) => prev.filter((n) => n._id !== deleteConfirmId));
-        notify("통지 기록을 삭제했습니다.");
+        toast("알림 기록을 삭제했습니다.");
       } else {
-        notify("삭제에 실패했습니다.", true);
+        toast("삭제에 실패했습니다.", true);
       }
     } catch {
-      notify("서버 통신 오류가 발생했습니다.", true);
+      toast("서버 통신 오류가 발생했습니다.", true);
     } finally {
       setIsDeleting(false);
       setDeleteConfirmId(null);
     }
   };
+
+  const shownSent = useMemo(() => {
+    const s = histQ.trim().toLowerCase();
+    return sent.filter((n) =>
+      (!histType || n.type === histType) &&
+      (!s || [n.title, n.recipientName, n.recipientId, n.sentBy].some((v) => String(v || "").toLowerCase().includes(s))));
+  }, [sent, histType, histQ]);
 
   // 로딩 · 권한 없음 화면은 공용 가드가 만든다 (관리자 화면마다 복사돼 있던 것)
   if (gate) return gate;
@@ -234,24 +281,25 @@ export default function AdminNotifyPage() {
   ];
 
   return (
-    <AdminPage section="운영" title="회원 통지 발송" desc="통지는 사이트 알림함에 기록되고 디스코드 DM으로도 전송됩니다.">
+    <AdminPage section="운영" title="알림 발송">
       {/* 상세 칸이 열리면 본문이 그 폭만큼 좁아진다 — 그때는 두 열 대신 위아래로 쌓아 이력 표가 사라지지 않게 */}
       <div className={`flex flex-col ${selected ? "" : "xl:flex-row xl:items-start"}`}>
-        {/* ── 통지서 작성 — xl 에서 왼쪽 고정 폭(유형 알약 다섯 개가 한 줄에 드는 폭) ── */}
+        {/* ── 작성 — xl 에서 왼쪽 고정 폭(유형 알약 다섯 개가 한 줄에 드는 폭) ── */}
         <div className={`min-w-0 mb-6 ${selected ? "" : "xl:w-[540px] 2xl:w-[620px] xl:shrink-0 xl:mb-0 xl:mr-6"}`}>
-          <Panel flush title="통지서 작성" right={<span className="text-[12px] text-[#8a8a8a]">발신 · 고급 이글루 운영팀</span>}>
+          <Panel flush title="알림 작성" right={<span className="text-[12px] text-[#8a8a8a]">발신 · 고급 이글루 운영팀</span>}>
             <form onSubmit={handleSubmit}>
-              {/* 표시 이름으로 넣으면 유저를 못 찾아 DM 만 조용히 빠진다 */}
-              <FieldRow label={<>수신자 <Req /></>} hint="표시 이름이 아닌 디스코드 고유 사용자명(핸들)이어야 합니다.">
-                <input type="text" required placeholder="예: elahw.06" value={recipient} onChange={(e) => setRecipient(e.target.value)} className={inputClass} />
+              {/* 여러 명 — 줄바꿈 · 쉼표. 입력이 멈추면 칸 아래 칩으로 미리 확인(찾음 · ✕ 못 찾음 · ? 겹침) */}
+              <FieldRow label={<>수신자 <Req /></>} top>
+                <TargetInput value={target} onChange={setTarget} disabled={sending} />
+                <TargetChips check={check} onPick={(k, id) => setTarget(pickTargetKey(check.keys, k, id))} />
               </FieldRow>
 
-              <FieldRow label={<>통지 유형 <Req /></>}>
-                <Segmented options={TYPE_OPTIONS} value={type} onChange={setType} />
+              <FieldRow label={<>유형 <Req /></>}>
+                <Segmented options={TYPE_OPTIONS} value={type} onChange={setType} disabled={sending} />
               </FieldRow>
 
               <FieldRow label={<>제목 <Req /></>} hint="제목은 디스코드 DM 알림에도 표시됩니다.">
-                <input type="text" required placeholder="예: 커뮤니티 이용 규칙 위반에 대한 경고 통지" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+                <input type="text" placeholder="예: 커뮤니티 이용 규칙 위반에 대한 경고 통지" value={title} disabled={sending} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
               </FieldRow>
 
               {/* 본문 + 서식 툴바 — 입력칸 테두리(#a3a3a3) 안에 버튼 줄과 글칸을 함께 둔다 */}
@@ -267,10 +315,10 @@ export default function AdminNotifyPage() {
                   </div>
                   <textarea
                     ref={textareaRef}
-                    required
                     rows={7}
-                    placeholder="통지 내용을 작성하세요"
+                    placeholder="알림 내용을 작성하세요"
                     value={content}
+                    disabled={sending}
                     onChange={(e) => setContent(e.target.value)}
                     className="block w-full bg-white px-3 py-2.5 text-[14px] text-[#131313] outline-none resize-none leading-relaxed placeholder:text-[#a3a3a3] [&::-webkit-scrollbar]:hidden"
                   />
@@ -294,29 +342,34 @@ export default function AdminNotifyPage() {
               )}
 
               <div className="flex justify-end px-5 py-4">
-                <Btn type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                  <SwapLabel swap={isSubmitting} to="발송 중...">통지 발송</SwapLabel>
+                <Btn type="submit" disabled={sending} className="w-full sm:w-auto">
+                  <SwapLabel swap={sending} to="발송 중…">알림 발송</SwapLabel>
                 </Btn>
               </div>
             </form>
           </Panel>
         </div>
 
-        {/* ── 발송 이력 — 남은 폭 전부. 줄을 누르면 상세 칸 ── */}
+        {/* ── 발송 이력 — 남은 폭 전부. 유형 · 검색으로 거르고, 줄을 누르면 상세 칸 ── */}
         <section className="flex-1 min-w-0">
-          <Toolbar right={<span className="text-[12px] text-[#8a8a8a] tabular-nums">{sent.length}건</span>}>
+          <div className="flex items-center gap-2 mb-3">
             <h2 className="text-[15px] font-black tracking-tight">발송 이력</h2>
+            <span className="ml-auto text-[12px] text-[#8a8a8a] tabular-nums">{shownSent.length === sent.length ? `${sent.length}건` : `${shownSent.length} / ${sent.length}건`}</span>
+          </div>
+          <Toolbar>
+            <Segmented options={HIST_TYPES} value={histType} onChange={setHistType} />
+            <SearchInput value={histQ} onChange={setHistQ} placeholder="제목 · 수신자" />
           </Toolbar>
           {isLoading ? (
-            <div className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중...</div>
+            <div className="py-12 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>
           ) : (
             <DataTable
               columns={columns}
-              rows={sent}
+              rows={shownSent}
               rowKey={(n) => n._id}
               onRowClick={(n) => setSelectedId(n._id)}
               selectedKey={selectedId}
-              empty="발송한 통지가 없습니다."
+              empty={sent.length ? "맞는 기록이 없습니다." : "발송한 알림이 없습니다."}
             />
           )}
         </section>
@@ -339,7 +392,7 @@ export default function AdminNotifyPage() {
         {selected && (
           <>
             <dl className="mb-5">
-              <DefRow k="수신자">{selected.recipientName}</DefRow>
+              <DefRow k="수신자">{selected.recipientName}{selected.recipientId && <span className="ml-1.5 font-normal text-[#8a8a8a] tabular-nums">{selected.recipientId}</span>}</DefRow>
               <DefRow k="발송 일시"><span className="tabular-nums">{fmtFull(selected.createdAt)}</span></DefRow>
               <DefRow k="상태"><StateChips n={selected} wrap /></DefRow>
               {selected.readAt && <DefRow k="읽은 시각"><span className="tabular-nums">{fmtFull(selected.readAt)}</span></DefRow>}
@@ -354,12 +407,34 @@ export default function AdminNotifyPage() {
         )}
       </DetailPane>
 
-      {/* ── 통지 기록 삭제 확인 — 수신자 알림함에서도 사라지므로 되돌릴 수 없다 ── */}
+      {/* ── 여러 명 발송 확인 — 한 번 ── */}
+      <ConfirmDialog
+        open={!!confirmSend}
+        title="알림 발송"
+        confirmLabel="발송"
+        busy={sending}
+        onCancel={() => setConfirmSend(null)}
+        onConfirm={() => {
+          const list = confirmSend;
+          setConfirmSend(null);
+          if (list) void send(list);
+        }}
+        body={confirmSend ? (
+          <>
+            <p className="font-bold text-[#131313] break-keep">[{type}] {title.trim()}</p>
+            <p className="mt-1 tabular-nums break-keep">
+              {confirmSend.length}명 · {confirmSend.slice(0, 3).map((r) => r.name).join(", ")}{confirmSend.length > 3 ? ` 외 ${confirmSend.length - 3}명` : ""}
+            </p>
+          </>
+        ) : null}
+      />
+
+      {/* ── 알림 기록 삭제 확인 — 수신자 알림함에서도 사라지므로 되돌릴 수 없다 ── */}
       <ConfirmDialog
         open={!!deleteConfirmId}
         danger
         busy={isDeleting}
-        title="통지 기록 삭제"
+        title="알림 기록 삭제"
         confirmLabel="삭제"
         body="수신자의 알림함에서도 사라집니다."
         onConfirm={executeDelete}
@@ -367,6 +442,7 @@ export default function AdminNotifyPage() {
       />
 
       {noticeEl}
+      {toastEl}
     </AdminPage>
   );
 }

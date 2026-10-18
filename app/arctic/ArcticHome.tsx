@@ -9,8 +9,7 @@ import { isTimed, durationLabel, cardPick, discountActive, affordFor, shownPrice
 import { pointToXp } from "@/lib/pointRate";
 import { isUnitSale, maxPerOrderOf } from "@/lib/unitSale";
 import { isBundle } from "@/lib/bundle";
-import { splitItemName } from "@/lib/itemName";
-import { bundleCountOf } from "./ProductCard";
+import { bundleCountOf, itemShortName } from "./ProductCard";
 import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
 import { saleEnded, saleUntilMs, saleUntilLabel } from "@/lib/saleWindow";
@@ -25,7 +24,7 @@ import { productIconOf } from "@/lib/cosmeticArt";
 type Props = {
   items: any[];
   isLoading: boolean;
-  isAdmin: boolean;
+  isAdmin: boolean; // 관리자로 보는 중(useAdminView().admin) — 「유저 화면으로 보기」면 false 라 맨 아래 관리 줄이 없다
   isLoggedIn: boolean;
   myXp: number | null;
   myPoint?: number | null; // 빙옥도 결제에 섞어 쓸 수 있다 — 살 수 있는지는 XP + 빙옥으로 본다
@@ -343,7 +342,7 @@ export default function ArcticHome({
               className="group relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 pr-[150px] md:pr-[190px] text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>{deal.kind === "sale" ? "할인" : "새로 들어온"}</span>
               <h3 className="mt-3 text-[20px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">
-                {deal.kind === "sale" ? <>{splitItemName(deal.it.name).short} <span className="text-[#ff5c77]">{deal.it.discountPct}%</span></> : splitItemName(deal.it.name).short}
+                {deal.kind === "sale" ? <>{itemShortName(deal.it)} <span className="text-[#ff5c77]">{deal.it.discountPct}%</span></> : itemShortName(deal.it)}
               </h3>
               <p className="mt-1.5 text-[12px] md:text-[13px] opacity-85 tabular-nums line-clamp-2">
                 {deal.kind === "sale"
@@ -376,7 +375,7 @@ export default function ArcticHome({
             <Link href={`/arctic/item/${side.it._id}`}
               className={`group relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 pr-[150px] md:pr-[190px] text-white block bg-gradient-to-br from-[#1d2b3a] to-[#3b5672] hover:to-[#46647f] transition-colors ${deal || !ready ? "" : "md:col-span-2"}`}>
               <span className="inline-flex items-center gap-1.5 text-[11px] font-black opacity-85"><span className="w-1.5 h-1.5 rounded-full bg-current"></span>곧 판매 종료</span>
-              <h3 className="mt-3 text-[20px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">{splitItemName(side.it.name).short}</h3>
+              <h3 className="mt-3 text-[20px] md:text-[26px] font-black tracking-tight leading-tight break-keep line-clamp-2">{itemShortName(side.it)}</h3>
               <p className="mt-1.5 text-[13px] opacity-85 tabular-nums">{priceText(side.it, cardPick(side.it)?.price ?? 0)}</p>
               <span className="absolute left-6 md:left-7 bottom-6 text-[11px] font-bold opacity-80 tabular-nums">~ {side.until}</span>
               {artTile(side.it, `right-5 md:right-7 top-1/2 -translate-y-1/2 rotate-[3deg] ${TILE}`)}
