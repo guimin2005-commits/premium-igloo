@@ -42,6 +42,8 @@ const MOCKS = {
       globalThis.__rates.push({ user: member.id, ch: channel?.id, stay: staySec });
       return 3000;
     }
+    // 핫타임 추가분(10/19 — 이벤트 패스 진행도에서 뺀다) — 시험에선 핫타임 밖
+    export const voiceHotRate = () => 0;
     export async function payVoiceCycle() {}`,
   "/bot/src/features/activity.js": `export const idleMinutes = () => null;`,
   "/bot/src/xpStop.js": `export const noteXpStop = () => {}; export const stopUntilOf = (d) => (d?.stop ? Date.now() + 1e9 : 0); export const notStopped = () => ({});`,
