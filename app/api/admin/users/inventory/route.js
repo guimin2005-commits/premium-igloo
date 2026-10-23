@@ -104,12 +104,14 @@ export async function POST(request) {
     // 고른 뒤 바뀐 건은 건드리지 않는다 — 이 유저 · 실물 아님 · 기간 남음(상태 · 소모 조건은 각 함수가 건다)
     const alive = { userId, itemType: { $ne: "physical" }, $or: [{ expiresAt: null }, { expiresAt: { $gt: at } }] };
     // 📌 2026-10-17 이벤트 패스 보상("event-pass")도 낸 값 없는 건 — 시즌 패스처럼 회수(돌려줄 값 없음)
-    const isShop = (p) => p.itemId !== "grant" && p.itemId !== "season-pass" && p.itemId !== "event-pass";
+    //    📌 2026-10-23 괴담회 추첨권("goedam-ticket") · 추첨 상품("goedam")도 같다
+    const FREE_IDS = ["grant", "season-pass", "event-pass", "goedam", "goedam-ticket"];
+    const isShop = (p) => !FREE_IDS.includes(p.itemId);
 
     // 낸 값 없는 건 — 운영진 지급 · 시즌 패스. 역할 이전 · 환불 도구의 기록은 조건으로도 한 번 더 막는다
     const freeIds = pick.filter((p) => !isShop(p)).map((p) => String(p._id));
     const free = freeIds.length
-      ? await revokeFreeRows({ ids: freeIds, userId, extra: { ...alive, itemId: { $in: ["grant", "season-pass", "event-pass"] }, adminNote: { $not: TOOL_RE } }, at })
+      ? await revokeFreeRows({ ids: freeIds, userId, extra: { ...alive, itemId: { $in: FREE_IDS }, adminNote: { $not: TOOL_RE } }, at })
       : { done: 0 };
 
     // 상점 구매 — 대기는 취소, 보유는 환불(관리자 주문 처리와 같은 전환). 고른 사이 봇이 지급을 끝낸 대기 건은 환불로 이어서 처리한다

@@ -215,7 +215,8 @@ async function processPurchases(guild) {
 // ── XP 지급 대기열 처리 ──────────────────────
 // 시즌 패스 진행도를 올리지 않는 지급 — 기준선(passBaseXp)을 같은 폭으로 함께 올린다(아래)
 //    📌 2026-10-17 이벤트 패스 XP 보상(source "event-pass")도 — 사이트 lib/season.js PASS_NEUTRAL_SOURCES · lib/eventPass.js 와 같은 글자(없으면 시즌 패스 진행도에 섞인다)
-const PASS_NEUTRAL = new Set(["pass", "role-refund", "event-pass"]);
+//    📌 2026-10-23 괴담회 추첨 XP 상품(source "goedam")도 — 이벤트 패스와 같은 대우(사이트 lib/goedam.js grantGoedamPrize · lib/season.js 와 같은 글자)
+const PASS_NEUTRAL = new Set(["pass", "role-refund", "event-pass", "goedam"]);
 // 📌 보상 역할을 알림 없이 맞추는 지급 — 역할 환불(관리자 역할 이전)은 한 번에 수십 명이 들어온다.
 //    지난 시즌 역할 값을 돌려준 것이라 "NEW ROLE" 알림이 채널을 도배하지 않게(processRoleSyncs 와 같은 notify:false). 역할은 그대로 맞춘다
 const QUIET_ROLE_SYNC = new Set(["role-refund"]);
@@ -226,7 +227,7 @@ const PASS_BOOSTED = new Set(["quest"]);
 // 📌 XP 획득 중단(관리자 — xpStop.js) 중이면 넣지 않는 자동 출처 — 2026-10-04 "5일 전체 XP 획득 중단". 퀘스트 · 시즌 패스 · 쿠폰 · 코드 보상.
 //    지급하지 않고 failed 로 남긴다(중단이 끝난 뒤에도 들어가지 않는다 — 관리 › 유저 조회 지급 탭에 사유가 보인다).
 //    운영진 지급(manual · 서포터즈 등) · 회수(음수)는 그대로 들어간다
-const STOP_BLOCKED = new Set(["quest", "pass", "coupon", "code", "event-pass"]); // event-pass — 이벤트 패스 보상(2026-10-17, 자동 출처)
+const STOP_BLOCKED = new Set(["quest", "pass", "coupon", "code", "event-pass", "goedam"]); // event-pass — 이벤트 패스 보상(2026-10-17, 자동 출처) · goedam — 괴담회 추첨 XP 상품(2026-10-23, 자동 출처)
 async function processPayouts(guild) {
   // 빙옥(currency "point") 건은 사이트가 즉시 반영한 것 — 어떤 경우에도 XP 로 지급하지 않는다
   const rows = await Payout.find({ status: "pending", currency: { $ne: "point" } }).limit(50);

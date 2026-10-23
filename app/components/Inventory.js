@@ -50,6 +50,7 @@ export const invSubLabel = (it) => {
   if (it.source === "level") return it.rewardLevel != null ? `${base} · Lv.${it.rewardLevel} 도달` : base;
   if (it.source === "pass") return `${base} · 시즌 패스`;
   if (it.source === "event") return `${base} · 이벤트 패스`;
+  if (it.source === "goedam") return `${base} · 괴담회`;
   if (it.source === "grant") return `${base} · 운영진 지급`;
   if (it.source === "season") return `${base} · 시즌 ${it.seasonNo} 보상`;
   if (it.days > 0) return `${base} · ${it.days}일 이용권`;

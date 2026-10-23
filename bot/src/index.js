@@ -31,6 +31,7 @@ import { startPassReminder } from "./features/passReminder.js";
 import { startScheduledChanges } from "./features/scheduledChanges.js";
 import { startSeasonSettle } from "./features/seasonSettle.js";
 import { startNoticeAnnounce } from "./features/noticeAnnounce.js";
+import { startGoedamWatch } from "./features/goedamWatch.js";
 import { refreshBotMessages, startBotMessageLoop } from "./botMessages.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
@@ -94,6 +95,7 @@ client.once(Events.ClientReady, async (c) => {
   startScheduledChanges(); // 예약 변경 — 정한 시각에 설정 · 아이템 값 바꾸기 (1분 주기)
   startSeasonSettle(c); // 끝난 시즌 결산 · RANKER (5분 주기)
   startNoticeAnnounce(c); // 사이트 공지 → 공지 채널 (20초 주기, 대기열 NoticeAnnounce)
+  startGoedamWatch(c); // 📌 방구석 심야 괴담회 — 스테이지 채널 회차별 머문 시간(20초마다 기록) · 회차 끝 + 60초 완청이면 할로윈 추첨권 자동 지급 (설정 1분 주기)
   startScrimNudge(c);
 });
 

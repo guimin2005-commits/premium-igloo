@@ -35,6 +35,7 @@ import { CURRENCY_PIXEL } from "@/lib/currencyIcons";
 import PromoOverlay from "./PromoOverlay";
 import AchievementsModal, { useAchievements, AchievementNotice } from "./AchievementsModal";
 import EventPassModal from "./EventPassModal";
+import GoedamModal from "./GoedamModal";
 import { ACHIEVEMENTS_ON } from "@/lib/achievements";
 import { openLogin } from "../components/LoginPrompt";
 
@@ -2494,6 +2495,40 @@ export default function LevelPage() {
     if (eventPassOn && Date.now() - evCountAt.current > 60_000) loadEventPassCount();
   }, [eventPassOn, loadEventPassCount, me?.xp]);
 
+  // 📌 2026-10-23 「방구석 심야 괴담회」 — 이벤트 패스 띠 바로 아래 추첨 띠 → 그 자리 창(GoedamModal). 약속 .claude/mockups/goedam/SPEC.md
+  //    띠 노출 · 배지는 GET /api/goedam?meta=1 하나(visible = 켜짐 또는 운영진 && 추첨 닫힘 전 — 서버가 센다 · tickets = 내 추첨권 수).
+  //    읽는 때: 처음 한 번 · XP 가 바뀌면(30초 폴링) 1분에 한 번까지 · 창이 상태를 받을 때마다(뽑기 · 다시 읽기 — onCount)
+  const [goedamMeta, setGoedamMeta] = useState(null); // { visible, end } — 읽기 전 · 실패는 null(띠 없음)
+  const [goedamCount, setGoedamCount] = useState(0); // 띠 오른쪽 위 빨간 숫자 — 내 추첨권 수
+  const goedamAt = useRef(0);
+  const loadGoedamMeta = useCallback(() => {
+    goedamAt.current = Date.now();
+    fetch("/api/goedam?meta=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const d = j?.success ? j.data : null;
+        if (!d) return;
+        setGoedamMeta({ visible: !!d.visible, end: Number(d.end) || 0 });
+        setGoedamCount(Math.max(0, Math.floor(Number(d.tickets) || 0)));
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (Date.now() - goedamAt.current > 60_000) loadGoedamMeta();
+  }, [loadGoedamMeta, me?.xp]);
+  const goedamOn = !!goedamMeta?.visible;
+  const [goedamOpen, setGoedamOpen] = useState(false);
+  const openGoedam = useCallback(() => {
+    playTone(660, 0.06, "sine", 0.03);
+    setGoedamOpen(true);
+  }, []);
+  // 닫는 소리 — 이벤트 패스 창과 같다
+  const closeGoedam = useCallback(() => {
+    setGoedamOpen(false);
+    playTone(659.25, 0.06, "sine", 0.025);
+    setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
+  }, []);
+
   // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
@@ -3665,6 +3700,9 @@ export default function LevelPage() {
       {/* 이벤트 패스 창 — 받으면 잔액 · XP 를 다시 읽는다 */}
       <EventPassModal open={eventPassOpen} onClose={closeEventPass} pushToast={pushToast} onClaimed={loadMe} onCount={setEventPassCount} />
 
+      {/* 괴담회 추첨 창 — 뽑으면 잔액 · XP 를 다시 읽고, 남은 추첨권 수를 띠 배지에 */}
+      <GoedamModal open={goedamOpen} onClose={closeGoedam} pushToast={pushToast} onDrawn={loadMe} onCount={setGoedamCount} />
+
       {promo && <PromoOverlay from={promo.from} to={promo.to} onClose={closePromo} />}
 
       {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
@@ -3992,6 +4030,27 @@ export default function LevelPage() {
                         {eventPassCount > 0 && (
                           <span aria-hidden className="pointer-events-none absolute -top-2 -right-2 z-10 min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums ring-2 ring-white">
                             {eventPassCount}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* 📌 2026-10-23 「방구석 심야 괴담회」 추첨 띠 — 이벤트 패스 띠 바로 아래, 같은 모양 · 같은 둥근 모서리 · 그림자 · 위 간격(mt-3 · lg:mt-3.5 — 둘 다 있으면 띠 사이도 이 간격).
+                           그림: public/banners/goedam-strip.png(992 × 240, .claude/mockups/goedam/out/goedam-strip-final.png). 추첨이 닫히면(drawClosesAt) 서버 visible 이 꺼져 빠진다 */}
+                    {goedamOn && (
+                      <div className="relative mt-3 lg:mt-3.5">
+                        <button
+                          type="button"
+                          onClick={openGoedam}
+                          aria-label={goedamCount > 0 ? `방구석 심야 괴담회 · 추첨 · 추첨권 ${goedamCount}` : "방구석 심야 괴담회 · 추첨"}
+                          className="block w-full rounded-[18px] overflow-hidden shadow-[0_18px_40px_-22px_rgba(30,10,80,0.7)] transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#9ff8ff]/70"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/banners/goedam-strip.png" alt="" width={992} height={240} draggable={false} className="block w-full h-auto select-none" />
+                        </button>
+                        {/* 내 추첨권 수 — 이벤트 패스 띠 배지와 같은 빨간 둥근 숫자 */}
+                        {goedamCount > 0 && (
+                          <span aria-hidden className="pointer-events-none absolute -top-2 -right-2 z-10 min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums ring-2 ring-white">
+                            {goedamCount}
                           </span>
                         )}
                       </div>

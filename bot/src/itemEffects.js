@@ -394,6 +394,9 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
     const consumable = (Array.isArray(i.effects) ? i.effects : []).some((e) => EFFECT_TRIGGERS[e?.on]?.kind === "consumable");
     if (consumable && UNIT_TYPES.includes(i.type) && !i.roleId) stackIds.add(id);
   }
+  // 📌 2026-10-23 괴담회 추첨권(Purchase.itemId "goedam-ticket" — features/goedamWatch.js · 사이트 lib/goedam.js)도 1장 = 1건이라 ×N 으로 묶는다.
+  //    사이트 lib/inventory.js 는 설정의 ticketItemId 로, 봇은 지급 표식(itemId)으로 같은 아이템(itemRef)을 고른다
+  for (const p of Array.isArray(purchases) ? purchases : []) if (p?.itemId === "goedam-ticket" && p.itemRef) stackIds.add(String(p.itemRef));
 
   const owned = new Map(); // 아이템 id → { exp(ms, 0 = 영구), pending, units: 묶음 건 수, perm: 무기한 묶음 건 있음, first: 가장 빠른 만료 }
   const seenRoles = new Set();

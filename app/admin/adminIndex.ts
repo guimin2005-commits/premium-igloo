@@ -59,6 +59,8 @@ const PAGE_DEFS: PageDef[] = [
   { key: "bot", group: "SYSTEM : LEVEL", label: "레벨 설정", href: "/admin/bot", icon: "chart", keywords: "봇 설정 XP 설정 레벨 정책 역할 퀘스트 지급 내역 bot" },
   { key: "pass", group: "SYSTEM : LEVEL", label: "시즌 패스", href: "/admin/pass", icon: "star", keywords: "시즌 패스 티어 보상 무료 트랙 프리미엄 트랙 season pass" },
   { key: "eventPass", group: "SYSTEM : LEVEL", label: "이벤트 패스", href: "/admin/event-pass", icon: "ticket", keywords: "이벤트 패스 유령 펭귄의 초대 단계 미션 기간 한정 event pass" },
+  // 📌 2026-10-23 방구석 심야 괴담회 — 스테이지 채널 상영 · 완청 추첨권 · 즉석 추첨(app/admin/goedam/page.tsx)
+  { key: "goedam", group: "SYSTEM : LEVEL", label: "괴담회", href: "/admin/goedam", icon: "ticket", keywords: "괴담회 방구석 심야 괴담회 추첨 추첨권 할로윈 추첨권 영화 상영 회차 스테이지 완청 상품 goedam" },
   { key: "season", group: "SYSTEM : LEVEL", label: "시즌 전환", href: "/admin/role-migration", icon: "arrowRight", keywords: "역할 이전 지난 시즌 역할 역할 떼기 RANKER 랭커 시즌 결산 시즌 역할" },
   { key: "messages", group: "SYSTEM : LEVEL", label: "봇 메시지", href: "/admin/messages", icon: "sparkles", keywords: "봇 메시지 임베드 문구 디자인 테스트 발송 기본값 변수 카드 이미지 알림 채널 보내는 곳" },
   // ARCTIC
@@ -150,6 +152,11 @@ const SUBS: SubDef[] = [
   // 시즌 패스
   ["pass", "section", "기본 설정", "/admin/pass?sec=basic", "시즌 패스 사용 운영 중 멈춤 프리미엄 트랙 해금가 빙옥"],
   ["pass", "section", "티어 구성", "/admin/pass?sec=tiers", "티어 추가 필요 XP 필요 XP 일괄 무료 보상 프리미엄 보상 티어 편집 티어 삭제 정렬"],
+
+  // 괴담회 — 탭 셋(구성 · 명단 · 추첨 기록)
+  ["goedam", "tab", "구성", "/admin/goedam", "괴담회 사용 스테이지 채널 ID 추첨권 아이템 추첨 기간 회차 상영 일정 장 수 완청 비율 상품 수량 비중 확률 희귀도 코드"],
+  ["goedam", "tab", "명단", "/admin/goedam?tab=watch", "회차 명단 머문 시간 완청 지급 여부 수동 지급 추첨권 지급"],
+  ["goedam", "tab", "추첨 기록", "/admin/goedam?tab=draws", "추첨 기록 당첨 코드 미지급 다시 지급"],
 
   // 시즌 전환
   ["season", "tab", "역할 이전", "/admin/role-migration", "역할 이전 지난 시즌 역할 인벤토리 아이템으로 환불 미리보기 이전 실행 대상 제외"],

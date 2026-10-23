@@ -41,6 +41,7 @@ const PAYOUT_SOURCE = {
   quest: "퀘스트 보상",
   pass: "시즌 패스 보상",
   "event-pass": "이벤트 패스 보상",
+  goedam: "괴담회 추첨", // 📌 2026-10-23 괴담회 추첨 XP 상품(lib/goedamRules.js GOEDAM_SOURCE)
   code: "쿠폰 보상",
   supporter: "서포터즈 보상",
   referral: "초대 보상",

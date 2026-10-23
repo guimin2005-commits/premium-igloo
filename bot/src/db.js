@@ -587,6 +587,66 @@ const AfkLogSchema = new mongoose.Schema({
 });
 export const AfkLog = mongoose.models.AfkLog || mongoose.model("AfkLog", AfkLogSchema);
 
+// 📌 방구석 심야 괴담회(2026-10-23) — 스테이지 채널 상영 회차마다 머문 시간을 재고, 완청(회차 시간의 ratio 이상)이면 「할로윈 추첨권」을 준다(features/goedamWatch.js).
+//    약속 문서 .claude/mockups/goedam/SPEC.md 의 칸 그대로 — 사이트 models/Goedam.js · models/GoedamWatch.js 와 이름 · 칸 · 기본값이 같아야 한다(같은 모델 이름 · 기본 컬렉션)
+//    ⚠️ 두 모델 다 autoCreate · autoIndex 를 끈다 — 설정은 사이트가 처음 저장할 때 만들고, GoedamWatch 는 첫 쓰기 직전에 createIndexes() 를 한 번(features/goedamWatch.js ensureWatchIndexes)
+//    설정 문서 하나(key "goedam-2026") — 봇은 읽기만 한다(늘 .lean() + features/goedamWatch.js normalizeGoedam). 절대 저장하지 말 것
+const GoedamScreeningSchema = new mongoose.Schema({
+  sid: { type: String, default: "" },        // 회차의 안정 식별자("s1" …) — GoedamWatch.sid · 추첨권 orderId 가 담는다(지우고 다시 쓰지 않는다)
+  title: { type: String, default: "" },
+  startsAt: { type: Date, default: null },
+  endsAt: { type: Date, default: null },
+  tickets: { type: Number, default: 1 },     // 완청 1회에 주는 추첨권 장 수(1~10)
+  ratio: { type: Number, default: 0.8 },     // 완청 기준 — 회차 시간 중 머문 시간 비율(0.1~1)
+}, { _id: false });
+const GoedamPrizeSchema = new mongoose.Schema({
+  pid: { type: String, default: "" },
+  name: { type: String, default: "" },
+  kind: { type: String, default: "none", enum: ["xp", "point", "item", "role", "code", "none"] },
+  amount: { type: Number, default: 0 },      // xp · point
+  itemId: { type: String, default: "" },
+  itemName: { type: String, default: "" },
+  days: { type: Number, default: 0 },        // item 기간(일) — 0 = 무기한
+  roleId: { type: String, default: "" },
+  roleName: { type: String, default: "" },
+  qty: { type: Number, default: null },      // null = 무제한(code 는 코드 수가 곧 수량)
+  weight: { type: Number, default: 1 },      // 비중(1~1000000)
+  rarity: { type: String, default: "" },     // rarity.js 키(표시용)
+}, { _id: false });
+const GoedamSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  enabled: { type: Boolean, default: false },          // 켜기 전엔 운영진 미리보기만 — 봇은 켜져 있을 때만 기록 · 지급
+  title: { type: String, default: "방구석 심야 괴담회" },
+  channelId: { type: String, default: "" },            // 스테이지 채널 ID — "" 이면 기록하지 않는다
+  ticketItemId: { type: String, default: "" },         // 「할로윈 추첨권」 아이템(Item) id — "" 이면 지급을 미룬다
+  ticketItemName: { type: String, default: "" },       // 표시 스냅샷 — 추첨권 Purchase.itemName
+  drawOpensAt: { type: Date, default: () => new Date("2026-10-30T20:00:00+09:00") },
+  drawClosesAt: { type: Date, default: () => new Date("2026-11-09T00:00:00+09:00") }, // 끝은 들어가지 않는다
+  screenings: { type: [GoedamScreeningSchema], default: [] },
+  prizes: { type: [GoedamPrizeSchema], default: [] },
+  nextSid: { type: Number, default: 1 },
+  nextPid: { type: Number, default: 1 },
+  updatedAt: { type: Date, default: Date.now },
+}, { autoCreate: false, autoIndex: false });
+export const Goedam = mongoose.models.Goedam || mongoose.model("Goedam", GoedamSchema);
+
+// 📌 괴담회 회차별 머문 시간 — 한 줄 = (이벤트 키 · 회차 sid · 유저). 봇이 20초마다 seconds 를 $inc(upsert)하고,
+//    회차가 끝나면 완청인 줄의 grantedAt 을 { grantedAt: null } 조건부로 세운 뒤 추첨권을 넣는다(features/goedamWatch.js).
+//    사이트 관리 화면은 명단을 읽고, 손 지급(POST /api/admin/goedam/grant)은 manual 을 세운다. unique(eventKey, sid, userId)
+const GoedamWatchSchema = new mongoose.Schema({
+  eventKey: { type: String, required: true },
+  sid: { type: String, required: true },
+  userId: { type: String, required: true },
+  userName: { type: String, default: "" },   // 디스코드 username(Purchase.userName 과 같은 값)
+  seconds: { type: Number, default: 0 },     // 회차 창 [startsAt, endsAt] 안에서 머문 초 합
+  grantedAt: { type: Date, default: null },  // 추첨권을 준 시각 — null 이면 아직
+  granted: { type: Number, default: 0 },     // 준 장 수
+  manual: { type: Boolean, default: false }, // 관리자 손 지급
+  updatedAt: { type: Date, default: Date.now },
+}, { versionKey: false, autoCreate: false, autoIndex: false });
+GoedamWatchSchema.index({ eventKey: 1, sid: 1, userId: 1 }, { unique: true });
+export const GoedamWatch = mongoose.models.GoedamWatch || mongoose.model("GoedamWatch", GoedamWatchSchema);
+
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();
 
