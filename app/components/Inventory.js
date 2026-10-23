@@ -81,7 +81,7 @@ export const buildInvGroups = (invAll) => {
   return [{ id: "all", label: "전체", items: invAll }, ...groups, ...(timed.length ? [{ id: "timed", label: "기간제", items: timed }] : [])];
 };
 
-// 📌 정렬 — 기본(상점 관리에서 정한 순서, 서버가 준 순서) · 최신순(받은 날) · 만료 임박(기간제 먼저).
+// 📌 정렬 — 기본(상점 관리에서 정한 순서, 서버가 준 순서 — 꾸미기 탭은 종류별로 묶음: sortCosmeticByKind) · 최신순(받은 날) · 만료 임박(기간제 먼저).
 //    등급 · 레벨 보상은 어느 정렬에서든 맨 앞(받은 날이 없는 항목이라 뒤로 밀리지 않게). 날짜가 없는 것은 기본 순서로 뒤에.
 //    📌 2026-10-17 「희귀도순」 — 높은 등급(lib/rarity — 유물 … 일반) 먼저, 같은 등급은 기본 순서. 안 고른 것("")은 일반
 export const INV_SORTS = [
@@ -178,6 +178,20 @@ export const cosmeticKindsOf = (it) => {
   return out.length ? out : ["etc"];
 };
 export const cosmeticKindOf = (it) => cosmeticKindsOf(it)[0];
+// 📌 2026-10-23 꾸미기 「기본」은 종류별로 묶는다(운영자 "너무 뒤죽박죽") — 칩 순서(카드 배경 → 카드 테두리 → 프로필 테두리 → 배지 → 기타),
+//    같은 종류 안은 기본 순서(상점 관리 순서 — 같은 시즌 · 이벤트끼리 붙음). 두 종류를 가진 아이템은 앞 종류로. 등급 · 레벨 보상은 그대로 맨 앞
+const COSMETIC_POS = Object.fromEntries(COSMETIC_KINDS.map((k, i) => [k.id, i]));
+export const sortCosmeticByKind = (rows) =>
+  rows
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => {
+      const la = a.it.source === "level" ? 0 : 1;
+      const lb = b.it.source === "level" ? 0 : 1;
+      if (la !== lb) return la - lb;
+      if (la === 0) return a.i - b.i;
+      return COSMETIC_POS[cosmeticKindOf(a.it)] - COSMETIC_POS[cosmeticKindOf(b.it)] || a.i - b.i;
+    })
+    .map((x) => x.it);
 // 📌 2026-10-18 꾸미기는 「효과」 대신 「적용 범위」(운영자 "효과라는 건 약간 이상하잖아") — 서버(lib/inventory)가 칸마다 isCosmetic · scopeLabel
 //    (관리자가 고른 범위 > 종류마다 자동 — lib/itemEffects AUTO_SCOPE)을 싣는다. 그 칸이 없는 칸(옛 응답)만 꾸미기 키로 자동 값. 꾸미기가 아니면 ""
 const SCOPE_KIND = { scene: "cardScene", skin: "cardSkin", frame: "avatarFrame", badge: "profileBadge" };
@@ -1502,7 +1516,8 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     let list = active?.items || [];
     if (subOn !== "all") list = list.filter((it) => cosmeticKindsOf(it).includes(subOn));
     if (favOnlyOn) list = list.filter((it) => favs.has(favKeyOf(it)) || favKeep.has(favKeyOf(it)));
-    return sortInvRows(list, sort);
+    const sorted = sortInvRows(list, sort);
+    return sort === "default" && (active?.id === "cosmetic" || active?.id === "trial") ? sortCosmeticByKind(sorted) : sorted;
   }, [active, sort, subOn, favOnlyOn, favs, favKeep]);
   // 📌 고른 칸이 목록에서 빠지면(꾸미기 칩으로 거름 · 폴링으로 사라짐) 그리는 자리에서 바로 첫 칸으로 — 상세 · 번짐이 빈 채로 남지 않게.
   //    첫 칸이 그대로면 아래 효과가 다시 돌지 않아 빈 상세가 남았다. 일부러 비운 것(고른 칸을 다시 누름 · null)은 그대로
