@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 //    초대한 사람의 누적 수 = 이 줄을 inviterId 로 센 수(누적 보상 단계 — lib/invite.js). 지우지 않는다(퇴장해도 그대로)
 //    추첨권 보너스 — ticketsGrantedAt 을 { ticketsGrantedAt: null } 조건부로 세운 요청 하나만 추첨권 Purchase 를 넣는다(괴담회 GoedamWatch.grantedAt 과 같은 자물쇠).
 //      넣기에 실패하면 표시를 되돌린다(관리 › 친구 초대 › 초대 기록의 「다시 지급」). 보너스 기간 밖에 들어온 줄은 ticketsGrantedAt null 그대로 +
-//      ticketsSkipped 에 까닭(대상 아님) — 못 준 줄(미지급)과 갈라 미지급 수 · 「다시 지급」에서 뺀다(lib/invite.js redeemInvite · getInviteAdmin · regrantInviteTickets)
+//      ticketsSkipped 에 까닭(대상 아님) — 못 준 줄(미지급)과 갈라 미지급 수 · 「다시 지급」에서 뺀다(lib/invite.js redeemInvite · getInviteAdmin · regrantInvite)
 //    ⚠️ 테스트 사이트(localhost)도 같은 DB 를 읽는다 — autoCreate · autoIndex 를 끄고, 처음 쓰기 직전에 createIndexes() 를 한 번 부른다(lib/invite.js ensureInviteIndexes)
 const InviteUseSchema = new mongoose.Schema(
   {
@@ -20,6 +20,9 @@ const InviteUseSchema = new mongoose.Schema(
     ticketsSkipped: { type: String, default: null },  // 추첨권 대상 아님 까닭 — "off"(넣은 순간 보너스가 안 돎) · "zero"(줄 장 수 0) · null(대상 — 줬거나 못 줌)
     inviterTickets: { type: Number, default: 0 },    // 초대한 사람에게 준 장 수
     inviteeTickets: { type: Number, default: 0 },    // 들어온 친구에게 준 장 수
+    // 📌 들어온 친구 보상(2026-10-26) — 받았는지는 InviteClaim(ref "welcome") 줄이 말한다. 이 칸은 대상 아님 까닭만 —
+    //    "none"(넣은 순간 보상 묶음이 비어 있음) · null(대상 — 줬거나 못 줌). 대상 아님 줄은 「다시 지급」에서 빠진다(lib/invite.js regrantInvite)
+    welcomeSkipped: { type: String, default: null },
   },
   { versionKey: false, autoCreate: false, autoIndex: false }
 );

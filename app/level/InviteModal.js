@@ -850,7 +850,9 @@ export default function InviteModal({ open, onClose, pushToast, onClaimed, onCou
       setInput("");
       sfxGet();
       const me = Math.max(0, Math.floor(Number(res.tickets?.me) || 0));
-      pushToast?.(`${res.inviterName ? `${res.inviterName} 님 ` : ""}초대 코드 등록${me > 0 ? ` · 추첨권 ${me}장` : ""}`, true);
+      // 📌 받은 것 — 들어온 친구 보상(서버가 준 것만 짧은 이름 「50,000 XP」) + 추첨권
+      const got = [...(Array.isArray(res.welcome) ? res.welcome.map(String).filter(Boolean) : []), ...(me > 0 ? [`추첨권 ${me}장`] : [])];
+      pushToast?.(`${res.inviterName ? `${res.inviterName} 님 ` : ""}초대 코드 등록${got.length ? ` · ${got.join(" · ")}` : ""}`, true);
       onTickets?.();
       onClaimed?.();
     } else {

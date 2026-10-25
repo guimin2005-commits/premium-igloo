@@ -12,6 +12,7 @@ import { isBoosterPerkItem, isBoosterMember, boosterRewardsOf, boostMonths, addM
 import { fetchGuildMember } from "@/lib/discordMember";
 import { normalizeEffects, describeEffect, perksOfItems, SKIN_OF, FRAME_OF } from "@/lib/itemEffects";
 import { CARD_SKIN_KEYS } from "@/lib/botCards";
+import { shortNameOf } from "@/lib/itemCategory";
 
 // 📌 서버 부스터 혜택(2026-10-24 운영자 「지정 아이템 보유」 · 화면 「비교형」) — 부스터 안내(/booster · /profile/booster)가 읽는다. 누구나 읽는다(혜택 목록은 공개 안내).
 //    GET → data: {
@@ -20,7 +21,7 @@ import { CARD_SKIN_KEYS } from "@/lib/botCards";
 //             기본 효과 칸(chatBuffXp · voiceBuffXp · attendBuffXp) + 조건 없는 추가 효과(채팅 · 음성 · 출석 1회당 +N), 캐시백은 상한을 건 합(perksOfItems)
 //      extras: 위 넷에 안 들어가는 효과 문장(요일 · 시간 · 채널 조건이 붙은 것 · 다른 종류) — 표에 한 줄씩
 //      badge: 부스터 혜택 아이템 중 프로필 배지 효과가 있는 첫 아이템 { id, name, icon, imageUrl, color } | null — 머리 · 「전용 배지」 줄
-//      skin · frame: 부스터 혜택 아이템의 첫 카드 테두리 · 프로필 테두리 효과 { key, label } | null(skin 은 botCard — 봇 /레벨 카드가 그릴 수 있나, 미리보기 디스코드 칸) — 「전용 카드 테두리」 · 「전용 프로필 테두리」 줄(2026-10-25 운영자 "혜택에도 추가해")
+//      skin · frame: 부스터 혜택 아이템의 첫 카드 테두리 · 프로필 테두리 효과 { key, label(그 아이템 이름) } | null(skin 은 botCard — 봇 /레벨 카드가 그릴 수 있나, 미리보기 디스코드 칸) — 「전용 카드 테두리」 · 「전용 프로필 테두리」 줄(2026-10-25 운영자 "혜택에도 추가해")
 //      bonus: 최초 부스팅 보상 { xp, point } — 봇이 처음 부스트한 사람에게 한 번(봇 features/boosterBonus.js)
 //      ladder: 연속 부스팅 단계 [{ months, xp, point }] — 부스트 시작일부터 이어진 개월, 단계마다 사람당 한 번. 둘 다 관리 › 레벨 설정 「서버 부스터 보상」(lib/booster.js boosterRewardsOf — 비면 기본값)
 //      me:    로그인했으면 { booster: true | false | null(디스코드 확인 실패), since: 부스트 시작일 ISO | "", months: 이어 온 개월, got: [받은 단계 개월], next: { months, at(ISO) } | null } — 비로그인은 null
@@ -56,8 +57,9 @@ export async function GET() {
       for (const e of normalizeEffects(it.effects)) {
         if (COSMETIC.has(e.on)) {
           if (e.on === "profileBadge" && !badge) badge = { id: String(it._id), name: it.name || "", icon: it.icon || "", imageUrl: it.imageUrl || "", color: it.color || "" };
-          else if (e.on === "cardSkin" && !skin && SKIN_OF[e.skin]) skin = { key: e.skin, label: SKIN_OF[e.skin].l, botCard: CARD_SKIN_KEYS.includes(e.skin) };
-          else if (e.on === "avatarFrame" && !frame && FRAME_OF[e.frame]) frame = { key: e.frame, label: FRAME_OF[e.frame].l };
+          // 📌 이름은 그 아이템 이름(관리 화면에서 바꾼 이름 — 인벤토리 · 상점과 같은 글자, 2026-10-26 「신비로운 깃털 궤도」가 여기선 옛 이름). 비면 키 이름
+          else if (e.on === "cardSkin" && !skin && SKIN_OF[e.skin]) skin = { key: e.skin, label: shortNameOf(it.name) || SKIN_OF[e.skin].l, botCard: CARD_SKIN_KEYS.includes(e.skin) };
+          else if (e.on === "avatarFrame" && !frame && FRAME_OF[e.frame]) frame = { key: e.frame, label: shortNameOf(it.name) || FRAME_OF[e.frame].l };
           continue;
         }
         if (e.on === "shopCashback") continue;

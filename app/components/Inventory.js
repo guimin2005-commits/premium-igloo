@@ -428,7 +428,7 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
   const scope = invScopeOf(it);
   const both = [it.sceneKey, it.skinKey || it.skinKeys?.length, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
   // 단추가 하나라도 있을 때만 단추 칸(빈 칸이 여백만 차지하지 않게) — 아래 단추들의 조건과 같다
-  const hasActions = !compact && !!((it.expiresAt && it.renewId) || it.sceneKey || it.skinKey || it.skinKeys?.length > 1 || it.badgeId || it.frameKey || it.frameKeys?.length > 1 || onLook);
+  const hasActions = !compact && !!((it.expiresAt && it.renewId) || it.eventLink === "goedam" || it.sceneKey || it.skinKey || it.skinKeys?.length > 1 || it.badgeId || it.frameKey || it.frameKeys?.length > 1 || onLook);
   const wearBtn = (on) =>
     `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
       on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
@@ -514,6 +514,12 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
           <Link href={`/arctic/item/${it.renewId}`} onClick={onGo}
             className="mt-1 w-full h-9 rounded-full border border-white/20 hover:border-white/45 text-[11px] font-black text-white/80 hover:text-white flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             기간 연장
+          </Link>
+        )}
+        {/* 📌 괴담회 추첨권 — 「사용」은 괴담회 이벤트 창으로(/level?event=goedam — 뽑기 · 추첨은 그 창에서). 가방은 닫는다(onGo) */}
+        {it.eventLink === "goedam" && !compact && (
+          <Link href="/level?event=goedam" onClick={onGo} className={wearBtn(false)}>
+            사용
           </Link>
         )}
         {/* 📌 카드 배경 — 카드 바탕 그림 전체(레벨 막대 모양도 배경 몫). 카드 테두리와 따로 끼고 함께 입는다(배경 위에 테두리) */}
@@ -1398,6 +1404,11 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     playTone(220, 0.09, "square", 0.02);
     say(error || "저장하지 못했습니다");
   };
+  // 📌 착용 알림 이름 — 그 키 하나만 가진 가방 아이템이면 그 이름(관리 화면에서 바꾼 이름 — 장착 칸 keySlot 과 같은 규칙), 없으면 키 이름
+  const lookName = (field, key, fallback) => {
+    const it = (allItems || []).find((x) => x[field] === key);
+    return it ? invShortName(it) : fallback || "";
+  };
   const saveSkin = async (skin) => {
     if (skinBusy || clearBusy) return;
     setSkinBusy(true);
@@ -1405,7 +1416,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       const r = await postSkin(skin);
       if (!r.ok) return failSay(r.error);
       playTone(skin === SKIN_NONE ? 523 : 784, 0.07, "sine", 0.03);
-      say(skin === SKIN_NONE ? "카드 테두리를 해제했습니다" : `${SKIN_OF[skin]?.l || ""} 카드 테두리를 착용했습니다`);
+      say(skin === SKIN_NONE ? "카드 테두리를 해제했습니다" : `${lookName("skinKey", skin, SKIN_OF[skin]?.l)} 카드 테두리를 착용했습니다`);
     } finally {
       setSkinBusy(false);
     }
@@ -1417,7 +1428,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       const r = await postScene(scene);
       if (!r.ok) return failSay(r.error);
       playTone(scene === SKIN_NONE ? 523 : 784, 0.07, "sine", 0.03);
-      say(scene === SKIN_NONE ? "카드 배경을 해제했습니다" : `${SCENE_OF[scene]?.l || ""} 카드 배경을 착용했습니다`);
+      say(scene === SKIN_NONE ? "카드 배경을 해제했습니다" : `${lookName("sceneKey", scene, SCENE_OF[scene]?.l)} 카드 배경을 착용했습니다`);
     } finally {
       setSceneBusy(false);
     }
@@ -1429,7 +1440,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       const r = await postFrame(frame);
       if (!r.ok) return failSay(r.error);
       playTone(frame === SKIN_NONE ? 523 : 784, 0.07, "sine", 0.03);
-      say(frame === SKIN_NONE ? "프로필 테두리를 해제했습니다" : `${FRAME_OF[frame]?.l || ""} 프로필 테두리를 착용했습니다`);
+      say(frame === SKIN_NONE ? "프로필 테두리를 해제했습니다" : `${lookName("frameKey", frame, FRAME_OF[frame]?.l)} 프로필 테두리를 착용했습니다`);
     } finally {
       setFrameBusy(false);
     }
@@ -1603,8 +1614,11 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   const keySlot = (kind, key, item, label, artKey) => {
     if (!key) return { kind, empty: true, name: "", accent: "", glow: "", art: () => null };
     const accent = item ? invAccentOf(item) : "#d4d4d4";
+    // 📌 이름은 가방의 그 아이템 이름이 먼저(관리 화면에서 바꾼 이름 — 아래 목록 칸과 같은 글자, 2026-10-26 「신비로운 깃털 궤도」가 칸에선 옛 이름).
+    //    키 여럿을 가진 아이템(등급 전체 · 테두리 전체)에서 고른 키는 그 키 이름(더 좁은 말)
+    const single = !!item && (item.sceneKey === key || item.skinKey === key || item.frameKey === key);
     return {
-      kind, empty: false, name: label || (item ? invShortName(item) : key), accent, glow: invGlowOf(item || { color: accent }),
+      kind, empty: false, name: single ? invShortName(item) : label || (item ? invShortName(item) : key), accent, glow: invGlowOf(item || { color: accent }),
       art: (size) => {
         const look = kind === "카드 배경" ? { sceneKey: key } : kind === "카드 테두리" ? { skinKey: key } : kind === "프로필 테두리" ? { frameKey: key } : null;
         if (look) return <LookArt it={look} size={Math.round(size * 0.8)} image={trialSession?.user?.image || ""} name={trialSession?.user?.name || ""} />;

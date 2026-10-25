@@ -51,6 +51,9 @@ const InviteEventSchema = new mongoose.Schema(
     joinDays: { type: Number, default: 7 },    // 서버 가입 후 이 일수 안에만 넣는다(0 = 기한 없음)
     accountDays: { type: Number, default: 7 }, // 디스코드 계정이 이 일수 이상 된 사람만(0 = 조건 없음)
     bonus: { type: BonusSchema, default: () => ({}) },
+    // 📌 들어온 친구 보상(2026-10-26) — 코드를 넣자마자 넣은 사람이 받는 묶음(최대 4개). 기본값 없음(undefined) —
+    //    칸이 없는 문서는 lib/invite.js INVITE_DEFAULTS.welcome(5만 XP)으로 읽고, 빈 배열은 「보상 없음」 그대로 남는다(암묵 [] 로 덮이지 않게)
+    welcome: { type: [RewardSchema], default: undefined },
     // 단계는 need 오름차순으로만 저장된다(정렬 · 검증은 lib/invite.js · app/api/admin/invite)
     tiers: { type: [TierSchema], default: [] },
     // 다음에 발급할 번호 — 지운 단계의 id 를 다시 쓰지 않으려고 문서에 들고 다닌다(EventPass.nextTid 와 같은 이유)

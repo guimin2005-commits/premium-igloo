@@ -290,7 +290,8 @@ export default function VerifyPage() {
   const [inviteInput, setInviteInput] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState("");
-  const [invited, setInvited] = useState<{ name: string; code: string } | null>(null);
+  // gifts — 넣자마자 받은 들어온 친구 보상(서버가 준 것만 짧은 이름 「50,000 XP」)
+  const [invited, setInvited] = useState<{ name: string; code: string; gifts: string[] } | null>(null);
   // 📌 넣는 중인 요청 — 「다음」이 끝날 때까지 기다린다(결과를 잃지 않게). 값: 넣었으면 true · 거절 · 오류면 false
   const inviteJob = useRef<Promise<boolean> | null>(null);
   const inviteBoxRef = useRef<HTMLDivElement>(null);
@@ -336,7 +337,7 @@ export default function VerifyPage() {
       if (res.ok && d?.ok) {
         ok = true;
         sfxInviteOk();
-        setInvited({ name: String(d.inviterName || ""), code });
+        setInvited({ name: String(d.inviterName || ""), code, gifts: Array.isArray(d.welcome) ? d.welcome.map(String).filter(Boolean) : [] });
         setInviteInput("");
       } else {
         sfxInviteNo();
@@ -564,6 +565,7 @@ export default function VerifyPage() {
                   <div ref={inviteDoneRef} role="status" tabIndex={-1} className="h-12 px-4 rounded-xl bg-[#f2f2f2] flex items-center gap-2.5 outline-none">
                     <span className="shrink-0 grid place-items-center text-[#e91e3f]"><CheckIcon className="w-4 h-4" /></span>
                     <span className="flex-1 min-w-0 truncate text-sm font-bold text-[#131313]">{invited.name} 님 초대</span>
+                    {invited.gifts.length > 0 && <span className="min-w-0 max-w-[45%] truncate text-xs font-black text-[#e91e3f] tabular-nums">{invited.gifts.join(", ")}</span>}
                     <span className="shrink-0 text-xs font-bold text-[#5a5a5a] tabular-nums tracking-[0.08em]">{invited.code}</span>
                   </div>
                 ) : (

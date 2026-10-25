@@ -22,7 +22,7 @@ import { preloadSfx, playSfx } from "@/lib/sfxFiles";
 //        칸 폭 고정 — 탭을 바꿔도 줄이 밀리지 않는다. 창 크기는 고정이고 목록만 그 안에서 스크롤
 //    📌 2026-10-24 운영자 "디코 일정 시간한 것도 지급할 거고 상점에도 판매할 거라서 회차라는 개념이 좀 애매한데" → 탭 「회차」 를 「받는 법」 으로(약속 SPEC.md 추가 절 6).
 //      안은 덩어리 셋(작은 머리 글 「상영」 · 「음성」 · 「상점」, 서버가 준 것만) — 상영 = 회차 줄 그대로(날짜 · 시간 · 제목 · 완청 ✓ / 진행 중 / –)
-//      · 음성 = GET voice 한 줄(「하루 음성 N분」 · 기간 · ×장 · 오늘 진행 10칸 게이지 + 「분/N분」 · 오늘 받았으면 ✓ · 기간 밖 · 꺼짐이면 흐리게)
+//      · 음성 = GET voice 한 줄(「음성 채널 참여」 · 기간 · ×장 · 오늘 진행 10칸 게이지 + 「분/N분」 · 오늘 받았으면 ✓ · 기간 밖 · 꺼짐이면 흐리게)
 //      · 상점 = GET shop 한 줄(상품 이름 + 「바로가기」 — 창을 닫고 그 상품 상세로). 셋 다 없으면 「준비 중」
 //    📌 애니메이션(약 2.4초 · 스크린을 누르면 건너뜀 · 움직임 줄이기면 바로 결과) — 2026-10-24 운영자 "누르면 티켓 잘리고 양커튼 쳐지면서 뽑기":
 //      ⓪ 원래 표가 0.5초 보인다(결과 화면에서 다시 눌러도 표부터 — 운영자 "0.5초 정도 원본 티켓 나오고 찢어지는")
@@ -1314,7 +1314,8 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
     voiceRow = (
       <div className={`gd-row gd-vc${voice.on ? "" : " dim"}`}>
         <span className="gd-tx">
-          <span className="gd-nm">하루 음성 {fmt(vMin)}분</span>
+          {/* 📌 2026-10-26 운영자 「하루 음성 60분 > 음성 채널 참여」 — 분 조건은 아래 막대 「N/60분」이 말한다 */}
+          <span className="gd-nm">음성 채널 참여</span>
           <span className="gd-sm">
             {vFrom && vTo && <span>{vFrom}–{vTo}</span>}
             <span className="gd-mi"><ItemIcon icon="art:goedam-ticket" size={16} /></span>

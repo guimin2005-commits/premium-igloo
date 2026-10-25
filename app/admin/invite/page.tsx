@@ -38,8 +38,9 @@ import {
 
 // 📌 친구 초대 관리 화면 — 상시 이벤트(2026-10-25 · 승인 시안 .claude/mockups/invite). 저장은 app/api/admin/invite, 계산 · 지급은 lib/invite.js.
 //    틀은 이벤트 패스 · 괴담회 화면(app/admin/event-pass · app/admin/goedam)과 같다 — 탭 둘:
-//      · 구성     — 요약, 기본 설정 · 추첨권 보너스 두 열, 누적 보상 단계 표, 바뀐 것이 있을 때만 뜨는 저장 줄(SaveBar). 줄을 누르면 오른쪽 편집 칸(폰은 아래 판)
-//      · 초대 기록 — 50건씩 쪽 넘김 · 검색(이름 · ID · 코드). 줄을 누르면 상세 칸, 추첨권 미지급은 「다시 지급」(app/api/admin/invite/regrant — 보너스 기간이 지나도 운영자가 준다)
+//      · 구성     — 요약, 기본 설정 · 추첨권 보너스 두 열, 들어온 친구 보상 한 줄, 누적 보상 단계 표, 바뀐 것이 있을 때만 뜨는 저장 줄(SaveBar). 줄을 누르면 오른쪽 편집 칸(폰은 아래 판)
+//      · 초대 기록 — 50건씩 쪽 넘김 · 검색(이름 · ID · 코드). 줄을 누르면 상세 칸, 추첨권 · 친구 보상 미지급은 「다시 지급」(app/api/admin/invite/regrant — 못 준 것만 한 번에 · 보너스 기간이 지나도 운영자가 준다)
+//    · 📌 2026-10-26 들어온 친구 보상(운영자 "5만 XP로 해") — 코드를 넣자마자 넣은 사람이 받는 보상 묶음(단계 보상과 같은 편집 부품 · 같은 저장). 비우면 보상 없음
 //        넣을 때 보너스가 돌지 않아 건너뛴 줄(ticketsSkipped)은 「해당 없음」 — 미지급이 아니라 「다시 지급」을 띄우지 않는다(마감된 추첨에 추첨권이 새로 들어가지 않게)
 //    · 📌 2026-10-25 운영자 결정 — 끝이 없는 상시 이벤트라 기간 대신 「시작 시각」 하나. 누적 보상은 계속, 괴담회 추첨권 보너스만 기간 한정
 //      (보너스 종료 시각 · 괴담회 추첨 종료 중 이른 때까지 — 판정은 서버)
@@ -71,7 +72,8 @@ type TierDraft = { key: string; isNew: boolean; need: string; free: DraftReward[
 // 추첨권 보너스 — 장 수 칸은 비울 수 있게 글자로(시각은 KST 칸 글자)
 type BonusCfg = { enabled: boolean; endsAt: string; inviter: string; invitee: string };
 // 저장할 한 벌 — 시각은 datetime-local 칸 글자(KST), 일수 · 장 수는 칸 글자 그대로 들고 있다가 보낼 때 바꾼다
-type Cfg = { enabled: boolean; startsAt: string; joinDays: string; accountDays: string; bonus: BonusCfg; tiers: Tier[] };
+// welcome — 들어온 친구 보상 묶음(코드를 넣자마자 · 최대 4개)
+type Cfg = { enabled: boolean; startsAt: string; joinDays: string; accountDays: string; bonus: BonusCfg; welcome: Reward[]; tiers: Tier[] };
 type Stats = { uses: number; codes: number; ticketsPending: number };
 // 저장을 누른 자리 — pane: 편집 칸(성공하면 닫고, 실패는 칸 안에 띄운다) / list: 표 · 설정 칸 · 저장 줄(토스트)
 type SaveFrom = "pane" | "list";
@@ -97,7 +99,11 @@ type UseRow = {
   ticketsSkipped: string;
   inviterTickets: number;
   inviteeTickets: number;
+  // 📌 들어온 친구 보상 — paid(받음) · skip(넣을 때 보상이 비어 있었음 — 「다시 지급」 없음) · pending(못 줌 · 일부만 줌)
+  welcome: WelcomeState;
 };
+type WelcomeState = "paid" | "skip" | "pending";
+const WELCOME_STATES: WelcomeState[] = ["paid", "skip", "pending"];
 
 // 서버가 준 값(정리 전) — 칸 이름만 믿고 값은 정리 함수가 다시 맞춘다
 type Raw = Record<string, unknown>;
@@ -251,10 +257,13 @@ const usesFrom = (v: unknown): UseRow[] =>
     ticketsSkipped: r.ticketsSkipped ? String(r.ticketsSkipped) : "",
     inviterTickets: countOf(r.inviterTickets),
     inviteeTickets: countOf(r.inviteeTickets),
+    welcome: WELCOME_STATES.find((x) => x === r.welcome) || "pending",
   }));
 // 추첨권 칸 — 지급 · 해당 없음(건너뜀) · 미지급(지급 실패 — 「다시 지급」 대상은 이것만)
 const ticketStateOf = (r: UseRow) => (r.ticketsGrantedAt ? "paid" : r.ticketsSkipped ? "skip" : "pending");
 const skipLabel = (s: string) => (s === "zero" ? "장 수 0" : "보너스 기간 밖");
+// 「다시 지급」 대상 — 추첨권 · 친구 보상 중 하나라도 못 준 줄(서버가 못 준 것만 한 번에 준다)
+const owesOf = (r: UseRow) => ticketStateOf(r) === "pending" || r.welcome === "pending";
 
 // ── 보상 표시 ─────────────────────────────────
 // 한 줄 요약 — 서버 lib/seasonPass.js rewardLabel 과 같은 모양
@@ -279,8 +288,12 @@ const sig = (c: Cfg) =>
     joinDays: intText(c.joinDays),
     accountDays: intText(c.accountDays),
     bonus: [c.bonus.enabled, c.bonus.endsAt, intText(c.bonus.inviter), intText(c.bonus.invitee)],
+    welcome: c.welcome.map(rewardSig),
     tiers: c.tiers.map((t) => ({ tid: t.tid, need: t.need, free: t.free.map(rewardSig) })),
   });
+
+// 설정의 보상 전부 — 누적 보상 단계 + 들어온 친구 보상(검사 · 켜기 잠금이 함께 본다)
+const allRewards = (c: Cfg) => [...c.tiers.flatMap((t) => t.free), ...c.welcome];
 
 // 저장 전 검사 — 서버(app/api/admin/invite PUT)가 돌려보낼 값을 먼저 막는다. 괜찮으면 빈 문자열
 const checkCfg = (c: Cfg) => {
@@ -291,7 +304,7 @@ const checkCfg = (c: Cfg) => {
   if (!inRange(c.bonus.inviter, TICKETS)) return `초대한 사람 장 수는 ${TICKETS.min}~${TICKETS.max} 사이로 입력해 주십시오.`;
   if (!inRange(c.bonus.invitee, TICKETS)) return `들어온 친구 장 수는 ${TICKETS.min}~${TICKETS.max} 사이로 입력해 주십시오.`;
   if (c.tiers.length > MAX_TIERS) return `단계는 최대 ${MAX_TIERS}개까지 만들 수 있습니다.`;
-  const all = c.tiers.flatMap((t) => t.free);
+  const all = allRewards(c);
   if (all.some((r) => r.kind === "role" && !r.roleId)) return "역할이 지정되지 않은 보상이 있습니다.";
   if (all.some((r) => r.kind === "item" && !r.itemId)) return "아이템이 지정되지 않은 보상이 있습니다.";
   const seen = new Set<number>();
@@ -481,6 +494,7 @@ function RewardEditor({
   nextKey,
   onChange,
   onEnter,
+  top = false,
 }: {
   rows: DraftReward[];
   roles: GuildRole[];
@@ -489,6 +503,8 @@ function RewardEditor({
   nextKey: () => string;
   onChange: (next: DraftReward[]) => void;
   onEnter: () => void;
+  // 칸의 맨 위(위에 다른 입력이 없음) — 위 구분선 · 여백을 뺀다
+  top?: boolean;
 }) {
   const set = (j: number, v: DraftReward) => onChange(rows.map((r, i) => (i === j ? v : r)));
   const move = (j: number, d: -1 | 1) => {
@@ -501,7 +517,7 @@ function RewardEditor({
     onChange([...rows, { key: nextKey(), kind: "xp", amount: "", roleId: "", roleName: "", itemId: "", itemName: "", days: "" }]);
   };
   return (
-    <div className="mt-5 pt-5 border-t border-[#ededed]">
+    <div className={top ? "" : "mt-5 pt-5 border-t border-[#ededed]"}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[14px] font-black">보상</span>
         <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">
@@ -540,7 +556,7 @@ function RewardEditor({
 }
 
 const EMPTY_BONUS: BonusCfg = { enabled: false, endsAt: "", inviter: "", invitee: "" };
-const EMPTY_CFG: Cfg = { enabled: false, startsAt: "", joinDays: "", accountDays: "", bonus: EMPTY_BONUS, tiers: [] };
+const EMPTY_CFG: Cfg = { enabled: false, startsAt: "", joinDays: "", accountDays: "", bonus: EMPTY_BONUS, welcome: [], tiers: [] };
 const EMPTY_STATS: Stats = { uses: 0, codes: 0, ticketsPending: 0 };
 
 export default function AdminInvitePage() {
@@ -575,6 +591,9 @@ export default function AdminInvitePage() {
   const nextRowKey = useCallback(() => `r:${++newKeyRef.current}`, []);
 
   const [tierDraft, setTierDraft] = useState<TierDraft | null>(null);
+  // 들어온 친구 보상 편집 칸 — 열려 있으면 보상 줄(단계 편집 칸과 한 번에 하나만 연다)
+  const [welcomeDraft, setWelcomeDraft] = useState<DraftReward[] | null>(null);
+  const paneOpen = !!tierDraft || !!welcomeDraft;
   const [paneErr, setPaneErr] = useState("");
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
 
@@ -611,6 +630,7 @@ export default function AdminInvitePage() {
         inviter: intField(b.inviter, TICKETS, BONUS_DEF.inviter),
         invitee: intField(b.invitee, TICKETS, BONUS_DEF.invitee),
       },
+      welcome: normRewards(p.welcome),
       tiers: sortTiers(
         rawList(p.tiers).map((t) => {
           const tid = String(t.tid || "");
@@ -680,6 +700,7 @@ export default function AdminInvitePage() {
 
   const closePane = useCallback(() => {
     setTierDraft(null);
+    setWelcomeDraft(null);
     setPaneErr("");
   }, []);
   // [다시 불러오기] — 목록이 서버 값으로 바뀌면 열린 편집 칸이 엉뚱한 값을 들고 있게 되므로 먼저 닫는다
@@ -706,8 +727,8 @@ export default function AdminInvitePage() {
   // ── 켜기 잠금 · 경고 ─────────────────────────
   // 📌 보상 아이템이 하나라도 실사이트에 없으면(반영 전 · 찾을 수 없음) 「사용」을 켤 수 없다 — 지급은 실사이트 Item 만 한다.
   //    서버 PUT 도 같은 검사 · 같은 문구로 돌려보낸다(app/api/admin/invite). 반영 전이 있으면 그 문구, 없고 찾을 수 없는 것만 있으면 그 문구
-  const enableLockOf = (list: Tier[]) => {
-    const rewards = list.flatMap((t) => t.free).filter((r) => r.kind === "item" && !!r.itemId);
+  const enableLockOf = (list: Reward[]) => {
+    const rewards = list.filter((r) => r.kind === "item" && !!r.itemId);
     const ids = [...new Set(rewards.map((r) => r.itemId))];
     const draftIds = ids.filter((id) => itemStateOf(id) === "draft");
     const missing = ids.filter((id) => itemStateOf(id) === "missing").length;
@@ -718,7 +739,7 @@ export default function AdminInvitePage() {
       msg: draftIds.length ? draftItemsMessage(draftIds.map(nameOf)) : missing ? missingItemsMessage(missing) : "",
     };
   };
-  const lock = enableLockOf(cfg.tiers);
+  const lock = enableLockOf(allRewards(cfg));
   // 잠금이 걸린 동안 창으로 돌아오면(상점 관리에서 반영하고 온 뒤) 아이템 목록 · 상태만 다시 받는다 —
   //    설정은 다시 받지 않는다(저장하지 않은 편집을 서버 값으로 덮지 않게)
   const lockOn = !!lock.msg;
@@ -743,7 +764,7 @@ export default function AdminInvitePage() {
   // ── 저장 ────────────────────────────────────
   // 실패 알림 — 편집 칸에서 누른 저장이면 칸 안(저장 단추 위)에, 그 밖은 토스트로
   const fail = (msg: string, from: SaveFrom) => {
-    if (from === "pane" && tierDraft) {
+    if (from === "pane" && paneOpen) {
       setPaneErr(msg);
       sfxErr();
     } else {
@@ -774,6 +795,7 @@ export default function AdminInvitePage() {
           inviter: intText(c.bonus.inviter),
           invitee: intText(c.bonus.invitee),
         },
+        welcome: c.welcome.map(named),
         // 📌 기존 단계의 tid 를 그대로 되돌려 보낸다 — 빠지면 서버가 새 번호를 발급해 이미 받은 단계가 미수령으로 되살아난다
         tiers: c.tiers.map((t, i) => ({ tid: t.tid || "", level: i + 1, need: t.need, free: t.free.map(named) })),
       }),
@@ -808,7 +830,7 @@ export default function AdminInvitePage() {
     const err = checkCfg(next);
     if (err) return fail(err, from);
     // 📌 켜진 채 저장(켜기 · 켜져 있는 동안의 저장) — 보상 아이템이 전부 실사이트에 있어야 한다(위 켜기 잠금 · 서버와 같은 검사). 끄는 저장은 늘 된다
-    const locked = next.enabled ? enableLockOf(next.tiers).msg : "";
+    const locked = next.enabled ? enableLockOf(allRewards(next)).msg : "";
     if (locked) return fail(locked, from);
     doSave(next, from, okMsg);
   };
@@ -825,10 +847,37 @@ export default function AdminInvitePage() {
     itemName: r.itemName,
     days: r.days > 0 ? String(r.days) : "",
   });
+  // 보상 줄 검사 · 변환 — 단계 편집 칸 · 친구 보상 편집 칸 공용. 괜찮으면 ""
+  const draftRewardsError = (rows: DraftReward[]) => {
+    for (const [j, d] of rows.entries()) {
+      const at = rows.length > 1 ? `보상 ${j + 1}` : "보상";
+      if (d.kind === "role" && !d.roleId) return `${at}의 역할을 선택해 주십시오.`;
+      if (d.kind === "item" && !d.itemId) return `${at}의 아이템을 선택해 주십시오.`;
+      if (d.kind === "item" && toInt(d.days) > MAX_DAYS) return `${at}의 기간은 ${MAX_DAYS.toLocaleString()}일 이하로 입력해 주십시오.`;
+      if (d.kind === "xp" || d.kind === "point") {
+        const a = parseAmount(d.amount);
+        if (!Number.isFinite(a) || a < 1) return `${at}의 수량을 1 이상으로 입력해 주십시오.`;
+        if (a > MAX_NUM) return `${at}의 수량은 10억 이하로 입력해 주십시오.`;
+      }
+    }
+    return "";
+  };
+  const fromDraft = (d: DraftReward): Reward => ({
+    kind: d.kind,
+    amount: d.kind === "xp" || d.kind === "point" ? parseAmount(d.amount) : 0,
+    roleId: d.kind === "role" ? d.roleId : "",
+    roleName: d.kind === "role" ? roleNameOf(d.roleId) || d.roleName : "",
+    itemId: d.kind === "item" ? d.itemId : "",
+    itemName: d.kind === "item" ? itemOf(d.itemId)?.name || d.itemName : "",
+    // 빈칸 = 무기한(0). 실물은 기간이 없다(칸도 잠겨 있다)
+    days: d.kind === "item" && itemOf(d.itemId)?.type !== "physical" ? toInt(d.days) : 0,
+  });
+
   // t 가 null 이면 새 단계 — 기본 인원은 nextNeed. 저장 전까지 목록에 넣지 않는다(취소하면 그대로 사라진다)
   const openTier = (t: Tier | null) => {
     if (savingRef.current) return;
     setPaneErr("");
+    setWelcomeDraft(null);
     if (t) {
       if (tierDraft?.key === t.key) return;
       setTierDraft({ key: t.key, isNew: false, need: String(t.need), free: t.free.map(toDraftReward) });
@@ -849,27 +898,8 @@ export default function AdminInvitePage() {
     const ne = needError(need);
     if (ne) return fail(ne, "pane");
     if (cfg.tiers.some((t) => t.key !== tierDraft.key && t.need === need)) return fail(`${fmt(need)}명 단계가 이미 있습니다.`, "pane");
-    for (const [j, d] of tierDraft.free.entries()) {
-      const at = tierDraft.free.length > 1 ? `보상 ${j + 1}` : "보상";
-      if (d.kind === "role" && !d.roleId) return fail(`${at}의 역할을 선택해 주십시오.`, "pane");
-      if (d.kind === "item" && !d.itemId) return fail(`${at}의 아이템을 선택해 주십시오.`, "pane");
-      if (d.kind === "item" && toInt(d.days) > MAX_DAYS) return fail(`${at}의 기간은 ${MAX_DAYS.toLocaleString()}일 이하로 입력해 주십시오.`, "pane");
-      if (d.kind === "xp" || d.kind === "point") {
-        const a = parseAmount(d.amount);
-        if (!Number.isFinite(a) || a < 1) return fail(`${at}의 수량을 1 이상으로 입력해 주십시오.`, "pane");
-        if (a > MAX_NUM) return fail(`${at}의 수량은 10억 이하로 입력해 주십시오.`, "pane");
-      }
-    }
-    const fromDraft = (d: DraftReward): Reward => ({
-      kind: d.kind,
-      amount: d.kind === "xp" || d.kind === "point" ? parseAmount(d.amount) : 0,
-      roleId: d.kind === "role" ? d.roleId : "",
-      roleName: d.kind === "role" ? roleNameOf(d.roleId) || d.roleName : "",
-      itemId: d.kind === "item" ? d.itemId : "",
-      itemName: d.kind === "item" ? itemOf(d.itemId)?.name || d.itemName : "",
-      // 빈칸 = 무기한(0). 실물은 기간이 없다(칸도 잠겨 있다)
-      days: d.kind === "item" && itemOf(d.itemId)?.type !== "physical" ? toInt(d.days) : 0,
-    });
+    const re = draftRewardsError(tierDraft.free);
+    if (re) return fail(re, "pane");
     const free = tierDraft.free.slice(0, MAX_REWARDS).map(fromDraft);
     const exists = cfg.tiers.some((t) => t.key === tierDraft.key);
     if (!exists && cfg.tiers.length >= MAX_TIERS) return fail(`단계는 최대 ${MAX_TIERS}개까지 만들 수 있습니다.`, "pane");
@@ -877,6 +907,25 @@ export default function AdminInvitePage() {
       ? cfg.tiers.map((t) => (t.key === tierDraft.key ? { ...t, need, free } : t))
       : [...cfg.tiers, { key: tierDraft.key, tid: "", need, free }];
     requestSave({ tiers: sortTiers(list) }, "pane", exists ? "저장되었습니다." : `${fmt(need)}명 단계를 추가했습니다.`);
+  };
+
+  // ── 들어온 친구 보상 편집 칸 ─────────────────────
+  const openWelcome = () => {
+    if (savingRef.current || welcomeDraft) return;
+    setPaneErr("");
+    setTierDraft(null);
+    setWelcomeDraft(cfg.welcome.map(toDraftReward));
+  };
+  const editWelcomeDraft = (rows: DraftReward[]) => {
+    setWelcomeDraft(rows);
+    setPaneErr("");
+  };
+  // [저장] · Enter — 칸의 보상을 검사해 그대로 저장한다(빈 묶음 = 보상 없음)
+  const saveWelcomeDraft = () => {
+    if (!welcomeDraft) return;
+    const re = draftRewardsError(welcomeDraft);
+    if (re) return fail(re, "pane");
+    requestSave({ welcome: welcomeDraft.slice(0, MAX_REWARDS).map(fromDraft) }, "pane");
   };
 
   // ── 단계 삭제 ────────────────────────────────
@@ -977,7 +1026,17 @@ export default function AdminInvitePage() {
       const g = rawOf(d.granted);
       const a = countOf(g.inviter);
       const b = countOf(g.invitee);
-      toast(a + b > 0 ? `추첨권을 지급했습니다 · 초대한 사람 ${fmt(a)}장 · 들어온 친구 ${fmt(b)}장` : "지급 처리했습니다.");
+      const w = Array.isArray(d.welcome) ? d.welcome.map(String).filter(Boolean) : [];
+      const msg =
+        a + b > 0 && w.length
+          ? "추첨권과 친구 보상을 지급했습니다."
+          : a + b > 0
+            ? `추첨권을 지급했습니다 · 초대한 사람 ${fmt(a)}장 · 들어온 친구 ${fmt(b)}장`
+            : w.length
+              ? `친구 보상을 지급했습니다. ${w.join(", ")}`
+              : "지급 처리했습니다.";
+      // 못 준 쪽이 있으면(하나라도 줬으면 성공으로 돌아온다) 그 까닭을 붙여 오류 알림 한 번으로 — 알림은 한 번에 하나만 뜬다
+      toast(d.warning ? `${msg} ${String(d.warning)}` : msg, !!d.warning);
     } else {
       toast(d?.error || "지급에 실패했습니다.", true);
     }
@@ -1020,7 +1079,7 @@ export default function AdminInvitePage() {
 
   // 📌 저장 줄 — 구성 탭에서만. 불러오기 실패면 바뀐 것과 상관없이 잠근 채 이유를 띄운다. 편집 칸이 열려 있는 동안은 숨긴다(칸의 [저장]이 나머지 변경까지 한 번에 저장한다)
   const onConfig = tab === "config";
-  const barNote = onConfig && !tierDraft && loadFailed ? <span className="font-bold text-[#d01634]">설정을 불러오지 못해 저장이 막혀 있습니다</span> : undefined;
+  const barNote = onConfig && !paneOpen && loadFailed ? <span className="font-bold text-[#d01634]">설정을 불러오지 못해 저장이 막혀 있습니다</span> : undefined;
 
   const emptyTierCount = cfg.tiers.filter((t) => !t.free.length).length;
   const tierIdx = tierDraft ? cfg.tiers.findIndex((t) => t.key === tierDraft.key) : -1;
@@ -1094,6 +1153,25 @@ export default function AdminInvitePage() {
     },
   ];
 
+  // 들어온 친구 보상 — 한 줄짜리 표(줄을 누르면 편집 칸)
+  const welcomeCols: Column<{ key: string }>[] = [
+    { key: "free", label: "보상", mobile: "title", render: () => rewardCell(cfg.welcome) },
+    {
+      key: "act",
+      label: "관리",
+      align: "right",
+      className: "w-32",
+      mobile: "hide",
+      render: () => (
+        <Btn variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openWelcome(); }}>
+          편집
+        </Btn>
+      ),
+    },
+  ];
+
+  const welcomeCell = (r: UseRow) =>
+    r.welcome === "paid" ? <StatusChip tone="ok">지급</StatusChip> : r.welcome === "skip" ? <StatusChip>해당 없음</StatusChip> : <StatusChip>미지급</StatusChip>;
   const ticketCell = (r: UseRow) => {
     const st = ticketStateOf(r);
     if (st === "skip") return <StatusChip>해당 없음</StatusChip>;
@@ -1114,6 +1192,7 @@ export default function AdminInvitePage() {
     { key: "invitee", label: "들어온 친구", mobile: "title", render: (r) => <UserCell name={r.inviteeName} id={r.inviteeId} /> },
     { key: "code", label: "코드", className: "w-28", render: (r) => (r.code ? <span className="font-mono text-[12px]">{r.code}</span> : <span className="text-[#a3a3a3]">-</span>) },
     { key: "tickets", label: "추첨권", className: "w-40", render: ticketCell },
+    { key: "welcome", label: "친구 보상", className: "w-28", render: welcomeCell },
     {
       key: "act",
       label: "관리",
@@ -1122,7 +1201,7 @@ export default function AdminInvitePage() {
       // 모바일 줄 카드는 통째로 단추라 안에 단추를 둘 수 없다 — 줄을 눌러 상세 칸에서 다시 지급한다
       mobile: "hide",
       render: (r) =>
-        ticketStateOf(r) !== "pending" ? (
+        !owesOf(r) ? (
           <span className="text-[#a3a3a3]">-</span>
         ) : (
           <Btn variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); setRegrantAsk(r); }}>
@@ -1141,7 +1220,7 @@ export default function AdminInvitePage() {
         tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={tabHref} />}
         footer={
           onConfig ? (
-            <SaveBar dirty={isDirty && !loadFailed && !tierDraft} changes={changes} onSave={saveList} onReset={resetToBase} saving={isSaving} note={barNote} />
+            <SaveBar dirty={isDirty && !loadFailed && !paneOpen} changes={changes} onSave={saveList} onReset={resetToBase} saving={isSaving} note={barNote} />
           ) : undefined
         }
       >
@@ -1277,6 +1356,22 @@ export default function AdminInvitePage() {
                 </FieldRow>
               </Panel>
             </PanelGrid>
+
+            {/* 들어온 친구 보상 — 코드를 넣자마자 넣은 사람이 받는 묶음. 한 줄 표, 줄을 누르면 편집 칸 */}
+            <Panel flush title="들어온 친구 보상" className="mb-5">
+              {isLoading ? (
+                <div className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>
+              ) : (
+                <DataTable
+                  className="!rounded-none !border-0"
+                  columns={welcomeCols}
+                  rows={[{ key: "welcome" }]}
+                  rowKey={(r) => r.key}
+                  onRowClick={() => openWelcome()}
+                  selectedKey={welcomeDraft ? "welcome" : null}
+                />
+              )}
+            </Panel>
 
             {/* 누적 보상 — 패널 머리에 추가, 본문은 전체 폭 표(필요 인원 오름차순) */}
             <Panel
@@ -1432,7 +1527,40 @@ export default function AdminInvitePage() {
         )}
       </DetailPane>
 
-      {/* ── 초대 기록 상세 — 줄을 누르면. 추첨권 미지급이면 아래 줄에 「다시 지급」 ── */}
+      {/* ── 들어온 친구 보상 편집 — [저장] · Enter 가 서버 저장까지 한 번에. 비우면 보상 없음 ── */}
+      <DetailPane
+        open={onConfig && !!welcomeDraft}
+        onClose={closePane}
+        title="들어온 친구 보상"
+        footer={
+          welcomeDraft && (
+            <>
+              <PaneError msg={paneErr} />
+              <Btn variant="ghost" className="ml-auto" onClick={closePane}>
+                취소
+              </Btn>
+              <Btn onClick={saveWelcomeDraft} disabled={isSaving}>
+                저장
+              </Btn>
+            </>
+          )
+        }
+      >
+        {welcomeDraft && (
+          <RewardEditor
+            top
+            rows={welcomeDraft}
+            roles={grantableRoles}
+            items={regItems}
+            stateOf={itemStateOf}
+            nextKey={nextRowKey}
+            onChange={editWelcomeDraft}
+            onEnter={saveWelcomeDraft}
+          />
+        )}
+      </DetailPane>
+
+      {/* ── 초대 기록 상세 — 줄을 누르면. 추첨권 · 친구 보상 미지급이면 아래 줄에 「다시 지급」 ── */}
       <DetailPane
         open={tab === "log" && !!picked}
         onClose={() => setPick(null)}
@@ -1444,7 +1572,7 @@ export default function AdminInvitePage() {
               <Btn variant="ghost" className="ml-auto" onClick={() => setPick(null)}>
                 닫기
               </Btn>
-              {ticketStateOf(picked) === "pending" && (
+              {owesOf(picked) && (
                 <Btn onClick={() => setRegrantAsk(picked)} disabled={regranting}>
                   다시 지급
                 </Btn>
@@ -1487,6 +1615,7 @@ export default function AdminInvitePage() {
                 "미지급"
               )}
             </DefRow>
+            <DefRow k="친구 보상">{picked.welcome === "paid" ? "지급" : picked.welcome === "skip" ? "해당 없음" : "미지급"}</DefRow>
           </dl>
         )}
       </DetailPane>
@@ -1508,10 +1637,10 @@ export default function AdminInvitePage() {
         }
       />
 
-      {/* ── 추첨권 다시 지급 확인 ── */}
+      {/* ── 다시 지급 확인 — 못 준 것(추첨권 · 친구 보상)만 한 번에 ── */}
       <ConfirmDialog
         open={regrantAsk !== null}
-        title="추첨권 다시 지급"
+        title="다시 지급"
         confirmLabel="지급"
         busy={regranting}
         onCancel={() => setRegrantAsk(null)}

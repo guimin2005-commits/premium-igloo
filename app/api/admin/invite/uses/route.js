@@ -6,8 +6,9 @@ import { requireAdmin } from "@/lib/apiAuth";
 import { inviteUses } from "@/lib/invite";
 
 // 📌 친구 초대 기록(관리자) — 관리자 판정은 서버(lib/apiAuth requireAdmin)
-//    GET ?page=(1부터)&q=(이름 · ID · 코드 일부) → { ok, rows: [{ inviteeId, inviteeName, inviterId, inviterName, code, at, joinedAt, ticketsGrantedAt, ticketsSkipped, inviterTickets, inviteeTickets }], total, page, perPage }
+//    GET ?page=(1부터)&q=(이름 · ID · 코드 일부) → { ok, rows: [{ inviteeId, inviteeName, inviterId, inviterName, code, at, joinedAt, ticketsGrantedAt, ticketsSkipped, inviterTickets, inviteeTickets, welcome }], total, page, perPage }
 //    ticketsSkipped — 추첨권 대상 아님 까닭("off" · "zero" · 넣은 순간 보너스가 안 돎) · null 이면 줬거나 못 줌(ticketsGrantedAt 으로 가른다)
+//    welcome — 들어온 친구 보상 "paid"(받음) · "skip"(대상 아님) · "pending"(못 줌 · 일부만 줌 — 「다시 지급」 대상)
 //    최신순 50줄 한 쪽(lib/invite.js inviteUses). 실패는 { ok: false, error }
 const fail = (status, error) => NextResponse.json({ ok: false, error }, { status });
 async function relay(res) {
