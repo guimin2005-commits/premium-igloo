@@ -33,10 +33,13 @@
 //          디스코드 역할 유무는 보지 않는다 — siteOnly · 지급 대기 · 역할이 빠진 완료 건도 보유다.
 //          roleId 가 있는 역할형(role · perk · item) 건은 아이템을 찾았든 못 찾았든 그 역할을 "구매로 본 역할"에 넣는다.
 //      (B) 디스코드에 실제로 있는 역할 중 (A)에서 보지 못한 것 → 그 역할의 첫 "보이는" 아이템
+//      (C) 2026-10-24 서버 부스터(./booster.js isBoosterMember) — 부스팅 중인 동안 「서버 부스터 혜택」 아이템(isBoosterPerkItem — Item.boosterPerk)을 가진 것으로 친다.
+//          이미 가진 같은 아이템이면 한 번. 부스트를 멈추면 다음 판정부터 빠진다(사이트 lib/ownedItems.js · lib/inventory.js (C) 와 같다)
 //      아이템은 효과 유무와 상관없이 전체(sortOrder · createdAt 순)에서 고른다 — 효과 있는 뒤쪽 아이템으로 건너뛰지 않는다.
 //      같은 아이템은 한 번만 — 두 번 사도 효과는 한 번.
 // ═══════════════════════════════════════════════════════
 import { Item, ShopItem, Purchase, UserXp } from "./db.js";
+import { isBoosterMember, isBoosterPerkItem } from "./booster.js";
 import { kstToday } from "./leveling.js";
 import { getSettings } from "./botSettings.js";
 
@@ -86,9 +89,11 @@ const RANK_SKIN_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "mast
 const SKIN_RANK_ALL = "rank_all";
 //    할로윈 시즌 카드 스킨 hw_<짧은 영문>(2026-10 — 사이트 SKINS 와 같은 키, 그림 cardSkins/hw_*.js)
 const HW_SKIN_KEYS = ["hw_pumpkin", "hw_ghost", "hw_witch", "hw_candy", "hw_grave", "hw_blackcat"];
-// 📌 할로윈 「유령 펭귄의 초대」 이벤트 카드 테두리(2026-10) — 키 ev_<영문>
-const EV_SKIN_KEYS = ["ev_ghost"];
-const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship", ...RANK_SKIN_KEYS, SKIN_RANK_ALL, ...HW_SKIN_KEYS, ...EV_SKIN_KEYS]);
+// 📌 할로윈 「유령 펭귄의 초대」 이벤트 카드 테두리(2026-10) — 키 ev_<영문> · 친구 초대 「네잎클로버 덩굴」(ev_clover — 2026-10-25)
+const EV_SKIN_KEYS = ["ev_ghost", "ev_clover"];
+// 📌 서버 부스터 전용 카드 테두리 「흩날리는 깃털과 엔젤 링」(bs_feather — 2026-10-25)
+const BS_SKIN_KEYS = ["bs_feather"];
+const SKIN_KEYS = new Set(["gold", "aurora", "ice", "crimson", "newworld", "chart", "airship", ...RANK_SKIN_KEYS, SKIN_RANK_ALL, ...HW_SKIN_KEYS, ...EV_SKIN_KEYS, ...BS_SKIN_KEYS]);
 // 효과의 skin 값 → 가진 것으로 치는 스킨 키들 — 사이트 skinsOf 와 같다
 export const skinsOf = (skin) => (skin === SKIN_RANK_ALL ? RANK_SKIN_KEYS : SKIN_KEYS.has(skin) ? [skin] : []);
 // 📌 유저가 고른 스킨 적용 — 사이트 lib/itemEffects.js pickCardSkin 과 같은 규칙
@@ -100,15 +105,15 @@ export function pickCardSkin(skins, pick) {
   return list.includes(pick) ? pick : "";
 }
 // 📌 카드 배경 키 sc_<영문>(2026-10-15) — 사이트 lib/itemEffects.js SCENES · botCards.js CARD_SCENES 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
-const SCENE_KEYS = new Set(["sc_ghost"]);
+const SCENE_KEYS = new Set(["sc_ghost", "sc_clover"]);
 // 효과의 scene 값 → 가진 것으로 치는 배경 키들 — 사이트 scenesOf 와 같다
 export const scenesOf = (scene) => (SCENE_KEYS.has(scene) ? [scene] : []);
 // 📌 유저가 고른 배경(UserXp.cardScenePick) — 사이트 pickCardScene 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
 export const pickCardScene = (scenes, pick) => pickCardSkin(scenes, pick);
 // 📌 아바타 테두리 키(등급 키) — 사이트 lib/itemEffects.js FRAMES 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
-//    앞 9개는 등급 키(시즌 티어 보상), 뒤는 꾸미기 테두리(할로윈 hwf_* · A New World nwf_* · 이벤트 evf_*)
+//    앞 9개는 등급 키(시즌 티어 보상), 뒤는 꾸미기 테두리(할로윈 hwf_* · A New World nwf_* · 이벤트 evf_* · 서버 부스터 bsf_*)
 const TIER_FRAME_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
-const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship", "evf_ghost"]);
+const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship", "evf_ghost", "evf_clover", "bsf_aura"]);
 // 📌 유저가 고른 테두리(UserXp.avatarFramePick) — 사이트 pickAvatarFrame 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
 export const pickAvatarFrame = (frames, pick) => pickCardSkin(frames, pick);
 // 📌 "all" — 테두리 9종 전부(관리자 테스트 아이템, 사이트 FRAME_ALL 과 같다). 효과의 frame 값 → 가진 것으로 치는 키들
@@ -256,7 +261,7 @@ function itemEffectList(item) {
 //    byUser            : 유저 id → 구매 건 [{ pid, itemId, roleId, exp }] — (A) 를 미리 풀어 둔 것. 만료(exp)는 쓸 때 다시 본다
 //    itemByRole · shopRef : (A) 해석용 표 — 보호막 소모(consumeStreakShield)가 방금 읽은 구매 건을 같은 규칙으로 풀 때 쓴다
 //    ⚠️ effectsById 는 아이템 순서(sortOrder · createdAt)대로 넣는다 — perksOf 의 카드 스킨 "관리자 순서상 첫 번째" 가 이 순서를 따른다
-let state = { effectsById: new Map(), visibleItemByRole: new Map(), byUser: new Map(), itemByRole: new Map(), shopRef: new Map(), itemIds: new Set() };
+let state = { effectsById: new Map(), visibleItemByRole: new Map(), byUser: new Map(), itemByRole: new Map(), shopRef: new Map(), itemIds: new Set(), boosterItemIds: [] };
 
 // 방금 소모한 구매 _id → 소모 시각(ms). 캐시가 소모 전에 읽은 값이어도 보유에서 빼도록 몇 분 들고 있다
 const consumedPids = new Map();
@@ -293,9 +298,11 @@ export async function refreshItemEffects() {
     const itemByRole = new Map();       // (A) fallback — 보이든 숨기든 첫 아이템
     const visibleItemByRole = new Map(); // (B) — 보이는 것 중 첫 아이템
     const effectsById = new Map();
+    const boosterItemIds = []; // (C) 서버 부스터 혜택 아이템 — 아이템 순서대로
     for (const i of items) {
       const id = String(i._id);
       itemIds.add(id);
+      if (isBoosterPerkItem(i)) boosterItemIds.push(id);
       if (i.roleId) {
         if (!itemByRole.has(i.roleId)) itemByRole.set(i.roleId, id);
         if (i.visible !== false && !visibleItemByRole.has(i.roleId)) visibleItemByRole.set(i.roleId, id);
@@ -321,7 +328,7 @@ export async function refreshItemEffects() {
       else byUser.set(p.userId, [row]);
     }
 
-    state = { effectsById, visibleItemByRole, byUser, itemByRole, shopRef, itemIds };
+    state = { effectsById, visibleItemByRole, byUser, itemByRole, shopRef, itemIds, boosterItemIds };
     const old = Date.now() - CONSUMED_KEEP_MS;
     for (const [pid, at] of consumedPids) if (at < old) consumedPids.delete(pid);
   } catch (e) {
@@ -355,6 +362,8 @@ function ownedItemIds(member, now = Date.now()) {
       if (!seenRoles.has(roleId) && roles.has(roleId)) owned.add(itemId);
     }
   }
+  // (C) 서버 부스터 — 부스팅 중이면 부스터 혜택 아이템(Set 이라 이미 가진 것은 한 번)
+  if (state.boosterItemIds.length && isBoosterMember(member)) for (const id of state.boosterItemIds) owned.add(id);
   return owned;
 }
 
@@ -362,13 +371,14 @@ function ownedItemIds(member, now = Date.now()) {
 //    위 캐시 판정(refreshItemEffects · ownedItemIds)과 같은 (A)(B) 규칙을, 캐시 대신 넘겨받은 이 유저의 최신 문서로 한다
 //    (방금 산 것 · 방금 환불된 것도 바로 맞게). 사이트 lib/ownedItems.js 의 ownedItems 와 같아야 한다 — 한쪽을 고치면 같이 고칠 것.
 //    보유는 효과와 무관하다 — 기프트카드(physical)도 보유로 센다(효과만 없다).
-//    입력: purchases(이 유저의 구매 건 — consumedAt 도 함께 읽어 올 것) · items(전체 Item, sortOrder · createdAt 순) · shopItems(전체 ShopItem) · heldRoles(디스코드 역할 id, 모르면 null)
+//    입력: purchases(이 유저의 구매 건 — consumedAt 도 함께 읽어 올 것) · items(전체 Item, sortOrder · createdAt 순 — boosterPerk · visible · type 칸 포함) · shopItems(전체 ShopItem) · heldRoles(디스코드 역할 id, 모르면 null)
+//          booster(서버 부스터인가 — true 일 때만 (C) 부스터 혜택 아이템을 영구로 더한다)
 //    반환: [{ item, expiresAt: Date | null(영구), pending, count }] — items 순서. 같은 아이템은 한 번(기간은 가장 늦게 끝나는 것, 영구가 있으면 영구)
 //          pending 은 그 아이템을 준 구매 건이 전부 지급 대기(pending)일 때만 true
 //          📌 count — ×N 묶음 아이템(아래 stackIds)이면 역할 없는 살아 있는 건 수(기간제 포함 — 기간제부터 쓴다), 아니면 1.
 //             묶음은 사이트 인벤토리(app/api/shop/my-items)와 같다: 무기한이 하나라도 있으면 만료 없음, 모두 기간제면 가장 빠른 만료
 //          shopItems 에 unitSale · type · roleId · durations, items 에 effects 가 있어야 묶음을 안다(views/inventory.js 가 읽는다)
-export function ownedItemList({ purchases, items, shopItems, heldRoles = null, now = Date.now() } = {}) {
+export function ownedItemList({ purchases, items, shopItems, heldRoles = null, booster = false, now = Date.now() } = {}) {
   const nowMs = now instanceof Date ? now.getTime() : Number(now);
   const itemById = new Map();
   const itemByRole = new Map();        // (A) fallback — 숨김 포함 첫 아이템
@@ -441,6 +451,11 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, n
       const item = visibleItemByRole.get(roleId);
       if (item) add(String(item._id), 0, false);
     }
+  }
+
+  // ── (C) 서버 부스터 — 부스팅 중인 동안 부스터 혜택 아이템(영구로 본다 · 이미 가진 것은 한 번) ──
+  if (booster === true) {
+    for (const [id, i] of itemById) if (isBoosterPerkItem(i) && !owned.has(id)) add(id, 0, false);
   }
 
   const out = [];

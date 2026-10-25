@@ -3,6 +3,7 @@
 //    봇은 읽기만 한다 — 절대 저장하지 않는다.
 import { Item, ShopItem, Purchase, UserXp } from "../db.js";
 import { ownedItemList, pickCardSkin, pickCardScene, scenesOf, pickAvatarFrame, framesOf, withSeasonFrame, seasonFrameOf, skinsOf, seasonSkinOf, withSeasonSkin } from "../itemEffects.js";
+import { isBoosterMember } from "../booster.js";
 import { formatUntil } from "../botMessages.js";
 import { SEASONS, seasonEndMs } from "../leveling.js";
 import { normalizeRarity } from "../rarity.js";
@@ -78,14 +79,15 @@ export async function inventoryView(member) {
       { status: 1, itemRef: 1, itemId: 1, roleId: 1, itemType: 1, expiresAt: 1 }
     ).lean(),
     // effects · unitSale · durations — ×N 묶음 판정용(ownedItemList) · icon · imageUrl · color — 카드 아이콘 · rarity — 카드 칸 희귀도(2026-10-17, lean 이라 스키마에 없어도 온다)
-    Item.find({}, { name: 1, type: 1, roleId: 1, visible: 1, sortOrder: 1, createdAt: 1, effects: 1, icon: 1, imageUrl: 1, color: 1, rarity: 1 })
+    Item.find({}, { name: 1, type: 1, roleId: 1, visible: 1, sortOrder: 1, createdAt: 1, effects: 1, icon: 1, imageUrl: 1, color: 1, rarity: 1, boosterPerk: 1 })
       .sort({ sortOrder: 1, createdAt: 1 })
       .lean(),
     ShopItem.find({}, { itemId: 1, type: 1, roleId: 1, unitSale: 1, durations: 1 }).lean(),
   ]);
   const roles = member?.roles?.cache;
   const heldRoles = roles ? [...roles.keys()] : Array.isArray(member?.roles) ? member.roles.map(String) : null;
-  const owned = ownedItemList({ purchases, items, shopItems, heldRoles });
+  // 서버 부스터면 부스터 혜택 아이템(boosterPerk)도 — 사이트 인벤토리 (C) 와 같다(../booster.js)
+  const owned = ownedItemList({ purchases, items, shopItems, heldRoles, booster: isBoosterMember(member) });
   const worn = await wornOf(userId, owned).catch(() => ({ skin: "", scene: "", frame: "", badges: new Set(), season: null, seasonSkin: null }));
   // 📌 시즌 티어 테두리(UserXp.seasonFrame) — 아이템이 아니어도 가진 것으로 한 줄(사이트 인벤토리의 꾸미기 카드와 같다). 다음 시즌 끝(그 결산이 덮어쓴다)
   if (worn.season) {
@@ -129,7 +131,7 @@ export async function inventoryView(member) {
   const DECO_ART = {
     hwf_pumpkin: "deco-pumpkin-mouth", hwf_crystal: "deco-crystal-ball", hwf_ghost: "deco-ghost-sheet", hwf_candy: "deco-wrapped-candy",
     hwf_mummy: "deco-mummy", hwf_window: "deco-haunted-window", hwf_blackcat: "deco-black-cat", hwf_patch: "deco-pumpkin-patch", hwf_party: "deco-ghost-party", hwf_witch: "deco-witch-night", hwf_shop: "deco-candy-shop", hwf_grave: "deco-moon-grave", nwf_world: "deco-new-world", nwf_chart: "deco-sea-chart", nwf_airship: "deco-airship",
-    evf_ghost: "deco-ghost-tail",
+    evf_ghost: "deco-ghost-tail", evf_clover: "deco-clover", bsf_aura: "deco-booster-aura",
   };
   const legacyFrameArt = (url) => {
     const m = /^\/avatar-borders\/([a-z0-9_]+)\.svg$/i.exec(String(url || "").trim());

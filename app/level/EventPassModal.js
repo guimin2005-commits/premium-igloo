@@ -274,6 +274,9 @@ const EP_CSS = `
   .ep-wi { height: auto; max-height: calc(min(760px, 94vh) - 6px); clip-path: ${NOTCH}; }
   .ep-wi::after, .ep-pvi::after { box-shadow: inset 3px 3px 0 #2c2468, inset -3px -3px 0 #0b0822; }
 }
+/* 📌 이벤트 창 안(embedded) — 크기는 이벤트 창(./EventTabs.js EventHub)이 정하고 창은 그 칸을 꽉 채운다. 열림 움직임도 이벤트 창이 한 번만 */
+.ep-win.emb { max-width: none; height: 100%; animation: none; }
+.ep-win.emb .ep-wi { height: 100%; max-height: none; }
 .ep-wi *, .ep-wi *::before, .ep-wi *::after, .ep-pv *, .ep-pv *::before, .ep-pv *::after { box-sizing: border-box; }
 .ep-px { image-rendering: pixelated; }
 /* 📌 떠 있기는 정수 px 단계로만(반 픽셀이면 도트 테가 흐려진다) — 3배 큰 유령 펭귄은 도트 한 칸(3px)씩 */
@@ -383,6 +386,17 @@ const EP_CSS = `
 .ep-gauge > i > b { position: absolute; left: 0; top: 0; bottom: 0; transition: width .9s cubic-bezier(0.16,1,0.3,1); }
 /* PC 아래 판 — [Lv N] [게이지 + 단계 줄] [모두 받기] 한 줄 */
 .ep-ft { flex: none; padding: 12px 24px 24px; background: ${EP.panel}; }
+/* 📌 2026-10-24 PC 아래 장면(운영자 「장면 그림을 아래까지」 → "아래 시안 넣어") — 창이 이벤트 창 틀(1100 × 800)로 커지며 랜턴 길 아래가 비던 자리에
+       밤 숲에서 이어지는 묘지 땅(scripts/gen-event-pass-art.mjs — ground-pc · tree-l · tree-r · fade). 길 글자 아래(466px — PC 머리 · 길 높이는 고정)부터 창 바닥까지 깔고,
+       위 끝은 fade 로 칸째 녹인다(흐린 빛 없이). 창이 낮으면 위(먼 능선 → 안개)부터 잘리고 비석 줄은 아래 판 바로 위라 늘 보인다.
+       아래 판(.ep-ft)은 바탕을 비워 땅 위에 놓인다. 폰(~639)은 세로 목록이 칸을 채워 깔지 않는다 */
+@media (min-width: 640px) {
+  .ep-wi::before { content: ""; position: absolute; left: 0; right: 0; top: 466px; bottom: 0; pointer-events: none;
+    background: url(${ART}/tree-l.png) left bottom / 136px 248px no-repeat, url(${ART}/tree-r.png) right bottom / 136px 248px no-repeat, url(${ART}/ground-pc.png) center bottom / 1100px 328px no-repeat;
+    -webkit-mask: url(${ART}/fade.png) left top / 16px 16px repeat-x, linear-gradient(#000 0 0) left 16px / 100% calc(100% - 16px) no-repeat;
+    mask: url(${ART}/fade.png) left top / 16px 16px repeat-x, linear-gradient(#000 0 0) left 16px / 100% calc(100% - 16px) no-repeat; }
+  .ep-ft { position: relative; background: transparent; }
+}
 .ep-bar { display: flex; align-items: center; padding: 14px 16px 14px 22px; --bg: #120e2e; --hi: #2c2468; --sh: #0b0822; }
 .ep-bl { flex: none; display: flex; align-items: baseline; margin-right: 22px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ep-bl b { font-size: 34px; font-weight: 900; line-height: 1; letter-spacing: -.02em; }
@@ -855,7 +869,9 @@ const fetchState = async () => {
 };
 
 // pushToast(msg, accent) — 레벨 페이지 토스트. onClaimed — 받은 뒤 페이지 잔액 · XP 를 다시 읽는다(loadMe)
-export default function EventPassModal({ open, onClose, pushToast, onClaimed, onCount }) {
+// 📌 embedded — 이벤트 창(./EventTabs.js EventHub) 안에 넣을 때. 바깥 어둠 · 틀 크기 · 열림 움직임 · 이벤트 탭은 이벤트 창 몫이고, 이 창은 그 칸을 꽉 채운다
+/** @param {{ open: boolean; onClose: () => void; pushToast?: any; onClaimed?: () => void; onCount?: (n: number) => void; embedded?: boolean }} props */
+export default function EventPassModal({ open, onClose, pushToast, onClaimed, onCount, embedded = false }) {
   const narrow = useNarrow();
   const [data, setData] = useState(null); // 마지막으로 받은 상태 — 다시 열면 바로 그리고 뒤에서 새로 읽는다
   const [status, setStatus] = useState("idle"); // idle · loading · ok · error
@@ -923,6 +939,13 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed, on
     setPreview(null);
     onClose();
   }, [onClose]);
+  // 📌 이벤트 창 안에서 다른 이벤트 탭으로 옮기거나 이벤트 창이 바깥에서 닫히면 closeAll 을 거치지 않고 open 만 꺼진다 — 그때도 말풍선 · 미리보기를 접는다
+  const [shownOpen, setShownOpen] = useState(open);
+  if (shownOpen !== open) {
+    setShownOpen(open);
+    if (!open) { setTip(null); setPreview(null); }
+  }
+  useEffect(() => { if (!open) clearTimeout(tipTimer.current); }, [open]);
 
   // 열리면 닫기 단추에 포커스 · Esc 로 닫기 — PopShell 과 같다. 미리보기 → 말풍선 → 창 차례로 하나씩
   useEffect(() => { if (open) closeRef.current?.focus({ preventScroll: true }); }, [open]);
@@ -1240,16 +1263,10 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed, on
     </div>
   );
 
-  return (
-    <div
-      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-      onClick={closeAll}
-    >
-      <style>{EP_CSS}</style>
-      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className="ep-win">
+  const win = (
+      <div role={embedded ? "group" : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label={title} onClick={(e) => e.stopPropagation()} className={`ep-win${embedded ? " emb" : ""}`}>
         <div ref={winRef} className="ep-wi">
-          {narrow && <span aria-hidden className="ep-grab"></span>}
+          {narrow && !embedded && <span aria-hidden className="ep-grab"></span>}
           {closeBtn}
 
           <div ref={bodyRef} className={`ep-scroll${narrow ? " ep-scroll-m" : ""}`} onScroll={onScrollAny}>
@@ -1297,7 +1314,19 @@ export default function EventPassModal({ open, onClose, pushToast, onClaimed, on
           {tip && tipTier && tipTier.rewards.length > 0 && <Tip tip={tip} tier={tipTier} narrow={narrow} onEnter={keepTip} onLeave={leaveTip} onPreview={openPreview} />}
         </div>
       </div>
-      {preview && <EpPreview key={`${preview.itemId || ""}`} r={preview} onClose={() => setPreview(null)} />}
+  );
+  const pv = preview && <EpPreview key={`${preview.itemId || ""}`} r={preview} onClose={() => setPreview(null)} />;
+  // 이벤트 창 안 — 틀(어둠 · 크기 · 탭)은 이벤트 창이 그린다
+  if (embedded) return <><style>{EP_CSS}</style>{win}{pv}</>;
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      onClick={closeAll}
+    >
+      <style>{EP_CSS}</style>
+      {win}
+      {pv}
     </div>
   );
 }

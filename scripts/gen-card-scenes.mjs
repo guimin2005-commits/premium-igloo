@@ -24,6 +24,9 @@ const SCENES = [
     key: "sc_ghost", src: ".claude/mockups/ghost-event/cos/card-bg.png", cell: 3, site: "public/card-scenes/sc_ghost.png",
     bot: { top: [[30, 350, 1140, 630]], clear: [[30, 40, 1140, 120], [30, 120, 1170, 900]] },
   },
+  // 📌 「바람의 클로버 언덕」(2026-10-25) — 봇 원본은 scripts/gen-clover-scene.mjs 가 만든 봇 벌(assets/card-scenes/sc_clover-bot.png — 하늘 · 구름 · 언덕만).
+  //    사이트 그림(바람 리본 · 수정 · 잎 · 별)과 일부러 다르다 — 가로 카드 글 줄에 걸려서. 그래서 site 맞춰 보기 없음 · 지울 칸도 없음(bot 네모 없음)
+  { key: "sc_clover", src: "assets/card-scenes/sc_clover-bot.png", cell: 3, bot: {} },
 ];
 const BOT_PX = 10; // 봇 카드 폭 1200 ÷ 120칸
 

@@ -8,6 +8,8 @@ import { UserXp, BotSetting, SeasonResult, isDuplicateKeyError } from "../db.js"
 import { SEASONS, seasonEndMs, getLevelByXp } from "../leveling.js";
 import { config } from "../config.js";
 import { buildMessageWithCard, cardAvatar, SITE_URL, tierOf } from "../botMessages.js";
+import { rankTotalOf } from "../rankBoards.js";
+import { serverHumanCount } from "../serverMembers.js";
 
 const TICK_MS = 5 * 60 * 1000;
 const NO_NAME = "이름 없음";
@@ -85,18 +87,22 @@ async function settleEnded(guild) {
 //    📌 XP 는 강화 · 상점에서 쓰이면 기록 없이 줄어 「지금 XP − 끝난 뒤 번 XP」로 되짚을 수 없다(10/10 읽기 시험에서 음수가 나옴) — 그래서 그 순간 값으로 찍는다
 //    시즌 1 은 레벨 비공개 기간이라 건너뛴다(운영자 결정 — 시즌 2 끝, 2026-12-31 결산부터)
 //    📌 지난 시즌 기록(UserXp.seasonHistory)도 같은 차례에 — { season, name, level, tier(아이언은 "iron"), rank, total, at } 를 한 줄 붙인다.
-//       순위는 그 순간 xp 내림차순 · userId 오름차순(사이트 랭킹 · /api/xp/me 와 같은 규칙), total 은 전체 문서 수(/api/xp/me 의 total 과 같다).
+//       순위는 그 순간 xp 내림차순 · userId 오름차순(사이트 랭킹 · /api/xp/me 와 같은 규칙), total 은 문서 수와 서버 사람 수 중 큰 쪽(2026-10-25 — /api/xp/me 의 total 과 같다).
 //       같은 시즌이 이미 있으면 붙이지 않는다(필터 — framesAt 을 적기 전에 멈췄다 다시 돌아도 두 번 안 들어간다) · 최근 20개만
 const FRAME_FROM_SEASON = 2;
 const HISTORY_KEEP = 20;
-async function settleFrames() {
+async function settleFrames(guild) {
   const rows = await SeasonResult.find({ framesAt: null, season: { $gte: FRAME_FROM_SEASON } }).sort({ season: 1 }).lean();
+  if (!rows.length) return;
+  // 서버 사람 수 — 결산 때만 멤버를 다 받아 정확히 센다(못 받으면 캐시 · 서버 인원)
+  await guild?.members.fetch().catch(() => null);
+  const humans = serverHumanCount(guild);
   for (const r of rows) {
     const s = SEASONS.find((x) => x.number === r.season);
     if (!s) continue;
     const docs = await UserXp.find({}, { userId: 1, level: 1, xp: 1 }).sort({ xp: -1, userId: 1 }).lean();
     const at = new Date();
-    const total = docs.length;
+    const total = rankTotalOf(docs.length, humans);
     let count = 0;
     const ops = [];
     docs.forEach((d, i) => {
@@ -254,7 +260,7 @@ async function run(client) {
     if (!guild) return;
     await settleEnded(guild);
     // 테두리 기록은 따로 — 실패해도(다음 주기에 framesAt 없는 시즌을 다시 한다) RANKER 지급 · 발표를 막지 않게
-    await settleFrames().catch((e) => console.error("시즌 티어 테두리 오류:", e.message));
+    await settleFrames(guild).catch((e) => console.error("시즌 티어 테두리 오류:", e.message));
     await processGrants(guild);
   } catch (e) {
     console.error("시즌 결산 오류:", e.message);

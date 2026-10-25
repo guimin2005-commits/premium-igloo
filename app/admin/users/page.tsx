@@ -93,7 +93,7 @@ type RoleState = { key: string; loading: boolean; present: boolean; roles: HeldR
 //    units: 회수 순서대로 한 건씩 — 지급 · 패스(낸 값 없음) 먼저, 그다음 구매(xp · point = 돌려줄 값, clawXp = 돌려줄 XP 로 다 못 뺀 캐시백 — 지갑에서 빠짐)
 type RevokeUnit = { src: "grant" | "pass" | "shop"; xp: number; point: number; clawXp: number };
 type Revoke = { mode: "rows" | "role" | "locked"; key: string; roleId: string; lock: string; stack: boolean; max: number; tool: number; units: RevokeUnit[] };
-type InvSource = "shop" | "grant" | "pass" | "event" | "goedam" | "item" | "level" | "season";
+type InvSource = "shop" | "grant" | "pass" | "event" | "goedam" | "invite" | "item" | "level" | "season" | "booster";
 type InvCard = {
   uid: string; kind: string; type: string; name: string; description?: string;
   icon?: string; imageUrl?: string; color?: string;
@@ -105,7 +105,7 @@ type InvCard = {
   revoke: Revoke;
 };
 type InvState = { key: string; synced: boolean; canGrant: boolean; items: InvCard[]; error: string };
-const INV_SOURCE: Record<InvSource, string> = { shop: "구매", grant: "지급", pass: "패스", event: "이벤트", goedam: "괴담회", item: "역할", level: "레벨 보상", season: "시즌 보상" };
+const INV_SOURCE: Record<InvSource, string> = { shop: "구매", grant: "지급", pass: "패스", event: "이벤트", goedam: "괴담회", invite: "친구 초대", item: "역할", level: "레벨 보상", season: "시즌 보상", booster: "부스터" };
 const UNIT_SRC: { src: RevokeUnit["src"]; l: string }[] = [{ src: "grant", l: "지급" }, { src: "pass", l: "패스" }, { src: "shop", l: "구매" }];
 
 const toInt = (v: unknown) => Math.max(0, Math.trunc(Number(v) || 0));

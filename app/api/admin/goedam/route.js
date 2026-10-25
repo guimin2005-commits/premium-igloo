@@ -1,23 +1,31 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/apiAuth";
 import { eventItemStates } from "@/lib/eventPass";
+import { unitThingSet } from "@/lib/unitSale";
+import Item from "@/models/Item";
+import ShopItem from "@/models/ShopItem";
 import {
   PRIZE_KINDS,
   MAX_SCREENINGS,
   MAX_PRIZES,
   MAX_TITLE,
-  MAX_DAYS,
+  PRIZE_COUNT,
   NUM_MAX,
   SCREENING_TICKETS,
   SCREENING_RATIO,
   PRIZE_WEIGHT,
   MAX_CODE_LEN,
   MAX_CODES_PER_SAVE,
+  VOICE_MINUTES,
+  VOICE_TICKETS,
   normalizeScreenings,
   normalizePrizes,
+  normalizeVoice,
+  prizeTitle,
   loadGoedamConfig,
   getGoedamAdmin,
   goedamRoster,
@@ -34,11 +42,13 @@ import {
 //    · 아이템(추첨권 · 아이템 상품)은 실사이트 Item 이나 초안(반영 전)에 있으면 저장한다 — 어디에도 없는 새 아이템만 돌려보낸다(이미 저장된 것은 그대로).
 //      아이템 상품이 반영 전이면 추첨이 그 상품을 고르지 않는다(lib/goedam.js readyOf). 켜기는 추첨권 아이템이 실사이트에 있을 때만(봇이 그 id 로 추첨권을 준다)
 //    · code 상품의 코드는 prizes[].codes(줄마다 하나 — 화면이 나눠 보낸다)로 받아 GoedamCode 에 없는 것만 넣는다(이미 나간 코드는 그대로 · 지우지 않는다)
-//    GET               → { success, data: { config, itemStates, stock } }
-//    GET ?watch=<sid>  → { success, data: [{ userId, userName, seconds, pct, earned, grantedAt, granted, manual }] } — 그 회차 명단(머문 초 많은 순)
+//    · 📌 2026-10-24 음성 활동(voice { enabled, minutes, tickets, startsAt, endsAt }) — 온 칸만 지금 값에 얹어 검사한 뒤 통째로 저장한다(lib/goedamRules.js normalizeVoice)
+//    GET               → { success, data: { config, itemStates, stock, shop, voiceDays } } — shop: 추첨권을 파는 상품 { id, name, href } | null · voiceDays: 음성 기록이 있는 날
+//    GET ?watch=<sid>  → { success, data: [{ userId, userName, seconds, pct, earned, grantedAt, granted, manual }] } — 그 회차 명단(머문 초 많은 순).
+//                        sid 자리에 "voice:<YYYY-MM-DD>" 를 주면 그날 음성 명단(비율 · 달성은 지금 설정의 하루 분 기준)
 //    GET ?draws=1      → { success, data: [{ id, at, userId, userName, pid, prizeName, kind, amount, code, granted, error }] } — 최근 추첨 300건
-//    PUT body { enabled?, title?, channelId?, ticketItemId?, drawOpensAt?, drawClosesAt?, screenings?, prizes? }
-//              → { success, data: { config, itemStates, stock, added: { pid: 넣은 코드 수 } } }
+//    PUT body { enabled?, title?, channelId?, ticketItemId?, drawOpensAt?, drawClosesAt?, screenings?, voice?, prizes? }
+//              → { success, data: { config, itemStates, stock, shop, voiceDays, added: { pid: 넣은 코드 수 } } }
 //    실패는 { success: false, error, message }
 const fail = (status, error) => NextResponse.json({ success: false, message: error, error }, { status });
 const NO_ITEM = "존재하지 않는 아이템은 상품으로 저장할 수 없습니다.";
@@ -91,6 +101,18 @@ function checkScreenings(list) {
   return "";
 }
 
+// 음성 활동 검사 — 지금 값에 온 칸을 얹은 한 벌(v)로. 괜찮으면 ""
+function checkVoice(v) {
+  if (v.enabled !== undefined && typeof v.enabled !== "boolean") return "음성 활동 사용 여부가 올바르지 않습니다.";
+  if (!isInt(v.minutes, VOICE_MINUTES.min, VOICE_MINUTES.max)) return `하루 음성 시간은 ${VOICE_MINUTES.min}~${VOICE_MINUTES.max.toLocaleString()}분 사이로 입력해 주십시오.`;
+  if (!isInt(v.tickets, VOICE_TICKETS.min, VOICE_TICKETS.max)) return `음성 활동 장 수는 ${VOICE_TICKETS.min}~${VOICE_TICKETS.max} 사이로 입력해 주십시오.`;
+  const s = dateOf(v.startsAt);
+  const e = dateOf(v.endsAt);
+  if (!s || !e) return "음성 활동 기간이 올바르지 않습니다.";
+  if (e.getTime() <= s.getTime()) return "음성 활동 종료 시각은 시작 시각 이후로 지정해 주십시오.";
+  return "";
+}
+
 // 상품 검사 — 같은 규칙. codes 는 code 상품만 · 한 장 MAX_CODE_LEN 자 · 한 번에 MAX_CODES_PER_SAVE 장까지
 function checkPrizes(list) {
   if (list.length > MAX_PRIZES) return `상품은 최대 ${MAX_PRIZES}개까지 등록할 수 있습니다.`;
@@ -104,7 +126,7 @@ function checkPrizes(list) {
     if ((kind === "xp" || kind === "point") && !isInt(r?.amount, 1, NUM_MAX)) return `${no}의 수량을 1 이상 10억 이하로 입력해 주십시오.`;
     if (kind === "item") {
       if (!String(r?.itemId || "").trim()) return `${no}의 아이템을 선택해 주십시오.`;
-      if (r?.days != null && r?.days !== "" && !isInt(r.days, 0, MAX_DAYS)) return `${no}의 기간은 ${MAX_DAYS.toLocaleString()}일 이하로 입력해 주십시오.`;
+      if (r?.count != null && r?.count !== "" && !isInt(r.count, PRIZE_COUNT.min, PRIZE_COUNT.max)) return `${no}의 개수는 ${PRIZE_COUNT.min}~${PRIZE_COUNT.max} 사이로 입력해 주십시오.`;
     }
     if (kind === "role" && !SNOWFLAKE.test(String(r?.roleId || "").trim())) return `${no}의 역할을 선택해 주십시오.`;
     if (kind !== "code" && r?.qty != null && r?.qty !== "" && !isInt(r.qty, 0, NUM_MAX)) return `${no}의 수량은 0 이상의 정수로 입력해 주십시오(빈칸 = 무제한).`;
@@ -167,6 +189,16 @@ export async function PUT(request) {
       $set.nextSid = n.nextSid;
     }
 
+    // 음성 활동 — 온 칸만 지금 값에 얹는다(빠진 칸이 기본값으로 돌아가지 않게). 시각은 ISO 글자 · Date 둘 다 받는다
+    if (b?.voice !== undefined) {
+      if (!b.voice || typeof b.voice !== "object" || Array.isArray(b.voice)) return fail(400, "음성 활동 설정이 올바르지 않습니다.");
+      const pick = (k) => (b.voice[k] !== undefined ? b.voice[k] : cur.voice[k]);
+      const v = { enabled: pick("enabled"), minutes: pick("minutes"), tickets: pick("tickets"), startsAt: pick("startsAt"), endsAt: pick("endsAt") };
+      const err = checkVoice(v);
+      if (err) return fail(400, err);
+      $set.voice = normalizeVoice({ ...v, startsAt: dateOf(v.startsAt), endsAt: dateOf(v.endsAt) });
+    }
+
     // 붙여 넣은 코드 — 정리된 상품과 같은 자리(정리 함수는 상품 줄을 빼거나 옮기지 않는다)
     let codesAt = [];
     if (b?.prizes !== undefined) {
@@ -193,6 +225,26 @@ export async function PUT(request) {
       for (const p of $set.prizes) {
         const name = p.kind === "item" ? states.get(p.itemId)?.name : "";
         if (name) p.itemName = name;
+      }
+      // 📌 2026-10-25 아이템 개수 — 2개 이상은 쌓이는 아이템만: 추첨권 아이템, 또는 1개 단위로 파는 상품이 가리키거나 소모형
+      //    (lib/unitSale.js unitThingSet — 관리자 수동 지급 · /api/admin/items stackable 과 같은 판정. 아니면 같은 물건이 따로 여러 장 생긴다).
+      //    실사이트 Item · 상품으로 본다(지급 lib/goedam.js itemPrizeFacts 와 같은 자료 — 초안에만 있는 1개 단위 상품으로는 풀리지 않는다).
+      //    새로 넣었거나 아이템 · 개수를 바꾼(늘린) 상품만 본다 — 저장된 그대로인 상품은 그 뒤 상점이 바뀌어도 다른 칸 저장 · 끄기를 막지 않는다(지급이 그때 1개로 준다)
+      const prev = new Map(cur.prizes.filter((p) => p.kind === "item").map((p) => [p.pid, p]));
+      const multi = $set.prizes.filter((p) => {
+        if (p.kind !== "item" || p.count <= 1 || p.itemId === ticketAfter) return false;
+        const old = prev.get(p.pid);
+        return !(old && old.itemId === p.itemId && old.count >= p.count);
+      });
+      const multiIds = [...new Set(multi.map((p) => p.itemId))].filter((id) => mongoose.isValidObjectId(id));
+      if (multi.length) {
+        const [items, shops] = await Promise.all([
+          multiIds.length ? Item.find({ _id: { $in: multiIds } }).lean() : [],
+          multiIds.length ? ShopItem.find({ itemId: { $in: multiIds } }, { type: 1, roleId: 1, itemId: 1, unitSale: 1, durations: 1 }).lean() : [],
+        ]);
+        const units = unitThingSet(shops, items);
+        const one = multi.find((p) => !units.has(`i:${p.itemId}`));
+        if (one) return fail(400, `「${prizeTitle({ ...one, count: 1 })}」은(는) 1개만 줄 수 있는 아이템입니다.`);
       }
     }
     if (ticketAfter) {

@@ -236,29 +236,30 @@ export const Sparkline = ({ history = [], h = 96 }) => {
 // ── 리더보드 행 — 홈·레벨 공용. 상위 3인은 포디움 대우(뱃지·굵기·크기) ──
 /** @type {import("react").FC<any>} */
 // 랭킹 한 줄 — RankRows 안에서 정의하면 렌더마다 새 컴포넌트가 돼 행이 통째로 다시 붙는다
-const RankRow = ({ rank, name, level, xp, mine, topXp, badges }) => {
+//    📌 2026-10-24 대시보드 「내 순위」 판 시안 그대로 — 줄 46px(아래 선 포함 · 옆 획득 피드 줄과 같은 높이) · 1~3위도 같은 높이(순위 칸 · 굵기로만 구분) ·
+//       줄 밑 1위 대비 막대는 뺐다(길이가 달라 끊긴 선처럼 보였다 — 1위와의 거리는 위 「내 순위」 막대가 맡는다)
+const RankRow = ({ rank, name, level, xp, mine, badges }) => {
     const podium = rank <= 3;
     return (
-      <div className={`relative border-b border-black/[0.07] transition-colors ${mine ? "bg-[#e91e3f]/[0.05]" : "hover:bg-black/[0.02]"}`}>
+      <div className={`relative flex items-center gap-[11px] h-[46px] border-b border-[#ededed] transition-colors ${mine ? "bg-[#e91e3f]/[0.05]" : "hover:bg-black/[0.02]"}`}>
         {mine && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#e91e3f]"></span>}
-        <div className={`flex items-center gap-3.5 pl-3 pr-1 ${podium ? "h-14" : "h-11"}`}>
-          {/* 순위 뱃지 — 1위는 채움, 2·3위는 테두리, 나머지는 숫자만 */}
+          {/* 순위 칸 — 1위는 채움, 2·3위는 테두리, 나머지는 숫자만(28 × 28 가운데) */}
           <span
-            className={`shrink-0 flex items-center justify-center tabular-nums font-black ${
+            className={`shrink-0 w-7 h-7 flex items-center justify-center tabular-nums font-black ${
               rank === 1
-                ? "w-8 h-8 rounded-lg bg-[#e91e3f] text-white text-sm shadow-[0_6px_16px_-6px_rgba(233,30,63,0.7)]"
+                ? "rounded-lg bg-[#e91e3f] text-white text-[13px]"
                 : podium
-                ? "w-8 h-8 rounded-lg border-[1.5px] border-[#131313] text-[#131313] text-sm"
-                : "w-8 text-right text-[13px] text-[#a3a3a3]"
+                ? "rounded-lg shadow-[inset_0_0_0_1.5px_#131313] text-[#131313] text-[13px]"
+                : "text-[12.5px] text-[#a3a3a3]"
             }`}
           >
             {rank}
           </span>
-          {/* 📌 이름만 줄어든다 — 프로필 배지(최대 3 · /api/xp/leaderboard badges)와 You 는 shrink-0. 줄 높이는 h-14 · h-11 고정이라 배지가 있어도 같다 */}
-          <span className={`min-w-0 flex-1 flex items-center gap-1.5 ${podium ? "text-[15px] font-black text-[#131313]" : "text-[13px] font-bold text-[#5a5a5a]"}`}>
+          {/* 📌 이름만 줄어든다 — 프로필 배지(최대 3 · /api/xp/leaderboard badges)와 You 는 shrink-0. 줄 높이는 46 고정이라 배지가 있어도 같다 */}
+          <span className={`min-w-0 flex-1 flex items-center gap-[5px] ${podium ? "text-[14px] font-black text-[#131313]" : "text-[13.5px] font-bold text-[#5a5a5a]"}`}>
             <span className="min-w-0 truncate">{name}</span>
             {Array.isArray(badges) && badges.length > 0 && (
-              <span className="shrink-0 inline-flex items-center gap-0.5">
+              <span className="shrink-0 inline-flex items-center gap-[2px]">
                 {badges.slice(0, 3).map((b, i) => (
                   <span key={b.itemId || i} title={b.name} aria-label={b.name} role="img" className="inline-flex w-4 h-4">
                     <ItemIcon icon={b.icon} imageUrl={b.imageUrl} type={b.type} size={16} color={b.color || itemTypeColor(b.type)} />
@@ -268,36 +269,27 @@ const RankRow = ({ rank, name, level, xp, mine, topXp, badges }) => {
             )}
             {mine && <span className="shrink-0 inline-flex items-center h-5 px-2 ml-0.5 rounded-full bg-[#e91e3f] text-[9px] font-black tracking-[0.12em] uppercase text-white">You</span>}
           </span>
-          <span className="shrink-0 text-[10px] font-black text-[#a3a3a3] tabular-nums uppercase tracking-wider">Lv {level}</span>
-          <span className={`shrink-0 w-20 md:w-24 text-right tabular-nums font-black ${podium ? "text-sm text-[#131313]" : "text-xs text-[#5a5a5a]"}`}>
+          <span className="shrink-0 w-12 text-right text-[10px] font-black text-[#a3a3a3] tabular-nums uppercase tracking-[0.04em]">Lv {level}</span>
+          <span className={`shrink-0 w-[92px] text-right tabular-nums font-black ${podium ? "text-[13.5px] text-[#131313]" : "text-[13px] text-[#5a5a5a]"}`}>
             {(xp || 0).toLocaleString()}
           </span>
-        </div>
-        {/* 1위 대비 상대치 바 — 순위 간 격차를 데이터로 */}
-        {topXp > 0 && (
-          <div
-            aria-hidden
-            className={`h-[2px] ${rank === 1 ? "bg-[#e91e3f]" : podium ? "bg-[#131313]/35" : "bg-[#131313]/12"}`}
-            style={{ width: `${Math.max(2, ((xp || 0) / topXp) * 100)}%` }}
-          ></div>
-        )}
       </div>
     );
 };
 
-export const RankRows = ({ rows = [], myId, me, myName = "" }) => {
-  const topXp = rows[0]?.xp || 0;
+// 📌 meRow false — 목록 밖 내 줄(··· + 내 줄)을 그리지 않는다(대시보드는 위 「내 순위」 판이 맡는다). strongTop — 맨 윗줄을 굵은 선(#131313)으로(위 판이 없을 때)
+export const RankRows = ({ rows = [], myId, me, myName = "", meRow = true, strongTop = false }) => {
   const inList = !!myId && rows.some((r) => r.userId === myId);
 
   return (
-    <div className="border-t border-black/[0.07]">
+    <div className={`border-t ${strongTop ? "border-[#131313]" : "border-[#ededed]"}`}>
       {rows.map((r) => (
-        <RankRow key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} topXp={topXp} badges={r.badges} />
+        <RankRow key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} badges={r.badges} />
       ))}
-      {myId && !inList && me && (
+      {meRow && myId && !inList && me && (
         <>
           <div className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
-          <RankRow rank={me.rank} name={myName} level={me.level} xp={me.xp} mine topXp={topXp} badges={me.badges} />
+          <RankRow rank={me.rank} name={myName} level={me.level} xp={me.xp} mine badges={me.badges} />
         </>
       )}
     </div>

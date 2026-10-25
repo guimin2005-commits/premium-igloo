@@ -733,6 +733,6 @@ const ACH_CSS = `
 @media (prefers-reduced-motion: reduce) { .ach-pop { animation: none !important; } }
 `;
 const NOTE_CSS = `
-@keyframes achNoteIn { 0% { opacity: 0; transform: translateY(14px) scale(0.96); } 60% { opacity: 1; } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes achNoteIn { 0% { opacity: 0; transform: translateY(-14px) scale(0.96); } 60% { opacity: 1; } 100% { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { [aria-label^="업적 달성"] { animation: none !important; } }
 `;

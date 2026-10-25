@@ -50,11 +50,12 @@ export async function POST(request) {
 
     await connectToDatabase();
     // 📌 디스코드 역할을 확인하지 못하면 저장하지 않는다 — 역할로만 가진 배지(B)가 빠진 목록이 저장되면 확인이 돌아와도 떨어진 채로 남는다
-    const { roles } = await fetchMemberRoleInfo(auth.userId).catch(() => ({ roles: null }));
+    const { roles, booster } = await fetchMemberRoleInfo(auth.userId).catch(() => ({ roles: null, booster: null }));
     if (roles === null) {
       return NextResponse.json({ success: false, error: "잠시 후 다시 시도해 주세요." }, { status: 503 });
     }
-    const { allBadges } = await getPerks(auth.userId, { heldRoles: roles });
+    // 서버 부스터면 부스터 혜택 배지(Item.boosterPerk)도 가진 것 — 같은 멤버 조회에서(lib/booster.js)
+    const { allBadges } = await getPerks(auth.userId, { heldRoles: roles, booster: booster === true });
     const owned = new Set(allBadges.map((b) => b.itemId));
     if (byOrder ? !order.every((id) => owned.has(id)) : !owned.has(itemId)) {
       return NextResponse.json({ success: false, error: "가지고 있지 않은 배지입니다." }, { status: 403 });

@@ -6,10 +6,10 @@
 //       다 못 채우고 음성에서 나가거나 다른 채널로 옮기면 그때까지 머문 시간만큼 준다(features/voiceXp.js payVoiceCycle).
 //       XP 는 구간마다 그때 상태로 계산해 더한다 — 1회분(voiceRate: 기본 · 등급 · 강화 · 부스트 · 아이템 효과) × 음소거 배율 × 구간 초 / 5분.
 //       구간은 본인 상태가 바뀔 때 · 같은 채널에 누가 들어오거나 나갈 때 · 20초마다 끊는다 — 인원(음성 파티 · ctx.n)도 구간마다 그때 값.
-//       음소거 막기 · 잠수 채널 · 제외 채널처럼 세지 않는 동안은 바퀴가 멈춰 있다(같은 채널에 있는 한 이어 간다).
+//       헤드셋 끔 · 음소거 막기 · 잠수 채널 · 제외 채널처럼 세지 않는 동안은 바퀴가 멈춰 있다(같은 채널에 있는 한 이어 간다).
 //       나갔다가 20초 안에 같은 채널로 돌아오면 같은 바퀴로 이어진다(기록 주기 안이라 나감을 따로 보지 않는다 — 받는 양은 같다).
 //       한 번 기록할 때 같은 사람에게 닫힌 바퀴가 여럿이면(채널을 자주 옮김) 하나로 합쳐 한 줄로 준다 — 지급 줄이 20초에 한 줄을 넘지 않게.
-//    📌 세는 조건은 예전 음성 XP 주기와 같다 — 봇 · 잠수 채널 · 제외 채널(채널 정책) · 음소거 막기(완화 효과 반영) · 음성 XP 정지(voiceXpOff) · XP 획득 중단(xpStop.js) ·
+//    📌 세는 조건은 예전 음성 XP 주기와 같다 — 봇 · 잠수 채널 · 제외 채널(채널 정책) · 헤드셋 끔(2026-10-25 — 설정과 상관없이) · 음소거 막기(완화 효과 반영) · 음성 XP 정지(voiceXpOff) · XP 획득 중단(xpStop.js) ·
 //       시즌 2 개시 전(VOICE_TIME_START)은 빼고, 레벨 비공개여도 쌓는다(XP · 오늘 누적 분 · 자동 출석은 payVoiceCycle 이 막는다 — 2026-10-04 "다 막아"). 지급 XP 가 0 이어도 시간은 센다 — 시간은 시간.
 //       설정 · 채널 정책 · 잠수 채널 · 아이템 효과는 이벤트 없이 바뀌므로 기록할 때마다 열린 구간을 끊어 다시 판정한다.
 //    📌 진행 중인 바퀴는 기록할 때마다 UserXp.voiceCycle 에 적는다 — 봇이 재시작(배포)돼도 처음 기록할 때 읽어,
@@ -74,12 +74,15 @@ const flagsOf = (vs) => ({
 const headcount = (channel) => channel?.members?.filter((m) => !m.user.bot).size || 0;
 
 // 이 음성 상태의 음소거 배율 — 0 이면 지금 시간으로 세지 않는다. 예전 음성 XP 주기의 대상 · 음소거 판정과 같은 규칙
+//    📌 2026-10-25 운영자 "헤드셋까지 끄면 XP 지급 차단 · 음성 시간 누적도 안 됨" — 헤드셋 끔(본인 · 서버)은 설정(음소거 처리 · 적용 기준)과 상관없이 0.
+//       XP · 음성 시간(voiceSeconds) · 머문 초(voiceStay) 모두 멈춘다. 마이크만 끈 것은 그대로 음소거 설정을 따른다
 function multOf(vs) {
   const member = vs?.member, channel = vs?.channel;
   if (!member || member.user?.bot || !channel) return 0;
   if (kstToday() < VOICE_TIME_START) return 0;
   if (channel.id === vs.guild?.afkChannelId) return 0;
   if (getChannelPolicy(channel).excluded) return 0;
+  if (vs.selfDeaf || vs.serverDeaf) return 0;
   return Math.max(0, Number(relieveMute(getMuteMultiplier(vs), member, getSettings())) || 0);
 }
 

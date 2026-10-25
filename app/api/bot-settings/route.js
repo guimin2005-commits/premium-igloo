@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { denyIfNotAdmin } from "@/lib/apiAuth";
 import BotSetting from "@/models/BotSetting";
+import { cleanBoosterLadder, BOOSTER_LADDER_DEFAULT, BOOSTER_REWARD_MAX } from "@/lib/booster";
 
 // 숫자 필드는 음수/NaN을 막고 상한을 둔다 (봇이 그대로 지급에 사용하므로)
 const num = (v, def, { min = 0, max = 10_000_000 } = {}) => {
@@ -47,6 +48,13 @@ const cleanStreakRules = (rows) => {
   return out.sort((a, b) => a.days - b.days);
 };
 
+// 📌 서버 부스터 보상(2026-10-25) — 사다리 칸이 없는 옛 문서는 기본 사다리로 보여 준다(관리 화면 표가 비어 보이지 않게). 봇은 「사용」(boosterLadderOn)을 켜야만 준다(lib/booster.js boosterRewardsOf)
+const withBoosterDefaults = (doc) => {
+  const data = doc?.toObject ? doc.toObject() : doc;
+  if (data && !Array.isArray(data.boosterLadder)) data.boosterLadder = BOOSTER_LADDER_DEFAULT.map((r) => ({ ...r }));
+  return data;
+};
+
 export async function GET() {
   try {
     const deny = await denyIfNotAdmin();
@@ -58,7 +66,7 @@ export async function GET() {
       { $setOnInsert: { key: "main" } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-    return NextResponse.json({ success: true, data: doc });
+    return NextResponse.json({ success: true, data: withBoosterDefaults(doc) });
   } catch (e) {
     return NextResponse.json({ success: false, data: null }, { status: 500 });
   }
@@ -140,6 +148,12 @@ export async function POST(request) {
         // 연속 출석 보너스 — 본문에 배열이 없으면 저장된 규칙 유지
         attendStreakEnabled: bool(b.attendStreakEnabled, cur?.attendStreakEnabled, false),
         attendStreakRules: cleanStreakRules(Array.isArray(b.attendStreakRules) ? b.attendStreakRules : cur?.attendStreakRules),
+        // 📌 서버 부스터 보상 — 본문에 없으면(이 칸을 모르는 옛 화면) 저장값 유지. 사다리는 배열로 왔을 때만 쓴다(빈 배열 = 끔).
+        //    정리는 봇과 같은 규칙(lib/booster.js cleanBoosterLadder — 개월 1~120 · 중복 · 보상 없는 줄 버림 · 최대 12줄). 「사용」은 본문에 없으면 저장값 유지(기본 꺼짐)
+        boosterLadderOn: bool(b.boosterLadderOn, cur?.boosterLadderOn, false),
+        boosterStartXp: num(b.boosterStartXp, cur?.boosterStartXp ?? 150000, { min: 0, max: BOOSTER_REWARD_MAX }),
+        boosterStartPoint: num(b.boosterStartPoint, cur?.boosterStartPoint ?? 30, { min: 0, max: BOOSTER_REWARD_MAX }),
+        ...(Array.isArray(b.boosterLadder) ? { boosterLadder: cleanBoosterLadder(b.boosterLadder) } : {}),
         // 📌 2026-10-17 관리 화면 정리 — 아래 칸은 POST 가 쓰지 않는다(다른 화면으로 옮겼다 · 본문에 와도 무시). 바꾸기는 PATCH 로만:
         //    shopPublic(상점 관리 › 설정) · supporterRoleId · supporterBaseXp · supporterGoalChat · supporterGoalVoiceMin(서포터즈 › 설정) ·
         //    levelupChannelId · roleGrantChannelId · attendChannelId · noticeChannelId · expiryReminderHours(봇 메시지 › 보내는 곳) · rankerRoleId(시즌 전환 › RANKER).
@@ -151,7 +165,7 @@ export async function POST(request) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    return NextResponse.json({ success: true, data: doc });
+    return NextResponse.json({ success: true, data: withBoosterDefaults(doc) });
   } catch (e) {
     return NextResponse.json({ success: false }, { status: 500 });
   }
@@ -229,7 +243,7 @@ export async function PATCH(request) {
       { $set: { ...set, updatedAt: new Date() } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-    return NextResponse.json({ success: true, data: doc });
+    return NextResponse.json({ success: true, data: withBoosterDefaults(doc) });
   } catch (e) {
     console.error("봇 설정 칸 저장 오류:", e);
     return NextResponse.json({ success: false, message: "저장에 실패했습니다." }, { status: 500 });

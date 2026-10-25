@@ -12,6 +12,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { connectToDatabase } from "@/lib/mongodb";
 import UserXp from "@/models/UserXp";
+import { serverMemberCount } from "@/lib/serverMembers";
+import { rankTotalOf } from "@/lib/rankBoards";
 import { buildCard, CARD_SIZE, CARD_FONT, CARD_SKIN_KEYS, CARD_SCENE_KEYS, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
@@ -103,9 +105,10 @@ async function myData(session, skin, frame = "", scene = "") {
   const doc = await UserXp.findOne({ userId: session.user.id }, { xp: 1, level: 1 }).lean();
   const xp = doc?.xp || 0;
   const level = doc?.level || 0;
-  const [above, total, avatar] = await Promise.all([
+  const [above, docCount, members, avatar] = await Promise.all([
     UserXp.countDocuments({ $or: [{ xp: { $gt: xp } }, { xp, userId: { $lt: session.user.id } }] }),
     UserXp.countDocuments(),
+    serverMemberCount().catch(() => 0),
     fetchAvatarDataUri(session.user.image).catch(() => null),
   ]);
   const cur = getCumulativeXpByLevel(level);
@@ -119,7 +122,7 @@ async function myData(session, skin, frame = "", scene = "") {
     need: Math.max(0, next - xp),
     progress: Math.min(1, Math.max(0, (xp - cur) / Math.max(1, next - cur))),
     rank: above + 1,
-    total,
+    total: rankTotalOf(docCount, members), // 서버 사람 수 포함(/api/xp/me 와 같다)
   };
 }
 // 본인 카드 메모리 캐시 — 사람 · 스킨 · 배경 · 테두리별 5분, 많아야 200장(오래된 것부터 버린다)

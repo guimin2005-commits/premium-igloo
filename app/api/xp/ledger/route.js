@@ -42,6 +42,8 @@ const PAYOUT_SOURCE = {
   pass: "시즌 패스 보상",
   "event-pass": "이벤트 패스 보상",
   goedam: "괴담회 추첨", // 📌 2026-10-23 괴담회 추첨 XP 상품(lib/goedamRules.js GOEDAM_SOURCE)
+  booster: "부스터 보상", // 📌 2026-10-25 lib/booster.js BOOSTER_BONUS_SOURCE(봇 features/boosterBonus.js) — 줄 이름은 사유(최초 부스팅 보상 · 연속 부스팅 N개월)
+  invite: "친구 초대", // 📌 2026-10-25 친구 초대 누적 보상(lib/invite.js INVITE_SOURCE) — 줄 이름은 사유(「친구 초대 N명」)
   code: "쿠폰 보상",
   supporter: "서포터즈 보상",
   referral: "초대 보상",

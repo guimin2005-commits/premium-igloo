@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/apiAuth";
-import { fetchGuildMember, forgetGuildMember } from "@/lib/discordMember";
+import { fetchGuildMember, forgetGuildMember, roleInfoOf } from "@/lib/discordMember";
 import { buildInventory } from "@/lib/inventory";
 import { revokeFreeRows } from "@/lib/itemRevoke";
 import { settleOrders } from "@/lib/orderRefund";
@@ -27,10 +27,9 @@ const NOTE = "운영진 회수";
 const UNKNOWN_ROLES = { roles: null, at: 0, stale: true };
 
 // 디스코드 역할 — 캐시를 건너뛰고 새로 묻는다. fetchMemberRoleInfo 와 같은 모양(서버에 없으면 [], 확인 실패면 null)
+//    서버 부스터(booster)도 같은 조회에서 — 부스터 혜택 아이템 칸(lib/inventory.js (C))
 async function freshRoleInfo(userId) {
-  const r = await fetchGuildMember(userId, { fresh: true });
-  const roles = r.status === "ok" ? (Array.isArray(r.member?.roles) ? r.member.roles : []) : r.status === "absent" ? [] : null;
-  return { roles, at: r.at || 0, stale: !!r.stale };
+  return roleInfoOf(await fetchGuildMember(userId, { fresh: true }));
 }
 
 // 디스코드가 관리하는 역할(부스터 · 봇 연동) — 뗄 수 없어 잠근다. 역할 목록은 유저 조회 › 역할(app/api/admin/users/roles)과 같은 주소(5분 캐시). 못 읽으면 null(잠그지 않고 역할 회수 API 가 거절한다)
@@ -104,8 +103,8 @@ export async function POST(request) {
     // 고른 뒤 바뀐 건은 건드리지 않는다 — 이 유저 · 실물 아님 · 기간 남음(상태 · 소모 조건은 각 함수가 건다)
     const alive = { userId, itemType: { $ne: "physical" }, $or: [{ expiresAt: null }, { expiresAt: { $gt: at } }] };
     // 📌 2026-10-17 이벤트 패스 보상("event-pass")도 낸 값 없는 건 — 시즌 패스처럼 회수(돌려줄 값 없음)
-    //    📌 2026-10-23 괴담회 추첨권("goedam-ticket") · 추첨 상품("goedam")도 같다
-    const FREE_IDS = ["grant", "season-pass", "event-pass", "goedam", "goedam-ticket"];
+    //    📌 2026-10-23 괴담회 추첨권("goedam-ticket") · 추첨 상품("goedam")도 같다 · 2026-10-25 친구 초대 누적 보상("invite")도
+    const FREE_IDS = ["grant", "season-pass", "event-pass", "goedam", "goedam-ticket", "invite"];
     const isShop = (p) => !FREE_IDS.includes(p.itemId);
 
     // 낸 값 없는 건 — 운영진 지급 · 시즌 패스. 역할 이전 · 환불 도구의 기록은 조건으로도 한 번 더 막는다

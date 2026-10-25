@@ -11,6 +11,13 @@ const AttendStreakRuleSchema = new mongoose.Schema({
   repeat: { type: Boolean, default: false }, // true 면 days 의 배수마다
 }, { _id: false });
 
+// 📌 연속 부스팅 보상 단계 한 줄 — 정리(개월 1~120 · 최대 12줄)는 app/api/bot-settings · lib/booster.js boosterRewardsOf. bot/src/db.js 와 같아야 한다
+const BoosterStepRuleSchema = new mongoose.Schema({
+  months: { type: Number, default: 1 }, // 연속 개월
+  xp: { type: Number, default: 0 },
+  point: { type: Number, default: 0 },  // 빙옥
+}, { _id: false });
+
 const BotSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
 
@@ -54,6 +61,13 @@ const BotSettingSchema = new mongoose.Schema({
   // 📌 연속 출석 보너스 — 기본 꺼짐. days 일 연속 달성 시 xp·point 지급, repeat 면 days 의 배수마다 (bot/src/attend.js)
   attendStreakEnabled: { type: Boolean, default: false },
   attendStreakRules: { type: [AttendStreakRuleSchema], default: [] },
+  // 📌 서버 부스터 보상(2026-10-25 — 관리 › 레벨 설정 「서버 부스터 보상」, 봇 features/boosterBonus.js 가 지급). 비어 있으면 lib/booster.js 기본값.
+  //    사다리는 default undefined — 칸이 없는 옛 문서(기본 사다리)와 "끔"(빈 배열)을 가른다
+  boosterStartXp: { type: Number, default: 150000 },
+  boosterStartPoint: { type: Number, default: 30 },
+  boosterLadder: { type: [BoosterStepRuleSchema], default: undefined },
+  // 📌 연속 부스팅 「사용」 — 켜야만 봇이 주고 부스터 화면에 보인다(lib/booster.js boosterRewardsOf). 기본 꺼짐 — 수치를 고친 뒤 켠다
+  boosterLadderOn: { type: Boolean, default: false },
 
   muteMode: { type: String, default: "reduce" },   // "off"(제한 없음) | "reduce"(감소) | "block"(차단)
   muteReducePct: { type: Number, default: 90 },    // reduce일 때 감소율 %

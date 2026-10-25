@@ -458,8 +458,8 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
     items: g.items.filter((it) => {
       if (it.path === "/level") return true; // 비공개여도 메뉴엔 남긴다 — 들어가면 예고 화면
       if (it.name === "ARCTIC") return levelOpen && (shopPublic || isAdmin);
-      // 로그인한 사람은 내 정보 › 서버 부스터로 본다 — 메뉴에 두 번 두지 않는다
-      if (it.path === "/booster") return status !== "authenticated";
+      // 📌 부스터 혜택은 로그인해도 메뉴에 둔다 — 예전엔 로그인하면 숨기고 내 정보 › 서버 부스터로만 가게 했는데
+      //    2026-10-25 운영자 "혜택 보러 들어가기가 너무 빡세" (내 정보 › 서버 부스터 줄은 그대로)
       return true;
     }),
   }));

@@ -61,6 +61,8 @@ const PAGE_DEFS: PageDef[] = [
   { key: "eventPass", group: "SYSTEM : LEVEL", label: "이벤트 패스", href: "/admin/event-pass", icon: "ticket", keywords: "이벤트 패스 유령 펭귄의 초대 단계 미션 기간 한정 event pass" },
   // 📌 2026-10-23 방구석 심야 괴담회 — 스테이지 채널 상영 · 완청 추첨권 · 즉석 추첨(app/admin/goedam/page.tsx)
   { key: "goedam", group: "SYSTEM : LEVEL", label: "괴담회", href: "/admin/goedam", icon: "ticket", keywords: "괴담회 방구석 심야 괴담회 추첨 추첨권 할로윈 추첨권 영화 상영 회차 스테이지 완청 상품 goedam" },
+  // 📌 2026-10-25 친구 초대 — 상시 이벤트 · 초대 코드 · 누적 보상 · 괴담회 추첨권 보너스(app/admin/invite/page.tsx)
+  { key: "invite", group: "SYSTEM : LEVEL", label: "친구 초대", href: "/admin/invite", icon: "gift", keywords: "친구 초대 초대 코드 초대 이벤트 누적 보상 1명 3명 5명 10명 추첨권 보너스 기간 신규 멤버 invite referral" },
   { key: "season", group: "SYSTEM : LEVEL", label: "시즌 전환", href: "/admin/role-migration", icon: "arrowRight", keywords: "역할 이전 지난 시즌 역할 역할 떼기 RANKER 랭커 시즌 결산 시즌 역할" },
   { key: "messages", group: "SYSTEM : LEVEL", label: "봇 메시지", href: "/admin/messages", icon: "sparkles", keywords: "봇 메시지 임베드 문구 디자인 테스트 발송 기본값 변수 카드 이미지 알림 채널 보내는 곳" },
   // ARCTIC
@@ -127,6 +129,7 @@ const SUBS: SubDef[] = [
   ["bot", "tab", "정책", "/admin/bot?tab=policy", "XP 정책"],
   ["bot", "section", "지급량 · 주기", "/admin/bot?tab=policy&sec=xp", "채팅 XP 채팅 쿨타임 음성 XP 음성 지급 주기 출석체크 XP 출석 인정 접속 시간", "정책"],
   ["bot", "section", "연속 출석 보너스", "/admin/bot?tab=policy&sec=streak", "연속 출석 스트릭 보너스 규칙 배수마다 반복 빙옥", "정책"],
+  ["bot", "section", "서버 부스터 보상", "/admin/bot?tab=policy&sec=booster", "서버 부스터 보상 최초 부스팅 연속 부스팅 개월 단계 부스트 XP 빙옥", "정책"],
   ["bot", "section", "음소거 처리", "/admin/bot?tab=policy&sec=muting", "음소거 마이크 헤드셋 감소 비율 차단 적용 기준", "정책"],
   ["bot", "section", "AFK 방지 시스템", "/admin/bot?tab=policy&sec=afk", "잠수 확인 AFK 잠수 채널 첫 확인 다음 확인 응답 시간 제재 이력 분", "정책"],
   ["bot", "section", "강화", "/admin/bot?tab=policy&sec=enhance", "강화 단계당 XP 최대 단계 1단계 비용 비용 상승", "정책"],
@@ -153,10 +156,15 @@ const SUBS: SubDef[] = [
   ["pass", "section", "기본 설정", "/admin/pass?sec=basic", "시즌 패스 사용 운영 중 멈춤 프리미엄 트랙 해금가 빙옥"],
   ["pass", "section", "티어 구성", "/admin/pass?sec=tiers", "티어 추가 필요 XP 필요 XP 일괄 무료 보상 프리미엄 보상 티어 편집 티어 삭제 정렬"],
 
-  // 괴담회 — 탭 셋(구성 · 명단 · 추첨 기록)
+  // 괴담회 — 탭 넷(구성 · 명단 · 추첨 기록 · 그룹 지원 — 2026-10-25 게임 그룹 지원)
   ["goedam", "tab", "구성", "/admin/goedam", "괴담회 사용 스테이지 채널 ID 추첨권 아이템 추첨 기간 회차 상영 일정 장 수 완청 비율 상품 수량 비중 확률 희귀도 코드"],
   ["goedam", "tab", "명단", "/admin/goedam?tab=watch", "회차 명단 머문 시간 완청 지급 여부 수동 지급 추첨권 지급"],
   ["goedam", "tab", "추첨 기록", "/admin/goedam?tab=draws", "추첨 기록 당첨 코드 미지급 다시 지급"],
+  ["goedam", "tab", "게임 그룹 지원", "/admin/goedam?tab=groups", "게임 그룹 지원 그룹 지원 그룹 모집 그룹 심사 심사 중 승인 반려 반려 사유 문화상품권 상품권 번호 번호 추가 번호 배정 최소 인원 최대 인원 멤버 확인 부계정 새 계정 참여 코드 group", undefined, "users"],
+
+  // 친구 초대 — 탭 둘(구성 · 초대 기록)
+  ["invite", "tab", "구성", "/admin/invite", "친구 초대 사용 기간 보너스 기간 추첨권 장 수 누적 보상 단계 가입 7일 계정 7일"],
+  ["invite", "tab", "초대 기록", "/admin/invite?tab=log", "초대 기록 초대한 사람 초대받은 사람 코드 입력 거절 사유"],
 
   // 시즌 전환
   ["season", "tab", "역할 이전", "/admin/role-migration", "역할 이전 지난 시즌 역할 인벤토리 아이템으로 환불 미리보기 이전 실행 대상 제외"],
@@ -178,6 +186,8 @@ const SUBS: SubDef[] = [
   ["messages", "section", "기간 만료", "/admin/messages?key=expired", "기간 만료 DM 회수"],
   ["messages", "section", "환불", "/admin/messages?key=refunded", "환불 DM 취소"],
   ["messages", "section", "시즌 패스 미수령", "/admin/messages?key=passUnclaimed", "시즌 패스 미수령 DM 안 받은 보상"],
+  ["messages", "section", "최초 부스팅 보상", "/admin/messages?key=boosterBonus", "최초 부스팅 보상 DM 서버 부스터 부스트"],
+  ["messages", "section", "연속 부스팅 보상", "/admin/messages?key=boosterStep", "연속 부스팅 보상 DM 서버 부스터 개월 단계"],
   ["messages", "section", "/레벨", "/admin/messages?key=cmdLevel", "레벨 명령어 응답 슬래시"],
   ["messages", "section", "/랭크", "/admin/messages?key=cmdRank", "랭크 명령어 응답 슬래시"],
   ["messages", "section", "/출석체크", "/admin/messages?key=cmdAttend", "출석체크 명령어 응답 슬래시"],

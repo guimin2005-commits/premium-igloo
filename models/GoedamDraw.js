@@ -14,6 +14,7 @@ const GoedamDrawSchema = new mongoose.Schema(
     prizeName: { type: String, default: "" }, // 뽑은 순간의 이름 스냅샷
     kind: { type: String, default: "none" },  // 뽑은 순간의 종류(xp · point · item · role · code · none)
     amount: { type: Number, default: 0 },     // xp · point 의 양
+    count: { type: Number, default: 0 },      // item 의 개수(2026-10-25 — 다시 지급이 뽑은 순간의 개수로 준다. 옛 기록은 0 = 지금 상품 개수)
     code: { type: String, default: "" },      // code 상품이면 받은 코드(models/GoedamCode)
     ticketId: { type: String, default: "" },  // 소모한 추첨권 Purchase _id
     granted: { type: Boolean, default: false },

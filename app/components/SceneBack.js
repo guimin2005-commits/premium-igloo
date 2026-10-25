@@ -6,13 +6,27 @@ import { sceneMetaOf } from "@/lib/cardScenes";
 // 📌 카드 배경(2026-10-15) — 카드 바탕 장면을 통째로 바꾼다. 부르는 쪽(레벨 카드 · 인벤토리 장착 판)이 카드 맨 아래 겹에 깐다.
 //    그림은 도트(가로 폭에 맞춰 위에서부터 · 확대는 칸 그대로). glow — 등급 빛(부르는 쪽 색)을 장면 위에 옅게 다시 얹는다
 //    카드가 그림보다 길면(폭 × h / w 넘게) 그림 아래는 meta.foot(그림 맨 아래 줄 색 — 눈밭)으로 카드 끝까지 잇는다(옆은 자르지 않는다 — 글 자리 기준이 위)
+//    📌 움직이는 배경(meta.anim — 2026-10-25 「바람의 클로버 언덕」): 같은 자리에 겹 셋 — base(바탕) → 구름 띠(두 장을 이어 CSS 로 칸 하나씩 오른쪽으로 끝없이 · cloudSec 초에 한 바퀴) → live(움직이는 webp).
+//       움직임 줄이기면 globals.css 가 움직이는 겹(.scene-live)을 숨기고 멈춘 그림(.scene-still — meta.src)을 보인다
+const pix = (src) => ({ backgroundImage: `url(${src})`, backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", imageRendering: "pixelated" });
 export function SceneBack({ scene, glow = "" }) {
   const m = sceneMetaOf(scene);
   if (!m) return null;
+  const a = m.anim;
   return (
     <>
       <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden" style={{ backgroundColor: m.foot || m.bg }}>
-        <div style={{ width: "100%", aspectRatio: `${m.w} / ${m.h}`, backgroundColor: m.bg, backgroundImage: `url(${m.src})`, backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", imageRendering: "pixelated" }}></div>
+        {a ? (
+          <div className="relative overflow-hidden" style={{ width: "100%", aspectRatio: `${m.w} / ${m.h}`, backgroundColor: m.bg }}>
+            <div className="scene-still absolute inset-0" style={pix(m.src)}></div>
+            <div className="scene-live absolute inset-0" style={pix(a.base)}>
+              <div className="scene-cloud absolute left-0 top-0 h-full" style={{ width: "200%", animationDuration: `${a.cloudSec}s`, backgroundImage: `url(${a.clouds})`, backgroundSize: "50% 100%", backgroundRepeat: "repeat-x", imageRendering: "pixelated" }}></div>
+              <div className="absolute inset-0" style={pix(a.live)}></div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ width: "100%", aspectRatio: `${m.w} / ${m.h}`, backgroundColor: m.bg, ...pix(m.src) }}></div>
+        )}
       </div>
       {glow && <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: glow, opacity: m.glow }}></div>}
     </>
@@ -41,6 +55,40 @@ export function GhostTrailBar({ pct = 0, className = "" }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// 📌 「덩굴 줄기」 막대(sc_clover — 바람의 클로버 언덕) — 짙은 홈(테 · 빈 관 두 톤) 안에서 세 톤 줄기(밝은 위 · 몸 · 짙은 밑)가 자라고,
+//    18px 마다 위아래 번갈아 잎이 테를 뚫고 돋고, 줄기 끝엔 흰 꽃 한 칸이 박힌 세잎 봉오리. 칸 2px 도트 · 높이 12px(봇 lib/botCards.js cloverBar 와 같은 그림 — 칸 4px)
+//    잎은 줄기 끝 12px 앞까지(봉오리 자리 비움). 부르는 쪽이 글 줄 폭 그대로 둔다(유령 꼬리처럼 밖으로 나가는 것 없음)
+const VINE = { frame: "#0a1517", track: "#1f3537", track2: "#182a2c", s1: "#a6e57c", s2: "#5aa83e", s3: "#24502a", lL: "#c8f2a0", lM: "#6cc24a", lD: "#3f8a35" };
+// 잎 무늬 한 마디(18칸 = 36px) — 0열 = 위 잎 왼쪽 잎자루 칸. 위 잎(0~3열 · 0 · 1줄) · 아래 잎(9~12열 · 4 · 5줄)
+const VINE_LEAVES = [[1, 0, 2, VINE.lL], [3, 0, 1, VINE.lM], [0, 1, 1, VINE.s2], [1, 1, 2, VINE.lM], [9, 4, 1, VINE.s2], [10, 4, 2, VINE.lM], [10, 5, 1, VINE.lM], [11, 5, 2, VINE.lD]];
+const VINE_LEAF_URI = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="12" shape-rendering="crispEdges">${VINE_LEAVES.map(([x, y, w, c]) => `<rect x="${x * 2}" y="${y * 2}" width="${w * 2}" height="2" fill="${c}"/>`).join("")}</svg>`)}")`;
+const VINE_BUD = [".oLLo.", "oLMMDo", "oLDWMo", "LMDDMD", "oMDoDo", ".oo.o."];
+const VINE_BUD_PAL = { o: VINE.frame, L: "#c8f2a0", M: "#8fd46a", D: "#4c9a3a", W: "#ffffff" };
+export function CloverVineBar({ pct = 0, className = "" }) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const row = (top, bg, extra = {}) => <div className="absolute" style={{ left: 2, right: 2, top, height: 2, background: bg, ...extra }}></div>;
+  return (
+    <div className={`relative ${className}`} style={{ height: 12 }}>
+      {row(2, VINE.frame)}
+      {row(4, VINE.track)}
+      {row(6, VINE.track2)}
+      {row(8, VINE.frame)}
+      <div className="absolute" style={{ left: 0, top: 4, width: 2, height: 4, background: VINE.frame }}></div>
+      <div className="absolute" style={{ right: 0, top: 4, width: 2, height: 4, background: VINE.frame }}></div>
+      {p > 0 && (
+        <div className="absolute top-0 bottom-0" style={{ left: 2, width: `calc((100% - 16px) * ${p / 100})`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}>
+          <div className="absolute left-0 right-0" style={{ top: 4, height: 6, background: `linear-gradient(180deg, ${VINE.s1} 0 2px, ${VINE.s2} 2px 4px, ${VINE.s3} 4px 6px)` }}></div>
+          {/* 잎 — 잎 k(18k px 부터 8px)는 18k < 줄기 폭 − 24px 일 때만(봇 cloverBar 의 i < f − 7). 폭을 잎 마디로 끊어 반쪽 잎이 남지 않게(round() 를 못 읽으면 right 12px 로) */}
+          <div className="absolute top-0 overflow-hidden" style={{ left: 6, right: 12, width: "calc(round(up, 100% - 24px, 18px) - 10px)", height: 12, backgroundImage: VINE_LEAF_URI, backgroundRepeat: "repeat-x", backgroundPosition: "0 0" }}></div>
+          <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" shapeRendering="crispEdges" className="absolute top-0" style={{ left: "100%" }}>
+            {VINE_BUD.flatMap((r, j) => [...r].map((ch, i) => (VINE_BUD_PAL[ch] ? <rect key={`${i}-${j}`} x={i * 2} y={j * 2} width="2" height="2" fill={VINE_BUD_PAL[ch]} /> : null)))}
+          </svg>
+        </div>
+      )}
     </div>
   );
 }

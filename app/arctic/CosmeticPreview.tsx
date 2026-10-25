@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import SkinFrame from "../components/SkinFrame";
-import { SceneBack, sceneBarOf, GhostTrailBar } from "../components/SceneBack";
+import { SceneBack, sceneBarOf, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
 import { sceneMetaOf } from "@/lib/cardScenes";
 import TierEmblem from "../components/TierEmblem";
 import AvatarFrame, { frameRoom } from "../components/AvatarFrame";
@@ -228,6 +228,8 @@ export function ProfileCardPreview({ who, skin, scene = "", frame }: { who: Who;
         <div className="mt-6">
           {sceneBarOf(scene) === "ghostTrail" ? (
             <div data-skin-bar className="ml-[12px]"><GhostTrailBar pct={max ? 100 : pct} /></div>
+          ) : sceneBarOf(scene) === "cloverVine" ? (
+            <div data-skin-bar><CloverVineBar pct={max ? 100 : pct} /></div>
           ) : (
             <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${max ? 100 : pct}%` }}></div>

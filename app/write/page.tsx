@@ -147,6 +147,7 @@ export default function AdminWritePage() {
   const [hidden, setHidden] = useState(false);    // 📌 글 가리기 (지우지 않고 감추기)
   const [eventTag, setEventTag] = useState("NONE");
   const [bannerUrl, setBannerUrl] = useState("");
+  const [bannerInBody, setBannerInBody] = useState(true); // 이벤트 — 글 보기 화면에도 배너를 그릴지(목록 카드는 늘)
   // 📌 디스코드 공지(공지사항만) — 보낼지 · 멘션 · 글마다 고친 모양(null 이면 봇 메시지 › 공지 디자인) · 링크 버튼 · 보낸 글 같이 고치기
   const [dcOn, setDcOn] = useState(true);
   const [dcMention, setDcMention] = useState("none");
@@ -409,7 +410,7 @@ export default function AdminWritePage() {
   const DRAFT_KEY = "writeDraft";
 
   const collectDraft = () => ({
-    category, title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl,
+    category, title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl, bannerInBody,
     dcOn, dcMention, dcTemplate, dcButton,
     eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
@@ -440,7 +441,7 @@ export default function AdminWritePage() {
   // 보류 · 자동 저장 한 벌(collectDraft 모양)을 칸에 채운다 — 새 글 「이어서 작성」 · 수정 글 「이어서 수정」이 같이 쓴다
   const applyDraft = (d: any) => {
       setCategory(d.category || "공지사항"); setTitle(d.title || ""); setContent(d.content || ""); setPublishAt(d.publishAt || ""); setHidden(!!d.hidden);
-      setNoticeTag(d.noticeTag || "일반"); setIsPinned(!!d.isPinned); setBannerUrl(d.bannerUrl || "");
+      setNoticeTag(d.noticeTag || "일반"); setIsPinned(!!d.isPinned); setBannerUrl(d.bannerUrl || ""); setBannerInBody(d.bannerInBody !== false);
       setDcOn(d.dcOn !== false); setDcMention(MENTIONS.some((m) => m.v === d.dcMention) ? d.dcMention : "none");
       setDcTemplate(d.dcTemplate ? normTpl(d.dcTemplate) : null); setDcButton({ on: d.dcButton?.on !== false, label: String(d.dcButton?.label || "") });
       setEventTag(d.eventTag || "NONE"); setEventStartDate(d.eventStartDate || ""); setEventEndDate(d.eventEndDate || ""); setIsEventAlways(!!d.isEventAlways);
@@ -456,6 +457,7 @@ export default function AdminWritePage() {
       if (d.survey) setSurvey({ enabled: !!d.survey.enabled, title: d.survey.title || "", desc: d.survey.desc || "", closed: !!d.survey.closed, questions: Array.isArray(d.survey.questions) ? d.survey.questions : [], privacy: readPrivacy(d.survey.privacy) });
   };
   const restoreDraft = () => {
+    if (editId) return; // 보류는 새 글 몫 — 수정 중인 글에 다른 글을 채우지 않는다
     try {
       const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
       if (!d) return;
@@ -484,7 +486,7 @@ export default function AdminWritePage() {
   //    새로 고침 · 창 닫기는 브라우저 확인(beforeunload), 뒤로 가기 · 창 닫기로 정말 나가면 새 글은 말없이 보류해 둔다(남은 보류 글이 없을 때만 — 덮어쓰지 않게).
   //    등록 · 수정이 끝난 뒤의 이동은 묻지 않는다(done)
   const written = JSON.stringify([
-    title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl, eventTag, eventStartDate, eventEndDate, isEventAlways,
+    title, content, publishAt, hidden, noticeTag, isPinned, bannerUrl, bannerInBody, eventTag, eventStartDate, eventEndDate, isEventAlways,
     recruitSubCategory, recruitRole, recruitStartDate, recruitEndDate, isRecruitAlways, recruitQual, recruitTasks, recruitExtra,
     tournamentGame, tournamentPrize, tournamentLink, serializeBracket(bracketRounds), bracketPublic, tournamentWinner, tournamentWinnerId,
     tournamentStartDate, tournamentEndDate, tournamentType, tournamentPhase, tournamentTeamDay, tournamentEventDay, tournamentSchedule, survey,
@@ -502,6 +504,7 @@ export default function AdminWritePage() {
   const storeEdit = (id: string, d: any, w: string) => { try { localStorage.setItem(EDIT_KEY(id), JSON.stringify({ w, d, savedAt: new Date().toISOString() })); return true; } catch { return false; } };
   const [editPending, setEditPending] = useState<{ w: string; d: any; savedAt?: string } | null>(null);
   const autoWrote = useRef(false); // 이 화면이 보류 칸(DRAFT_KEY)에 자동 저장했다 — 「보류 안 함」 · 등록 뒤 지운다
+  const loadSeq = useRef(0); // 주소의 글이 바뀐 횟수(아래 searchParams 효과) — 앞 글의 늦은 응답 · 타이머를 버린다
   const live = useRef({ dirty: false, isNew: true, hasDraft: false, collect: collectDraft, editId: "", editPending: false, written: "" });
   live.current = { dirty: leaveDirty, isNew: isNewPost, hasDraft, collect: collectDraft, editId, editPending: !!editPending, written };
   const latestWritten = useRef(written);
@@ -509,7 +512,8 @@ export default function AdminWritePage() {
   // 수정 글 — 불러와 채운 뒤 잠시 기다렸다 그때의 written 을 기준으로(채운 뒤 맞추는 효과가 한 번 더 바꿔도 묻지 않게)
   useEffect(() => {
     if (!loadedTick) return;
-    const t = window.setTimeout(() => { keptWritten.current = latestWritten.current; }, 400);
+    const seq = loadSeq.current;
+    const t = window.setTimeout(() => { if (seq === loadSeq.current) keptWritten.current = latestWritten.current; }, 400);
     return () => window.clearTimeout(t);
   }, [loadedTick]);
   useEffect(() => {
@@ -580,7 +584,9 @@ export default function AdminWritePage() {
   // 수정 글 — 불러와 기준을 잡은 뒤(위 loadedTick 0.4초) 이 글의 저장 안 한 수정이 남아 있으면 띠로 묻는다
   useEffect(() => {
     if (!loadedTick || !editId) return;
+    const seq = loadSeq.current;
     const t = window.setTimeout(() => {
+      if (seq !== loadSeq.current) return; // 그새 다른 글로 옮겨 갔다 — 앞 글의 저장 안 한 수정을 새 글 띠에 올리지 않는다
       try {
         const s = JSON.parse(localStorage.getItem(EDIT_KEY(editId)) || "null");
         if (s?.d && s.w !== keptWritten.current) setEditPending(s);
@@ -629,83 +635,115 @@ export default function AdminWritePage() {
   const categories = ["공지사항", "이벤트", "구인", "대회", "서포터즈"];
 
   const searchParams = useSearchParams();
+  // 📌 2026-10-25 운영자 "수정을 누르면 다른 글이 나온다" — 화면이 그대로 남은 채 주소의 글이 바뀌면(관리 메뉴 · 기능 검색 · 뒤로/앞으로)
+  //    앞 글의 칸이 남아 섞였다. 주소의 id 가 바뀌면 칸을 비우고 그 글만 채운다 — 늦게 온 앞 글의 답은 버린다(loadSeq).
+  //    수정 화면에서 새 글 주소(?category=)로 오면 새 글로 비운다(editId 가 남아 「등록」이 앞 글을 덮어쓰던 길). 새 글끼리(?category= 가 바뀜)도 같다
+  const loadedFor = useRef<string | null>(null); // 마지막으로 맞춘 주소("글 id" 또는 "new:글 종류", null = 처음)
+  const resetForm = (cat: string) => {
+    applyDraft({ category: cat });
+    setSurvey({ enabled: false, title: "", desc: "", closed: false, questions: [], privacy: { ...EMPTY_PRIVACY } });
+    setCreatedAt("");
+    setEditPending(null);
+    keptWritten.current = null;
+  };
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
-    const id = params.get("id");
+    const id = params.get("id") || "";
     const categoryParam = params.get("category");
-    if (!id && categoryParam && categories.includes(categoryParam)) {
-      setCategory(categoryParam);
+    const cat = categoryParam && categories.includes(categoryParam) ? categoryParam : "";
+    const target = id || `new:${cat}`;
+    const prev = loadedFor.current;
+    loadedFor.current = target;
+    const seq = ++loadSeq.current;
+    const moved = prev !== null && prev !== target;
+    // 다른 글로 옮겨 왔다(같은 화면) — 화면을 떠날 때와 같게 앞 글을 보류 · 자동 저장해 두고(「나가기」로 답했으면 건너뛴다),
+    // 닫아 둔 묻기 · 자동 저장을 새 글에 다시 건다. autoWrote 도 비운다 — 이제 보류 칸에 있는 것은 이 글이 쓴 것이 아니다(지우지 않게)
+    if (moved) {
+      keepOnExit();
+      leftRef.current = false;
+      setLeaveAsk(null);
+      autoWrote.current = false;
     }
-    if (id) {
-      setEditId(id);
-      fetch(`/api/posts/${id}`).then((res) => res.json()).then((json) => {
-        if (json.success) {
-          const post = json.data;
-          setCategory(post.category);
-          setTitle(post.title);
-          setHidden(!!post.hidden); // 모든 카테고리 공통 — 빠지면 수정 저장 때 가리기가 풀린다
-          setCreatedAt(post.createdAt || "");
-          if (post.publishAt) {
-            const d = new Date(post.publishAt);
-            const pad = (n: number) => String(n).padStart(2, "0");
-            setPublishAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-          }
-          
-          if (post.category === "구인") {
-            setRecruitSubCategory(post.recruitSubCategory || "staff");
-            setRecruitRole(post.recruitRole || "");
-            setRecruitQual(post.recruitQual || "");
-            setRecruitTasks(post.recruitTasks || "");
-            setRecruitExtra(post.recruitExtra || "");
-            if (post.recruitPeriod && post.recruitPeriod.includes("~")) {
-              const [start, end] = post.recruitPeriod.split("~").map((s: string) => s.trim());
-              setRecruitStartDate(start.replace(/\./g, "-"));
-              if (end === "상시") { setIsRecruitAlways(true); setRecruitEndDate(""); }
-              else setRecruitEndDate(end.replace(/\./g, "-"));
-            }
-          } else if (post.category === "대회") {
-            setContent(post.content || "");
-            setBannerUrl(post.bannerUrl || "");
-            setTournamentGame(post.tournamentGame || "");
-            setTournamentPrize(post.tournamentPrize || "");
-            setTournamentStatus(post.tournamentStatus || "예정됨");
-            setTournamentLink(post.tournamentLink || "");
-            setTournamentBracket(post.tournamentBracket || "");
-            setBracketRounds(parseBracket(post.tournamentBracket || ""));
-            setBracketPublic(!!post.tournamentBracketPublic);
-            setTournamentWinner(post.tournamentWinner || "");
-            setTournamentWinnerId(post.tournamentWinnerId || "");
-            setTournamentType(post.tournamentType || "모집");
-            setTournamentPhase(phaseOf(post));
-            setTournamentTeamDay(post.tournamentTeamDay || ""); setTournamentEventDay(post.tournamentEventDay || "");
-            if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", desc: q.desc || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [], privacy: readPrivacy(post.survey.privacy) });
-            setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
-            if (post.tournamentDate && post.tournamentDate.includes("~")) {
-              const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
-              setTournamentStartDate(start.replace(/\./g, "-"));
-              setTournamentEndDate(end.replace(/\./g, "-"));
-            } else if (post.tournamentDate) {
-              setTournamentStartDate(post.tournamentDate.replace(/\./g, "-"));
-            }
-          } else {
-            setContent(post.content || "");
-            setEventTag(post.eventTag || "NONE");
-            setBannerUrl(post.bannerUrl || "");
-            setNoticeTag(post.noticeTag || (post.isImportant ? "중요" : "일반"));
-            setIsPinned(post.isPinned || false);
-            
-            if (post.eventPeriod && post.eventPeriod.includes("~")) {
-              const [start, end] = post.eventPeriod.split("~").map((s: string) => s.trim());
-              setEventStartDate(start.replace(/\./g, "-"));
-              if (end === "상시") { setIsEventAlways(true); setEventEndDate(""); } 
-              else setEventEndDate(end.replace(/\./g, "-"));
-            }
-          }
-          // 나가기 묻기의 기준 — 채운 뒤의 값(위 useEffect loadedTick)
-          setLoadedTick((n) => n + 1);
+    if (!id) {
+      if (moved) {
+        setEditId("");
+        resetForm(cat || "공지사항");
+        try { setHasDraft(!!localStorage.getItem(DRAFT_KEY)); } catch {}
+      } else if (cat) setCategory(cat);
+      return;
+    }
+    if (moved) resetForm(category);
+    setHasDraft(false); // 보류 띠는 새 글에서만
+    setEditId(id);
+    const failed = () => { if (seq === loadSeq.current) setPopupConfig({ isOpen: true, message: "글을 불러오지 못했습니다.", isError: true }); };
+    fetch(`/api/posts/${id}`, { cache: "no-store" }).then((res) => res.json()).then((json) => {
+      if (seq !== loadSeq.current) return; // 그새 다른 글로 옮겨 갔다
+      if (!json.success) { failed(); return; }
+      const post = json.data;
+      setCategory(post.category);
+      setTitle(post.title);
+      setHidden(!!post.hidden); // 모든 카테고리 공통 — 빠지면 수정 저장 때 가리기가 풀린다
+      setCreatedAt(post.createdAt || "");
+      if (post.publishAt) {
+        const d = new Date(post.publishAt);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setPublishAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+      }
+      
+      if (post.category === "구인") {
+        setRecruitSubCategory(post.recruitSubCategory || "staff");
+        setRecruitRole(post.recruitRole || "");
+        setRecruitQual(post.recruitQual || "");
+        setRecruitTasks(post.recruitTasks || "");
+        setRecruitExtra(post.recruitExtra || "");
+        if (post.recruitPeriod && post.recruitPeriod.includes("~")) {
+          const [start, end] = post.recruitPeriod.split("~").map((s: string) => s.trim());
+          setRecruitStartDate(start.replace(/\./g, "-"));
+          if (end === "상시") { setIsRecruitAlways(true); setRecruitEndDate(""); }
+          else setRecruitEndDate(end.replace(/\./g, "-"));
         }
-      });
-    }
+      } else if (post.category === "대회") {
+        setContent(post.content || "");
+        setBannerUrl(post.bannerUrl || "");
+        setTournamentGame(post.tournamentGame || "");
+        setTournamentPrize(post.tournamentPrize || "");
+        setTournamentStatus(post.tournamentStatus || "예정됨");
+        setTournamentLink(post.tournamentLink || "");
+        setTournamentBracket(post.tournamentBracket || "");
+        setBracketRounds(parseBracket(post.tournamentBracket || ""));
+        setBracketPublic(!!post.tournamentBracketPublic);
+        setTournamentWinner(post.tournamentWinner || "");
+        setTournamentWinnerId(post.tournamentWinnerId || "");
+        setTournamentType(post.tournamentType || "모집");
+        setTournamentPhase(phaseOf(post));
+        setTournamentTeamDay(post.tournamentTeamDay || ""); setTournamentEventDay(post.tournamentEventDay || "");
+        if (post.survey) setSurvey({ enabled: !!post.survey.enabled, title: post.survey.title || "", desc: post.survey.desc || "", closed: !!post.survey.closed, questions: Array.isArray(post.survey.questions) ? post.survey.questions.map((q: any) => ({ qid: q.qid || newQid(), type: q.type || "short", label: q.label || "", desc: q.desc || "", required: !!q.required, options: Array.isArray(q.options) ? q.options : [], etc: !!q.etc })) : [], privacy: readPrivacy(post.survey.privacy) });
+        setTournamentSchedule(Array.isArray(post.tournamentSchedule) ? post.tournamentSchedule.map((p: any) => ({ label: p.label || "", start: p.start || "", end: p.end || "" })) : []);
+        if (post.tournamentDate && post.tournamentDate.includes("~")) {
+          const [start, end] = post.tournamentDate.split("~").map((s: string) => s.trim());
+          setTournamentStartDate(start.replace(/\./g, "-"));
+          setTournamentEndDate(end.replace(/\./g, "-"));
+        } else if (post.tournamentDate) {
+          setTournamentStartDate(post.tournamentDate.replace(/\./g, "-"));
+        }
+      } else {
+        setContent(post.content || "");
+        setEventTag(post.eventTag || "NONE");
+        setBannerUrl(post.bannerUrl || "");
+        setBannerInBody(post.bannerInBody !== false);
+        setNoticeTag(post.noticeTag || (post.isImportant ? "중요" : "일반"));
+        setIsPinned(post.isPinned || false);
+        
+        if (post.eventPeriod && post.eventPeriod.includes("~")) {
+          const [start, end] = post.eventPeriod.split("~").map((s: string) => s.trim());
+          setEventStartDate(start.replace(/\./g, "-"));
+          if (end === "상시") { setIsEventAlways(true); setEventEndDate(""); } 
+          else setEventEndDate(end.replace(/\./g, "-"));
+        }
+      }
+      // 나가기 묻기의 기준 — 채운 뒤의 값(위 useEffect loadedTick)
+      setLoadedTick((n) => n + 1);
+    }).catch(failed);
   }, [searchParams]);
 
   // 📌 디스코드 공지 상태 — 처음 읽을 때 수정 글이면 글쓰기 칸(보낼지 · 멘션 · 모양 · 버튼)도 그 글 값으로. 보내는 중 · 대기면 10초마다 상태만 다시
@@ -838,11 +876,14 @@ export default function AdminWritePage() {
     window.scrollTo({ top: Math.max(boxTop - stickyTop(), Math.min(want, last)) });
   }, [editorView]);
 
+  // 📌 이벤트는 올린 글이 있는 탭으로 연다(?focus=) — 기간을 바꿔 「예정」 · 「종료」로 옮겨 간 글이 사라지고
+  //    「진행 중」 첫 칸에 다른 글이 와 있어, 같은 자리의 「수정」이 다른 글을 열었다(2026-10-25)
+  const savedId = useRef("");
   const handleModalClose = () => {
     setPopupConfig({ ...popupConfig, isOpen: false });
     if (!popupConfig.isError) {
       if (category === "공지사항") router.push("/notice");
-      else if (category === "이벤트") router.push("/event");
+      else if (category === "이벤트") router.push(savedId.current ? `/event?focus=${savedId.current}` : "/event");
       else if (category === "대회") router.push("/tournament");
       else if (category === "서포터즈") router.push(editId ? `/supporters/notice/${editId}` : "/supporters?tab=notice");
       else router.push("/recruit");
@@ -897,7 +938,7 @@ export default function AdminWritePage() {
       ...(category === "공지사항" && (!editId || dcLoadedFor === editId) && {
         discord: { on: dcOn, sync: dcSync, mention: dcMention, template: dcTemplate, button: dcButton },
       }),
-      ...(category === "이벤트" && { content, eventTag, bannerUrl, eventPeriod: computedEventPeriod }),
+      ...(category === "이벤트" && { content, eventTag, bannerUrl, bannerInBody, eventPeriod: computedEventPeriod }),
       // 서포터즈 글은 본문만 — 태그·배너 없이 /supporters 안에서 펼쳐 읽는다
       ...(category === "서포터즈" && { content }),
       ...(category === "구인" && {
@@ -942,6 +983,7 @@ export default function AdminWritePage() {
       const dcLine = category === "공지사항" ? dcResultLine(d?.discord, !!dcInfo?.botOnline) : "";
       if (res.ok) {
         leftRef.current = true; // 다 올렸다 — 이 뒤 이동은 묻지도 보류하지도 않는다
+        savedId.current = editId || String(d?.data?._id || "");
         // 올렸으니 자동 저장해 둔 것은 지운다(수정 글 칸 · 이 화면이 쓴 새 글 보류 칸)
         try { if (editId) localStorage.removeItem(EDIT_KEY(editId)); else if (autoWrote.current) { localStorage.removeItem(DRAFT_KEY); autoWrote.current = false; } } catch {}
         setPopupConfig({ isOpen: true, message: `${editId ? "수정되었습니다." : "등록되었습니다."}${dcLine ? `\n${dcLine}` : ""}`, isError: false });
@@ -964,6 +1006,7 @@ export default function AdminWritePage() {
     publishAt, createdAt, now: previewAt, hidden,
     noticeTag, isPinned, eventTag, eventPeriod: previewEventPeriod,
     bannerUrl: category === "서포터즈" && !editId ? "" : bannerUrl, // 서포터즈 새 글은 배너를 저장하지 않는다(다른 탭에서 넣은 값이 남아 있어도)
+    bannerInBody,
     tournamentGame, tournamentPhase, tournamentStatus: statusFromPhase(tournamentPhase), tournamentType,
     tournamentTeamDay, tournamentEventDay, tournamentDate: dateFromDays(tournamentTeamDay, tournamentEventDay), tournamentSchedule: tournamentSchedule.filter((p) => p.label.trim()),
   };
@@ -1047,7 +1090,7 @@ export default function AdminWritePage() {
       <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-5">
           {/* 보류된 글 이어서 작성 */}
-          {hasDraft && (
+          {hasDraft && !editId && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#ededed] bg-white px-5 py-3">
               <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f] shrink-0" />
               <p className="min-w-0 flex-1 text-[13px] font-bold">보류된 글이 있습니다</p>
@@ -1573,6 +1616,7 @@ export default function AdminWritePage() {
                 <SideRow label="배너 이미지 URL">
                   <input type="text" placeholder="https://..." value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} className={inputClass} />
                 </SideRow>
+                <SideRow label="본문에 배너 표시" right={<Switch on={bannerInBody} onChange={() => setBannerInBody((v) => !v)} label="본문에 배너 표시" />} />
               </>
             )}
 

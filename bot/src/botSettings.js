@@ -58,6 +58,8 @@ const DEFAULTS = {
 
 let settings = { ...DEFAULTS };
 let boosts = [];
+// 📌 한 번이라도 DB 에서 읽었는지 — 서버 부스터 보상(features/boosterBonus.js)은 이게 서기 전엔 주지 않는다(관리자가 정한 값 대신 기본값으로 나가지 않게)
+let loaded = false;
 
 export async function refreshBotSettings() {
   try {
@@ -67,6 +69,7 @@ export async function refreshBotSettings() {
     ]);
     settings = { ...DEFAULTS, ...(doc || {}) };
     boosts = boostRows;
+    loaded = true;
   } catch (e) {
     console.error("봇 설정 갱신 오류:", e.message);
   }
@@ -77,6 +80,7 @@ export function startBotSettingLoop() {
 }
 
 export const getSettings = () => settings;
+export const settingsLoaded = () => loaded;
 
 // 📌 SYSTEM : LEVEL 공개 여부 — 비공개(false · 없음)면 봇이 스스로 만드는 XP(채팅 · 음성 · 출석 · 아이템 효과)를 주지 않는다.
 //    2026-10-04 부터 오늘 누적 음성 분(자동 출석 · 하루 음성 효과 — features/voiceXp.js) · 활동 횟수(퀘스트 — features/activityStats.js)도 쌓지 않는다.

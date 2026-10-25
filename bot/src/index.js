@@ -32,6 +32,7 @@ import { startScheduledChanges } from "./features/scheduledChanges.js";
 import { startSeasonSettle } from "./features/seasonSettle.js";
 import { startNoticeAnnounce } from "./features/noticeAnnounce.js";
 import { startGoedamWatch } from "./features/goedamWatch.js";
+import { registerBoosterBonus, startBoosterBonus } from "./features/boosterBonus.js";
 import { refreshBotMessages, startBotMessageLoop } from "./botMessages.js";
 import { registerCommandDefinitions, registerCommandHandlers } from "./commands.js";
 
@@ -52,6 +53,7 @@ if (!nudgeOnly) {
   registerChatXp(client);
   registerWispHunt(client); // 📌 2026-10-14 할로윈 호박불 랜턴 — 채팅이 띄운 도깨비불의 [잡기] 버튼(features/wispHunt.js)
   registerLeaveReset(client);
+  registerBoosterBonus(client); // 📌 2026-10-25 서버 부스터 보상(최초 부스팅 · 연속 부스팅) — 부스트가 새로 붙으면 바로(features/boosterBonus.js)
   registerCommandHandlers(client);
 }
 
@@ -95,7 +97,8 @@ client.once(Events.ClientReady, async (c) => {
   startScheduledChanges(); // 예약 변경 — 정한 시각에 설정 · 아이템 값 바꾸기 (1분 주기)
   startSeasonSettle(c); // 끝난 시즌 결산 · RANKER (5분 주기)
   startNoticeAnnounce(c); // 사이트 공지 → 공지 채널 (20초 주기, 대기열 NoticeAnnounce)
-  startGoedamWatch(c); // 📌 방구석 심야 괴담회 — 스테이지 채널 회차별 머문 시간(20초마다 기록) · 회차 끝 + 60초 완청이면 할로윈 추첨권 자동 지급 (설정 1분 주기)
+  startGoedamWatch(c); // 📌 방구석 심야 괴담회 — 스테이지 채널 회차별 머문 시간(20초마다 기록) · 회차 끝 + 60초 완청이면 할로윈 추첨권 자동 지급 · 하루 음성 N분 채우면 추첨권(5분 주기, 2026-10-24) (설정 1분 주기)
+  startBoosterBonus(c); // 📌 서버 부스터 보상 — 최초 부스팅(사람당 한 번 · 기능 켜기 전 부스터 제외) · 연속 부스팅(시작일부터 개월 · 단계마다 한 번). 수치는 관리 › 레벨 설정(켤 때 멤버 전체 · 10분 주기 훑기)
   startScrimNudge(c);
 });
 

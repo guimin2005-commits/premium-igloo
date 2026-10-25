@@ -8,6 +8,7 @@ import { grantGoedamTickets, regrantGoedamDraw } from "@/lib/goedam";
 // 📌 괴담회 수동 지급(관리자) — 관리자 판정은 서버(lib/apiAuth requireAdmin)
 //    POST { sid, userId } → 그 회차 장 수만큼 추첨권. 완청 못 한 사람 · 기록이 빠진 사람에게 손으로(봇 자동 지급과 같은 조건 — 이미 받았으면 거절)
 //         → { success, data: { row(명단 한 줄), tickets(준 장 수) } }
+//         📌 2026-10-24 sid 자리에 "voice:<YYYY-MM-DD>" 면 그날 음성 활동 몫(음성 장 수 — lib/goedam.js grantGoedamTickets)
 //    POST { drawId } → 지급이 실패해 미지급으로 남은 추첨 결과를 다시 지급(granted false 인 기록만) → { success, data: { id, granted, error } }
 //    실패는 { success: false, error, message }
 const fail = (status, error) => NextResponse.json({ success: false, message: error, error }, { status });

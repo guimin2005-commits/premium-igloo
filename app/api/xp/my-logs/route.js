@@ -34,6 +34,8 @@ const PAYOUT_SOURCE = {
   pass: "시즌 패스 보상",
   "event-pass": "이벤트 패스 보상",
   goedam: "괴담회 추첨",
+  booster: "부스터 보상",
+  invite: "친구 초대",
   code: "쿠폰 보상",
   supporter: "서포터즈 보상",
   referral: "초대 보상",
@@ -54,8 +56,13 @@ export async function GET() {
     const userId = session.user.id;
     const dayStart = kstDayStart();
     const monthStart = kstMonthStart();
+    // 📌 2026-10-25 XP 테이블 목표 계산기 「활동하면 약 N분」 — 활동할 때 속도. 최근 7일 활동 XP(XpLog — 채팅 · 음성 · 그 칸의 효과)를
+    //    채팅 · 음성 XP 를 받은 5분 칸 수로 나눠 「활동 1분에 얼마」를 낸다(운영자 "나 몇 분만에 10,000XP 받는데" — 하루 평균은 24시간에 나눠 너무 느렸다).
+    //    한꺼번에 들어오는 보상 XP(Payout — 퀘스트 · 패스 · 부스터 · 지급) · 출석 · 레벨업 효과는 뺀다
+    const paceStart = new Date(Date.now() - 7 * 86400000);
+    const PACE_BUCKET_MS = 5 * 60 * 1000;
 
-    const [logs, sums, pays, paySums] = await Promise.all([
+    const [logs, sums, pays, paySums, paceAgg] = await Promise.all([
       XpLog.find({ userId }, { amount: 1, reason: 1, channelName: 1, createdAt: 1 })
         .sort({ createdAt: -1 })
         .limit(FEED_LIMIT)
@@ -92,21 +99,37 @@ export async function GET() {
           },
         },
       ]),
+      // 최근 7일 활동 XP — 5분 칸마다 묶어 합 · 칸 수. 채팅 · 음성이 있던 칸만 시간 · XP 를 센다(그 칸의 아이템 효과 XP 는 같이 더한다).
+      //    출석(하루 한 번 몫)과 레벨업 효과(보상 XP · 출석으로 오른 레벨에서도 써진다)는 활동 시간과 상관없어 뺀다
+      XpLog.aggregate([
+        { $match: { userId, createdAt: { $gte: paceStart }, amount: { $gt: 0 }, reason: { $nin: ["attend", "effect-levelup"] } } },
+        {
+          $group: {
+            _id: { $floor: { $divide: [{ $toLong: "$createdAt" }, PACE_BUCKET_MS] } },
+            xp: { $sum: "$amount" },
+            act: { $max: { $cond: [{ $in: ["$reason", ["chat", "voice"]] }, 1, 0] } },
+          },
+        },
+        { $group: { _id: null, buckets: { $sum: "$act" }, xp: { $sum: { $cond: [{ $eq: ["$act", 1] }, "$xp", 0] } } } },
+      ]),
     ]);
+    // 활동 속도 — { xp: 활동 XP 합, minutes: 채팅 · 음성 XP 를 받은 5분 칸 × 5 } (칸이 없으면 0 — 화면이 「—」)
+    const pace = { xp: Math.max(0, paceAgg[0]?.xp || 0), minutes: (paceAgg[0]?.buckets || 0) * 5 };
 
-    const today = { total: 0, chat: 0, voice: 0, attend: 0 };
-    const month = { total: 0, chat: 0, voice: 0, attend: 0 };
+    // 📌 2026-10-24 획득 피드 「오늘」 막대(채팅 · 음성 · 출석 · 보상 · 아이템) — effect = 채팅 · 음성 · 출석 밖의 활동 XP(아이템 효과 · 레벨업 효과 등), payout = 보상 XP
+    const today = { total: 0, chat: 0, voice: 0, attend: 0, effect: 0, payout: 0 };
+    const month = { total: 0, chat: 0, voice: 0, attend: 0, effect: 0, payout: 0 };
     for (const s of sums) {
-      const key = ["chat", "voice", "attend"].includes(s._id) ? s._id : null;
-      if (key) {
-        today[key] = s.today;
-        month[key] = s.month;
-      }
+      const key = ["chat", "voice", "attend"].includes(s._id) ? s._id : "effect";
+      today[key] += s.today;
+      month[key] += s.month;
       today.total += s.today;
       month.total += s.month;
     }
-    today.total += paySums[0]?.today || 0;
-    month.total += paySums[0]?.month || 0;
+    today.payout = paySums[0]?.today || 0;
+    month.payout = paySums[0]?.month || 0;
+    today.total += today.payout;
+    month.total += month.payout;
 
     // 피드 — 활동 XP 와 보상 XP 를 시각 순으로 섞어 최근 FEED_LIMIT 건
     const feed = [
@@ -133,6 +156,7 @@ export async function GET() {
         logs: feed,
         today,
         month,
+        pace, // 최근 7일 활동 속도 — XP 테이블 목표 계산기(활동하면 약 N분)
       },
     });
   } catch (e) {

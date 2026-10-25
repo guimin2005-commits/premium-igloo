@@ -69,7 +69,10 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
   const topBonus = VOICE_TIERS[VOICE_TIERS.length - 1].bonus;
   const myTier = me ? VOICE_TIERS[tierIdx] : null;
   const boosts = policy?.activeBoosts || [];
-  const muteV = P.muteMode === "off" ? null : P.muteMode === "block" ? "음성 XP 없음" : `음성 XP −${P.muteReducePct}%`;
+  // 📌 2026-10-25 헤드셋 끔은 설정과 상관없이 XP · 음성 시간 모두 없음(봇 voiceTime.js multOf) — 「헤드셋 끔」 줄은 늘.
+  //    설정 줄은 마이크만 끈 경우라 적용 기준 any 일 때만(both 는 헤드셋까지 끈 때라 위 줄과 같다) · 감소율 0% 면 뺀다
+  const muteV = P.muteTarget !== "any" || P.muteMode === "off" || (P.muteMode !== "block" && !(Number(P.muteReducePct) > 0))
+    ? null : P.muteMode === "block" ? "음성 XP 없음" : `음성 XP −${P.muteReducePct}%`;
 
   // 📌 연속 출석 보너스 — 관리자가 꺼 두면 policy 가 [] 를 준다(api/xp/policy) → 줄이 아예 안 생긴다.
   //    봇 streakBonusOf(bot/src/attend.js)와 같은 읽기: days 일째 한 번, repeat 면 days 의 배수마다
@@ -180,10 +183,11 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
             })}
           </div>}
           {/* 혼자면 오른쪽 반이 비어 보인다 — 전체 폭으로 펴고 PC 는 세 줄을 한 줄로 */}
-          <div className={`rounded-2xl bg-[#f2f2f2] px-5 py-2 ${hasPlus ? "" : "md:col-span-2 md:grid md:grid-cols-3 md:gap-x-8 md:[&>*]:border-b-0"}`}>
+          <div className={`rounded-2xl bg-[#f2f2f2] px-5 py-2 ${hasPlus ? "" : `md:col-span-2 md:grid ${muteV ? "md:grid-cols-4" : "md:grid-cols-3"} md:gap-x-8 md:[&>*]:border-b-0`}`}>
             <Rule k="잠수 채널" v="음성 XP 없음" />
             <Rule k="제외 채널" v="XP 없음" />
-            {muteV && <Rule k="음소거" v={muteV} />}
+            <Rule k="헤드셋 끔" v="음성 XP와 음성 시간 없음" />
+            {muteV && <Rule k="마이크 끔" v={muteV} />}
           </div>
         </div>
       </section>

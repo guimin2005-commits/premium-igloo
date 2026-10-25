@@ -69,8 +69,9 @@ export const POP_THEME = {
 // corner: "2xl" 이면 창 모서리 16px(다른 패널과 같은 값 — 인벤토리 2026-10-11 「다듬은 잉크 판」). 기본은 예전 그대로 24px
 // compact: 왼쪽 요약 판 없이 한 칸짜리 창(PC 최대 680px · 높이는 내용만큼, 모바일은 바텀시트 최대 88dvh) — 강화 창
 // 📌 top — 왼쪽 · 오른쪽 칸 위에 전체 폭으로 까는 판(2026-10-15 인벤토리 「꾸미기」 장착 판). 있으면 본문이 칸마다가 아니라 한 번에 스크롤한다
+//    size "fit" — PC 폭 860 · 높이는 내용만큼(최대 min(800, 92vh)) · 폰은 내용만큼(최대 88dvh) 아래 시트. body 와 함께 쓰고 본문이 넘치면 본문만 스크롤(2026-10-24 세부 효과 창 — 시안 크기 그대로). grab false — 폰 시트 손잡이를 그리지 않는다
 //    size "xl" — PC 1100 × 800 · 폰은 기본과 같은 높이(인벤토리 — 모든 탭 같은 크기, 2026-10-17 운영자 "그냥 똑같은 크기로 맞추라니까"). size "wide" — 넓은 창(PC 1024 × 820, 인벤토리 — 2026-10-15 운영자 "인벤토리 창 크기 늘려도 되니까"). body — 왼쪽 · 오른쪽 칸 대신 본문을 통째로 맡긴다(인벤토리 「꾸미기」 옷장 — 스크롤도 그쪽이)
-export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, top, left, children, body, footer, theme = "ink", compact = false, corner = "3xl", glow, size = "", tabsWrap = false }) => {
+export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, top, left, children, body, footer, theme = "ink", compact = false, corner = "3xl", glow, size = "", tabsWrap = false, grab = true }) => {
   // 왼쪽 칸(상세) 폭 — 큰 창(xl · 1100)은 340, 그 밖은 236(2026-10-17 운영자 인벤토리 상세 칸 "이부분을 좀 더 늘려")
   //    tabsWrap — 폰에서 탭이 넘치면 숨은 가로 스크롤 대신 다음 줄로 접는다(인벤토리 — 「즐겨찾기」 탭이 늘 붙어 폰 폭을 넘는다). PC 는 그대로 한 줄
   const leftW = size === "xl" ? "sm:w-[340px]" : "sm:w-[236px]";
@@ -97,8 +98,8 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, top, 
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : `pop-snap ${size === "xl" ? "sm:max-w-[1100px] h-[86dvh] sm:h-[min(800px,92vh)]" : size === "wide" ? "sm:max-w-5xl h-[90dvh] sm:h-[min(820px,92vh)]" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)]"} ${corner === "2xl" ? "rounded-t-2xl sm:rounded-2xl" : "rounded-t-3xl sm:rounded-3xl"}`}`}
-        style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)", ...(compact ? null : SNAP[size] || SNAP[""]) }}
+        className={`relative w-full overflow-hidden flex flex-col shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] ${compact ? "sm:max-w-[680px] max-h-[88dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl" : size === "fit" ? "sm:max-w-[860px] max-h-[88dvh] sm:max-h-[min(800px,92vh)] rounded-t-3xl sm:rounded-3xl" : `pop-snap ${size === "xl" ? "sm:max-w-[1100px] h-[86dvh] sm:h-[min(800px,92vh)]" : size === "wide" ? "sm:max-w-5xl h-[90dvh] sm:h-[min(820px,92vh)]" : "sm:max-w-3xl h-[86dvh] sm:h-[min(620px,88vh)]"} ${corner === "2xl" ? "rounded-t-2xl sm:rounded-2xl" : "rounded-t-3xl sm:rounded-3xl"}`}`}
+        style={{ background: t.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)", ...(compact || size === "fit" ? null : SNAP[size] || SNAP[""]) }}
       >
         <style>{POP_CSS}</style>
         {t.grid && <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>}
@@ -108,7 +109,7 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, top, 
         {t.glow2 && <div aria-hidden className="absolute -bottom-32 -left-20 w-80 h-80 blur-[110px] rounded-full pointer-events-none" style={{ background: t.glow2 }}></div>}
 
         {/* 모바일 바텀시트 손잡이 */}
-        <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>
+        {grab && <div aria-hidden className="sm:hidden relative z-10 flex justify-center pt-2.5"><span className="w-10 h-1 rounded-full bg-white/20"></span></div>}
 
         {/* 머리 */}
         <div className="relative z-10 shrink-0 px-5 sm:px-7 pt-4 sm:pt-6 flex items-center justify-between gap-4">
@@ -139,7 +140,7 @@ export const PopShell = ({ open, onClose, title, count, badge, icon, tabs, top, 
         {compact ? (
           <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 sm:px-9 pt-6 sm:pt-8 pb-6 sm:pb-9">{children}</div>
         ) : body ? (
-          <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden pop-scroll">{body}</div>
+          <div data-pop-body className={`relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${size === "fit" ? "" : "sm:overflow-hidden "}pop-scroll`}>{body}</div>
         ) : top ? (
           <div data-pop-body className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pop-scroll">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6">{top}</div>

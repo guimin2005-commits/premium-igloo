@@ -1,22 +1,28 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { RARITIES, rarityOf } from "@/lib/rarity";
+import GoedamModal from "../../level/GoedamModal";
 import {
   SCREENING_TICKETS,
   SCREENING_RATIO,
   PRIZE_WEIGHT,
   MAX_TITLE,
-  MAX_DAYS,
+  PRIZE_COUNT,
   NUM_MAX,
   MAX_CODE_LEN,
   MAX_CODES_PER_SAVE,
   MAX_SCREENINGS,
   MAX_PRIZES,
+  VOICE_MINUTES,
+  VOICE_TICKETS,
+  voiceSid,
+  voiceDayOf,
+  voiceDayLabel,
 } from "@/lib/goedamRules";
 import {
   AdminPage,
@@ -32,13 +38,16 @@ import {
   StatRow,
   DataTable,
   DetailPane,
+  DefRow,
   EmptyRow,
   Toolbar,
   SearchInput,
   inputClass,
+  numClass,
   labelClass,
   fieldNote,
   ConfirmDialog,
+  FormSheet,
   StatusChip,
   useAdminGuard,
   useToast,
@@ -52,6 +61,10 @@ import {
 //      · 구성   — 기본 설정 + 요약, 회차 표, 상품 표, 바뀐 것이 있을 때만 뜨는 저장 줄(SaveBar). 줄을 누르면 오른쪽 편집 칸(폰은 아래 판)
 //      · 명단   — 회차를 고르면 머문 시간 · 비율 · 지급 여부, 줄마다 「지급」(완청 못 한 사람에게 손으로 — app/api/admin/goedam/grant) · 디스코드 ID 로 직접 지급
 //      · 추첨 기록 — 최근 300건. 지급이 실패한 결과는 「다시 지급」
+//      · 그룹 지원 — 게임 그룹 지원(2026-10-25 · 약속 문서 .claude/mockups/goedam-group/SPEC.md §6) — 설정 · 문화상품권 번호 · 그룹 심사(아래 GroupsTab)
+//    · 📌 2026-10-24 운영자 "디코 일정 시간한 것도 지급할 거고 상점에도 판매할 거라서 회차라는 개념이 좀 애매한데" — 추첨권을 받는 길은 셋:
+//      「상영」(회차 표 — 이름만 바꿈) · 「음성 활동」(하루 음성 N분 → N장, 기본 꺼짐 · 저장은 같은 PUT 의 voice) · 「상점」(추첨권 아이템을 파는 상품 — 상점 관리 몫, 여기서는 보기 · 바로가기만).
+//      명단 고르기에 음성 기록이 있는 날(「음성 M. D.」 — GoedamWatch sid "voice:<YYYY-MM-DD>")도 들어간다
 //    · 저장 — 편집 칸 [저장] · Enter · 삭제 확인 · 저장 줄이 전부 한 PUT(설정 전체)으로 간다. sid · pid 는 서버가 발급하고 화면은 되돌려 보내기만 한다
 //    · 시각은 KST 로 받고 보낸다(브라우저 시간대와 상관없이) — 추첨 종료 시각은 들어가지 않는다([열림, 닫힘))
 //    · code 상품의 코드는 편집 칸의 붙여넣기 칸(줄마다 하나)으로만 넣는다 — 그 저장에만 실어 보내고(prizes[].codes), 서버가 없는 것만 넣는다(지우기 없음)
@@ -70,13 +83,15 @@ type Prize = {
   amount: number;
   itemId: string;
   itemName: string;
-  days: number;
+  count: number; // item 개수(1~99 — 그 밖 0)
   roleId: string;
   roleName: string;
   qty: number | null; // null = 무제한
   weight: number;
   rarity: string;
 };
+// 음성 활동 — 숫자 칸은 비울 수 있게 글자로 들고 있다가 보낼 때 숫자로(시각은 KST 칸 글자)
+type VoiceCfg = { enabled: boolean; minutes: string; tickets: string; startsAt: string; endsAt: string };
 // 저장할 한 벌 — 시각은 datetime-local 칸 글자(KST) 그대로 들고 있다가 보낼 때 ISO 로 바꾼다
 type Cfg = {
   enabled: boolean;
@@ -86,8 +101,11 @@ type Cfg = {
   drawOpensAt: string;
   drawClosesAt: string;
   screenings: Screening[];
+  voice: VoiceCfg;
   prizes: Prize[];
 };
+// 추첨권을 파는 상품(서버 getGoedamAdmin shop) — 판매 중인 것 하나
+type ShopLink = { id: string; name: string };
 // 편집 칸 초안 — 숫자 칸을 비울 수 있어야 해서 글자로 들고 있다가 저장할 때 숫자로 바꾼다
 type ScreeningDraft = { key: string; title: string; startsAt: string; endsAt: string; tickets: string; ratioPct: string };
 type PrizeDraft = {
@@ -97,7 +115,7 @@ type PrizeDraft = {
   amount: string;
   itemId: string;
   itemName: string;
-  days: string;
+  count: string; // 빈칸 = 1개
   roleId: string;
   roleName: string;
   qty: string;
@@ -110,17 +128,34 @@ type SaveFrom = "pane" | "list";
 type Stock = { given: number; total: number | null; left: number | null };
 type ItemState = "live" | "draft" | "missing";
 type GuildRole = { id: string; name: string; color?: string; managed?: boolean };
-type RegItem = { _id: string; name: string; type?: string; icon?: string; imageUrl?: string; color?: string; _draft?: string };
+type RegItem = { _id: string; name: string; type?: string; icon?: string; imageUrl?: string; color?: string; _draft?: string; stackable?: boolean };
 type RosterRow = { userId: string; userName: string; seconds: number; pct: number; earned: boolean; grantedAt: string | null; granted: number; manual: boolean };
 type DrawRow = { id: string; at: string | null; userId: string; userName: string; pid: string; prizeName: string; kind: string; amount: number; code: string; granted: boolean; error: string };
-type Tab = "config" | "watch" | "draws";
+type Tab = "config" | "watch" | "draws" | "groups";
 
 const TABS: { id: Tab; short: string }[] = [
   { id: "config", short: "구성" },
   { id: "watch", short: "명단" },
   { id: "draws", short: "추첨 기록" },
+  { id: "groups", short: "그룹 지원" },
 ];
-const tabOf = (v: string | null): Tab => (v === "watch" || v === "draws" ? v : "config");
+const tabOf = (v: string | null): Tab => (v === "watch" || v === "draws" || v === "groups" ? v : "config");
+// 📌 연출 미리보기(2026-10-23 운영자 "애니메이션 보는 것 좀") — 고른 결과 등급 · 종류로 레벨 화면 추첨 창(GoedamModal demo)을 서버 없이 띄운다.
+//    추첨권 · 추첨 기록 · 지급은 그대로(읽기 · 쓰기 요청 없음). 이름 · 양은 그 종류의 첫 상품(없으면 예시 값)
+const DEMO_RARITY = [{ v: "none", l: "꽝" }, ...RARITIES.map((r) => ({ v: r.v, l: r.l }))];
+const DEMO_KIND = [
+  { v: "xp", l: "XP" },
+  { v: "point", l: "빙옥" },
+  { v: "item", l: "아이템" },
+  { v: "code", l: "코드" },
+];
+const DEMO_BASE: Record<string, { name: string; amount?: number; itemName?: string; count?: number; code?: string }> = {
+  xp: { name: "XP", amount: 5000 },
+  point: { name: "빙옥", amount: 300 },
+  item: { name: "아이템", itemName: "아이템", count: 1 },
+  code: { name: "스팀 월렛 코드", code: "DEMO-2026-1031" },
+  none: { name: "다음 기회에" },
+};
 const tabHref = (id: string) => (id === "config" ? "/admin/goedam" : `/admin/goedam?tab=${id}`);
 
 const KIND_OPTIONS: { v: PrizeKind; l: string }[] = [
@@ -143,7 +178,8 @@ const SNOWFLAKE = /^\d{17,20}$/;
 const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 // 불러오기에 실패한 채로 저장하면 빈 구성이 운영 중인 설정을 통째로 덮어쓴다
 const LOAD_FAILED_MSG = "현재 설정을 불러오지 못해 저장할 수 없습니다. [다시 불러오기] 후에 저장해 주십시오.";
-const EMPTY_CFG: Cfg = { enabled: false, title: "", channelId: "", ticketItemId: "", drawOpensAt: "", drawClosesAt: "", screenings: [], prizes: [] };
+const EMPTY_VOICE: VoiceCfg = { enabled: false, minutes: "", tickets: "", startsAt: "", endsAt: "" };
+const EMPTY_CFG: Cfg = { enabled: false, title: "", channelId: "", ticketItemId: "", drawOpensAt: "", drawClosesAt: "", screenings: [], voice: EMPTY_VOICE, prizes: [] };
 
 // 서버가 준 값(정리 전) — 칸 이름만 믿고 값은 정리 함수가 다시 맞춘다
 type Raw = Record<string, unknown>;
@@ -253,7 +289,7 @@ const normPrize = (r: Raw): Prize => {
     amount: toInt(r.amount),
     itemId: String(r.itemId || ""),
     itemName: String(r.itemName || ""),
-    days: Math.min(MAX_DAYS, toInt(r.days)),
+    count: Math.min(PRIZE_COUNT.max, toInt(r.count)),
     roleId: String(r.roleId || ""),
     roleName: String(r.roleName || ""),
     qty: r.qty == null ? null : Math.max(0, Math.floor(Number(r.qty)) || 0),
@@ -261,6 +297,19 @@ const normPrize = (r: Raw): Prize => {
     rarity: String(r.rarity || ""),
   };
 };
+// 음성 활동 — 서버가 정리해 보낸 값(lib/goedamRules.js normalizeVoice). 숫자는 칸 글자로
+const normVoice = (r: Raw): VoiceCfg => ({
+  enabled: r.enabled === true,
+  minutes: String(Math.min(VOICE_MINUTES.max, Math.max(VOICE_MINUTES.min, toInt(r.minutes) || VOICE_MINUTES.def))),
+  tickets: String(Math.min(VOICE_TICKETS.max, Math.max(VOICE_TICKETS.min, toInt(r.tickets) || VOICE_TICKETS.def))),
+  startsAt: toKstInput(r.startsAt),
+  endsAt: toKstInput(r.endsAt),
+});
+const shopFrom = (v: unknown): ShopLink | null => {
+  const o = rawOf(v);
+  return o.id ? { id: String(o.id), name: String(o.name || "") } : null;
+};
+const voiceDaysFrom = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter((d) => !!voiceDayOf(voiceSid(d))) : []);
 const statesFrom = (v: unknown): Record<string, ItemState> => {
   const out: Record<string, ItemState> = {};
   for (const [id, s] of Object.entries(rawOf(v))) {
@@ -303,20 +352,20 @@ const drawsFrom = (v: unknown): DrawRow[] =>
 
 // ── 표시 ───────────────────────────────────────
 // 상품 보이는 이름 — lib/goedamRules.js prizeTitle 과 같은 모양
-const prizeTitle = (p: Pick<Prize, "name" | "kind" | "amount" | "itemName" | "roleName">) => {
+const prizeTitle = (p: Pick<Prize, "name" | "kind" | "amount" | "itemName" | "roleName"> & { count?: number }) => {
   if (p.name.trim()) return p.name.trim();
   if (p.kind === "xp") return `XP ${fmt(p.amount)}`;
   if (p.kind === "point") return `빙옥 ${fmt(p.amount)}`;
-  if (p.kind === "item") return p.itemName || "아이템";
+  if (p.kind === "item") return `${p.itemName || "아이템"}${(p.count || 0) > 1 ? ` ×${fmt(p.count || 0)}` : ""}`;
   if (p.kind === "role") return p.roleName || "역할";
   if (p.kind === "code") return "코드";
   return "꽝";
 };
-// 상품 내용 한 줄 — 종류마다 양 · 아이템(기간) · 역할
+// 상품 내용 한 줄 — 종류마다 양 · 아이템(2개 이상이면 ×N) · 역할
 const prizeDetail = (p: Prize, roleNameOf: (id: string) => string, itemOf: (id: string) => RegItem | null) => {
   if (p.kind === "xp") return `${fmt(p.amount)} XP`;
   if (p.kind === "point") return `${fmt(p.amount)} 빙옥`;
-  if (p.kind === "item") return `${itemOf(p.itemId)?.name || p.itemName || "미지정"}${p.days > 0 ? ` · ${fmt(p.days)}일` : ""}`;
+  if (p.kind === "item") return `${itemOf(p.itemId)?.name || p.itemName || "미지정"}${p.count > 1 ? ` ×${fmt(p.count)}` : ""}`;
   if (p.kind === "role") return roleNameOf(p.roleId) || p.roleName || "미지정";
   if (p.kind === "code") return "코드 1장";
   return "-";
@@ -371,7 +420,8 @@ const sig = (c: Cfg) =>
     drawOpensAt: c.drawOpensAt,
     drawClosesAt: c.drawClosesAt,
     screenings: c.screenings.map((s) => [s.sid, s.title.trim(), s.startsAt, s.endsAt, s.tickets, s.ratio]),
-    prizes: c.prizes.map((p) => [p.pid, p.name.trim(), p.kind, p.amount, p.itemId, p.days, p.roleId, p.qty, p.weight, p.rarity || "common"]),
+    voice: [c.voice.enabled, intText(c.voice.minutes), intText(c.voice.tickets), c.voice.startsAt, c.voice.endsAt],
+    prizes: c.prizes.map((p) => [p.pid, p.name.trim(), p.kind, p.amount, p.itemId, p.count, p.roleId, p.qty, p.weight, p.rarity || "common"]),
   });
 
 const screeningError = (s: { title: string; startsAt: string; endsAt: string; tickets: number; ratio: number }) => {
@@ -392,10 +442,22 @@ const prizeError = (p: Prize) => {
   if (p.name.trim().length > MAX_TITLE) return `이름은 ${MAX_TITLE}자 이하로 입력해 주십시오.`;
   if ((p.kind === "xp" || p.kind === "point") && !(p.amount >= 1 && p.amount <= NUM_MAX)) return "수량을 1 이상 10억 이하로 입력해 주십시오.";
   if (p.kind === "item" && !p.itemId) return "아이템을 선택해 주십시오.";
-  if (p.kind === "item" && p.days > MAX_DAYS) return `기간은 ${fmt(MAX_DAYS)}일 이하로 입력해 주십시오.`;
+  if (p.kind === "item" && !(Number.isInteger(p.count) && p.count >= PRIZE_COUNT.min && p.count <= PRIZE_COUNT.max)) return `개수는 ${PRIZE_COUNT.min}~${PRIZE_COUNT.max} 사이로 입력해 주십시오.`;
   if (p.kind === "role" && !p.roleId) return "역할을 선택해 주십시오.";
   if (p.qty != null && !(Number.isInteger(p.qty) && p.qty >= 0 && p.qty <= NUM_MAX)) return "수량은 0 이상의 정수로 입력해 주십시오.";
   if (!(Number.isInteger(p.weight) && p.weight >= PRIZE_WEIGHT.min && p.weight <= PRIZE_WEIGHT.max)) return `비중은 ${PRIZE_WEIGHT.min}~${fmt(PRIZE_WEIGHT.max)} 사이의 정수로 입력해 주십시오.`;
+  return "";
+};
+// 음성 활동 검사 — 서버(app/api/admin/goedam checkVoice)와 같은 범위
+const voiceError = (v: VoiceCfg) => {
+  const m = intText(v.minutes);
+  if (!(Number.isInteger(m) && m >= VOICE_MINUTES.min && m <= VOICE_MINUTES.max)) return `하루 음성 시간은 ${VOICE_MINUTES.min}~${fmt(VOICE_MINUTES.max)}분 사이로 입력해 주십시오.`;
+  const t = intText(v.tickets);
+  if (!(Number.isInteger(t) && t >= VOICE_TICKETS.min && t <= VOICE_TICKETS.max)) return `장 수는 ${VOICE_TICKETS.min}~${VOICE_TICKETS.max} 사이로 입력해 주십시오.`;
+  const a = kstMs(v.startsAt);
+  const b = kstMs(v.endsAt);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return "기간을 입력해 주십시오.";
+  if (b <= a) return "종료 시각은 시작 시각 이후로 지정해 주십시오.";
   return "";
 };
 // 저장 전 검사 — 서버가 돌려보낼 값을 먼저 막는다. 괜찮으면 ""
@@ -413,6 +475,8 @@ const checkCfg = (c: Cfg) => {
     const err = screeningError(s);
     if (err) return `「${s.title.trim() || "회차"}」: ${err}`;
   }
+  const vErr = voiceError(c.voice);
+  if (vErr) return `음성 활동: ${vErr}`;
   if (c.prizes.length > MAX_PRIZES) return `상품은 최대 ${MAX_PRIZES}개까지 등록할 수 있습니다.`;
   for (const p of c.prizes) {
     const err = prizeError(p);
@@ -423,11 +487,983 @@ const checkCfg = (c: Cfg) => {
 // 회차는 시작 순 — 서버(lib/goedamRules.js normalizeScreenings)와 같은 차례로 들고 있어 저장 뒤 표가 뒤섞이지 않는다
 const sortScreenings = (list: Screening[]) => [...list].sort((a, b) => (kstMs(a.startsAt) || 0) - (kstMs(b.startsAt) || 0));
 const onOffLabel = (v: boolean) => (v ? "운영 중" : "중단");
+const voiceOnLabel = (v: boolean) => (v ? "사용" : "중단");
+
+// ══ 그룹 지원 탭 ═══════════════════════════════════════════
+// 📌 게임 그룹 지원(2026-10-25 운영자 결정 · 약속 문서 .claude/mockups/goedam-group/SPEC.md §4 · §6) — 「그룹 지원」 탭(?tab=groups).
+//    저장 · 심사는 app/api/admin/goedam/groups, 계산 · 번호 배정 · 알림은 lib/goedamGroup.js 한 곳(화면 검사는 먼저 막는 것뿐 — 서버가 다시 검사한다)
+//    · 위: 설정 판(사용 · 기간 · 최소/최대 인원 — 바뀐 것이 있을 때만 뜨는 저장 줄 · Enter → PUT { config }) · 문화상품권 번호 판(남은 / 배정 / 전체 · 붙여 넣기 → codes-add)
+//    · 아래: 그룹 표(상태 거르기 · 검색 · 심사 중 먼저). 줄을 누르면 상세 칸(GET ?id= — 멤버마다 계정 만든 날 · 서버 들어온 날 · 레벨/XP · 첫 XP · 최근 30일 XP,
+//      새 계정 · 기록 없음은 빨간 글자 — 부계정 가려내기용). 심사 중이면 승인(확인 창 — 남은 번호가 모자라면 잠금) · 반려(사유 입력 창). 승인된 그룹은 멤버별 배정 번호
+//    · 📌 지원 보너스(2026-10-25 · 약속 문서 6b) — 설정 판 「지원 보너스 추첨권」(0~20장 · 같은 PUT config 의 applyTickets). 상세 멤버마다 「추첨권 N장」 · 빨간 「추첨권 미지급」(member.bonus),
+//      지원한 뒤(심사 중 · 승인 · 반려) 미지급 멤버가 있으면 「추첨권 다시 지급」(확인 창 → POST { action: "regrant", id } → 받은 사람 수 토스트 · 상세 다시 받기)
+//    · 다시 받기(새로고침 · 심사 · 번호 추가 뒤)는 표 · 번호 수만 바꾼다 — 저장하지 않은 설정 편집을 서버 값으로 덮지 않는다
+//    · 제 틀(AdminPage)을 따로 그린다 — 설정 저장 줄 · 상세 칸이 구성 탭과 섞이지 않게(머리 · 탭 줄은 같은 것을 받는다)
+//    · 응답은 약속 모양(맨 위 칸 { success, config, codes, groups })이 기본, data 로 감싼 모양도 읽는다
+type GroupStatus = "open" | "review" | "approved" | "rejected";
+type GroupFilter = "all" | GroupStatus;
+// 설정 한 벌 — 시각은 datetime-local 칸 글자(KST), 인원 · 지원 보너스 추첨권(applyTickets — 약속 문서 6b)은 칸 글자 그대로 들고 있다가 보낼 때 숫자로
+type GroupCfg = { enabled: boolean; startsAt: string; endsAt: string; minMembers: string; maxMembers: string; applyTickets: string };
+type CodeStats = { total: number; assigned: number; left: number };
+type GroupRow = {
+  id: string;
+  code: string;
+  name: string;
+  game: string;
+  when: string | null;
+  status: GroupStatus;
+  reason: string;
+  leaderId: string;
+  leaderName: string;
+  count: number;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string;
+  createdAt: string | null;
+};
+// 멤버 확인 — accountAt: 디스코드 계정 만든 때(snowflake) · guildJoinedAt: 서버 들어온 때(못 읽으면 null) · firstXpAt: 가장 이른 XP 기록 · xp30: 최근 30일 XP 합
+type MemberCheck = { accountAt: string | null; guildJoinedAt: string | null; level: number; xp: number; firstXpAt: string | null; xp30: number };
+// 지원 보너스 — 받은 장 수 · 시각(models/GoedamGroupBonus 한 줄 · 1인 평생 1번). null = 아직 안 받음
+type MemberBonus = { tickets: number; at: string | null } | null;
+type GroupMember = { id: string; name: string; joinedAt: string | null; check: MemberCheck; bonus: MemberBonus };
+type GroupDetail = GroupRow & { members: GroupMember[]; giftCodes: { name: string; code: string }[] };
+type ToastFn = ReturnType<typeof useToast>["toast"];
+
+const GROUPS_API = "/api/admin/goedam/groups";
+// 📌 인원 범위 — app/api/admin/goedam/groups PUT 검사와 같다(최소 2~20 · 최대 최소~50 · 기본 4 · 10). 바꾸면 같이
+const GROUP_MIN = { min: 2, max: 20, def: 4 };
+const GROUP_MAX = { max: 50, def: 10 };
+// 📌 지원 보너스 추첨권 — 지원하기 성공 때 멤버마다(1인 평생 1번). 0~20장 · 기본 5 · 0 = 지급 안 함(서버 PUT 검사와 같다 — 바꾸면 같이)
+const GROUP_TICKETS = { min: 0, max: 20, def: 5 };
+// 지원한 뒤의 상태 — 이 상태의 그룹에서 보너스가 없는 멤버만 「미지급」 · 다시 지급 대상(모집 중은 아직 받을 때가 아니다)
+const BONUS_DUE: GroupStatus[] = ["review", "approved", "rejected"];
+const MAX_REASON = 100;
+// 번호 붙여 넣기 한 번 — 서버 codes-add 와 같은 500줄
+const MAX_CODE_LINES = 500;
+// 새 계정 — 계정 만든 지 이 날 수 안이면 빨간 글자(부계정 의심)
+const NEW_ACCOUNT_DAYS = 30;
+const GROUP_STATUS: { v: GroupStatus; l: string; tone: "warn" | "info" | "ok" | "bad" }[] = [
+  { v: "review", l: "심사 중", tone: "warn" },
+  { v: "open", l: "모집 중", tone: "info" },
+  { v: "approved", l: "승인", tone: "ok" },
+  { v: "rejected", l: "반려", tone: "bad" },
+];
+const EMPTY_GROUP_CFG: GroupCfg = { enabled: false, startsAt: "", endsAt: "", minMembers: "", maxMembers: "", applyTickets: "" };
+const EMPTY_CODES: CodeStats = { total: 0, assigned: 0, left: 0 };
+const MINI_CHIP = "!h-5 !px-1.5 !text-[10px]";
+
+const groupStatusOf = (v: unknown): GroupStatus => GROUP_STATUS.find((s) => s.v === v)?.v || "open";
+const GroupChip = ({ s }: { s: GroupStatus }) => {
+  const m = GROUP_STATUS.find((x) => x.v === s) || GROUP_STATUS[1];
+  return <StatusChip tone={m.tone}>{m.l}</StatusChip>;
+};
+// 응답 본문 — 맨 위 칸이 기본, data 로 감싸 왔으면 그 안
+const bodyOf = (d: unknown): Raw => {
+  const o = rawOf(d);
+  return o.data && typeof o.data === "object" && !Array.isArray(o.data) ? rawOf(o.data) : o;
+};
+const okOf = (d: unknown) => rawOf(d).success === true || rawOf(d).ok === true;
+const errOf = (d: unknown, def: string) => {
+  const o = rawOf(d);
+  return String(o.error || o.message || def);
+};
+const isoOrNull = (v: unknown) => (v ? String(v) : null);
+const countOf = (v: unknown) => Math.max(0, Math.floor(Number(v)) || 0);
+const groupCfgFrom = (v: unknown): GroupCfg => {
+  const o = rawOf(v);
+  return {
+    enabled: o.enabled === true,
+    startsAt: toKstInput(o.startsAt),
+    endsAt: toKstInput(o.endsAt),
+    minMembers: String(toInt(o.minMembers) || GROUP_MIN.def),
+    maxMembers: String(toInt(o.maxMembers) || GROUP_MAX.def),
+    // 0 도 값이다(지급 안 함) — 칸이 없을 때만 기본값
+    applyTickets: String(o.applyTickets == null ? GROUP_TICKETS.def : Math.min(GROUP_TICKETS.max, countOf(o.applyTickets))),
+  };
+};
+const codesFrom = (v: unknown): CodeStats => {
+  const o = rawOf(v);
+  return { total: countOf(o.total), assigned: countOf(o.assigned), left: countOf(o.left) };
+};
+const groupRowFrom = (r: Raw): GroupRow => {
+  const leader = rawOf(r.leader);
+  return {
+    id: String(r.id || ""),
+    code: String(r.code || ""),
+    name: String(r.name || ""),
+    game: String(r.game || ""),
+    when: isoOrNull(r.when),
+    status: groupStatusOf(r.status),
+    reason: String(r.reason || ""),
+    leaderId: String(leader.id || ""),
+    leaderName: String(leader.name || ""),
+    count: r.count != null ? countOf(r.count) : rawList(r.members).length,
+    submittedAt: isoOrNull(r.submittedAt),
+    reviewedAt: isoOrNull(r.reviewedAt),
+    reviewedBy: String(r.reviewedBy || ""),
+    createdAt: isoOrNull(r.createdAt),
+  };
+};
+// 멤버 보너스 — 서버 { tickets, grantedAt } | null(미지급 — 1인 평생 1번이라 다른 그룹에서 받은 것도 받음)
+const bonusFrom = (v: unknown): MemberBonus => {
+  if (!v || typeof v !== "object") return null;
+  const o = rawOf(v);
+  return { tickets: countOf(o.tickets), at: isoOrNull(o.grantedAt) };
+};
+// 다시 지급 결과 — 서버 { granted(받은 사람 수), tickets(넣은 장 수 합), failed(실패한 사람 수) }
+const regrantOf = (b: Raw) => ({ people: countOf(b.granted), tickets: countOf(b.tickets), failed: countOf(b.failed) });
+const groupDetailFrom = (v: unknown): GroupDetail | null => {
+  const r = rawOf(v);
+  if (!r.id) return null;
+  const members = rawList(r.members).map((m) => {
+    const c = rawOf(m.check);
+    return {
+      id: String(m.id || ""),
+      name: String(m.name || ""),
+      joinedAt: isoOrNull(m.joinedAt),
+      check: { accountAt: isoOrNull(c.accountAt), guildJoinedAt: isoOrNull(c.guildJoinedAt), level: countOf(c.level), xp: countOf(c.xp), firstXpAt: isoOrNull(c.firstXpAt), xp30: countOf(c.xp30) },
+      bonus: bonusFrom(m.bonus),
+    };
+  });
+  return {
+    ...groupRowFrom(r),
+    members,
+    giftCodes: rawList(r.giftCodes)
+      .map((g) => ({ name: String(g.name || ""), code: String(g.code || "") }))
+      .filter((g) => g.code),
+  };
+};
+
+// 저장 여부를 가를 지문 — 서버로 나가는 값만
+const groupSig = (c: GroupCfg) => JSON.stringify([c.enabled, c.startsAt, c.endsAt, intText(c.minMembers), intText(c.maxMembers), intText(c.applyTickets)]);
+// 저장 전 검사 — 서버(PUT)가 돌려보낼 값을 먼저 막는다. 괜찮으면 ""
+const groupCfgError = (c: GroupCfg) => {
+  const a = kstMs(c.startsAt);
+  const b = kstMs(c.endsAt);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return "기간을 입력해 주십시오.";
+  if (b <= a) return "종료 시각은 시작 시각 이후로 지정해 주십시오.";
+  const min = intText(c.minMembers);
+  if (!(Number.isInteger(min) && min >= GROUP_MIN.min && min <= GROUP_MIN.max)) return `최소 인원은 ${GROUP_MIN.min}~${GROUP_MIN.max}명 사이로 입력해 주십시오.`;
+  const max = intText(c.maxMembers);
+  if (!(Number.isInteger(max) && max >= min && max <= GROUP_MAX.max)) return `최대 인원은 ${min}~${GROUP_MAX.max}명 사이로 입력해 주십시오.`;
+  const t = intText(c.applyTickets);
+  if (!(Number.isInteger(t) && t >= GROUP_TICKETS.min && t <= GROUP_TICKETS.max)) return `지원 보너스 추첨권은 ${GROUP_TICKETS.min}~${GROUP_TICKETS.max}장 사이로 입력해 주십시오.`;
+  return "";
+};
+const memberCountLabel = (s: string) => (Number.isFinite(intText(s)) ? `${fmt(intText(s))}명` : "없음");
+const ticketCountLabel = (s: string) => (Number.isFinite(intText(s)) ? `${fmt(intText(s))}장` : "없음");
+
+// ── 표시 ──
+// 날짜만(해가 다를 수 있는 계정 · 서버 입장 · 첫 기록) — "2025. 03. 14."
+const dayLabel = (v: string | null) => {
+  const k = v ? toKstInput(v) : "";
+  return k ? `${k.slice(0, 4)}. ${k.slice(5, 7)}. ${k.slice(8, 10)}.` : "-";
+};
+// 그룹 일정(언제) — "10. 31. 22:00(토)"
+const whenLabel = (v: string | null) => {
+  const k = v ? toKstInput(v) : "";
+  return k ? `${kstLabel(k)}(${kstDay(k)})` : "-";
+};
+// 지난 날 수 — now(받은 시각) 기준. 못 읽으면 null
+const daysAgo = (v: string | null, now: number) => {
+  const t = v ? Date.parse(v) : NaN;
+  return Number.isFinite(t) && now > 0 ? Math.max(0, Math.floor((now - t) / DAY_MS)) : null;
+};
+const agoLabel = (n: number | null) => (n == null || n >= 365 ? "" : n === 0 ? " · 오늘" : ` · ${fmt(n)}일 전`);
+const memberFlags = (m: GroupMember, now: number) => {
+  const age = daysAgo(m.check.accountAt, now);
+  return { newAccount: age != null && age < NEW_ACCOUNT_DAYS, noXp: !m.check.firstXpAt };
+};
+
+// 멤버 확인 한 칸 — 이름 · 값(bad 면 빨간 글자)
+const CheckItem = ({ k, bad = false, children }: { k: string; bad?: boolean; children: ReactNode }) => (
+  <div className="min-w-0 flex items-baseline gap-2">
+    <dt className="shrink-0 w-16 text-[#8a8a8a]">{k}</dt>
+    <dd className={`min-w-0 font-bold tabular-nums break-keep ${bad ? "text-[#d01634]" : "text-[#131313]"}`}>{children}</dd>
+  </div>
+);
+// 멤버 한 줄 — 이름 · 그룹장 · 의심 칩 · 지원 보너스 칩 · 디스코드 ID, 그 아래 확인 여섯 칸(폰은 한 줄에 하나)
+//    보너스 — 받았으면 「추첨권 N장」, 받을 때가 지났는데(bonusDue — 지원한 뒤 · 보너스 장 수 > 0) 없으면 빨간 「추첨권 미지급」
+function MemberCheckRow({ m, leader, now, bonusDue }: { m: GroupMember; leader: boolean; now: number; bonusDue: boolean }) {
+  const c = m.check;
+  const flags = memberFlags(m, now);
+  return (
+    <li className="py-3.5 border-b border-[#ededed] last:border-b-0">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="min-w-0 text-[14px] font-black break-all">{m.name || "-"}</span>
+        {leader && (
+          <StatusChip tone="ink" className={MINI_CHIP}>
+            그룹장
+          </StatusChip>
+        )}
+        {flags.newAccount && (
+          <StatusChip tone="bad" className={MINI_CHIP}>
+            새 계정
+          </StatusChip>
+        )}
+        {flags.noXp && (
+          <StatusChip tone="bad" className={MINI_CHIP}>
+            기록 없음
+          </StatusChip>
+        )}
+        {m.bonus ? (
+          <StatusChip className={`${MINI_CHIP} tabular-nums`}>추첨권 {fmt(m.bonus.tickets)}장</StatusChip>
+        ) : (
+          bonusDue && (
+            <StatusChip tone="bad" className={MINI_CHIP}>
+              추첨권 미지급
+            </StatusChip>
+          )
+        )}
+        <span className="ml-auto text-[11px] text-[#8a8a8a] tabular-nums">{m.id}</span>
+      </div>
+      <dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
+        <CheckItem k="계정 생성" bad={flags.newAccount}>
+          {dayLabel(c.accountAt)}
+          {agoLabel(daysAgo(c.accountAt, now))}
+        </CheckItem>
+        <CheckItem k="서버 입장">
+          {dayLabel(c.guildJoinedAt)}
+          {agoLabel(daysAgo(c.guildJoinedAt, now))}
+        </CheckItem>
+        <CheckItem k="레벨 · XP">
+          Lv. {fmt(c.level)} · {fmt(c.xp)}
+        </CheckItem>
+        <CheckItem k="첫 XP" bad={flags.noXp}>
+          {c.firstXpAt ? dayLabel(c.firstXpAt) : "기록 없음"}
+        </CheckItem>
+        <CheckItem k="최근 30일" bad={c.xp30 === 0}>
+          {fmt(c.xp30)} XP
+        </CheckItem>
+        <CheckItem k="참여">{isoLabel(m.joinedAt)}</CheckItem>
+      </dl>
+    </li>
+  );
+}
+
+function GroupsTab({ tabs, desc, toast }: { tabs: ReactNode; desc: string; toast: ToastFn }) {
+  const [loading, setLoading] = useState(true);
+  // 설정을 못 받음 — 빈 설정이 운영 중인 설정을 덮어쓰지 않게 저장을 잠근다 / 표 · 번호 수를 못 받음
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [listFailed, setListFailed] = useState(false);
+  const [cfg, setCfg] = useState<GroupCfg>(EMPTY_GROUP_CFG);
+  const [base, setBase] = useState<GroupCfg | null>(null);
+  const [codes, setCodes] = useState<CodeStats>(EMPTY_CODES);
+  const [rows, setRows] = useState<GroupRow[]>([]);
+  // 받은 시각 — 단계(시작 전 · 진행 중 · 종료) 판정용. 렌더 중에 Date.now() 를 부르지 않는다
+  const [loadedAt, setLoadedAt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [acting, setActing] = useState(false);
+  // 📌 연타 막이 — 저장 · 번호 추가 · 승인 · 반려가 같은 틈에 두 번 들어오지 않게(상태는 다음 렌더에야 보인다)
+  const busyRef = useRef(false);
+  const [codeText, setCodeText] = useState("");
+  const [filter, setFilter] = useState<GroupFilter>("all");
+  const [q, setQ] = useState("");
+  const [pickId, setPickId] = useState<string | null>(null);
+  const [detailNonce, setDetailNonce] = useState(0);
+  const [detail, setDetail] = useState<{ key: string; group: GroupDetail | null; at: number } | null>(null);
+  const [approveAsk, setApproveAsk] = useState(false);
+  const [rejectAsk, setRejectAsk] = useState(false);
+  const [regrantAsk, setRegrantAsk] = useState(false);
+  const [reason, setReason] = useState("");
+
+  // 📌 읽기만 — withCfg 면 설정까지(첫 화면 · 다시 불러오기), 아니면 표 · 번호 수만
+  //    상태는 응답을 받은 뒤에만 바꾼다(첫 화면은 effect 에서 부른다)
+  const fetchAll = useCallback(
+    (withCfg: boolean) =>
+      fetch(GROUPS_API, { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null)
+        .then((d) => {
+          const b = bodyOf(d);
+          if (okOf(d) && Array.isArray(b.groups)) {
+            setCodes(codesFrom(b.codes));
+            setRows(rawList(b.groups).map(groupRowFrom).filter((r) => r.id));
+            setListFailed(false);
+            setLoadedAt(Date.now());
+            if (withCfg) {
+              const ok = !!b.config && typeof b.config === "object";
+              if (ok) {
+                const next = groupCfgFrom(b.config);
+                setCfg(next);
+                setBase(next);
+              }
+              setLoadFailed(!ok);
+            }
+          } else {
+            setListFailed(true);
+            if (withCfg) setLoadFailed(true);
+          }
+        }),
+    []
+  );
+
+  useEffect(() => {
+    fetchAll(true).finally(() => setLoading(false));
+  }, [fetchAll]);
+
+  const reloadAll = () => {
+    setLoading(true);
+    fetchAll(true).finally(() => setLoading(false));
+  };
+  const refresh = () => {
+    sfxTick();
+    fetchAll(false);
+    if (pickId) setDetailNonce((n) => n + 1);
+  };
+
+  // ── 상세(멤버 확인) ──
+  const detailKey = pickId ? `${pickId}|${detailNonce}` : "";
+  useEffect(() => {
+    if (!pickId) return;
+    let live = true;
+    const key = `${pickId}|${detailNonce}`;
+    fetch(`${GROUPS_API}?id=${encodeURIComponent(pickId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .catch(() => null)
+      .then((d) => {
+        if (!live) return;
+        const group = okOf(d) ? groupDetailFrom(bodyOf(d).group) : null;
+        setDetail({ key, group, at: Date.now() });
+      });
+    return () => {
+      live = false;
+    };
+  }, [pickId, detailNonce]);
+  const detailLoading = !!pickId && detail?.key !== detailKey;
+  // 다시 받는 동안에도 같은 그룹이면 앞 값을 그대로 보인다(칸이 깜빡이지 않게)
+  const dg = detail?.group && detail.group.id === pickId ? detail.group : null;
+  const pickRow = pickId ? rows.find((r) => r.id === pickId) || null : null;
+  const g: GroupRow | null = dg || pickRow;
+  const closePick = () => {
+    setPickId(null);
+    setApproveAsk(false);
+    setRejectAsk(false);
+    setRegrantAsk(false);
+  };
+
+  // ── 설정 저장 ──
+  const snapshot = useMemo(() => (base ? groupSig(base) : ""), [base]);
+  const dirty = !loading && !!base && groupSig(cfg) !== snapshot;
+  const set = <K extends keyof GroupCfg>(k: K, v: GroupCfg[K]) => setCfg((c) => ({ ...c, [k]: v }));
+  const save = async () => {
+    if (busyRef.current) return;
+    if (loadFailed) return toast(LOAD_FAILED_MSG, true);
+    if (groupSig(cfg) === snapshot) {
+      sfxTick();
+      return toast("변경 사항이 없습니다.", false, { sound: false });
+    }
+    const err = groupCfgError(cfg);
+    if (err) return toast(err, true);
+    busyRef.current = true;
+    setSaving(true);
+    const res = await fetch(GROUPS_API, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: {
+          enabled: cfg.enabled,
+          startsAt: fromKstInput(cfg.startsAt),
+          endsAt: fromKstInput(cfg.endsAt),
+          minMembers: intText(cfg.minMembers),
+          maxMembers: intText(cfg.maxMembers),
+          applyTickets: intText(cfg.applyTickets),
+        },
+      }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    busyRef.current = false;
+    setSaving(false);
+    if (res?.ok && okOf(d)) {
+      const b = bodyOf(d);
+      const next = b.config && typeof b.config === "object" ? groupCfgFrom(b.config) : cfg;
+      setCfg(next);
+      setBase(next);
+      setLoadedAt(Date.now());
+      toast("저장되었습니다.");
+    } else {
+      toast(errOf(d, "저장에 실패했습니다."), true);
+    }
+  };
+  const resetToBase = () => {
+    if (base) setCfg(base);
+  };
+
+  // ── 문화상품권 번호 추가 ──
+  // 줄 수(앞뒤 공백 · 빈 줄 · 같은 줄 뺀 것) — 칸 옆 「+N」. 보내는 것은 붙여 넣은 글 그대로(정리 · 중복 판정은 서버)
+  const codeLines = useMemo(() => [...new Set(codeText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))], [codeText]);
+  const addCodes = async () => {
+    if (busyRef.current) return;
+    if (!codeLines.length) return toast("번호를 입력해 주십시오.", true);
+    if (codeLines.length > MAX_CODE_LINES) return toast(`번호는 한 번에 ${fmt(MAX_CODE_LINES)}개까지 추가할 수 있습니다.`, true);
+    busyRef.current = true;
+    setAdding(true);
+    const res = await fetch(GROUPS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "codes-add", text: codeText }),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    busyRef.current = false;
+    setAdding(false);
+    if (res?.ok && okOf(d)) {
+      const b = bodyOf(d);
+      const added = countOf(b.added);
+      const dup = countOf(b.dup);
+      setCodeText("");
+      fetchAll(false);
+      if (added > 0) toast(`번호 ${fmt(added)}개 추가${dup ? ` · 중복 ${fmt(dup)}개` : ""}`);
+      else toast(`추가된 번호 없음 · 중복 ${fmt(dup)}개`, true);
+    } else {
+      toast(errOf(d, "추가에 실패했습니다."), true);
+    }
+  };
+
+  // ── 승인 · 반려 · 추첨권 다시 지급 ──
+  // 성공하면 표 · 번호 수 · 상세를 다시 받는다(상세 칸은 열린 채 — 승인이면 배정 번호가, 다시 지급이면 멤버별 장 수가 뜬다)
+  //    okMsg — 글자, 또는 응답 본문으로 글자를 만드는 함수(다시 지급 — 받은 사람 수)
+  const act = async (body: Raw, okMsg: string | ((b: Raw) => string)) => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setActing(true);
+    const res = await fetch(GROUPS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    busyRef.current = false;
+    setActing(false);
+    if (res?.ok && okOf(d)) {
+      toast(typeof okMsg === "function" ? okMsg(bodyOf(d)) : okMsg);
+      fetchAll(false);
+      setDetailNonce((n) => n + 1);
+      return true;
+    }
+    toast(errOf(d, "처리에 실패했습니다."), true);
+    return false;
+  };
+  // 승인에 필요한 번호 수 = 멤버 수(상세를 받았으면 그 수)
+  const need = dg ? dg.members.length : g?.count ?? 0;
+  const codesOk = !listFailed && loadedAt > 0;
+  const short = !!g && g.status === "review" && codesOk && codes.left < need;
+  const doApprove = async () => {
+    if (!g) return;
+    await act({ action: "approve", id: g.id }, `승인했습니다 · 번호 ${fmt(need)}장 배정`);
+    setApproveAsk(false);
+  };
+  const openReject = () => {
+    setReason("");
+    setRejectAsk(true);
+  };
+  const doReject = async () => {
+    if (!g) return;
+    const r = reason.trim();
+    if (!r) return toast("사유를 입력해 주십시오.", true);
+    if (r.length > MAX_REASON) return toast(`사유는 ${MAX_REASON}자 이하로 입력해 주십시오.`, true);
+    if (await act({ action: "reject", id: g.id, reason: r }, "반려했습니다.")) {
+      setRejectAsk(false);
+      setReason("");
+    }
+  };
+  // 📌 지원 보너스 — 장 수는 저장된 설정 값(편집 중인 칸이 아니라 서버가 쓰는 값). 0 장이면 미지급 · 다시 지급을 띄우지 않는다(줄 것이 없다)
+  //    설정을 못 받았으면(base 없음) 막지 않는다 — 서버가 판정한다
+  const bonusPer = base ? intText(base.applyTickets) : NaN;
+  const bonusDue = !!g && BONUS_DUE.includes(g.status) && bonusPer !== 0;
+  const bonusMissing = dg ? dg.members.filter((m) => !m.bonus).length : 0;
+  const canRegrant = bonusDue && !!dg && bonusMissing > 0;
+  // 다시 지급 — 그 그룹(심사 중 · 승인 · 반려) 멤버 중 보너스가 없는 사람만(서버가 고르고 주문 묶음으로 모자란 장만 넣는다)
+  const doRegrant = async () => {
+    if (!g) return;
+    await act({ action: "regrant", id: g.id }, (b) => {
+      const r = regrantOf(b);
+      const fail = r.failed ? ` · 실패 ${fmt(r.failed)}명` : "";
+      return r.people > 0 ? `추첨권을 지급했습니다 · ${fmt(r.people)}명${r.tickets ? ` · ${fmt(r.tickets)}장` : ""}${fail}` : `지급 대상이 없습니다.${fail}`;
+    });
+    setRegrantAsk(false);
+  };
+
+  // ── 표 ──
+  const counts = useMemo(() => {
+    const c: Record<GroupFilter, number> = { all: rows.length, review: 0, open: 0, approved: 0, rejected: 0 };
+    for (const r of rows) c[r.status] += 1;
+    return c;
+  }, [rows]);
+  // 📌 심사 중 먼저 — 나머지는 서버 차례(최근) 그대로(안정 정렬)
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return rows
+      .filter((r) => (filter === "all" || r.status === filter) && (!s || [r.name, r.game, r.leaderName, r.leaderId, r.code].some((x) => x.toLowerCase().includes(s))))
+      .sort((a, b) => (a.status === "review" ? 0 : 1) - (b.status === "review" ? 0 : 1));
+  }, [rows, filter, q]);
+  const reviewNeed = useMemo(() => rows.reduce((sum, r) => sum + (r.status === "review" ? r.count : 0), 0), [rows]);
+  const pickIdx = pickId ? shown.findIndex((r) => r.id === pickId) : -1;
+
+  // ── 변경 목록 · 단계 ──
+  const changed = {
+    enabled: !!base && base.enabled !== cfg.enabled,
+    period: !!base && (base.startsAt !== cfg.startsAt || base.endsAt !== cfg.endsAt),
+    min: !!base && !Object.is(intText(base.minMembers), intText(cfg.minMembers)),
+    max: !!base && !Object.is(intText(base.maxMembers), intText(cfg.maxMembers)),
+    tickets: !!base && !Object.is(intText(base.applyTickets), intText(cfg.applyTickets)),
+  };
+  const changes: string[] = [];
+  if (base && dirty) {
+    if (changed.enabled) changes.push(`상태 ${onOffLabel(base.enabled)} → ${onOffLabel(cfg.enabled)}`);
+    if (base.startsAt !== cfg.startsAt) changes.push(`시작 ${kstLabel(base.startsAt)} → ${kstLabel(cfg.startsAt)}`);
+    if (base.endsAt !== cfg.endsAt) changes.push(`종료 ${kstLabel(base.endsAt)} → ${kstLabel(cfg.endsAt)}`);
+    if (changed.min) changes.push(`최소 인원 ${memberCountLabel(base.minMembers)} → ${memberCountLabel(cfg.minMembers)}`);
+    if (changed.max) changes.push(`최대 인원 ${memberCountLabel(base.maxMembers)} → ${memberCountLabel(cfg.maxMembers)}`);
+    if (changed.tickets) changes.push(`지원 보너스 추첨권 ${ticketCountLabel(base.applyTickets)} → ${ticketCountLabel(cfg.applyTickets)}`);
+  }
+  const startMs = kstMs(cfg.startsAt);
+  const endMs = kstMs(cfg.endsAt);
+  const periodOk = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs;
+  const phase = !cfg.enabled ? "중단" : !periodOk || !loadedAt ? "-" : loadedAt < startMs ? "시작 전" : loadedAt < endMs ? "진행 중" : "종료";
+  const onLabel = !cfg.enabled ? "중단 (운영진 미리보기)" : phase === "시작 전" || phase === "종료" ? `운영 중 · ${phase}` : "운영 중";
+  const periodHint = !periodOk ? (
+    <span className="font-bold text-[#d01634]">{Number.isFinite(startMs) && Number.isFinite(endMs) ? "종료 시각은 시작 시각 이후로 지정해 주십시오." : "기간을 입력해 주십시오."}</span>
+  ) : (
+    `KST · 종료 시각 미포함 · ${Math.round(((endMs - startMs) / DAY_MS) * 10) / 10}일`
+  );
+  const barNote = loadFailed && !loading ? <span className="font-bold text-[#d01634]">설정을 불러오지 못해 저장이 막혀 있습니다</span> : undefined;
+  const shortAll = codesOk && reviewNeed > codes.left;
+  const leaderOf = (gr: GroupDetail, m: GroupMember, i: number) => (gr.leaderId ? m.id === gr.leaderId : i === 0);
+  const flagged = dg ? dg.members.filter((m) => {
+    const f = memberFlags(m, detail?.at || 0);
+    return f.newAccount || f.noXp;
+  }).length : 0;
+
+  const cols: Column<GroupRow>[] = [
+    { key: "status", label: "상태", className: "w-24", mobile: "title", render: (r) => <GroupChip s={r.status} /> },
+    {
+      key: "name",
+      label: "그룹 이름",
+      mobile: "title",
+      render: (r) => (
+        <span className="min-w-0">
+          <span className="font-bold">{r.name || "-"}</span>
+          {r.code && <span className="ml-1.5 font-mono text-[11px] font-normal text-[#8a8a8a]">{r.code}</span>}
+        </span>
+      ),
+    },
+    { key: "game", label: "게임", render: (r) => <span className="break-keep">{r.game || "-"}</span> },
+    { key: "leader", label: "그룹장", render: (r) => <span className="font-bold text-[#131313]">{r.leaderName || r.leaderId || "-"}</span> },
+    { key: "count", label: "인원", align: "right", className: "w-20", sortValue: (r) => r.count, render: (r) => <span className="tabular-nums">{fmt(r.count)}명</span> },
+    {
+      key: "submittedAt",
+      label: "지원 시각",
+      className: "w-32",
+      sortValue: (r) => (r.submittedAt ? Date.parse(r.submittedAt) : 0),
+      render: (r) => <span className="tabular-nums text-[#5a5a5a]">{isoLabel(r.submittedAt)}</span>,
+    },
+  ];
+
+  return (
+    <AdminPage
+      section="SYSTEM : LEVEL"
+      title="괴담회"
+      desc={desc}
+      tabs={tabs}
+      footer={<SaveBar dirty={dirty && !loadFailed} changes={changes} onSave={save} onReset={resetToBase} saving={saving} note={barNote} />}
+    >
+      {loadFailed && !loading && (
+        <div className="mb-5">
+          <NoteLine tone="bad" action={<Btn size="sm" variant="secondary" onClick={reloadAll}>다시 불러오기</Btn>}>
+            현재 설정을 불러오지 못했습니다 ({GROUPS_API}). 저장을 막아 두었습니다.
+          </NoteLine>
+        </div>
+      )}
+
+      {/* 설정 · 문화상품권 번호 — 넓은 화면에서 두 열, 좁으면 위아래.
+             📌 상세 칸이 열리면(PC 오른쪽 칸이 본문을 밀어 좁힌다) 위아래로 — 두 열이면 이름 칸 180 옆 입력 칸이 몇십 px 로 줄어 글자가 세로로 꺾였다 */}
+      <div className={`grid grid-cols-1 ${g ? "" : "xl:grid-cols-2"} gap-5 items-start mb-5`}>
+        <Panel title="설정" flush>
+          <FieldRow label="사용" changed={changed.enabled}>
+            <Inline>
+              <Switch on={cfg.enabled} onChange={(v) => set("enabled", v)} disabled={loading} label="게임 그룹 지원 사용" />
+              <span className={`font-bold ${cfg.enabled ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{onLabel}</span>
+            </Inline>
+          </FieldRow>
+          {/* 📌 시작 · 종료는 위아래 — 두 열 판(설정 | 번호) 안에서 나란히 두면 datetime-local 칸이 좁아 시각이 잘렸다 */}
+          <FieldRow label="기간" hint={loading ? undefined : periodHint} changed={changed.period}>
+            <div className="grid grid-cols-1 gap-3 max-w-[260px]">
+              <label className="block min-w-0">
+                <span className="block mb-1 text-[12px] text-[#5a5a5a]">시작</span>
+                <input
+                  type="datetime-local"
+                  value={cfg.startsAt}
+                  onChange={(e) => set("startsAt", e.target.value)}
+                  onKeyDown={(e) => enterKey(e, save)}
+                  aria-label="그룹 지원 시작 (KST)"
+                  className={`${inputClass} tabular-nums`}
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className="block mb-1 text-[12px] text-[#5a5a5a]">종료</span>
+                <input
+                  type="datetime-local"
+                  value={cfg.endsAt}
+                  onChange={(e) => set("endsAt", e.target.value)}
+                  onKeyDown={(e) => enterKey(e, save)}
+                  aria-label="그룹 지원 종료 (KST)"
+                  className={`${inputClass} tabular-nums`}
+                />
+              </label>
+            </div>
+          </FieldRow>
+          <FieldRow label="최소 인원" changed={changed.min}>
+            <Inline>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={cfg.minMembers}
+                onChange={(e) => set("minMembers", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                onKeyDown={(e) => enterKey(e, save)}
+                placeholder={`${GROUP_MIN.min}~${GROUP_MIN.max}`}
+                aria-label="최소 인원"
+                className={numClass}
+              />
+              명
+            </Inline>
+          </FieldRow>
+          <FieldRow label="최대 인원" changed={changed.max}>
+            <Inline>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={cfg.maxMembers}
+                onChange={(e) => set("maxMembers", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                onKeyDown={(e) => enterKey(e, save)}
+                placeholder={`~${GROUP_MAX.max}`}
+                aria-label="최대 인원"
+                className={numClass}
+              />
+              명
+            </Inline>
+          </FieldRow>
+          {/* 지원 보너스 — 지원하기 성공 때 멤버마다 괴담회 추첨권(1인 평생 1번 · 서버가 지급). 같은 PUT config 로 저장 */}
+          <FieldRow label="지원 보너스 추첨권" hint="0 = 지급 안 함" changed={changed.tickets}>
+            <Inline>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={cfg.applyTickets}
+                onChange={(e) => set("applyTickets", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                onKeyDown={(e) => enterKey(e, save)}
+                placeholder={`${GROUP_TICKETS.min}~${GROUP_TICKETS.max}`}
+                aria-label="지원 보너스 추첨권 장 수"
+                className={numClass}
+              />
+              장
+            </Inline>
+          </FieldRow>
+        </Panel>
+
+        <Panel title="문화상품권 번호" flush>
+          {/* 심사 중 그룹을 다 승인하기에 번호가 모자라면 한 줄 */}
+          {shortAll && (
+            <NoteLine tone="bad" inset>
+              번호 부족 · 심사 중 {fmt(reviewNeed)}명 · 남은 {fmt(codes.left)}개
+            </NoteLine>
+          )}
+          <FieldRow label="남은 번호">
+            <Inline>
+              <span className={`text-[20px] font-black tabular-nums leading-none ${shortAll ? "text-[#d01634]" : "text-[#131313]"}`}>{loading ? "-" : fmt(codes.left)}</span>
+              <span className="tabular-nums">
+                배정 {loading ? "-" : fmt(codes.assigned)} · 전체 {loading ? "-" : fmt(codes.total)}
+              </span>
+            </Inline>
+          </FieldRow>
+          <FieldRow
+            top
+            label={
+              <>
+                번호 추가
+                <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{codeLines.length ? `+${fmt(codeLines.length)}` : ""}</span>
+              </>
+            }
+          >
+            <textarea
+              value={codeText}
+              onChange={(e) => setCodeText(e.target.value)}
+              rows={5}
+              spellCheck={false}
+              placeholder="줄마다 하나"
+              aria-label="문화상품권 번호 추가"
+              disabled={loading || adding}
+              className={`${inputClass} font-mono text-[13px] resize-y`}
+            />
+            <div className="mt-2 flex justify-end">
+              <Btn variant="secondary" size="sm" onClick={addCodes} disabled={loading || adding || !codeLines.length}>
+                {adding ? "추가 중…" : "추가"}
+              </Btn>
+            </div>
+          </FieldRow>
+        </Panel>
+      </div>
+
+      {/* 그룹 — 상태 거르기 · 검색 · 새로고침, 아래 전체 폭 표(심사 중 먼저) */}
+      <Toolbar
+        right={
+          <Btn variant="ghost" onClick={refresh} disabled={loading}>
+            새로고침
+          </Btn>
+        }
+      >
+        <Segmented
+          options={[
+            { v: "all", l: "전체", n: counts.all },
+            ...GROUP_STATUS.map((s) => ({ v: s.v, l: s.l, n: counts[s.v] })),
+          ]}
+          value={filter}
+          onChange={(v) => setFilter(v === "all" ? "all" : groupStatusOf(v))}
+        />
+        <SearchInput value={q} onChange={setQ} placeholder="그룹 · 게임 · 그룹장 · 코드" />
+      </Toolbar>
+      {listFailed && !loadFailed && !loading && (
+        <div className="mb-4">
+          <NoteLine tone="bad" action={<Btn size="sm" variant="secondary" onClick={() => fetchAll(false)}>다시 불러오기</Btn>}>
+            그룹 목록을 불러오지 못했습니다.
+          </NoteLine>
+        </div>
+      )}
+      {loading ? (
+        <div className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>
+      ) : (
+        <DataTable
+          columns={cols}
+          rows={shown}
+          rowKey={(r) => r.id}
+          onRowClick={(r) => setPickId(r.id)}
+          selectedKey={pickId}
+          empty={q.trim() || filter !== "all" ? "검색 결과가 없습니다." : "그룹이 없습니다."}
+        />
+      )}
+
+      {/* ── 그룹 상세 — PC 오른쪽 칸 / 모바일 아래 판. 심사 중이면 승인 · 반려 ── */}
+      <DetailPane
+        open={!!g}
+        onClose={closePick}
+        title={g ? g.name || "-" : ""}
+        sub={g ? [g.game, g.code].filter(Boolean).join(" · ") : undefined}
+        badge={g ? <GroupChip s={g.status} /> : undefined}
+        width={520}
+        nav={{
+          index: pickIdx,
+          total: shown.length,
+          onPrev: () => pickIdx > 0 && setPickId(shown[pickIdx - 1].id),
+          onNext: () => pickIdx >= 0 && pickIdx < shown.length - 1 && setPickId(shown[pickIdx + 1].id),
+        }}
+        footer={
+          g &&
+          (g.status === "review" ? (
+            <>
+              {short && <PaneError msg={`번호 부족 · 필요 ${fmt(need)} · 남은 ${fmt(codes.left)}`} />}
+              <Btn variant="ghost" className="mr-auto" onClick={closePick}>
+                닫기
+              </Btn>
+              <Btn variant="secondary" onClick={openReject} disabled={acting}>
+                반려
+              </Btn>
+              <Btn onClick={() => setApproveAsk(true)} disabled={acting || short || !dg}>
+                승인
+              </Btn>
+            </>
+          ) : (
+            <Btn variant="ghost" className="ml-auto" onClick={closePick}>
+              닫기
+            </Btn>
+          ))
+        }
+      >
+        {g && (
+          <>
+            <dl>
+              <DefRow k="그룹장">
+                <span className="font-bold">{g.leaderName || "-"}</span>
+                <span className="ml-1.5 text-[11px] font-normal text-[#8a8a8a] tabular-nums">{g.leaderId}</span>
+              </DefRow>
+              <DefRow k="인원">
+                <span className="tabular-nums">{fmt(dg ? dg.members.length : g.count)}명</span>
+              </DefRow>
+              <DefRow k="일정">
+                <span className="tabular-nums">{whenLabel(g.when)}</span>
+              </DefRow>
+              <DefRow k="만든 시각">
+                <span className="tabular-nums">{isoLabel(g.createdAt)}</span>
+              </DefRow>
+              <DefRow k="지원 시각">
+                <span className="tabular-nums">{isoLabel(g.submittedAt)}</span>
+              </DefRow>
+              {g.reviewedAt && (
+                <DefRow k="처리">
+                  <span className="tabular-nums">
+                    {isoLabel(g.reviewedAt)}
+                    {g.reviewedBy ? ` · ${g.reviewedBy}` : ""}
+                  </span>
+                </DefRow>
+              )}
+              {g.status === "rejected" && g.reason && (
+                <DefRow k="반려 사유">
+                  <span className="text-[#d01634] break-keep">{g.reason}</span>
+                </DefRow>
+              )}
+            </dl>
+
+            {/* 멤버 확인 — 새 계정 · 기록 없음은 빨간 글자(부계정 가려내기용) · 지원 보너스 미지급이 있으면 오른쪽 「추첨권 다시 지급」
+                단추는 위아래를 당겨(-my) 머리 줄 높이를 그대로 둔다(단추가 뜨고 져도 아래 줄이 밀리지 않게) */}
+            <div className="mt-6 mb-1 flex items-center gap-2">
+              <h3 className="min-w-0 flex items-center gap-2 text-[14px] font-black">
+                멤버
+                <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{fmt(dg ? dg.members.length : g.count)}</span>
+                {flagged > 0 && (
+                  <StatusChip tone="bad" className={MINI_CHIP}>
+                    확인 {fmt(flagged)}
+                  </StatusChip>
+                )}
+              </h3>
+              {canRegrant && (
+                <Btn size="sm" variant="secondary" className="ml-auto -my-1.5" onClick={() => setRegrantAsk(true)} disabled={acting}>
+                  추첨권 다시 지급
+                </Btn>
+              )}
+            </div>
+            {dg ? (
+              dg.members.length ? (
+                <ul>
+                  {dg.members.map((m, i) => (
+                    <MemberCheckRow key={m.id || i} m={m} leader={leaderOf(dg, m, i)} now={detail?.at || 0} bonusDue={bonusDue} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="py-6 text-center text-[13px] text-[#8a8a8a]">멤버가 없습니다.</p>
+              )
+            ) : detailLoading ? (
+              <p className="py-6 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</p>
+            ) : (
+              <NoteLine tone="bad" action={<Btn size="sm" variant="secondary" onClick={() => setDetailNonce((n) => n + 1)}>다시 불러오기</Btn>}>
+                멤버 정보를 불러오지 못했습니다.
+              </NoteLine>
+            )}
+
+            {/* 승인된 그룹 — 멤버별 배정 번호 */}
+            {g.status === "approved" && dg && (
+              <>
+                <h3 className="mt-6 mb-1 flex items-center gap-2 text-[14px] font-black">
+                  배정 번호
+                  <span className="text-[12px] font-bold text-[#8a8a8a] tabular-nums">{fmt(dg.giftCodes.length)}</span>
+                </h3>
+                {dg.giftCodes.length ? (
+                  <dl>
+                    {dg.giftCodes.map((c, i) => (
+                      <DefRow key={`${c.code}:${i}`} k={c.name || "-"}>
+                        <span className="font-mono select-all break-all">{c.code}</span>
+                      </DefRow>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="py-6 text-center text-[13px] text-[#8a8a8a]">배정된 번호가 없습니다.</p>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </DetailPane>
+
+      {/* ── 승인 확인 — 멤버마다 번호 하나씩 배정 · 멤버 전원에게 알림(서버) ── */}
+      <ConfirmDialog
+        open={approveAsk && !!g}
+        title="그룹 승인"
+        confirmLabel="승인"
+        busy={acting}
+        confirmDisabled={short}
+        onCancel={() => setApproveAsk(false)}
+        onConfirm={doApprove}
+        body={
+          g ? (
+            <>
+              <strong className="text-[#131313]">「{g.name}」</strong> · {fmt(need)}명 · 문화상품권 {fmt(need)}장
+              <span className="block mt-1 tabular-nums">
+                남은 번호 {fmt(codes.left)} → {fmt(Math.max(0, codes.left - need))}
+              </span>
+              <strong className="block mt-1 text-[#131313]">승인은 되돌릴 수 없습니다.</strong>
+            </>
+          ) : null
+        }
+      />
+
+      {/* ── 추첨권 다시 지급 확인 — 보너스가 없는 멤버만(서버가 고른다 · 이미 들어간 장은 다시 넣지 않는다) ── */}
+      <ConfirmDialog
+        open={regrantAsk && !!g}
+        title="추첨권 다시 지급"
+        confirmLabel="지급"
+        busy={acting}
+        confirmDisabled={!canRegrant}
+        onCancel={() => setRegrantAsk(false)}
+        onConfirm={doRegrant}
+        body={
+          g ? (
+            <>
+              <strong className="text-[#131313]">「{g.name}」</strong> · 미지급 {fmt(bonusMissing)}명
+              {Number.isFinite(bonusPer) && <span className="tabular-nums"> · 1인당 {fmt(bonusPer)}장</span>}
+            </>
+          ) : null
+        }
+      />
+
+      {/* ── 반려 — 사유(1~100자) 입력 · 그룹장에게 알림(서버) ── */}
+      <FormSheet
+        open={rejectAsk && !!g}
+        onClose={() => setRejectAsk(false)}
+        title="그룹 반려"
+        sub={g ? `「${g.name}」` : undefined}
+        busy={acting}
+        width={560}
+        onSubmit={doReject}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setRejectAsk(false)}>
+              취소
+            </Btn>
+            <Btn type="submit" variant="danger" disabled={!reason.trim()}>
+              반려
+            </Btn>
+          </>
+        }
+      >
+        <label className="block">
+          <span className={labelClass}>
+            사유 <Req />
+          </span>
+          <input
+            autoFocus
+            type="text"
+            maxLength={MAX_REASON}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            // 한글 조합 중 Enter 는 조합을 끝내는 키 — 창 제출로 받지 않는다
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && imeBusy(e)) e.preventDefault();
+            }}
+            placeholder="사유"
+            className={inputClass}
+          />
+        </label>
+        <p className={`${fieldNote} text-right tabular-nums`}>
+          {reason.trim().length}/{MAX_REASON}
+        </p>
+      </FormSheet>
+    </AdminPage>
+  );
+}
 
 export default function AdminGoedamPage() {
   // 화면 가리기 전용 — 실제 방어는 /api/admin/goedam 이 서버에서 한다(requireAdmin)
   const { isAdmin, gate } = useAdminGuard();
   const { toast, toastEl } = useToast();
+  const router = useRouter();
   const tab = tabOf(useSearchParams().get("tab"));
 
   const [isLoading, setIsLoading] = useState(true);
@@ -442,9 +1478,16 @@ export default function AdminGoedamPage() {
   const [itemsOk, setItemsOk] = useState(false);
   const [itemStates, setItemStates] = useState<Record<string, ItemState>>({});
   const [stock, setStock] = useState<Record<string, Stock>>({});
+  // 「상점」 줄 — 저장된 추첨권 아이템을 파는 상품(없으면 null) · 명단 고르기의 음성 날(GoedamWatch 에 기록이 있는 날)
+  const [shopRow, setShopRow] = useState<ShopLink | null>(null);
+  const [voiceDays, setVoiceDays] = useState<string[]>([]);
   const [eventKey, setEventKey] = useState("");
   // 📌 기본 꺼짐 — 불러오기에 실패했을 때 실수로 켜진 채 저장되는 일을 막는다(모델 기본값과 같음)
   const [cfg, setCfg] = useState<Cfg>(EMPTY_CFG);
+  // 연출 미리보기 — 결과 등급(none = 꽝) · 종류 · 창 열림
+  const [demoRarity, setDemoRarity] = useState("legendary");
+  const [demoKind, setDemoKind] = useState("code");
+  const [demoOpen, setDemoOpen] = useState(false);
   // 불러온(저장한) 한 벌 — 변경 목록 · 빨간 점 · 되돌리기의 기준
   const [base, setBase] = useState<Cfg | null>(null);
   // 불러온 시각 — 단계(추첨 전 · 중 · 종료) · 명단 기본 회차 판정용. 렌더 중에 Date.now() 를 부르지 않는다
@@ -457,6 +1500,9 @@ export default function AdminGoedamPage() {
 
   const roleNameOf = useCallback((id: string) => guildRoles.find((r) => r.id === id)?.name || "", [guildRoles]);
   const itemOf = useCallback((id: string) => regItems.find((it) => it._id === id) || null, [regItems]);
+  // 📌 아이템 상품 개수 2개 이상이 되는 아이템 — 추첨권 아이템 · 쌓이는 아이템(/api/admin/items stackable — 1개 단위 상품이 가리키거나 소모형). 서버 저장도 같은 판정.
+  //    아이템 목록을 못 받았으면 모른다고 보고 칸을 열어 둔다(저장된 개수를 몰래 1 로 바꾸지 않게 — 서버가 막는다)
+  const stackableOf = (id: string) => !!id && (id === cfg.ticketItemId || (itemsOk ? !!itemOf(id)?.stackable : true));
   const grantableRoles = useMemo(() => guildRoles.filter((r) => !r.managed), [guildRoles]);
   // 📌 아이템 상태 한 곳 — 서버 값(저장된 추첨권 · 아이템 상품)이 먼저, 없으면 목록(_draft "new" = 반영 전). 목록에도 없으면 missing(목록을 받았을 때만)
   const itemStateOf = useCallback(
@@ -482,6 +1528,7 @@ export default function AdminGoedamPage() {
       drawOpensAt: toKstInput(p.drawOpensAt),
       drawClosesAt: toKstInput(p.drawClosesAt),
       screenings: rawList(p.screenings).map(normScreening),
+      voice: normVoice(rawOf(p.voice)),
       prizes: rawList(p.prizes).map(normPrize),
     };
     setEventKey(String(p.key || ""));
@@ -489,6 +1536,8 @@ export default function AdminGoedamPage() {
     setBase(next);
     setItemStates(statesFrom(d.itemStates));
     setStock(stockFrom(d.stock));
+    setShopRow(shopFrom(d.shop));
+    setVoiceDays(voiceDaysFrom(d.voiceDays));
     setLoadedAt(Date.now());
     return next;
   }, []);
@@ -548,6 +1597,7 @@ export default function AdminGoedamPage() {
   const snapshot = useMemo(() => (base ? sig(base) : ""), [base]);
   const isDirty = !isLoading && !!base && sig(cfg) !== snapshot;
   const set = <K extends keyof Cfg>(k: K, v: Cfg[K]) => setCfg((c) => ({ ...c, [k]: v }));
+  const setVoice = <K extends keyof VoiceCfg>(k: K, v: VoiceCfg[K]) => setCfg((c) => ({ ...c, voice: { ...c.voice, [k]: v } }));
 
   // ── 켜기 잠금 ─────────────────────────────────
   // 📌 추첨권 아이템이 실사이트에 없으면(안 고름 · 반영 전 · 찾을 수 없음) 「사용」을 켤 수 없다 — 봇이 그 id 로 추첨권을 준다(서버 PUT 도 같은 문구로 돌려보낸다)
@@ -569,19 +1619,28 @@ export default function AdminGoedamPage() {
     if (p.qty == null) return { given, total: null, left: null };
     return { given, total: p.qty, left: Math.max(0, p.qty - given) };
   };
-  // 📌 지금 나올 수 있는 상품 — 서버 고르기(lib/goedam.js readyOf + 남은 수)와 같은 판정. 확률 = 비중 / 나올 수 있는 상품 비중 합
-  const drawable = (p: Prize) => {
+  // 📌 나올 수 있는 상품 — 서버 고르기(lib/goedam.js readyOf + 남은 수)와 같은 판정. 확률 = 비중 / 나올 수 있는 상품 비중 합.
+  //    확률 셈(planned)에는 반영 전(초안) 아이템도 넣는다 — 반영하면 바로 후보가 되니 설정할 때 그 확률을 미리 본다
+  //    (2026-10-25 운영자 "확률을 모르면 설정을 어캐해"). 아직 안 나온다는 표시는 이름 칸의 「반영 전」 표 · 「지금 나올 수 있는 상품이 없습니다」 줄(지금 기준)
+  const drawable = (p: Prize, planned = true) => {
+    const st = p.kind === "item" && p.itemId ? itemStateOf(p.itemId) : "";
     const ready =
-      p.kind === "item" ? !!p.itemId && itemStateOf(p.itemId) === "live" : p.kind === "role" ? !!p.roleId : p.kind === "xp" || p.kind === "point" ? p.amount > 0 : true;
+      p.kind === "item" ? st === "live" || (planned && st === "draft") : p.kind === "role" ? !!p.roleId : p.kind === "xp" || p.kind === "point" ? p.amount > 0 : true;
     const s = stockOfPrize(p);
     return ready && (s.left == null || s.left > 0);
   };
   const weightSum = cfg.prizes.reduce((sum, p) => sum + (drawable(p) ? p.weight : 0), 0);
+  const liveWeightSum = cfg.prizes.reduce((sum, p) => sum + (drawable(p, false) ? p.weight : 0), 0);
   // weight — 편집 칸에서 고치는 중인 비중(미리 보기). 합은 그 상품 몫만 바꿔 다시 센다
   const chanceOf = (p: Prize, weight = p.weight) => {
     if (!drawable(p)) return "-";
     const sum = weightSum - p.weight + weight;
-    return sum > 0 ? `${(Math.round((weight / sum) * 10000) / 100).toLocaleString("ko-KR")}%` : "-";
+    if (!(sum > 0)) return "-";
+    // 유저 창(app/level/GoedamModal.js pctOf)과 같은 글자 — 0.01% 미만 · 99.99% 넘으면(꽝 등이 남아 100 으로 반올림되는 때) 끝을 붙인다
+    const r = (weight / sum) * 100;
+    if (r > 0 && r < 0.01) return "<0.01%";
+    if (r > 99.99 && r < 100) return ">99.99%";
+    return `${(Math.round(r * 100) / 100).toLocaleString("ko-KR")}%`;
   };
 
   // ── 저장 ────────────────────────────────────
@@ -610,6 +1669,13 @@ export default function AdminGoedamPage() {
         drawClosesAt: fromKstInput(c.drawClosesAt),
         // 📌 기존 회차 · 상품의 sid · pid 를 그대로 되돌려 보낸다 — 빠지면 서버가 새 번호를 발급해 명단 · 나간 수 · 코드와 끊긴다
         screenings: c.screenings.map((s) => ({ sid: s.sid, title: s.title.trim(), startsAt: fromKstInput(s.startsAt), endsAt: fromKstInput(s.endsAt), tickets: s.tickets, ratio: s.ratio })),
+        voice: {
+          enabled: c.voice.enabled,
+          minutes: intText(c.voice.minutes),
+          tickets: intText(c.voice.tickets),
+          startsAt: fromKstInput(c.voice.startsAt),
+          endsAt: fromKstInput(c.voice.endsAt),
+        },
         prizes: c.prizes.map((p) => ({
           pid: p.pid,
           name: p.name.trim(),
@@ -617,7 +1683,7 @@ export default function AdminGoedamPage() {
           amount: p.amount,
           itemId: p.itemId,
           itemName: p.kind === "item" ? itemOf(p.itemId)?.name || p.itemName : "",
-          days: p.days,
+          count: p.count,
           roleId: p.roleId,
           roleName: p.kind === "role" ? roleNameOf(p.roleId) || p.roleName : "",
           qty: p.qty,
@@ -662,6 +1728,16 @@ export default function AdminGoedamPage() {
     doSave(next, from, okMsg, codes);
   };
   const saveList = () => requestSave({}, "list");
+  // 📌 상품 순서(2026-10-25 운영자 "위치 바꾸는 기능 좀 줘봐 · 아니면 정렬 기능") — 줄 앞 손잡이로 끌어 놓으면 그 차례로 바로 저장한다
+  //    (유저 창 상품 줄 · 뽑기 기록이 이 차례를 쓴다). 열 머리(이름 · 종류 · 남은 수 · 비중 · 확률 · 희귀도) 정렬은 보기만 — 정렬 중엔 끌기가 잠긴다(DataTable)
+  const reorderPrizes = (keys: string[]) => {
+    if (savingRef.current) return;
+    const byKey = new Map(cfg.prizes.map((p) => [p.key, p]));
+    const next = keys.map((k) => byKey.get(k)).filter((p): p is Prize => !!p);
+    if (next.length !== cfg.prizes.length) return;
+    setCfg((c) => ({ ...c, prizes: next }));
+    requestSave({ prizes: next }, "list", "순서를 바꿨습니다.");
+  };
 
   // ── 편집 칸 ────────────────────────────────
   const openScreening = (s: Screening | null) => {
@@ -695,7 +1771,7 @@ export default function AdminGoedamPage() {
           amount: p.amount ? String(p.amount) : "",
           itemId: p.itemId,
           itemName: p.itemName,
-          days: p.days > 0 ? String(p.days) : "",
+          count: p.count > 1 ? String(p.count) : "",
           roleId: p.roleId,
           roleName: p.roleName,
           qty: p.qty == null ? "" : String(p.qty),
@@ -710,7 +1786,7 @@ export default function AdminGoedamPage() {
     setPane({
       type: "prize",
       isNew: true,
-      d: { key: `new:${++newKeyRef.current}`, name: "", kind: "xp", amount: "", itemId: "", itemName: "", days: "", roleId: "", roleName: "", qty: "", weight: String(PRIZE_WEIGHT.def), rarity: "common", codesText: "" },
+      d: { key: `new:${++newKeyRef.current}`, name: "", kind: "xp", amount: "", itemId: "", itemName: "", count: "", roleId: "", roleName: "", qty: "", weight: String(PRIZE_WEIGHT.def), rarity: "common", codesText: "" },
     });
   };
   const editDraft = (d: ScreeningDraft | PrizeDraft) => {
@@ -736,8 +1812,8 @@ export default function AdminGoedamPage() {
     amount: d.kind === "xp" || d.kind === "point" ? parseAmount(d.amount) : 0,
     itemId: d.kind === "item" ? d.itemId : "",
     itemName: d.kind === "item" ? itemOf(d.itemId)?.name || d.itemName : "",
-    // 빈칸 = 무기한(0). 실물은 기간이 없다(칸도 잠겨 있다)
-    days: d.kind === "item" && itemOf(d.itemId)?.type !== "physical" && d.days.trim() ? intText(d.days) : 0,
+    // 빈칸 = 1개. 쌓이지 않는 아이템은 늘 1개(칸도 잠겨 있다 — 서버도 같은 규칙으로 막는다)
+    count: d.kind !== "item" ? 0 : stackableOf(d.itemId) && d.count.trim() ? intText(d.count) : 1,
     roleId: d.kind === "role" ? d.roleId : "",
     roleName: d.kind === "role" ? roleNameOf(d.roleId) || d.roleName : "",
     // 빈칸 = 무제한. code 는 코드 수가 곧 수량
@@ -799,18 +1875,26 @@ export default function AdminGoedamPage() {
   const [grantId, setGrantId] = useState("");
   const [grantAsk, setGrantAsk] = useState<{ userId: string; userName: string } | null>(null);
   const [granting, setGranting] = useState(false);
-  // 기본 회차 — 진행 중인 회차, 없으면 가장 최근에 끝난 회차, 그것도 없으면 첫 회차(저장된 회차만 — 명단은 sid 로 읽는다)
+  // 기본 회차 — 진행 중인 회차, 없으면 가장 최근에 끝난 회차, 그것도 없으면 첫 회차(저장된 회차만 — 명단은 sid 로 읽는다).
+  //    회차가 하나도 없으면 가장 최근 음성 날
   const savedScreenings = useMemo(() => base?.screenings ?? [], [base]);
+  const voiceSids = useMemo(() => voiceDays.map((d) => voiceSid(d)), [voiceDays]);
   const defaultSid = useMemo(() => {
-    if (!savedScreenings.length) return "";
+    if (!savedScreenings.length) return voiceSids[voiceSids.length - 1] || "";
     const now = loadedAt;
     const live = savedScreenings.find((s) => kstMs(s.startsAt) <= now && now < kstMs(s.endsAt));
     if (live) return live.sid;
     const past = savedScreenings.filter((s) => kstMs(s.endsAt) <= now);
     return (past[past.length - 1] || savedScreenings[0]).sid;
-  }, [savedScreenings, loadedAt]);
-  const watchSid = savedScreenings.some((s) => s.sid === watchPick) ? watchPick : defaultSid;
+  }, [savedScreenings, voiceSids, loadedAt]);
+  const watchSid = savedScreenings.some((s) => s.sid === watchPick) || voiceSids.includes(watchPick) ? watchPick : defaultSid;
   const watchScreening = savedScreenings.find((s) => s.sid === watchSid) || null;
+  // 📌 음성 날을 고르면 그날(「음성 M. D.」) — 기준(하루 분 · 장 수)은 저장된 음성 설정
+  const watchDay = watchScreening ? "" : voiceDayOf(watchSid);
+  const savedVoice = base?.voice ?? EMPTY_VOICE;
+  const watchTickets = watchScreening ? watchScreening.tickets : intText(savedVoice.tickets) || VOICE_TICKETS.def;
+  const watchName = watchScreening ? `「${watchScreening.title}」 회차` : watchDay ? `「음성 ${voiceDayLabel(watchDay)}」` : "";
+  const watchOk = !!watchScreening || !!watchDay;
   const rosterLoading = !!watchSid && (roster?.sid !== watchSid || roster?.nonce !== rosterNonce);
 
   useEffect(() => {
@@ -834,19 +1918,20 @@ export default function AdminGoedamPage() {
     return q ? rosterRows.filter((r) => r.userName.toLowerCase().includes(q) || r.userId.includes(q)) : rosterRows;
   }, [rosterRows, rosterQ]);
   const askGrant = (userId: string, userName = "") => {
-    if (!watchScreening) return;
+    if (!watchOk) return;
     if (!SNOWFLAKE.test(userId)) return toast("디스코드 ID가 올바르지 않습니다.", true);
     const row = rosterRows.find((r) => r.userId === userId);
     if (row?.grantedAt) return toast("이미 지급되었습니다.", true);
     setGrantAsk({ userId, userName: userName || row?.userName || "" });
   };
   const doGrant = async () => {
-    if (!grantAsk || !watchScreening || granting) return;
+    if (!grantAsk || !watchOk || granting) return;
+    const sid = watchSid;
     setGranting(true);
     const res = await fetch("/api/admin/goedam/grant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sid: watchScreening.sid, userId: grantAsk.userId }),
+      body: JSON.stringify({ sid, userId: grantAsk.userId }),
     }).catch(() => null);
     const d = await res?.json().catch(() => null);
     setGranting(false);
@@ -854,7 +1939,7 @@ export default function AdminGoedamPage() {
     if (res?.ok && d?.success === true) {
       const row = rosterFrom([d.data?.row])[0];
       setRoster((cur) =>
-        cur && cur.sid === watchScreening.sid
+        cur && cur.sid === sid
           ? { ...cur, rows: cur.rows.some((r) => r.userId === row.userId) ? cur.rows.map((r) => (r.userId === row.userId ? row : r)) : [row, ...cur.rows] }
           : cur
       );
@@ -920,8 +2005,59 @@ export default function AdminGoedamPage() {
     }
   };
 
+  // ── 연출 미리보기 — 고른 결과 + 지금 설정(제목 · 기간 · 회차 · 상품)으로 추첨 창 상태를 만든다(GET /api/goedam 모양). 추첨권은 99장으로 보인다 ──
+  const demoNone = demoRarity === "none";
+  const demoKindOn = demoNone ? "none" : demoKind;
+  const demoPrize = cfg.prizes.find((p) => p.kind === demoKindOn);
+  const demoBase = DEMO_BASE[demoKindOn] || DEMO_BASE.none;
+  const demoResult = {
+    pid: demoPrize?.pid || "demo",
+    kind: demoKindOn,
+    rarity: demoNone ? "" : demoRarity,
+    name: demoPrize ? prizeTitle(demoPrize) : demoBase.name,
+    amount: demoPrize?.amount || demoBase.amount || 0,
+    itemName: demoPrize?.itemName || demoBase.itemName || "",
+    count: demoPrize?.count || demoBase.count || 0,
+    code: demoKindOn === "code" ? demoBase.code || "" : "",
+  };
+  // 상품 줄 — 서버 유저 화면(lib/goedam.js getGoedamState)과 같은 모양: 보이는 이름 · 나간 수를 뺀 남은 수 · 확률
+  const demoPrizes = cfg.prizes
+    .filter((p) => p.kind !== "none")
+    .map((p) => {
+      const st = stockOfPrize(p);
+      return { pid: p.pid || p.key, name: prizeTitle(p), kind: p.kind, amount: p.amount, itemName: p.itemName, count: p.count, rarity: p.rarity, total: st.total, left: st.left, chance: drawable(p) && weightSum > 0 ? (p.weight / weightSum) * 100 : 0, ready: true };
+    });
+  const demo = {
+    result: demoResult,
+    data: {
+      phase: "open",
+      adminPreview: false,
+      title: cfg.title || "방구석 심야 괴담회",
+      drawOpensAt: cfg.drawOpensAt,
+      drawClosesAt: cfg.drawClosesAt,
+      tickets: 99,
+      screenings: cfg.screenings.map((s) => ({ sid: s.sid || s.key, title: s.title, startsAt: s.startsAt, endsAt: s.endsAt, tickets: s.tickets, ratio: s.ratio, mySeconds: 0, earned: false, granted: 0 })),
+      // 상품이 하나도 없으면 고른 결과를 한 줄로(창 단추가 「남은 상품 없음」으로 잠기지 않게)
+      prizes: demoPrizes.length ? demoPrizes : [{ pid: "demo", name: demoResult.name, kind: demoKindOn, amount: demoResult.amount, itemName: demoResult.itemName, count: demoResult.count, rarity: demoResult.rarity, total: null, left: null, chance: 100, ready: true }],
+      history: [],
+      // 받는 법(2026-10-24) — 연출 미리보기에는 음성 · 상점 줄 없음(창은 null 이면 그 줄을 그리지 않는다)
+      voice: null,
+      shop: null,
+    },
+  };
+
   // 로딩 · 권한 없음 화면은 공용 가드가 만든다
   if (gate) return gate;
+
+  // 📌 그룹 지원 탭 — 제 틀(설정 저장 줄 · 상세 칸 · 확인 창)을 따로 그린다. 머리 · 탭 줄 · 토스트는 이 화면 것 그대로
+  if (tab === "groups") {
+    return (
+      <>
+        <GroupsTab tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={tabHref} />} desc={`이벤트 키 ${eventKey || "-"}`} toast={toast} />
+        {toastEl}
+      </>
+    );
+  }
 
   // ── 변경 목록(저장 줄) ───────────────────────
   // 📌 불러온 한 벌과 지금 값을 맞대어 한 줄씩. 회차 · 상품은 sid · pid 로 짝을 지어 추가 · 삭제 · 수정을 가린다(보여 주기 전용)
@@ -932,7 +2068,13 @@ export default function AdminGoedamPage() {
     channelId: !!base && base.channelId.trim() !== cfg.channelId.trim(),
     ticket: !!base && base.ticketItemId !== cfg.ticketItemId,
     period: !!base && (base.drawOpensAt !== cfg.drawOpensAt || base.drawClosesAt !== cfg.drawClosesAt),
+    voiceEnabled: !!base && base.voice.enabled !== cfg.voice.enabled,
+    voiceMinutes: !!base && !Object.is(intText(base.voice.minutes), intText(cfg.voice.minutes)),
+    voiceTickets: !!base && !Object.is(intText(base.voice.tickets), intText(cfg.voice.tickets)),
+    voicePeriod: !!base && (base.voice.startsAt !== cfg.voice.startsAt || base.voice.endsAt !== cfg.voice.endsAt),
   };
+  // 숫자 칸 글자(비었거나 못 읽으면 「없음」)
+  const numLabel = (s: string, unit: string) => (Number.isFinite(intText(s)) ? `${fmt(intText(s))}${unit}` : "없음");
   if (base && isDirty) {
     if (changed.enabled) changes.push(`상태 ${onOffLabel(base.enabled)} → ${onOffLabel(cfg.enabled)}`);
     if (changed.title) changes.push(`제목 ${base.title.trim() || "없음"} → ${cfg.title.trim() || "없음"}`);
@@ -940,6 +2082,11 @@ export default function AdminGoedamPage() {
     if (changed.ticket) changes.push(`추첨권 ${itemOf(base.ticketItemId)?.name || "없음"} → ${itemOf(cfg.ticketItemId)?.name || "없음"}`);
     if (base.drawOpensAt !== cfg.drawOpensAt) changes.push(`추첨 시작 ${kstLabel(base.drawOpensAt)} → ${kstLabel(cfg.drawOpensAt)}`);
     if (base.drawClosesAt !== cfg.drawClosesAt) changes.push(`추첨 종료 ${kstLabel(base.drawClosesAt)} → ${kstLabel(cfg.drawClosesAt)}`);
+    if (changed.voiceEnabled) changes.push(`음성 활동 ${voiceOnLabel(base.voice.enabled)} → ${voiceOnLabel(cfg.voice.enabled)}`);
+    if (changed.voiceMinutes) changes.push(`하루 음성 ${numLabel(base.voice.minutes, "분")} → ${numLabel(cfg.voice.minutes, "분")}`);
+    if (changed.voiceTickets) changes.push(`음성 장 수 ${numLabel(base.voice.tickets, "장")} → ${numLabel(cfg.voice.tickets, "장")}`);
+    if (base.voice.startsAt !== cfg.voice.startsAt) changes.push(`음성 시작 ${kstLabel(base.voice.startsAt)} → ${kstLabel(cfg.voice.startsAt)}`);
+    if (base.voice.endsAt !== cfg.voice.endsAt) changes.push(`음성 종료 ${kstLabel(base.voice.endsAt)} → ${kstLabel(cfg.voice.endsAt)}`);
   }
 
   // 단계 — 불러온 시각 기준(렌더 중 시계를 읽지 않는다)
@@ -947,11 +2094,15 @@ export default function AdminGoedamPage() {
   const closeMs = kstMs(cfg.drawClosesAt);
   const periodOk = Number.isFinite(openMs) && Number.isFinite(closeMs) && closeMs > openMs;
   const phase = !cfg.enabled ? "중단" : !periodOk || !loadedAt ? "-" : loadedAt < openMs ? "추첨 전" : loadedAt < closeMs ? "추첨 중" : "종료";
-  const periodHint = !periodOk ? (
-    <span className="font-bold text-[#d01634]">{Number.isFinite(openMs) && Number.isFinite(closeMs) ? "종료 시각은 시작 시각 이후로 지정해 주십시오." : "기간을 입력해 주십시오."}</span>
-  ) : (
-    `KST · 종료 시각 미포함 · ${Math.round((closeMs - openMs) / DAY_MS * 10) / 10}일`
-  );
+  // 기간 칸 아래 한 줄 — 추첨 기간 · 음성 활동 기간이 같은 모양
+  const periodHintOf = (a: number, b: number) =>
+    !(Number.isFinite(a) && Number.isFinite(b) && b > a) ? (
+      <span className="font-bold text-[#d01634]">{Number.isFinite(a) && Number.isFinite(b) ? "종료 시각은 시작 시각 이후로 지정해 주십시오." : "기간을 입력해 주십시오."}</span>
+    ) : (
+      `KST · 종료 시각 미포함 · ${Math.round((b - a) / DAY_MS * 10) / 10}일`
+    );
+  const periodHint = periodHintOf(openMs, closeMs);
+  const voicePeriodHint = periodHintOf(kstMs(cfg.voice.startsAt), kstMs(cfg.voice.endsAt));
   const leftSum = cfg.prizes.reduce<number | null>((sum, p) => {
     const s = stockOfPrize(p);
     return sum == null || s.left == null ? null : sum + s.left;
@@ -1011,6 +2162,7 @@ export default function AdminGoedamPage() {
       key: "name",
       label: "이름",
       mobile: "title",
+      sortValue: (p) => prizeTitle(p),
       render: (p) => (
         <span className="font-bold break-keep">
           {prizeTitle(p)}
@@ -1018,13 +2170,14 @@ export default function AdminGoedamPage() {
         </span>
       ),
     },
-    { key: "kind", label: "종류", className: "w-20", render: (p) => KIND_LABEL[p.kind] },
+    { key: "kind", label: "종류", className: "w-20", sortValue: (p) => KIND_LABEL[p.kind], render: (p) => KIND_LABEL[p.kind] },
     { key: "detail", label: "내용", render: (p) => <span className="break-keep">{prizeDetail(p, roleNameOf, itemOf)}</span> },
     {
       key: "left",
       label: "남은 수",
       align: "right",
       className: "w-32",
+      sortValue: (p) => stockOfPrize(p).left, // 무제한(null)은 늘 맨 끝
       render: (p) => {
         const s = stockOfPrize(p);
         return s.total == null ? (
@@ -1036,9 +2189,9 @@ export default function AdminGoedamPage() {
         );
       },
     },
-    { key: "weight", label: "비중", align: "right", className: "w-24", render: (p) => <span className="tabular-nums">{fmt(p.weight)}</span> },
-    { key: "chance", label: "확률", align: "right", className: "w-24", render: (p) => <span className="tabular-nums font-bold">{chanceOf(p)}</span> },
-    { key: "rarity", label: "희귀도", className: "w-24", render: (p) => <RarityMark v={p.rarity} /> },
+    { key: "weight", label: "비중", align: "right", className: "w-24", sortValue: (p) => p.weight, render: (p) => <span className="tabular-nums">{fmt(p.weight)}</span> },
+    { key: "chance", label: "확률", align: "right", className: "w-24", sortValue: (p) => (drawable(p) && weightSum > 0 ? p.weight / weightSum : null), render: (p) => <span className="tabular-nums font-bold">{chanceOf(p)}</span> },
+    { key: "rarity", label: "희귀도", className: "w-24", sortValue: (p) => rarityOf(p.rarity).rank, render: (p) => <RarityMark v={p.rarity} /> },
     {
       key: "act",
       label: "관리",
@@ -1070,7 +2223,7 @@ export default function AdminGoedamPage() {
         </span>
       ),
     },
-    { key: "time", label: "머문 시간", align: "right", className: "w-32", sortValue: (r) => r.seconds, render: (r) => <span className="tabular-nums">{durLabel(r.seconds)}</span> },
+    { key: "time", label: watchDay ? "음성 시간" : "머문 시간", align: "right", className: "w-32", sortValue: (r) => r.seconds, render: (r) => <span className="tabular-nums">{durLabel(r.seconds)}</span> },
     {
       key: "pct",
       label: "비율",
@@ -1089,7 +2242,7 @@ export default function AdminGoedamPage() {
             {r.granted}장{r.manual ? " · 수동" : ""}
           </StatusChip>
         ) : r.earned ? (
-          <StatusChip tone="info">완청 · 대기</StatusChip>
+          <StatusChip tone="info">{watchDay ? "달성" : "완청"} · 대기</StatusChip>
         ) : (
           <StatusChip>미달</StatusChip>
         ),
@@ -1178,7 +2331,7 @@ export default function AdminGoedamPage() {
   const pdPrize = pd ? cfg.prizes.find((p) => p.key === pd.key) || null : null;
   const pdStock = pdPrize ? stockOfPrize(pdPrize) : null;
   const pdPicked = pd ? itemOf(pd.itemId) : null;
-  const pdNoDays = pdPicked?.type === "physical";
+  const pdOne = !!pd?.itemId && !stackableOf(pd.itemId); // 쌓이지 않는 아이템 — 개수 칸을 1 로 잠근다
   const pdCodes = pd ? codeLines(pd.codesText) : [];
   // 편집 중인 비중의 확률(미리 보기) — 지금 나올 수 있는 상품 기준
   const pdWeight = pd ? intText(pd.weight) : NaN;
@@ -1313,13 +2466,13 @@ export default function AdminGoedamPage() {
               />
             </PanelGrid>
 
-            {/* 회차 — 패널 머리에 추가, 본문은 전체 폭 표 */}
+            {/* 상영(2026-10-24 「회차」 → 「상영」 — 받는 길 중 하나) — 패널 머리에 추가, 본문은 전체 폭 표 */}
             <Panel
               flush
               className="mb-5"
               title={
                 <>
-                  회차 <span className="ml-1 text-[#8a8a8a] tabular-nums">{cfg.screenings.length}</span>
+                  상영 <span className="ml-1 text-[#8a8a8a] tabular-nums">{cfg.screenings.length}</span>
                 </>
               }
               right={
@@ -1346,6 +2499,113 @@ export default function AdminGoedamPage() {
               )}
             </Panel>
 
+            {/* 음성 활동 · 상점 — 받는 길 나머지 둘(2026-10-24). 넓은 화면 두 열, 좁으면 위아래 */}
+            <PanelGrid className="mb-5">
+              <Panel title="음성 활동" flush>
+                <FieldRow label="사용" changed={changed.voiceEnabled}>
+                  <Inline>
+                    <Switch on={cfg.voice.enabled} onChange={(v) => setVoice("enabled", v)} disabled={isLoading} label="음성 활동 사용" />
+                    <span className={`font-bold ${cfg.voice.enabled ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{voiceOnLabel(cfg.voice.enabled)}</span>
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="하루 음성" changed={changed.voiceMinutes}>
+                  <Inline>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={cfg.voice.minutes}
+                      onChange={(e) => setVoice("minutes", e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      onKeyDown={(e) => enterKey(e, saveList)}
+                      placeholder={`${VOICE_MINUTES.min}~${VOICE_MINUTES.max}`}
+                      aria-label="하루 음성 (분)"
+                      className={numClass}
+                    />
+                    분
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="장 수" changed={changed.voiceTickets}>
+                  <Inline>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={cfg.voice.tickets}
+                      onChange={(e) => setVoice("tickets", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                      onKeyDown={(e) => enterKey(e, saveList)}
+                      placeholder={`${VOICE_TICKETS.min}~${VOICE_TICKETS.max}`}
+                      aria-label="음성 활동 장 수"
+                      className={numClass}
+                    />
+                    장
+                  </Inline>
+                </FieldRow>
+                <FieldRow label="기간" hint={voicePeriodHint} changed={changed.voicePeriod}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block min-w-0">
+                      <span className="block mb-1 text-[12px] text-[#5a5a5a]">시작</span>
+                      <input
+                        type="datetime-local"
+                        value={cfg.voice.startsAt}
+                        onChange={(e) => setVoice("startsAt", e.target.value)}
+                        onKeyDown={(e) => enterKey(e, saveList)}
+                        aria-label="음성 활동 시작 (KST)"
+                        className={`${inputClass} tabular-nums`}
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="block mb-1 text-[12px] text-[#5a5a5a]">종료</span>
+                      <input
+                        type="datetime-local"
+                        value={cfg.voice.endsAt}
+                        onChange={(e) => setVoice("endsAt", e.target.value)}
+                        onKeyDown={(e) => enterKey(e, saveList)}
+                        aria-label="음성 활동 종료 (KST)"
+                        className={`${inputClass} tabular-nums`}
+                      />
+                    </label>
+                  </div>
+                </FieldRow>
+              </Panel>
+
+              {/* 상점 — 판매는 상점 관리 몫(저장된 추첨권 아이템을 파는 판매 중 상품 하나). 여기서는 보기 · 바로가기만 */}
+              <Panel title="상점" flush>
+                <FieldRow label="판매 상품">
+                  <Inline>
+                    {isLoading ? (
+                      <span className="text-[#8a8a8a]">불러오는 중…</span>
+                    ) : shopRow ? (
+                      <>
+                        <span className="min-w-0 font-bold text-[#131313] break-keep">{shopRow.name || "-"}</span>
+                        <Btn
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            sfxTick();
+                            router.push(`/admin/shop?tab=products&edit=${encodeURIComponent(shopRow.id)}`);
+                          }}
+                        >
+                          상점 관리에서 열기
+                        </Btn>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-bold text-[#5a5a5a]">판매 상품 없음</span>
+                        <Btn
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            sfxTick();
+                            router.push("/admin/shop?tab=products");
+                          }}
+                        >
+                          상점 관리
+                        </Btn>
+                      </>
+                    )}
+                  </Inline>
+                </FieldRow>
+              </Panel>
+            </PanelGrid>
+
             {/* 상품 */}
             <Panel
               flush
@@ -1360,7 +2620,7 @@ export default function AdminGoedamPage() {
                 </Btn>
               }
             >
-              {!isLoading && cfg.prizes.length > 0 && weightSum === 0 && (
+              {!isLoading && cfg.prizes.length > 0 && liveWeightSum === 0 && (
                 <NoteLine tone="warn" inset>
                   지금 나올 수 있는 상품이 없습니다.
                 </NoteLine>
@@ -1379,8 +2639,25 @@ export default function AdminGoedamPage() {
                   rowKey={(p) => p.key}
                   onRowClick={(p) => openPrize(p)}
                   selectedKey={pd?.key ?? null}
+                  onReorder={reorderPrizes}
+                  reorderLocked={isSaving}
                 />
               )}
+            </Panel>
+
+            {/* 연출 미리보기 — 추첨 창을 서버 없이(추첨권 · 기록 그대로) 고른 결과로 */}
+            <Panel title="연출 미리보기" flush className="mt-5">
+              <FieldRow label="결과">
+                <Segmented options={DEMO_RARITY} value={demoRarity} onChange={setDemoRarity} />
+              </FieldRow>
+              <FieldRow label="종류">
+                <Segmented options={DEMO_KIND} value={demoKind} onChange={setDemoKind} disabled={demoRarity === "none"} />
+              </FieldRow>
+              <FieldRow label="재생">
+                <Btn variant="secondary" size="sm" onClick={() => { sfxTick(); setDemoOpen(true); }}>
+                  창 열기
+                </Btn>
+              </FieldRow>
             </Panel>
           </>
         )}
@@ -1398,21 +2675,25 @@ export default function AdminGoedamPage() {
                     onKeyDown={(e) => enterKey(e, () => askGrant(grantId.trim()))}
                     placeholder="디스코드 ID"
                     aria-label="지급할 디스코드 ID"
-                    disabled={!watchScreening}
+                    disabled={!watchOk}
                     className={`${inputClass} !w-52 tabular-nums`}
                   />
-                  <Btn variant="secondary" onClick={() => askGrant(grantId.trim())} disabled={!watchScreening || !grantId.trim()}>
+                  <Btn variant="secondary" onClick={() => askGrant(grantId.trim())} disabled={!watchOk || !grantId.trim()}>
                     지급
                   </Btn>
-                  <Btn variant="ghost" onClick={() => setRosterNonce((n) => n + 1)} disabled={!watchScreening}>
+                  <Btn variant="ghost" onClick={() => setRosterNonce((n) => n + 1)} disabled={!watchOk}>
                     새로고침
                   </Btn>
                 </>
               }
             >
-              {savedScreenings.length > 0 && (
+              {/* 상영 회차 → 음성 날(「음성 M. D.」 — 기록이 있는 날만) */}
+              {savedScreenings.length + voiceDays.length > 0 && (
                 <Segmented
-                  options={savedScreenings.map((s) => ({ v: s.sid, l: `${kstLabel(s.startsAt).slice(0, 7)} ${s.title}` }))}
+                  options={[
+                    ...savedScreenings.map((s) => ({ v: s.sid, l: `${kstLabel(s.startsAt).slice(0, 7)} ${s.title}` })),
+                    ...voiceDays.map((d) => ({ v: voiceSid(d), l: `음성 ${voiceDayLabel(d)}` })),
+                  ]}
                   value={watchSid}
                   onChange={(v) => setWatchPick(v)}
                 />
@@ -1421,18 +2702,27 @@ export default function AdminGoedamPage() {
             </Toolbar>
             {isLoading ? (
               <div className="py-10 text-center text-[13px] text-[#8a8a8a]">불러오는 중…</div>
-            ) : !watchScreening ? (
+            ) : !watchOk ? (
               <EmptyRow>저장된 회차가 없습니다.</EmptyRow>
             ) : (
               <>
                 <StatRow
                   className="mb-5"
-                  items={[
-                    { label: "명단", value: fmt(rosterRows.length) },
-                    { label: "완청", value: fmt(rosterRows.filter((r) => r.earned).length) },
-                    { label: "지급", value: fmt(rosterRows.filter((r) => !!r.grantedAt).length) },
-                    { label: "완청 기준", value: durLabel(needSec(watchScreening)), sub: `${rangeLabel(watchScreening.startsAt, watchScreening.endsAt)} · ${Math.round(watchScreening.ratio * 100)}%` },
-                  ]}
+                  items={
+                    watchScreening
+                      ? [
+                          { label: "명단", value: fmt(rosterRows.length) },
+                          { label: "완청", value: fmt(rosterRows.filter((r) => r.earned).length) },
+                          { label: "지급", value: fmt(rosterRows.filter((r) => !!r.grantedAt).length) },
+                          { label: "완청 기준", value: durLabel(needSec(watchScreening)), sub: `${rangeLabel(watchScreening.startsAt, watchScreening.endsAt)} · ${Math.round(watchScreening.ratio * 100)}%` },
+                        ]
+                      : [
+                          { label: "명단", value: fmt(rosterRows.length) },
+                          { label: "달성", value: fmt(rosterRows.filter((r) => r.earned).length) },
+                          { label: "지급", value: fmt(rosterRows.filter((r) => !!r.grantedAt).length) },
+                          { label: "달성 기준", value: durLabel((intText(savedVoice.minutes) || VOICE_MINUTES.def) * 60), sub: `음성 ${voiceDayLabel(watchDay)} · ${fmt(watchTickets)}장` },
+                        ]
+                  }
                 />
                 {roster?.failed && roster.sid === watchSid && !rosterLoading && (
                   <div className="mb-4">
@@ -1604,7 +2894,7 @@ export default function AdminGoedamPage() {
                 maxLength={MAX_TITLE}
                 onChange={(e) => editDraft({ ...pd, name: e.target.value })}
                 onKeyDown={(e) => enterKey(e, savePane)}
-                placeholder={prizeTitle({ name: "", kind: pd.kind, amount: parseAmount(pd.amount) || 0, itemName: pdPicked?.name || pd.itemName, roleName: roleNameOf(pd.roleId) || pd.roleName })}
+                placeholder={prizeTitle({ name: "", kind: pd.kind, amount: parseAmount(pd.amount) || 0, itemName: pdPicked?.name || pd.itemName, count: pdOne ? 1 : Number(pd.count) || 1, roleName: roleNameOf(pd.roleId) || pd.roleName })}
                 className={inputClass}
               />
             </label>
@@ -1636,7 +2926,7 @@ export default function AdminGoedamPage() {
                 <span className={labelClass}>
                   아이템 <Req />
                 </span>
-                {/* 기간 칸은 폭 고정(줄이 움직이지 않는다). 비우면 무기한, 실물은 기간이 없어 잠근다 */}
+                {/* 개수 칸은 폭 고정(줄이 움직이지 않는다). 비우면 1개, 쌓이지 않는 아이템은 1 로 잠근다(2026-10-25 기간 칸을 바꿈 — 운영자 "일자 말고") */}
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <Dropdown
@@ -1646,7 +2936,7 @@ export default function AdminGoedamPage() {
                       buttonClassName={DROPDOWN_BTN}
                       onChange={(v) => {
                         const it = itemOf(v);
-                        editDraft({ ...pd, itemId: v, itemName: it?.name || "", days: it?.type === "physical" ? "" : pd.days });
+                        editDraft({ ...pd, itemId: v, itemName: it?.name || "", count: stackableOf(v) ? pd.count : "" });
                       }}
                       options={itemOptions}
                     />
@@ -1655,16 +2945,16 @@ export default function AdminGoedamPage() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={pdNoDays ? "" : pd.days}
-                      disabled={pdNoDays}
-                      onChange={(e) => editDraft({ ...pd, days: e.target.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 4) })}
+                      value={pdOne ? "" : pd.count}
+                      disabled={pdOne}
+                      onChange={(e) => editDraft({ ...pd, count: e.target.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 2) })}
                       onKeyDown={(e) => enterKey(e, savePane)}
-                      placeholder="무기한"
-                      aria-label="기간(일)"
+                      placeholder="1"
+                      aria-label="개수"
                       className={`${inputClass} !pr-8 text-right tabular-nums`}
                     />
-                    <span aria-hidden className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#8a8a8a] ${pd.days && !pdNoDays ? "" : "invisible"}`}>
-                      일
+                    <span aria-hidden className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#8a8a8a]">
+                      개
                     </span>
                   </span>
                 </div>
@@ -1782,9 +3072,9 @@ export default function AdminGoedamPage() {
         onCancel={() => setGrantAsk(null)}
         onConfirm={doGrant}
         body={
-          grantAsk && watchScreening ? (
+          grantAsk && watchOk ? (
             <>
-              <strong className="text-[#131313]">{grantAsk.userName || grantAsk.userId}</strong> · 「{watchScreening.title}」 회차 · 추첨권 {watchScreening.tickets}장
+              <strong className="text-[#131313]">{grantAsk.userName || grantAsk.userId}</strong> · {watchName} · 추첨권 {watchTickets}장
             </>
           ) : null
         }
@@ -1808,6 +3098,7 @@ export default function AdminGoedamPage() {
       />
 
       {toastEl}
+      <GoedamModal open={demoOpen} onClose={() => setDemoOpen(false)} pushToast={(m: string) => toast(m)} demo={demo} />
     </>
   );
 }

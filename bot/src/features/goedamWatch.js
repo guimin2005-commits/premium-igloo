@@ -11,8 +11,20 @@
 //    📌 시작할 때(설정을 처음 읽은 뒤) 채널에 이미 있는 사람은 지금부터 구간을 연다. 봇이 꺼져 있던 동안은 못 센다(features/voiceTime.js 와 같다)
 //    📌 겹침 계산(overlapMs · splitByScreenings) · 완청 판정(isFullWatch) · 설정 정리(normalizeGoedam)는 순수 함수로 내보낸다 — node 로 바로 확인할 수 있게
 //    ⚠️ GoedamWatch 는 autoIndex 가 꺼져 있다(사이트 · 테스트 사이트가 같은 DB) — 첫 쓰기 직전에 createIndexes() 를 한 번(ensureWatchIndexes)
+// ── 2026-10-24 음성 활동 지급 ──────────────────
+//    📌 운영자 "디코 일정 시간한 것도 지급할 거고 상점에도 판매할 거라서 회차라는 개념이 좀 애매한데" — 약속 문서 「2026-10-24 추가 — 받는 법 확장」 3:
+//       · 5분마다, 켜져 있고(enabled · voice.enabled) 기간 안이고 추첨권 아이템이 있으면 오늘(KST) 셀 구간의 XpLog { reason: "voice" } 를 사람마다 sec 합으로 모은다
+//         (sec 없는 옛 줄은 300초 — lib/questKinds.js · questKinds.js 와 같은 규칙). 합 ≥ minutes × 60 인 사람에게 하루 한 번 tickets 장
+//       · GoedamWatch 줄 { sid: "voice:<YYYY-MM-DD>" } 에 그날 합을 쓰고($max) { grantedAt: null } 조건부로 세운 뒤 추첨권 Purchase(표식은 상영과 같고
+//         orderId "goedam:voice:<날짜>:<userId>" · adminNote "괴담회 음성 <minutes>분 · <M. D.>"). 못다 준 줄 채우기(auditGrants)도 상영과 같다
+//    📌 셀 구간 = 그날 [0시, 다음 0시) ∩ 기간 [voice.startsAt, voice.endsAt). 지난날은 구간 끝 + 6시간까지 다시 본다 — 끝 직전(23:5x)에 채운 사람이
+//       5분 주기 · 봇 재시작 사이에 빠지지 않게. 구간 밖 음성은 세지 않으니 못 채운 날은 그대로 끝이다(voiceDays)
+//    📌 XP 획득 중단 · 레벨 비공개 · 음성 XP 정지 — 상영 지급처럼 따로 거르지 않는다. 다만 XpLog 음성 줄은 XP 를 실제로 받은 바퀴에만 남아
+//       (xp.js grantXp · features/voiceXp.js payVoiceCycle) 그동안의 음성은 저절로 세지 않는다. 0 XP 바퀴(채널 정책 · 음소거 막기 등)도 줄이 없어 빠진다
+//    📌 채널 조건은 아직 없다(음성 XP 기록 전부) — 추후 설정에 voice.channels 를 더하면 voiceDayPipeline 의 $match 에 붙인다
+//    📌 날짜 · 합 · 기준 판정(kstDayKey · voiceDays · daySeconds · voiceQualifiers)도 순수 함수로 내보낸다
 import { Events } from "discord.js";
-import { Goedam, GoedamWatch, Purchase, Item } from "../db.js";
+import { Goedam, GoedamWatch, Purchase, Item, XpLog, UserXp } from "../db.js";
 import { config } from "../config.js";
 import { recordBotError } from "./heartbeat.js";
 
@@ -33,6 +45,17 @@ const GRANT_STOP_MS = 6 * 60 * 60 * 1000; // 회차 끝 + 6시간 뒤로는 그 
 const AUDIT_MS = 5 * 60 * 1000;
 const AUDIT_GRACE_MS = 60 * 1000;
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+// 📌 음성 활동(2026-10-24) — 5분마다 모은다. 지난날은 구간 끝 + 2분이 지나면(끝 직전 바퀴의 XpLog 가 다 써진 뒤) 한 번 다 돌고 더 보지 않는다(voiceDone)
+const VOICE_MS = 5 * 60 * 1000;
+const VOICE_SETTLE_MS = 2 * 60 * 1000;
+const KST_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// sec 없는 옛 음성 줄(2026-10-01 19:05 전 — 전부 300초 주기였다)을 세는 초 — lib/questKinds.js · questKinds.js 의 $ifNull 300 과 같다
+export const LEGACY_VOICE_SEC = 300;
+// 음성 활동 기본값 · 범위 — 사이트 lib/goedamRules.js · models/Goedam.js voice 와 같다(바꾸면 같이)
+export const VOICE_DEFAULTS = { minutes: 60, tickets: 1, startsAt: "2026-10-30T00:00:00.000+09:00", endsAt: "2026-11-06T00:00:00.000+09:00" };
+export const VOICE_MINUTES = { min: 10, max: 1440 };
+export const VOICE_TICKETS = { min: 1, max: 10 };
 
 let cfg = null; // normalizeGoedam 결과 — 아직 못 읽었거나 문서가 없으면 null
 let guildRef = null;
@@ -43,8 +66,10 @@ let busy = false; // 쓰기 · 지급이 도는 중 — 구간 끊기(sweep)는 
 const sessions = new Map();
 // "<userId>|<sid>" → { userId, sid, name, ms: 아직 GoedamWatch 에 안 쓴 시간(반올림 나머지는 이월) }
 const pending = new Map();
-const auditAt = new Map(); // sid → 마지막으로 못다 준 줄을 살핀 ms
+const auditAt = new Map(); // sid → 마지막으로 못다 준 줄을 살핀 ms(음성 날 "voice:<날짜>" 포함)
 const warned = new Set(); // 같은 경고를 주기마다 찍지 않게
+let voiceAt = 0; // 마지막 음성 지급 주기 ms
+const voiceDone = new Set(); // 다 돈 지난 음성 날(voiceDoneKey) — 재시작하면 비어 한 번 더 돈다(못다 준 줄 채우기 포함)
 
 // ── 순수 함수 ─────────────────────────────────
 
@@ -59,6 +84,26 @@ const msOf = (d) => {
   const t = new Date(d).getTime();
   return Number.isFinite(t) ? t : NaN;
 };
+// 정수 칸 — 못 읽으면 기본, 아니면 내림 뒤 범위로(사이트 lib/goedamRules.js intIn 과 같은 순서)
+const intIn = (v, lo, hi, d) => {
+  const n = numOr(v, NaN);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.floor(n))) : d;
+};
+
+// 📌 음성 활동 설정 정리(2026-10-24) — 사이트 lib/goedamRules.js 와 같은 범위 · 같은 기본값(하루 10~1440분, 기본 60 · 장 수 1~10, 기본 1 · 기본 꺼짐).
+//    시각이 깨졌으면 기본 기간(10. 30. 00:00 ~ 11. 9. 00:00 KST, 끝은 들어가지 않는다). 끝 ≤ 시작이면 그대로 둔다 — 셀 날이 없다(voiceDays)
+//    📌 채널 조건은 아직 없다 — 추후 voice.channels(채널 · 카테고리 id)를 더하면 여기서 정리해 voiceDayPipeline 에 넘긴다
+export function normalizeVoice(v) {
+  const startsAt = msOf(v?.startsAt);
+  const endsAt = msOf(v?.endsAt);
+  return {
+    enabled: v?.enabled === true,
+    minutes: intIn(v?.minutes, VOICE_MINUTES.min, VOICE_MINUTES.max, VOICE_DEFAULTS.minutes),
+    tickets: intIn(v?.tickets, VOICE_TICKETS.min, VOICE_TICKETS.max, VOICE_DEFAULTS.tickets),
+    startsAt: Number.isFinite(startsAt) ? startsAt : msOf(VOICE_DEFAULTS.startsAt),
+    endsAt: Number.isFinite(endsAt) ? endsAt : msOf(VOICE_DEFAULTS.endsAt),
+  };
+}
 
 // 📌 설정 문서 → 봇이 쓰는 모양(문서가 없으면 null). 사이트 lib/goedam.js normalizeGoedamConfig 와 같은 범위로 자른다(장 수 1~10 · 비율 0.1~1).
 //    시각이 틀렸거나(끝 ≤ 시작) sid 가 비거나 겹치는 회차는 뺀다 — 봇은 sid 를 새로 매기지 않는다(사이트가 저장 때 매긴다)
@@ -89,6 +134,7 @@ export function normalizeGoedam(doc) {
     ticketItemId: String(doc.ticketItemId || "").trim(),
     ticketItemName: String(doc.ticketItemName || "").trim(),
     screenings,
+    voice: normalizeVoice(doc.voice),
   };
 }
 
@@ -115,7 +161,65 @@ export const needSeconds = (s) => (Number(s.ratio) * (Number(s.endsAt) - Number(
 export const isFullWatch = (seconds, s) => Number(seconds) + 1e-6 >= needSeconds(s);
 
 // 추첨권 주문 묶음 — 회차 · 사람마다 하나(1장 = 1건, 같은 orderId 로 ×N). 사이트 손 지급 · 인벤토리 묶음과 같은 글자
+//    음성 날도 같은 식 — sid "voice:<YYYY-MM-DD>" 라 "goedam:voice:<날짜>:<userId>"(약속 문서 추가 절 3)
 export const ticketOrderId = (sid, userId) => `goedam:${sid}:${userId}`;
+
+// ── 음성 활동(순수 함수) ─────────────────────────
+// KST 날짜 "YYYY-MM-DD" · 그날 0시(ms). KST 는 서머타임이 없어 9시간을 더하고 빼면 된다
+export const kstDayKey = (ms) => new Date(Number(ms) + KST_MS).toISOString().slice(0, 10);
+export const kstDayStart = (ms) => Math.floor((Number(ms) + KST_MS) / DAY_MS) * DAY_MS - KST_MS;
+// GoedamWatch.sid · 화면 이름(「음성 10. 30.」 — 사이트 명단과 같은 글자) · Purchase.adminNote
+export const voiceSid = (key) => `voice:${key}`;
+export const voiceDayLabel = (key) => `${Number(String(key).slice(5, 7))}. ${Number(String(key).slice(8, 10))}.`;
+export const voiceTicketNote = (minutes, key) => `괴담회 음성 ${minutes}분 · ${voiceDayLabel(key)}`;
+
+// 📌 지금 볼 음성 날 — 어제 · 오늘(KST) 중 기간과 겹치는 날. [{ key, sid, from, to, settled }]
+//    셀 구간 [from, to) = 그날 [0시, 다음 0시) ∩ 기간 [startsAt, endsAt). 오늘은 구간이 열린 뒤부터, 지난날은 구간 끝 + 6시간까지(GRANT_STOP_MS — 상영과 같다).
+//    settled = 구간 끝 + 2분이 지났다(그 날 합이 더 늘지 않는다 — 한 번 다 돌면 voiceDone)
+export function voiceDays(now, voice) {
+  const out = [];
+  if (!voice) return out;
+  const t = Number(now);
+  const today = kstDayStart(t);
+  for (const start of [today - DAY_MS, today]) {
+    const from = Math.max(start, Number(voice.startsAt));
+    const to = Math.min(start + DAY_MS, Number(voice.endsAt));
+    if (!(to > from) || t < from || t >= to + GRANT_STOP_MS) continue;
+    const key = kstDayKey(start);
+    out.push({ key, sid: voiceSid(key), from, to, settled: t >= to + VOICE_SETTLE_MS });
+  }
+  return out;
+}
+
+// 📌 그 구간 사람마다 음성 초 — XpLog { reason: "voice" } 를 userId 로 묶어 s(sec 있는 줄의 합) · old(sec 없는 옛 줄 수)를 센다(daySeconds 가 합친다).
+//    XpLog 는 바퀴가 끝날 때(5분을 채움 · 나감 · 옮김) 남는 줄이라 날짜는 그 줄을 적은 때(createdAt)로 가른다 — 사이트 lib/questKinds.js 하루 음성 분과 같은 기준.
+//    📌 채널 조건은 아직 없다(음성 XP 기록 전부) — 추후 voice.channels 를 더하면 $match 에 { $or: [{ channelId: { $in } }, { pc: { $in } }] } 를 붙인다
+export const voiceDayPipeline = (from, to) => [
+  { $match: { reason: "voice", createdAt: { $gte: new Date(from), $lt: new Date(to) } } },
+  { $group: { _id: "$userId", s: { $sum: "$sec" }, old: { $sum: { $cond: [{ $eq: [{ $ifNull: ["$sec", null] }, null] }, 1, 0] } } } },
+];
+// 한 사람 그날 초(정수) — sec 합 + 옛 줄 × 300. 0.1초 단위 줄을 더한 값이라 아주 작은 오차는 찬 것으로 본다
+export const daySeconds = (g) =>
+  Math.floor(Math.max(0, Number(g?.s) || 0) + Math.max(0, Math.floor(Number(g?.old) || 0)) * LEGACY_VOICE_SEC + 1e-6);
+export const voiceNeedSeconds = (voice) => Number(voice.minutes) * 60;
+// 기준을 넘은 사람 — [{ userId, seconds }](seconds ≥ minutes × 60, 딱 맞아도 준다). userId 없는 줄은 뺀다
+export function voiceQualifiers(groups, voice) {
+  const need = voiceNeedSeconds(voice);
+  const out = [];
+  for (const g of groups || []) {
+    const userId = String(g?._id || "");
+    if (!userId) continue;
+    const seconds = daySeconds(g);
+    if (seconds >= need) out.push({ userId, seconds });
+  }
+  return out;
+}
+
+// 지급 갈래 — { sid, note(Purchase.adminNote), label(로그) }. 주문 묶음은 둘 다 ticketOrderId(sid, userId)
+export const screeningGrant = (s) => ({ sid: s.sid, note: `괴담회 완청 · ${s.title || s.sid}`, label: s.title || s.sid });
+export const voiceGrant = (key, voice) => ({ sid: voiceSid(key), note: voiceTicketNote(voice.minutes, key), label: `음성 ${voiceDayLabel(key)}` });
+// 다 돈 지난날 표시 — 기준 · 장 수 · 구간이 바뀌면 다시 본다
+const voiceDoneKey = (day, voice) => `${day.sid}|${voice.minutes}|${voice.tickets}|${day.from}|${day.to}`;
 
 // ── 구간 ─────────────────────────────────────
 
@@ -284,8 +388,9 @@ async function ticketItem() {
   return { id, name: cfg.ticketItemName || it.name || DEFAULT_TICKET_NAME };
 }
 
-// 추첨권 count 건을 넣는다 — 약속 문서 「키 · 표식」의 모양 그대로(1장 = Purchase 1건, 지급 큐를 거치지 않는 completed · DM 없음)
-async function insertTickets(row, s, item, count) {
+// 추첨권 count 건을 넣는다 — 약속 문서 「키 · 표식」의 모양 그대로(1장 = Purchase 1건, 지급 큐를 거치지 않는 completed · DM 없음).
+//    g: 지급 갈래(screeningGrant · voiceGrant) — orderId · adminNote 만 다르다
+async function insertTickets(row, g, item, count) {
   if (!(count > 0)) return;
   const at = new Date();
   const doc = {
@@ -303,44 +408,45 @@ async function insertTickets(row, s, item, count) {
     days: 0,
     status: "completed",
     processedAt: at,
-    orderId: ticketOrderId(s.sid, row.userId),
-    adminNote: `괴담회 완청 · ${s.title || s.sid}`,
+    orderId: ticketOrderId(g.sid, row.userId),
+    adminNote: g.note,
     createdAt: at,
   };
   await Purchase.insertMany(Array.from({ length: count }, () => ({ ...doc })));
 }
 
 // 이미 들어간 장 수를 orderId 로 세어 모자란 만큼만 넣는다 — 되돌린 뒤 다시 할 때 · 못다 준 줄을 채울 때 두 번 주지 않게. 돌려주는 값: 넣은 장 수
-async function fillTickets(row, s, item, want) {
-  const have = await Purchase.countDocuments({ userId: row.userId, orderId: ticketOrderId(s.sid, row.userId) });
+async function fillTickets(row, g, item, want) {
+  const have = await Purchase.countDocuments({ userId: row.userId, orderId: ticketOrderId(g.sid, row.userId) });
   const short = Math.max(0, want - have);
-  await insertTickets(row, s, item, short);
+  await insertTickets(row, g, item, short);
   return short;
 }
 
-// 못다 준 줄 — 표시(grantedAt)는 있는데 추첨권이 granted 보다 적은 줄(봇 지급만 — 손 지급(manual)은 사이트 몫)
-async function auditScreening(s, item, now) {
+// 못다 준 줄 — 표시(grantedAt)는 있는데 추첨권이 granted 보다 적은 줄(봇 지급만 — 손 지급(manual)은 사이트 몫). 상영 회차 · 음성 날 둘 다(g.sid)
+async function auditGrants(g, item, now) {
   const rows = await GoedamWatch.find(
-    { eventKey: GOEDAM_KEY, sid: s.sid, grantedAt: { $ne: null, $lte: new Date(now - AUDIT_GRACE_MS) }, manual: { $ne: true }, granted: { $gt: 0 } },
+    { eventKey: GOEDAM_KEY, sid: g.sid, grantedAt: { $ne: null, $lte: new Date(now - AUDIT_GRACE_MS) }, manual: { $ne: true }, granted: { $gt: 0 } },
     { userId: 1, userName: 1, granted: 1 }
   ).lean();
   if (!rows.length) return;
   const counts = await Purchase.aggregate([
-    { $match: { userId: { $in: rows.map((r) => r.userId) }, orderId: { $in: rows.map((r) => ticketOrderId(s.sid, r.userId)) } } },
+    { $match: { userId: { $in: rows.map((r) => r.userId) }, orderId: { $in: rows.map((r) => ticketOrderId(g.sid, r.userId)) } } },
     { $group: { _id: "$orderId", n: { $sum: 1 } } },
   ]);
   const have = new Map(counts.map((c) => [c._id, c.n]));
   for (const r of rows) {
-    const short = Math.floor(Number(r.granted) || 0) - (have.get(ticketOrderId(s.sid, r.userId)) || 0);
+    const short = Math.floor(Number(r.granted) || 0) - (have.get(ticketOrderId(g.sid, r.userId)) || 0);
     if (short <= 0) continue;
-    await insertTickets(r, s, item, short);
-    console.log(`🎟️ 괴담회 추첨권 채움: ${r.userName || r.userId} ← ${item.name} ×${short} (${s.title || s.sid})`);
+    await insertTickets(r, g, item, short);
+    console.log(`🎟️ 괴담회 추첨권 채움: ${r.userName || r.userId} ← ${item.name} ×${short} (${g.label})`);
   }
 }
 
 // 회차 하나 지급 — 완청 · 아직 안 받은 줄을 조건부로 세운 뒤(손 지급 · 다른 봇과 겹쳐도 한 번만) 추첨권을 넣는다.
 //    넣지 못하면 표시를 되돌려 다음 주기에 다시(이미 들어간 건은 fillTickets 가 세어 모자란 만큼만). 실패하면 이 회차는 이번 주기에 멈춘다
 async function grantScreening(s, item, now) {
+  const g = screeningGrant(s);
   const need = needSeconds(s) - 1e-6;
   const rows = await GoedamWatch.find({ eventKey: GOEDAM_KEY, sid: s.sid, grantedAt: null, seconds: { $gte: need } }, { userId: 1, userName: 1, seconds: 1 }).lean();
   for (const r of rows) {
@@ -351,16 +457,16 @@ async function grantScreening(s, item, now) {
     );
     if (!claim.modifiedCount) continue; // 그새 다른 쪽(손 지급 · 다른 봇)이 세웠다
     try {
-      const n = await fillTickets(r, s, item, s.tickets);
-      console.log(`🎟️ 괴담회 추첨권 지급: ${r.userName || r.userId} ← ${item.name} ×${n} (${s.title || s.sid} · ${Math.floor(r.seconds)}초)`);
+      const n = await fillTickets(r, g, item, s.tickets);
+      console.log(`🎟️ 괴담회 추첨권 지급: ${r.userName || r.userId} ← ${item.name} ×${n} (${g.label} · ${Math.floor(r.seconds)}초)`);
     } catch (e) {
       await GoedamWatch.updateOne({ _id: r._id, grantedAt: at, manual: { $ne: true } }, { $set: { grantedAt: null, granted: 0 } }).catch(() => {});
       throw e;
     }
   }
-  if (now - (auditAt.get(s.sid) || 0) >= AUDIT_MS) {
-    await auditScreening(s, item, now);
-    auditAt.set(s.sid, now);
+  if (now - (auditAt.get(g.sid) || 0) >= AUDIT_MS) {
+    await auditGrants(g, item, now);
+    auditAt.set(g.sid, now);
   }
 }
 
@@ -378,6 +484,105 @@ async function grantDue(now) {
       await grantScreening(s, item, now);
     } catch (e) {
       console.error(`🎟️ 괴담회 추첨권 지급 오류 (${s.title || s.sid}):`, e?.message || e);
+      recordBotError(e);
+    }
+  }
+}
+
+// ── 음성 활동 지급(2026-10-24) ─────────────────────
+
+// 디스코드 username — 길드 캐시 먼저, 없으면 UserXp.username. 모르면 빠진다(""로 쓴다 — GoedamWatch.userName · Purchase.userName 과 같은 값)
+async function usernames(ids) {
+  const out = new Map();
+  const miss = [];
+  for (const id of ids) {
+    const u = guildRef?.members.cache.get(id)?.user?.username;
+    if (u) out.set(id, u);
+    else miss.push(id);
+  }
+  if (miss.length) {
+    const docs = await UserXp.find({ userId: { $in: miss } }, { userId: 1, username: 1 }).lean();
+    for (const d of docs) if (d.username) out.set(d.userId, d.username);
+  }
+  return out;
+}
+
+// 음성 날 하나 — 그날 기준을 넘은 사람의 줄(sid "voice:<날짜>")에 그날 합을 쓰고(새 줄 · 늘어난 줄만, $max), 아직 안 받은 줄을
+//    { grantedAt: null } 조건부로 세운 뒤(손 지급 · 다른 봇과 겹쳐도 한 번만) 추첨권을 넣는다. 넣지 못하면 표시를 되돌려 다음 주기에 다시(grantScreening 과 같다).
+//    돌려주는 값: 이번에 못다 준 줄까지 살폈나(지난날이면 voiceDone 에 넣는다)
+async function grantVoiceDay(day, voice, item, now) {
+  const g = voiceGrant(day.key, voice);
+  const need = voiceNeedSeconds(voice);
+  const hits = voiceQualifiers(await XpLog.aggregate(voiceDayPipeline(day.from, day.to)), voice);
+  if (hits.length) {
+    const rows = await GoedamWatch.find(
+      { eventKey: GOEDAM_KEY, sid: g.sid, userId: { $in: hits.map((h) => h.userId) } },
+      { userId: 1, userName: 1, seconds: 1, grantedAt: 1 }
+    ).lean();
+    const have = new Map(rows.map((r) => [r.userId, r]));
+    const stale = hits.filter((h) => !(Number(have.get(h.userId)?.seconds) >= h.seconds));
+    const todo = hits.filter((h) => have.get(h.userId)?.grantedAt == null);
+    const names = await usernames([...new Set([...stale, ...todo].map((h) => h.userId))]);
+    const nameOfId = (id) => names.get(id) || have.get(id)?.userName || "";
+    if (stale.length) {
+      const at = new Date();
+      await ensureWatchIndexes();
+      await GoedamWatch.bulkWrite(
+        stale.map((h) => ({
+          updateOne: {
+            filter: { eventKey: GOEDAM_KEY, sid: g.sid, userId: h.userId },
+            update: {
+              $max: { seconds: h.seconds },
+              $set: { updatedAt: at, ...(names.get(h.userId) ? { userName: names.get(h.userId) } : {}) },
+              $setOnInsert: { grantedAt: null, granted: 0, manual: false },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false }
+      );
+    }
+    for (const h of todo) {
+      const row = { userId: h.userId, userName: nameOfId(h.userId) };
+      const at = new Date();
+      const claim = await GoedamWatch.updateOne(
+        { eventKey: GOEDAM_KEY, sid: g.sid, userId: h.userId, grantedAt: null, seconds: { $gte: need } },
+        { $set: { grantedAt: at, granted: voice.tickets, updatedAt: at } }
+      );
+      if (!claim.modifiedCount) continue; // 그새 다른 쪽(손 지급 · 다른 봇)이 세웠다
+      try {
+        const n = await fillTickets(row, g, item, voice.tickets);
+        console.log(`🎟️ 괴담회 추첨권 지급: ${row.userName || row.userId} ← ${item.name} ×${n} (${g.label} · ${Math.floor(h.seconds / 60)}분)`);
+      } catch (e) {
+        await GoedamWatch.updateOne(
+          { eventKey: GOEDAM_KEY, sid: g.sid, userId: h.userId, grantedAt: at, manual: { $ne: true } },
+          { $set: { grantedAt: null, granted: 0 } }
+        ).catch(() => {});
+        throw e;
+      }
+    }
+  }
+  if (now - (auditAt.get(g.sid) || 0) < AUDIT_MS) return false;
+  await auditGrants(g, item, now);
+  auditAt.set(g.sid, now);
+  return true;
+}
+
+// 5분마다 — 켜져 있고(enabled · voice.enabled) 볼 날(voiceDays — 기간 안의 오늘 · 끝 + 6시간 안의 어제)이 있으면 지급한다. 추첨권 아이템이 없으면 미룬다
+async function grantVoice(now) {
+  const voice = cfg?.voice;
+  if (!cfg?.enabled || !voice?.enabled) return;
+  const days = voiceDays(now, voice).filter((d) => !voiceDone.has(voiceDoneKey(d, voice)));
+  if (!days.length) return;
+  const item = await ticketItem();
+  if (!item) return;
+  warned.clear(); // 아이템이 돌아왔다 — 다음에 또 비면 다시 알린다
+  for (const day of days) {
+    try {
+      const audited = await grantVoiceDay(day, voice, item, now);
+      if (day.settled && audited) voiceDone.add(voiceDoneKey(day, voice));
+    } catch (e) {
+      console.error(`🎟️ 괴담회 추첨권 지급 오류 (음성 ${voiceDayLabel(day.key)}):`, e?.message || e);
       recordBotError(e);
     }
   }
@@ -401,7 +606,13 @@ function tick() {
       console.error("괴담회 시청 기록 쓰기 오류:", e?.message || e);
       recordBotError(e);
     }
-    await grantDue(now);
+    // 상영 지급이 멈춰도(아이템 읽기 오류 등) 음성 지급은 따로 돈다
+    await grantDue(now).catch((e) => console.error("괴담회 지급 주기 오류:", e?.message || e));
+    // 음성 활동은 5분마다(같은 줄에서 돌아 상영 쓰기 · 지급과 겹치지 않는다)
+    if (cfg && now - voiceAt >= VOICE_MS) {
+      voiceAt = now;
+      await grantVoice(now);
+    }
   })()
     .catch((e) => console.error("괴담회 지급 주기 오류:", e?.message || e))
     .finally(() => {
@@ -434,5 +645,7 @@ export function startGoedamWatch(client) {
   refreshGoedam();
   setInterval(refreshGoedam, REFRESH_MS);
   setInterval(tick, FLUSH_MS);
-  console.log(`✅ 괴담회 시청 기록 시작 — 스테이지 채널 머문 시간 ${FLUSH_MS / 1000}초마다 기록 · 회차 끝 + 60초 완청 추첨권 지급 (설정 1분 주기)`);
+  console.log(
+    `✅ 괴담회 시청 기록 시작 — 스테이지 채널 머문 시간 ${FLUSH_MS / 1000}초마다 기록 · 회차 끝 + 60초 완청 추첨권 지급 · 하루 음성 ${VOICE_MS / 60000}분마다 확인 (설정 1분 주기)`
+  );
 }

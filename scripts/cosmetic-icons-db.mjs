@@ -20,16 +20,16 @@ const mode = process.argv.includes("--apply") ? "apply" : process.argv.includes(
 const SKIN = {
   gold: "skin-gold", aurora: "skin-aurora", ice: "skin-ice", crimson: "skin-crimson", newworld: "skin-newworld", chart: "skin-chart", airship: "skin-airship",
   hw_pumpkin: "skin-pumpkin-patch", hw_ghost: "skin-ghost-party", hw_witch: "skin-witch-night", hw_candy: "skin-candy-shop", hw_grave: "skin-moon-grave", hw_blackcat: "skin-black-cat",
-  ev_ghost: "skin-ghost-invite",
+  ev_ghost: "skin-ghost-invite", ev_clover: "skin-clover", bs_feather: "skin-booster-feather",
 };
 const TIERS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
 const DECO = {
   hwf_pumpkin: "deco-pumpkin-mouth", hwf_crystal: "deco-crystal-ball", hwf_ghost: "deco-ghost-sheet", hwf_candy: "deco-wrapped-candy",
   hwf_mummy: "deco-mummy", hwf_window: "deco-haunted-window", hwf_blackcat: "deco-black-cat", hwf_patch: "deco-pumpkin-patch", hwf_party: "deco-ghost-party", hwf_witch: "deco-witch-night", hwf_shop: "deco-candy-shop", hwf_grave: "deco-moon-grave", nwf_world: "deco-new-world", nwf_chart: "deco-sea-chart", nwf_airship: "deco-airship",
-  evf_ghost: "deco-ghost-tail",
+  evf_ghost: "deco-ghost-tail", evf_clover: "deco-clover", bsf_aura: "deco-booster-aura",
 };
 // 카드 배경(2026-10-15 — lib/cosmeticArt.js SCENE_ART 와 같은 값)
-const SCENE = { sc_ghost: "scene-ghost-night" };
+const SCENE = { sc_ghost: "scene-ghost-night", sc_clover: "scene-clover-hill" };
 const artOfSkin = (s) => SKIN[s] || (typeof s === "string" && s.startsWith("rank_") && TIERS.includes(s.slice(5)) ? "tier-skin-" + s.slice(5) : "");
 const artOfFrame = (f) => (TIERS.includes(f) ? "tier-frame-" + f : f === "all" ? "avatar-frame" : DECO[f] || "");
 const artOfScene = (s) => SCENE[s] || "";

@@ -8,7 +8,8 @@ import {
 import mongoose from "mongoose";
 import { UserXp, XpLog, Payout, Purchase, WalletLog } from "./db.js";
 import { getCumulativeXpByLevel, getLevelByXp, currentSeason, seasonStartMs } from "./leveling.js";
-import { RANK_PERIODS, rankPeriodOf, rankMonthStart, rankTotalSince, monthBoard, totalBoard, voiceTimeText } from "./rankBoards.js";
+import { RANK_PERIODS, rankPeriodOf, rankMonthStart, rankTotalSince, monthBoard, totalBoard, voiceTimeText, rankTotalOf } from "./rankBoards.js";
+import { serverHumanCount } from "./serverMembers.js";
 import { config } from "./config.js";
 import { getSettings } from "./botSettings.js";
 import { claimAttendance, streakBonusText } from "./attend.js";
@@ -150,7 +151,8 @@ async function handleLevel(interaction, r) {
   const doc = await UserXp.findOne({ userId: interaction.user.id }, { xp: 1 }).lean();
   const xp = doc?.xp || 0;
   // 📌 /레벨 = 내 카드 — 순위 · 상위 % 까지 여기서 보여 준다(/랭크 는 서버 순위표)
-  const [above, total] = await Promise.all([UserXp.countDocuments(rankAbove(interaction.user.id, xp)), UserXp.countDocuments()]);
+  const [above, docCount] = await Promise.all([UserXp.countDocuments(rankAbove(interaction.user.id, xp)), UserXp.countDocuments()]);
+  const total = rankTotalOf(docCount, serverHumanCount(interaction.guild)); // 2026-10-25 서버 사람 수 포함(사이트 /api/xp/me 와 같다)
   const rank = above + 1;
   // 저장된 level 은 새 문서 · 초기화 직후 0 일 수 있다 — xp 로 계산한다 (0 XP = Lv.1, 사이트와 같은 기준)
   const level = getLevelByXp(xp);
@@ -222,6 +224,8 @@ async function handleRank(interaction, r) {
   const doc = await UserXp.findOne({ userId: myId }, { xp: 1, voiceSeconds: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
   const xp = doc?.xp || 0;
   const b = await rankBoardOf(period.v, myId, doc);
+  // 📌 2026-10-25 전체 인원 = 서버 사람 수 포함(rankTotalOf — 사이트 랭킹 members 와 같다). 순위는 그대로
+  b.total = rankTotalOf(b.total, serverHumanCount(interaction.guild));
   // 1~10위의 이름 · 지금 XP(레벨) · 테두리 — UserXp 문서에서(이번 달 · 누적 · 음성 순위표는 값만 준다)
   const ids = b.rows.map((x) => x.userId);
   const docsById = new Map(

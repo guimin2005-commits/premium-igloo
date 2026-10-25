@@ -8,6 +8,7 @@ import { normalizeItemPayload, itemCascadeSet, normalizeItemGroup, copyNameOf } 
 import { normalizeEffects, hasConsumable, effectDisplayOf, autoEffectLinesOf, autoScopeOf, normalizeEffectText, normalizeScope } from "@/lib/itemEffects";
 import { channelNamesFor } from "@/lib/channelNames";
 import { unitThingSet } from "@/lib/unitSale";
+import { goedamTicketInfo } from "@/lib/goedam";
 import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import Setting from "@/models/Setting";
@@ -194,21 +195,25 @@ export async function GET(request) {
     // ?groups=1 — 그룹 목록(덩어리 차례 · 빈 그룹 포함)도 함께 준다(상점 관리)
     const withGroups = params.get("groups") === "1";
     // 📌 초안 모드는 초안을 덧씌운 목록 — 초안 행에 _draft("new" | "edit"). 상품은 한 번 읽어 연결 · 사용 수를 함께 센다
-    const [loaded, shops] = await Promise.all([
+    const [loaded, shops, ticket] = await Promise.all([
       catalogFind(Item, {}, { sort: ORDER_SORT, mark: true }),
       catalogFind(ShopItem, {}, { select: { type: 1, roleId: 1, itemId: 1, unitSale: 1, durations: 1, bundle: 1 } }),
+      goedamTicketInfo().catch(() => ({ id: "", closesAt: null })),
     ]);
     // 아이템을 가리키는 상품(itemId 가 "" 가 아닌 것 — 예전 { itemId: { $ne: "" } } 조회와 같은 범위. 세트는 itemId 가 "" 라 빠진다)
     const linkedShops = shops.filter((s) => s.itemId !== "");
     // 📌 여러 개 지급할 수 있는 아이템인가(수동 지급의 수량 칸) — 수동 지급 API(app/api/admin/items/grant POST)와 같은 판정:
     //    unitThingSet(이 아이템을 가리키는 상품들, [아이템]).has("i:<id>") — 1개 단위로 파는 상품이 가리키거나 역할 없는 소모형.
     //    인벤토리 ×N 묶음(lib/unitSale.js)과 같은 키. 효과 모양을 바꾸기 전(attachEffects 앞)에 본다
+    //    📌 괴담회 추첨권 아이템도 늘 ×N(1장 = Purchase 1건 — lib/inventory.js · lib/goedam.js 와 같다). ticketUntil = 추첨 마감(ISO — 관리 미리보기의 만료 줄)
     let rows = loaded;
     const units = unitThingSet(linkedShops, rows);
+    if (ticket.id) units.add(`i:${ticket.id}`);
 
     // 효과 — 아이템 문서에 든 값을 화면 모양(effects 객체)으로 바꿔 붙인다
     for (const r of rows) {
       r.stackable = units.has(`i:${r._id}`);
+      if (ticket.id && ticket.closesAt && String(r._id) === ticket.id) r.ticketUntil = ticket.closesAt.toISOString();
       // 그룹 — 칸이 생기기 전 문서는 비어 있다("" = 묶지 않음)
       r.group = typeof r.group === "string" ? r.group : "";
       attachCategory(attachEffects(r));

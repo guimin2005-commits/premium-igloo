@@ -12,6 +12,7 @@ import { POINT_RATE } from "@/lib/pointRate";
 import { parseTargetKeys, MAX_TARGETS } from "@/lib/adminTargetKeys";
 import { groupOrders } from "@/lib/orderGroups";
 import { hotTimeState } from "@/lib/hotTime";
+import { BOOSTER_LADDER_MAX } from "@/lib/booster";
 import { QUEST_REASONS, QUEST_METRICS, QUEST_DAY_LABELS, questReasonOf, questCondLabel, questTimed } from "@/lib/questKinds";
 import {
   AdminPage,
@@ -90,7 +91,8 @@ const ENHANCE_FIELDS: {
 const ENHANCE_COLS = ["단계당 +XP", "최대 단계", "1단계 비용", "비용 상승 %"];
 
 const MUTE_MODES = [{ v: "off", l: "제한 없음" }, { v: "reduce", l: "감소" }, { v: "block", l: "차단" }];
-const MUTE_TARGETS = [{ v: "both", l: "마이크+헤드셋 모두" }, { v: "any", l: "하나라도 음소거" }];
+// 📌 2026-10-25 헤드셋 끔은 늘 차단(아래 「헤드셋 끔」 줄) — 그래서 any 는 사실상 마이크만 끈 사람, both 는 헤드셋까지 끈 사람(이미 차단)에게만 걸린다
+const MUTE_TARGETS = [{ v: "both", l: "헤드셋까지 끔" }, { v: "any", l: "마이크만 꺼도" }];
 
 // ── 탭 ──────────────────────────────────────────────────────
 //    운영 흐름대로 네 갈래다: 규칙을 정하고(정책 — XP 가 얼마나 · 언제 더 붙는지) → 역할에 잇고(역할) →
@@ -107,7 +109,7 @@ const TAB_ORDER: { id: string; short: string }[] = [
 // 📌 ?sec= — 그 패널(id="sec-…")로 한 번 스크롤한다(기능 검색 · 다른 화면의 바로가기). 모르는 값이면 스크롤하지 않는다.
 //    tier · inventory 는 옛 패널(음성 티어 역할 일괄 연결 · 인벤토리 표기) — 합친 표 / 역할 탭 첫 패널로
 const SEC_ANCHOR: Record<string, Record<string, string>> = {
-  policy: { xp: "xp", streak: "streak", muting: "muting", afk: "afk", enhance: "enhance", events: "events", hottime: "hottime", boosts: "boosts", channels: "channels", public: "public" },
+  policy: { xp: "xp", streak: "streak", booster: "booster", muting: "muting", afk: "afk", enhance: "enhance", events: "events", hottime: "hottime", boosts: "boosts", channels: "channels", public: "public" },
   roles: { reward: "reward", tier: "reward", inventory: "reward", protected: "protected", promo: "promo" },
   quests: { quests: "quests" },
   ledger: { grant: "grant", logs: "logs", reset: "reset" },
@@ -306,6 +308,23 @@ const streakRuleError = (rows: any): string => {
   return "";
 };
 
+// 📌 서버 부스터 보상(2026-10-25) — 연속 부스팅 단계 BotSetting.boosterLadder 한 줄. 입력 중엔 글자로 들고, 정리는 app/api/bot-settings(lib/booster.js boosterRewardsOf)가 한다
+const EMPTY_LADDER_ROW = { months: "", xp: "", point: "" };
+const LADDER_COLS = ["연속 개월", "XP", "빙옥"];
+// 서버는 잘못된 줄(개월 범위 밖 · 보상 없음 · 같은 개월)을 말없이 버린다 — 저장 전에 알려 준다
+const ladderError = (rows: any): string => {
+  if (!Array.isArray(rows)) return "";
+  const seen = new Set<number>();
+  for (const r of rows) {
+    const m = Number(r?.months);
+    if (!Number.isInteger(m) || m < 1 || m > 120) return "연속 개월은 1~120 사이로 입력해 주세요.";
+    if (!(Math.floor(Number(r?.xp)) > 0) && !(Math.floor(Number(r?.point)) > 0)) return `${m}개월 단계에 보상이 없습니다.`;
+    if (seen.has(m)) return `${m}개월 단계가 두 개입니다.`;
+    seen.add(m);
+  }
+  return "";
+};
+
 // ── 저장 줄(SaveBar) 용 ─────────────────────────────────────
 //    설정은 BotSetting 단일 문서 하나라 정책 · 보호 역할 · 퀘스트 노출이 모두 같은 저장을 탄다.
 //    그래서 저장 줄도 하나 — 불러온 값(스냅샷)과 지금 값을 비교해 바뀐 게 있으면 어느 탭에서든 뜬다
@@ -321,6 +340,10 @@ const SETTING_LABEL: Record<string, string> = {
   attendVoiceMin: "출석 인정 시간",
   attendStreakEnabled: "연속 출석 보너스",
   attendStreakRules: "연속 출석 규칙",
+  boosterStartXp: "최초 부스팅 XP",
+  boosterStartPoint: "최초 부스팅 빙옥",
+  boosterLadder: "연속 부스팅 단계",
+  boosterLadderOn: "연속 부스팅 보상",
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, `${g.label} 강화 ${f.label}`]))),
   muteMode: "음소거 처리",
   muteReducePct: "감소 비율",
@@ -352,6 +375,8 @@ const SETTING_LABEL: Record<string, string> = {
 };
 // 화면이 비어 있을 때 대신 보여 주던 값 — 비교 · 변경 목록에서도 같은 값으로 친다
 const SETTING_DEFAULT: Record<string, number> = {
+  boosterStartXp: 150000,
+  boosterStartPoint: 30,
   chatXpMin: 50,
   chatXpMax: 500,
   attendVoiceMin: 60,
@@ -366,7 +391,7 @@ const SETTING_DEFAULT: Record<string, number> = {
   questRerollPriceMonthly: 3,
   ...Object.fromEntries(ENHANCE_FIELDS.flatMap((g) => g.fields.map((f) => [f.key, f.def]))),
 };
-const SETTING_TEXT = new Set(["attendStreakRules"]);
+const SETTING_TEXT = new Set(["attendStreakRules", "boosterLadder"]);
 // 입력칸은 문자열, 서버 값은 숫자 · 빈 값은 기본값처럼 — 겉보기가 같으면 같은 값으로 본다
 // 핫타임 기간 입력 — 저장값(ISO)은 [시작일 0시, 끝나는 날 다음 날 0시) KST. 입력칸은 날짜만
 const kstDay = (v: unknown, end = false) => {
@@ -378,13 +403,16 @@ const dayStartIso = (d: string) => (d ? new Date(`${d}T00:00:00+09:00`).toISOStr
 const dayEndIso = (d: string) => (d ? new Date(new Date(`${d}T00:00:00+09:00`).getTime() + 86400e3).toISOString() : null);
 
 const normSetting = (k: string, v: any) => {
-  if (k === "resetOnLeave" || k === "levelPublic" || k === "attendStreakEnabled" || k === "hotTimeOn") return String(!!v);
+  if (k === "resetOnLeave" || k === "levelPublic" || k === "attendStreakEnabled" || k === "hotTimeOn" || k === "boosterLadderOn") return String(!!v);
   // 핫타임 기간 — 서버는 ISO 글자, 입력칸은 그날 0시(KST) ISO 로 넣으므로 시각으로 맞춰 비교한다
   if (k === "hotTimeFrom" || k === "hotTimeUntil") { const t = v ? new Date(v).getTime() : NaN; return Number.isFinite(t) ? String(t) : ""; }
   if (k === "hotTimeWeekdayMult" || k === "hotTimeWeekendMult") return v == null || v === "" ? "" : String(Number(v));
   if (k === "muteMode") return v || "off";
   if (k === "muteTarget") return v || "both";
   // 규칙 표 — 입력 중엔 글자("7"), 서버 값은 숫자(7)라 칸 모양으로 맞춰 비교한다
+  if (k === "boosterLadder") {
+    return Array.isArray(v) && v.length ? JSON.stringify(v.map((r: any) => [String(r?.months ?? ""), String(r?.xp ?? ""), String(r?.point ?? "")])) : "";
+  }
   if (k === "attendStreakRules") {
     return Array.isArray(v) && v.length
       ? JSON.stringify(v.map((r: any) => [String(r?.days ?? ""), String(r?.xp ?? ""), String(r?.point ?? ""), !!r?.repeat]))
@@ -903,7 +931,7 @@ export default function AdminBotPage() {
   // 저장 줄의 '저장' — 설정 문서 전체를 기존 postSettings 로 보낸다
   const saveSettings = async () => {
     if (savingSettings) return;
-    const ruleErr = streakRuleError(settings?.attendStreakRules);
+    const ruleErr = streakRuleError(settings?.attendStreakRules) || ladderError(settings?.boosterLadder);
     if (ruleErr) { notify(ruleErr, true); return; }
     setSavingSettings(true);
     try { await postSettings(); } finally { setSavingSettings(false); }
@@ -1427,7 +1455,7 @@ export default function AdminBotPage() {
     if (k === "resetOnLeave") return v ? "초기화함" : "유지함";
     if (k === "muteMode") return MUTE_MODES.find((o) => o.v === (v || "off"))?.l || String(v);
     if (k === "muteTarget") return MUTE_TARGETS.find((o) => o.v === (v || "both"))?.l || String(v);
-    if (k === "attendStreakEnabled") return v ? "사용" : "사용 안 함";
+    if (k === "attendStreakEnabled" || k === "boosterLadderOn") return v ? "사용" : "사용 안 함";
     if (k === "protectedRoleIds") return `${Array.isArray(v) ? v.length : 0}개`;
     const raw = v == null && k in SETTING_DEFAULT ? SETTING_DEFAULT[k] : v;
     if (raw == null || raw === "") return "비움";
@@ -1446,6 +1474,12 @@ export default function AdminBotPage() {
     setSettings({ ...settings, attendStreakRules: streakRules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
   const addStreakRule = () => setSettings({ ...settings, attendStreakRules: [...streakRules, { ...EMPTY_STREAK_RULE }] });
   const removeStreakRule = (i: number) => setSettings({ ...settings, attendStreakRules: streakRules.filter((_, j) => j !== i) });
+  // ── 연속 부스팅 단계 표 — 같은 문서의 배열(저장 줄) ──
+  const ladderRows: any[] = Array.isArray(settings?.boosterLadder) ? settings.boosterLadder : [];
+  const setLadderRow = (i: number, patch: Record<string, any>) =>
+    setSettings({ ...settings, boosterLadder: ladderRows.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const addLadderRow = () => setSettings({ ...settings, boosterLadder: [...ladderRows, { ...EMPTY_LADDER_ROW }] });
+  const removeLadderRow = (i: number) => setSettings({ ...settings, boosterLadder: ladderRows.filter((_, j) => j !== i) });
 
   // 노출 방식 칸은 자기 저장 · 취소가 있다 — 그 칸이 열린 동안 저장 줄까지 띄우면 저장 단추가 둘이 된다
   const showSaveBar = settingsDirty && !isFormOpen("questPick");
@@ -1876,6 +1910,76 @@ export default function AdminBotPage() {
                 )}
               </Panel>
 
+              {/* 📌 서버 부스터 보상(2026-10-25 운영자 "혜택은 나중에 내가 수정할테니까 추가해") — 봇 features/boosterBonus.js 가 지급, 부스터 화면(/booster)이 같은 값을 보인다.
+                     최초 부스팅: 처음 부스트한 사람에게 한 번(기능을 켜기 전부터 부스팅 중이던 사람은 없음). 연속 부스팅: 디스코드 부스트 시작일부터 이어진 개월, 단계마다 사람당 한 번.
+                     표 모양은 연속 출석 보너스와 같다(PC 세 칸 한 줄 · 모바일 두 칸씩). 단계를 다 지우고 저장하면 연속 부스팅 보상은 꺼진다 */}
+              <Panel
+                id="sec-booster"
+                className="scroll-mt-24"
+                title={<>서버 부스터 보상<Count n={ladderRows.length} /></>}
+                right={<Btn variant="secondary" size="sm" onClick={addLadderRow} disabled={ladderRows.length >= BOOSTER_LADDER_MAX}>＋ 단계</Btn>}
+                flush
+              >
+                <FieldRow label="최초 부스팅" changed={chg("boosterStartXp") || chg("boosterStartPoint")} hint="처음 부스트한 사람에게 한 번">
+                  <Inline>
+                    <input type="number" min={0} aria-label="최초 부스팅 XP" value={settings.boosterStartXp ?? 150000} onChange={(e) => setSettings({ ...settings, boosterStartXp: e.target.value })} className={`${inputClass} !w-32 tabular-nums`} />
+                    XP
+                    <input type="number" min={0} aria-label="최초 부스팅 빙옥" value={settings.boosterStartPoint ?? 30} onChange={(e) => setSettings({ ...settings, boosterStartPoint: e.target.value })} className={`${inputClass} !w-24 tabular-nums`} />
+                    빙옥
+                  </Inline>
+                </FieldRow>
+                {/* 📌 연속 부스팅 「사용」 — 기본 꺼짐(2026-10-25 검토: 임시 수치로 봇 반영 즉시 오래된 부스터에게 한꺼번에 나가면 되돌릴 수 없다). 수치를 고친 뒤 켠다.
+                       단계는 개월로 구분한다 — 개월을 바꾸면 새 단계라 이미 받은 사람도 그 단계를 다시 받는다 */}
+                <FieldRow label="연속 부스팅 보상" changed={chg("boosterLadderOn")} hint="켜면 봇이 지급하고 부스터 화면에 보입니다. 단계는 개월로 구분해 개월을 바꾸면 새 단계로 다시 지급됩니다">
+                  <Toggle
+                    on={!!settings.boosterLadderOn}
+                    onClick={() => setSettings({ ...settings, boosterLadderOn: !settings.boosterLadderOn })}
+                    onLabel="사용 중"
+                    offLabel="사용 안 함"
+                  />
+                </FieldRow>
+                {ladderRows.length === 0 ? (
+                  <PanelEmpty>연속 부스팅 단계가 없습니다.</PanelEmpty>
+                ) : (
+                  <div className="px-5 py-4">
+                    <div className="hidden md:flex items-center gap-3 pb-2 text-[12px] font-bold text-[#5a5a5a]">
+                      <div className="flex-1 min-w-0 grid grid-cols-3 gap-3">
+                        {LADDER_COLS.map((c) => <span key={c} className="min-w-0 truncate">{c}</span>)}
+                      </div>
+                      <span className="w-8 shrink-0" />
+                    </div>
+                    {ladderRows.map((r, i) => (
+                      <div key={i} className={`flex items-start md:items-center gap-3 py-3 border-[#ededed] ${i > 0 ? "border-t" : "md:border-t"}`}>
+                        <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {(["months", "xp", "point"] as const).map((f, j) => (
+                            <label key={f} className="block min-w-0">
+                              <span className="md:hidden block mb-1 text-[12px] text-[#5a5a5a]">{LADDER_COLS[j]}</span>
+                              <input
+                                type="number"
+                                min={f === "months" ? 1 : 0}
+                                max={f === "months" ? 120 : 10_000_000}
+                                aria-label={`${i + 1}번째 단계 ${LADDER_COLS[j]}`}
+                                value={r?.[f] ?? ""}
+                                onChange={(e) => setLadderRow(i, { [f]: e.target.value })}
+                                className={`${inputClass} tabular-nums`}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`${i + 1}번째 단계 삭제`}
+                          onClick={() => removeLadderRow(i)}
+                          className="w-8 h-10 shrink-0 mt-5 md:mt-0 inline-flex items-center justify-center text-[#5a5a5a] hover:text-[#d01634] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Panel>
+
               <Panel id="sec-muting" className="scroll-mt-24" title="음소거 처리" flush>
                 <FieldRow label="음소거 시 처리" changed={chg("muteMode")} hint="차단은 지급 자체를 건너뜁니다">
                   <Segmented options={MUTE_MODES} value={settings.muteMode || "off"} onChange={(v) => setSettings({ ...settings, muteMode: v })} />
@@ -1889,6 +1993,10 @@ export default function AdminBotPage() {
                 </FieldRow>
                 <FieldRow label="적용 기준" changed={chg("muteTarget")} hint="어떤 상태를 ‘음소거’로 볼지">
                   <Segmented options={MUTE_TARGETS} value={settings.muteTarget || "both"} onChange={(v) => setSettings({ ...settings, muteTarget: v })} />
+                </FieldRow>
+                {/* 📌 2026-10-25 운영자 "헤드셋까지 끄면 XP 지급 차단 · 음성 시간 누적도 안 됨" — 설정과 상관없이 늘(봇 voiceTime.js multOf). 바꾸는 칸이 아니라 규칙만 보인다 */}
+                <FieldRow label="헤드셋 끔">
+                  <span className="font-bold text-[#131313]">늘 차단 (음성 시간도 안 쌓임)</span>
                 </FieldRow>
               </Panel>
 

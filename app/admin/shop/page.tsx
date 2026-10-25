@@ -36,7 +36,7 @@ import {
   SALE_MODES, saleModeOf, setSaleMode, saleModeError, unitSaleOk, pickRole,
   PRODUCT_TYPE_OPTIONS, isBundleForm, newBundleRow, bundleError, bundleValueSum, bundleBlankValues, canStackInBundle, BUNDLE_VALUE_ERROR,
 } from "../../arctic/productForm";
-import { isUnitSale, maxPerOrderOf, MAX_PER_ORDER } from "@/lib/unitSale";
+import { isUnitSale, maxPerOrderOf, MAX_PER_ORDER, unitSaleAllowed } from "@/lib/unitSale";
 import { groupOrders, orderSummary } from "@/lib/orderGroups";
 import { BUNDLE_TYPE, BUNDLE_MAX, BUNDLE_QTY_MAX, BUNDLE_DAYS_MAX, isBundle } from "@/lib/bundle";
 import { groupList, moveUnit, moveInGroup, moveToGroup, groupUnitKey, itemUnitKey, nestParents, orderParentBlocks, parentList, orderGroupsNested } from "@/lib/itemOrder";
@@ -366,11 +366,14 @@ const xpNum = (s: string) => Math.max(0, Math.floor(Number(s) || 0));
 type ItemForm = {
   id: string; name: string; description: string; type: string; roleId: string; icon: string; imageUrl: string;
   color: string; detachOnSeason: boolean; visible: boolean; group: string; rarity: string; category: string;
+  // 서버 부스터 혜택(2026-10-24 — models/Item.js boosterPerk · lib/booster.js): 켜면 부스팅 중인 동안 이 아이템을 가진 것으로 친다
+  boosterPerk: boolean;
   chatBuffXp: string; voiceBuffXp: string; attendBuffXp: string; effects: EffectDraft[];
   effectCustom: boolean; effectText: string; scope: string[];
 };
 const EMPTY_ITEM_FORM: ItemForm = {
   id: "", name: "", description: "", type: "item", roleId: "", icon: "", imageUrl: "", color: "", detachOnSeason: false, visible: true, group: "", rarity: "", category: "",
+  boosterPerk: false,
   chatBuffXp: "", voiceBuffXp: "", attendBuffXp: "", effects: [],
   effectCustom: false, effectText: "", scope: [],
 };
@@ -861,26 +864,36 @@ const HOUR_FROM = Array.from({ length: 24 }, (_, h) => h);
 const HOUR_TO = Array.from({ length: 24 }, (_, h) => h + 1);
 const selectSm = `${inputClass} !w-[84px] tabular-nums`;
 // 📌 스킨 · 테두리 고르기 묶음 — 시즌마다 늘어 한 줄 목록은 찾기 어렵다
+// 📌 친구 초대 전용 꾸미기(2026-10-25 「네잎클로버 덩굴」) — 키는 ev_ · evf_ 이지만 할로윈 이벤트가 아니라 따로 묶는다
+const INVITE_SKINS = ["ev_clover"];
+const INVITE_FRAMES = ["evf_clover"];
+// 📌 서버 부스터 전용 꾸미기(2026-10-25 — 카드 테두리 bs_feather · 프로필 테두리 bsf_aura) — 키 bs_ · bsf_
 const SKIN_GROUPS: { l: string; has: (s: { v: string }) => boolean }[] = [
   { l: "기본", has: (s) => ["gold", "aurora", "ice", "crimson"].includes(s.v) },
   { l: "시즌 2", has: (s) => ["newworld", "chart", "airship"].includes(s.v) },
   { l: "등급", has: (s) => s.v.startsWith("rank_") },
-  { l: "할로윈", has: (s) => s.v.startsWith("hw_") || s.v.startsWith("ev_") }, // ev_* — 할로윈 이벤트(유령 펭귄의 초대)
+  { l: "할로윈", has: (s) => s.v.startsWith("hw_") || (s.v.startsWith("ev_") && !INVITE_SKINS.includes(s.v)) }, // ev_* — 할로윈 이벤트(유령 펭귄의 초대)
+  { l: "친구 초대", has: (s) => INVITE_SKINS.includes(s.v) },
+  { l: "서버 부스터", has: (s) => s.v.startsWith("bs_") },
 ];
 const FRAME_GROUPS: { l: string; all?: boolean; has: (f: { v: string }) => boolean }[] = [
   { l: "등급", all: true, has: (f) => !f.v.includes("_") },
-  { l: "할로윈", has: (f) => f.v.startsWith("hwf_") || f.v.startsWith("evf_") },
+  { l: "할로윈", has: (f) => f.v.startsWith("hwf_") || (f.v.startsWith("evf_") && !INVITE_FRAMES.includes(f.v)) },
   { l: "시즌 2", has: (f) => f.v.startsWith("nwf_") },
+  { l: "친구 초대", has: (f) => INVITE_FRAMES.includes(f.v) },
+  { l: "서버 부스터", has: (f) => f.v.startsWith("bsf_") },
 ];
 // 📌 카드 배경(2026-10-15) — 이벤트마다 늘어난다. 묶음에 없는 새 배경은 「기타」에(목록에서 빠지지 않게)
 const SCENE_HALLOWEEN = ["sc_ghost"];
+const SCENE_INVITE = ["sc_clover"]; // 친구 초대 「네잎클로버 덩굴」 한 벌(2026-10-25)
 const SCENE_GROUPS: { l: string; has: (s: { v: string }) => boolean }[] = [
   { l: "할로윈", has: (s) => SCENE_HALLOWEEN.includes(s.v) },
-  { l: "기타", has: (s) => !SCENE_HALLOWEEN.includes(s.v) },
+  { l: "친구 초대", has: (s) => SCENE_INVITE.includes(s.v) },
+  { l: "기타", has: (s) => !SCENE_HALLOWEEN.includes(s.v) && !SCENE_INVITE.includes(s.v) },
 ];
 const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
 
-// 📌 카드 배경 · 카드 테두리 · 프로필 테두리 고르기 — 긴 목록 칸 대신 그림 칸(2026-10-11 운영자). 묶음(기본 · 시즌 2 · 등급 · 할로윈 / 등급 · 할로윈 · 시즌 2 / 할로윈 · 기타)마다
+// 📌 카드 배경 · 카드 테두리 · 프로필 테두리 고르기 — 긴 목록 칸 대신 그림 칸(2026-10-11 운영자). 묶음(기본 · 시즌 2 · 등급 · 할로윈 · 친구 초대 / 등급 · 할로윈 · 시즌 2 · 친구 초대 / 할로윈 · 친구 초대 · 기타)마다
 //    배경 · 카드 테두리는 그 아이콘(lib/cosmeticArt artOfScene · artOfSkin), 프로필 테두리는 테두리 그림(public/avatar-borders — 등급 전체는 아이콘) + 이름.
 //    판은 높이 고정(안에서 스크롤) — 효과 줄 높이가 고른 것에 따라 바뀌지 않게. 열 때 고른 칸이 보이게 판 안에서만 굴린다
 const COSMETIC_BOX_H = 264;
@@ -3243,7 +3256,7 @@ export default function AdminShopPage() {
     return {
       id: it._id, name: it.name || "", description: it.description || "", type: it.type || "item", roleId: it.roleId || "",
       icon: it.icon || "", imageUrl: it.imageUrl || "", color: it.color || "", detachOnSeason: !!it.detachOnSeason,
-      visible: it.visible !== false, group: groupOfItem(it), rarity: normalizeRarity(it.rarity),
+      visible: it.visible !== false, group: groupOfItem(it), rarity: normalizeRarity(it.rarity), boosterPerk: it.boosterPerk === true,
       // 분류 — 저장 칸 그대로("" = 자동). 옛 이름 머리말은 이름 칸에 남은 채 분류를 정한다(말없이 고쳐 쓰지 않는다)
       category: typeof it.category === "string" ? it.category : "",
       chatBuffXp: ef.chatBuffXp ? String(ef.chatBuffXp) : "", voiceBuffXp: ef.voiceBuffXp ? String(ef.voiceBuffXp) : "",
@@ -5242,6 +5255,11 @@ export default function AdminShopPage() {
   // 📌 분류(2026-10-17 「자동 + 바꾸기」) — 편집 중인 유형 · 효과 · 이름으로 다시 셈한다(lib/itemCategory.js). regCategoryAuto = 「자동」이면 보일 값
   const regCategory = resolveCategory(itemForm);
   const regCategoryAuto = resolveCategory({ ...itemForm, category: "" });
+  // 📌 개수로 쌓이는 아이템 · 괴담회 추첨권(2026-10-25 운영자 "이거는 개수 표기인 거 알지?" · 추첨권 설명은 11월 5일 뒤 소멸인데 「기간 영구」로 보였다) —
+  //    쌓이는 아이템(역할 없는 item · cosmetic 이고 소모형 효과, 또는 1개 단위 상품이 가리킴 — 저장된 줄의 stackable, 또는 추첨권)은 「수량 ×1」,
+  //    추첨권은 만료(추첨 마감 — /api/admin/items ticketUntil)도 같이 보인다. 그 밖은 지금처럼 「기간 영구」
+  const regTicketUntil = typeof regSavedRow?.ticketUntil === "string" ? regSavedRow.ticketUntil : "";
+  const regStackable = unitSaleAllowed(itemForm.type, itemForm.roleId) && (hasConsumable(regFxShape) || !!regSavedRow?.stackable || !!regTicketUntil);
   const regPreviewItem = {
     name: itemForm.name.trim() || "아이템 이름",
     // 인벤토리 칸 · 상세의 분류 글자 · 이름(API categoryLabel · shortName 과 같은 값)
@@ -5259,6 +5277,8 @@ export default function AdminShopPage() {
     isCosmetic: regCosmetic,
     scopeLabel: regScopeLabel,
     effectCustom: regFxShape.effectText.length > 0,
+    ...(regStackable ? { count: 1 } : {}),
+    ...(regTicketUntil ? { expiresAt: regTicketUntil } : {}),
   };
   // 📌 상세 칸 흰 판(2026-10-17 shop-tidy) — 꾸미기 아이템은 착용 미리보기부터 · 머리 줄 값(접힌 판도 지금 값이 보이게)
   const regWear = itemForm.type !== "physical" ? wearOf(itemForm.effects) : null;
@@ -5342,6 +5362,8 @@ export default function AdminShopPage() {
               {editedDot("reg", it._id)}
               <TypeBadge type={it.type} label={categoryOfRow(it)} className="shrink-0 px-2 py-0.5 text-[10px]" />
               {/* 시즌 뗌 — 역할 아이템만(시즌 열을 숨겨도 보이게 유형 옆 작은 표시) */}
+              {/* 서버 부스터 혜택(boosterPerk) — 부스팅 중 자동 보유 아이템 */}
+              {it.boosterPerk === true && it.type !== "physical" && <span className="shrink-0 text-[10px] font-bold text-[#8a8a8a]">부스터</span>}
               {it.type === "role" && it.detachOnSeason && regHidden.includes("season") && <span className="shrink-0 text-[10px] font-bold text-[#8a8a8a]">시즌 뗌</span>}
               {/* 초안(추가 · 수정 — 순서만 바뀐 것은 표시 없음) — 되돌리기는 한 번 묻는다 */}
               {it._draft && <DraftMark onRevert={() => askRevertRow("item", it, it.name || "이름 없음")} disabled={!!draftBusy} />}
@@ -6254,7 +6276,7 @@ export default function AdminShopPage() {
                         </PaneSection>
                       )}
                       <PaneSection title="분류 · 표시" {...foldOf(!!itemForm.id, "shop:item:class")}
-                        summary={`${normalizeItemGroup(itemForm.group) ? `그룹 ${normalizeItemGroup(itemForm.group)}` : "그룹 없음"} · ${itemForm.visible ? "표시" : "숨김"}${itemForm.type === "role" ? ` · ${itemForm.detachOnSeason ? "시즌에 역할 뗌" : "역할 유지"}` : ""}`}>
+                        summary={`${normalizeItemGroup(itemForm.group) ? `그룹 ${normalizeItemGroup(itemForm.group)}` : "그룹 없음"} · ${itemForm.visible ? "표시" : "숨김"}${itemForm.boosterPerk && itemForm.type !== "physical" ? " · 부스터 혜택" : ""}${itemForm.type === "role" ? ` · ${itemForm.detachOnSeason ? "시즌에 역할 뗌" : "역할 유지"}` : ""}`}>
                         {/* 그룹 — 상점 관리 목록에서 묶어 보일 이름(관리 화면 정리용 · 인벤토리엔 안 보인다) */}
                         <Field label="그룹">
                           <GroupPicker key={itemForm.id || "new"} value={itemForm.group} groups={regGroups} counts={regGroupCount} onChange={(v) => setItemForm((f) => ({ ...f, group: v }))} />
@@ -6262,6 +6284,12 @@ export default function AdminShopPage() {
                         <Field label="인벤토리 표시">
                           <Toggle on={itemForm.visible} onClick={() => setItemForm({ ...itemForm, visible: !itemForm.visible })} onLabel="표시" offLabel="숨김" />
                         </Field>
+                        {/* 📌 2026-10-24 서버 부스터 혜택 — 켜면 부스팅 중인 동안 이 아이템을 가진 것으로 친다(효과 · 꾸미기 그대로, 부스트를 멈추면 빠짐). 숨기면 빠진다. 기프트카드는 없음 */}
+                        {itemForm.type !== "physical" && (
+                          <Field label="서버 부스터 혜택">
+                            <Toggle on={itemForm.boosterPerk} onClick={() => setItemForm({ ...itemForm, boosterPerk: !itemForm.boosterPerk })} onLabel="부스팅 중 자동 보유" offLabel="끔" />
+                          </Field>
+                        )}
                         {itemForm.type === "role" && (
                           <Field label="시즌 전환">
                             <Toggle on={itemForm.detachOnSeason} onClick={() => setItemForm({ ...itemForm, detachOnSeason: !itemForm.detachOnSeason })}

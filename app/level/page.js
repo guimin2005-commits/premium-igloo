@@ -27,7 +27,7 @@ import { PopShell, POP_THEME } from "../components/PopShell";
 import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedScene, keepSavedBadges, keepSavedFrame, applyTrial, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import WalletHistory from "../components/WalletHistory";
 import SkinFrame from "../components/SkinFrame";
-import { SceneBack, sceneBarOf, GhostTrailBar } from "../components/SceneBack";
+import { SceneBack, sceneBarOf, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
 import AvatarFrame, { frameRoom, frameSizeOf, FRAME_GRID, FRAME_REACH } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
 import PassPreview, { passCosmeticOf, passKindOf, passShortName, passDays, PassClock } from "./PassPreview";
@@ -36,6 +36,10 @@ import PromoOverlay from "./PromoOverlay";
 import AchievementsModal, { useAchievements, AchievementNotice } from "./AchievementsModal";
 import EventPassModal from "./EventPassModal";
 import GoedamModal from "./GoedamModal";
+import InviteModal from "./InviteModal";
+import GoedamGroupModal from "./GoedamGroupModal";
+import EventHub from "./EventTabs";
+import { HotTimeStrip, HotTimeModal } from "./HotTime";
 import { ACHIEVEMENTS_ON } from "@/lib/achievements";
 import { openLogin } from "../components/LoginPrompt";
 
@@ -183,12 +187,62 @@ const fmtRel = (s) => {
 };
 const kstTodayStr = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-// XP 사유 서브팔레트 — 채팅 모노/음성 아이스/출석 레드 · 보상(payout) 먹 (그 외 유채색 금지)
+// XP 사유 이름 — 색 · 아이콘은 아래 FEED_KINDS(채팅 모노 · 음성 아이스 · 출석 레드 · 보상 먹 · 아이템 금빛 — 그 외 유채색 금지)
 //    📌 payout = 퀘스트 · 시즌 패스 · 운영진 지급 등 보상 XP(app/api/xp/my-logs). 2026-10-04 "보상 XP도 같이 보여서 'XP가 어디서 늘었는지' 바로 알 수 있습니다"
-const REASON_COLORS = { chat: "#a8adb8", voice: "#6fa8c4", attend: "#e91e3f", effect: "#c39220", "effect-levelup": "#c39220", payout: "#131313" };
 const REASON_LABELS = { chat: "채팅", voice: "음성", attend: "출석", effect: "아이템 효과", "effect-levelup": "레벨업 효과", payout: "보상" };
 // 획득 피드 한 줄의 글자 — 채널 이름이 있으면 그것, 보상은 지급 사유(label), 없으면 사유. 대시보드 칸 · 전체 창이 같이 쓴다
-const feedLabel = (l) => l.channelName || l.label || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—");
+//    📌 2026-10-25 운영자 "획득 피드에서 이모지 표기가 안 돼 · 음성채널에 붙어있는 이모지 말하는 거임" → 채널 이름을 디스코드에 보이는 그대로(앞 이모지 · 구분 점 포함).
+//       (10/24 에는 「💬ㆍ수다방」의 이모지 · 점을 떼고 이름만 보였다)
+const feedChannel = (n) => String(n || "").trim();
+const feedLabel = (l) => (l.channelName ? feedChannel(l.channelName) : "") || l.label || (l.reason === "attend" ? "출석 체크" : REASON_LABELS[l.reason] || "—");
+// 📌 2026-10-24 획득 피드 줄 아이콘 · 「오늘」 막대 색 — 종류마다 아이콘 + 진한 색(막대 · 아이콘) · 옅은 판(아이콘 바탕). 막대 순서 = 이 순서
+//    아이템 = 채팅 · 음성 · 출석 밖의 활동 XP(아이템 효과 · 레벨업 효과 — API today.effect), 보상 = 퀘스트 · 패스 · 운영진 지급(today.payout)
+const FEED_KINDS = [
+  { k: "chat", l: "채팅", icon: "chat", c: "#8f95a3", bg: "#eef0f3" },
+  { k: "voice", l: "음성", icon: "mic", c: "#4f93b4", bg: "#e5f1f7" },
+  { k: "attend", l: "출석", icon: "calendar", c: "#e91e3f", bg: "#fde8ec" },
+  { k: "payout", l: "보상", icon: "gift", c: "#131313", bg: "#ededed" },
+  { k: "effect", l: "아이템", icon: "sparkles", c: "#c39220", bg: "#f8f0dc" },
+];
+// 📌 「오늘」 범례 숫자 — 1만부터 「만」 · 1억부터 「억」(소수 한 자리 · 내림)으로 줄여 범례가 늘 한 줄(실데이터 「음성 757,924 · 아이템 89,894」가 두 줄로 넘쳐 판 밖으로 나왔다).
+//    위 합계 · 아래 줄 숫자는 그대로 다 적는다
+const feedAmt = (n) => {
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  if (v >= 1e8) return `${(Math.floor(v / 1e7) / 10).toLocaleString()}억`;
+  if (v >= 1e4) return `${(Math.floor(v / 1e3) / 10).toLocaleString()}만`;
+  return v.toLocaleString();
+};
+const feedKindOf = (reason) => FEED_KINDS.find((x) => x.k === reason) || (reason === "effect-levelup" ? FEED_KINDS[4] : FEED_KINDS[0]);
+
+// 📌 2026-10-24 카드 이름 — 칸을 넘으면 글자를 단계로 줄여 한 줄에(운영자 "더 표기 못하나" → "줄여").
+//    CSS 기본 크기(폰 20 · PC 26)부터 0.8배 · 0.64배까지(정수 px), 그래도 넘치면 「…」(truncate). 줄 높이는 기본 크기 그대로 —
+//    글자가 줄어도 카드 머리 높이 · 아래 「랭크 · 상위 %」 칩 자리가 그대로다. 폭이 바뀔 때(창 크기 · 폰↔PC)만 다시 잰다
+const FitName = ({ text, className = "" }) => {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let lastW = -1;
+    const fit = () => {
+      const w = el.clientWidth;
+      if (w === lastW) return;
+      lastW = w;
+      el.style.fontSize = "";
+      el.style.lineHeight = "";
+      const base = parseFloat(getComputedStyle(el).fontSize) || 20;
+      el.style.lineHeight = `${Math.round(base)}px`;
+      for (const k of [1, 0.8, 0.64]) {
+        el.style.fontSize = `${Math.round(base * k)}px`;
+        if (el.scrollWidth <= el.clientWidth) return;
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text]);
+  return <p ref={ref} className={className}>{text}</p>;
+};
 
 // 📌 누적 음성 시간 — 분까지("3시간 27분", 1시간 전에는 "27분", 1분 전에는 "42초"). 서버 랭킹과 대시보드 '누적 음성 시간' 칸이 같이 쓴다
 //    2026-10-04 "두 곳 모두 '3시간 27분'으로 통일" — 대시보드만 시간 단위로 끊던 것을 없앴다
@@ -207,204 +261,348 @@ const fmtVoiceTimeMin = (sec) => {
 // 📌 XP 도구 공용 — 숫자 범위 가두기
 const clampLv = (n) => Math.min(1000, Math.max(1, Math.round(Number(n) || 1)));
 
-// 📌 XP 테이블 — 레벨 하나를 골라 크게 본다(필요 · 누적 XP · 등급 · 내 레벨에서 남은 양).
-//    아래 표는 1,000 줄을 한 번에 늘어놓지 않고 등급으로 나눈다. 어디서 고르든 위 카드와 표가 같은 레벨을 가리킨다.
-const XP_JUMPS = [100, 250, 500, 750, 1000];
-const XpTableView = ({ myLevel = 0, myXp = null, onTone }) => {
+// 📌 XP 테이블 — 「목표 계산기」(2026-10-25 운영자 시안 승인 — .claude/mockups/xp-table/시안-목표계산기.png).
+//    위 먹 판: 목표 레벨(− 숫자 +) · 그 레벨 등급 · 막대(내 레벨에 화살표, 내 레벨 → 목표는 빨간 줄) · 남은 XP · 활동하면 약 N분/N시간(활동 속도 = /api/xp/my-logs pace —
+//    최근 7일 XP 를 받은 5분 칸만 센 「활동 1분에 얼마」. 하루 평균은 24시간에 나눠 "다음 레벨 약 1일"로 나와 반려 — 운영자 "나 몇 분만에 10,000XP 받는데") ·
+//    그 레벨 필요 · 누적(PC만) · 빠른 고르기(위 줄 내 레벨 · 다음 레벨 · 다음 등급, 아래 줄 Lv 100 · 250 · 500 · 750 · 1000). 로그인 전에는 남은 XP · 속도 대신 필요 · 누적만.
+//    폰 정리(2026-10-25 A안 — .claude/mockups/xp-table/시안-폰정리.png · 운영자 "모바일 화면 너무 복잡해"): 「필요 · 누적」 줄 빼기 · 칩은 칸에 맞춘 두 줄 ·
+//    표는 레벨 · 필요 XP · 남은 XP 세 칸(누적 XP 는 PC만) · 「2 / 10」 빼기. 「내 레벨」을 누르면 목표가 내 레벨 · 표가 내 등급으로 돌아가 내 줄이 가운데
+//    아래 레벨 표: 등급 막대 한 줄(10칸 · ‹ ›) · 고른 등급 줄만 · 남은 XP 칸(지난 레벨 「달성」 · 내 줄 진행도). 줄을 누르면 그 레벨이 목표.
+//    평평한 단색(그라데이션 · 번짐 · 큰 그림자 없음 — 운영자 규칙). 화면 글에 가운데 점 · 잡다한 꼬리 없음(운영자 "중간 점 빼라고 제발" · "잡다한 거 다붙이네")
+const XPT_CSS = `
+.xpt-range { -webkit-appearance: none; appearance: none; background: transparent; width: 100%; height: 34px; margin: 0; cursor: pointer; position: relative; }
+.xpt-range:focus { outline: none; }
+.xpt-range::-webkit-slider-runnable-track { height: 34px; background: transparent; }
+.xpt-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: 8px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 3px #e91e3f; }
+.xpt-range::-moz-range-track { height: 34px; background: transparent; }
+.xpt-range::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 999px; background: #fff; box-shadow: 0 0 0 3px #e91e3f; }
+.xpt-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px #e91e3f, 0 0 0 7px rgba(255,255,255,.3); }
+.xpt-range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px #e91e3f, 0 0 0 7px rgba(255,255,255,.3); }
+.xpt-nums { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; }
+.xpt-third { display: none; }
+.xpt-cols { display: grid; grid-template-columns: 60px repeat(var(--nm), minmax(0,1fr)); align-items: center; }
+.xpt-cum { display: none; }
+.xpt-pg { display: grid; grid-template-columns: repeat(var(--n), minmax(0,1fr)); gap: 6px; }
+.xpt-pg + .xpt-pg { margin-top: 6px; }
+@media (min-width: 40rem) {
+  .xpt-nums { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr) minmax(0,.9fr); gap: 24px; }
+  .xpt-third { display: block; }
+  .xpt-cols { grid-template-columns: 96px repeat(var(--n), minmax(0,1fr)); }
+  .xpt-cum { display: block; }
+  .xpt-picks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .xpt-pg { display: flex; }
+  .xpt-pg + .xpt-pg { margin-top: 0; }
+}
+`;
+// 목표 레벨 처음 값 — 다음 등급 시작(마지막 등급이면 다음 레벨). 로그인 전에는 Lv 100
+const xptDefaultTarget = (my) => {
+  if (!(my > 0)) return 100;
+  const next = VOICE_TIERS[getTierIndex(my) + 1];
+  return next ? next.min : Math.min(1000, my + 1);
+};
+// 큰 숫자 칸 — 칸을 넘으면 글자를 단계로 줄여 한 줄에(FitName 과 같은 식 · 줄 높이는 기본 크기 그대로라 아래가 안 움직인다).
+//   폰에서 Lv 1000 을 고르면 남은 XP 가 9자리(129,990,750 XP)라 옆 칸과 겹쳤다. 값(k)이나 칸 폭이 바뀔 때만 다시 잰다
+const XptFit = ({ k, className = "", children }) => {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let lastW = -1;
+    const fit = (force) => {
+      const w = el.clientWidth;
+      if (!force && w === lastW) return;
+      lastW = w;
+      el.style.fontSize = "";
+      el.style.lineHeight = "";
+      const base = parseFloat(getComputedStyle(el).fontSize) || 24;
+      el.style.lineHeight = `${Math.round(base)}px`;
+      for (const r of [1, 0.88, 0.76, 0.64]) {
+        el.style.fontSize = `${Math.round(base * r)}px`;
+        if (el.scrollWidth <= el.clientWidth) return;
+      }
+    };
+    fit(true);
+    const ro = new ResizeObserver(() => fit(false));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [k]);
+  return <p ref={ref} className={className}>{children}</p>;
+};
+// 막대 위 자리 — 손잡이(18px) 가운데가 닿는 곳과 같게(양끝 9px 안쪽)
+const xptPos = (l) => `calc(9px + (100% - 18px) * ${(clampLv(l) - 1) / 999})`;
+const XpTableView = ({ myLevel = 0, myXp = null, perMin = 0, onTone }) => {
   const mine = myLevel > 0;
-  const [lv, setLv] = useState(mine ? myLevel : 1);
-  const [tierTab, setTierTab] = useState(getTierIndex(mine ? myLevel : 1));
+  const [lv, setLv] = useState(xptDefaultTarget(myLevel));
+  // 표는 처음에 내 등급(로그인 전에는 목표 레벨의 등급)으로 연다
+  const [tierTab, setTierTab] = useState(getTierIndex(mine ? myLevel : xptDefaultTarget(0)));
   const [draft, setDraft] = useState(""); // 숫자 칸을 고치는 중인 값
   const listRef = useRef(null);
 
-  // 로그인 정보가 늦게 오면 한 번만 내 레벨로 맞춘다
+  // 로그인 정보가 늦게 오면 한 번만 내 레벨 기준으로 맞춘다
   const seeded = useRef(mine);
   useEffect(() => {
     if (seeded.current || !mine) return;
     seeded.current = true;
-    setLv(myLevel);
+    setLv(xptDefaultTarget(myLevel));
     setTierTab(getTierIndex(myLevel));
   }, [mine, myLevel]);
 
-  const pick = (n, tone = true) => {
+  // 목표 고르기 — 위 판(숫자 · 막대 · 빠른 고르기)에서 고르면 표도 그 등급으로, 표 줄을 누르면 표는 그대로.
+  //   위 판에서 고를 때마다 표를 다시 가운데로 맞춘다(같은 값을 다시 눌러도 — 「내 레벨」을 또 누르면 스크롤한 표가 내 줄로 돌아온다)
+  const [centerTick, setCenterTick] = useState(0);
+  const pick = (n, { tone = true, fromTable = false } = {}) => {
     const v = clampLv(n);
     setLv(v);
-    // "전체"(-1)를 보고 있으면 그대로 두고, 등급 탭이면 고른 레벨의 등급으로 옮긴다
-    setTierTab((t) => (t === -1 ? -1 : getTierIndex(v)));
+    if (!fromTable) {
+      setTierTab(getTierIndex(v));
+      setCenterTick((t) => t + 1);
+    }
     setDraft("");
     if (tone) onTone?.();
   };
+  const stepTier = (d) => {
+    setTierTab((t) => Math.min(VOICE_TIERS.length - 1, Math.max(0, t + d)));
+    onTone?.();
+  };
 
-  // 고른 레벨의 줄이 표 가운데 오게 (페이지는 건드리지 않는다)
-  useEffect(() => {
+  // 표 안에서 목표 줄(없으면 내 줄)이 가운데 오게 (페이지는 건드리지 않는다)
+  const centerRow = useCallback(() => {
     const box = listRef.current;
-    const row = box?.querySelector(`[data-lv="${lv}"]`);
-    if (!box || !row) return;
+    const row = box?.querySelector(`[data-lv="${lv}"]`) || (mine ? box?.querySelector(`[data-lv="${myLevel}"]`) : null);
+    if (!box || !box.clientHeight) return;
+    // 그 등급에 목표 줄도 내 줄도 없으면 맨 위부터(앞 등급에서 내린 자리가 남지 않게)
+    if (!row) {
+      box.scrollTop = 0;
+      return;
+    }
     const a = row.getBoundingClientRect(), b = box.getBoundingClientRect();
     box.scrollTop += a.top - b.top - (box.clientHeight - a.height) / 2;
-  }, [lv, tierTab]);
+  }, [lv, mine, myLevel]);
+  useEffect(() => { centerRow(); }, [centerRow, tierTab, centerTick]);
+  // XP 테이블은 숨긴 채(hidden) 먼저 그려져 있어 그때는 잴 수 없다 — 보이게 되는 순간(높이 0 → 생김)에 한 번 더 맞춘다
+  useEffect(() => {
+    const box = listRef.current;
+    if (!box) return;
+    let shown = box.clientHeight > 0;
+    const ro = new ResizeObserver(() => {
+      const now = box.clientHeight > 0;
+      if (now && !shown) centerRow();
+      shown = now;
+    });
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [centerRow]);
 
   const cum = getCumulativeXpByLevel(lv);
   const req = lv <= 1 ? 0 : cum - getCumulativeXpByLevel(lv - 1);
   const tier = VOICE_TIERS[getTierIndex(lv)];
   const myCum = mine ? (myXp ?? getCumulativeXpByLevel(myLevel)) : 0;
   const left = mine ? cum - myCum : 0;
+  // 목표까지 활동 시간 — 1시간 안이면 분, 넘으면 시간(반올림)
+  const mins = left > 0 && perMin > 0 ? Math.max(1, Math.ceil(left / perMin)) : 0;
+  const eta = mins <= 0 ? "—" : mins < 60 ? `약 ${mins}분` : `약 ${Math.round(mins / 60).toLocaleString()}시간`;
+  const perHour = perMin * 60;
+  // 내 레벨 진행도(내 줄) — 이번 레벨에서 다음 레벨까지
+  const myBase = mine ? getCumulativeXpByLevel(myLevel) : 0;
+  const myNeed = mine && myLevel < 1000 ? getCumulativeXpByLevel(myLevel + 1) - myBase : 0;
+  const myPct = myNeed > 0 ? Math.min(100, Math.max(0, Math.floor(((myCum - myBase) / myNeed) * 100))) : 100;
 
-  // 표 — 고른 등급 구간만, "전체"(-1)면 1 – 1000 전부 (등급이 시작되는 줄에 등급 이름을 붙인다)
-  const all = tierTab === -1;
-  const tt = all ? null : VOICE_TIERS[tierTab];
-  const tNext = all ? null : VOICE_TIERS[tierTab + 1];
-  const tierStart = new Map(VOICE_TIERS.map((t) => [Math.max(1, t.min), t]));
+  const nextTier = mine ? VOICE_TIERS[getTierIndex(myLevel) + 1] : null;
+  // 빠른 고르기 — 위 줄 내 기준(로그인 때만) · 아래 줄 레벨 다섯(운영자 "250 500 1000은 뭐이리 줄었냐" — 예전 100 · 750 되살림)
+  const pickGroups = [
+    mine
+      ? [
+          { l: "내 레벨", v: myLevel },
+          // Lv 1000 이면 다음 레벨이 없다(「내 레벨」과 같은 칸이 둘 눌려 보이지 않게)
+          ...(myLevel < 1000 ? [{ l: "다음 레벨", v: myLevel + 1 }] : []),
+          ...(nextTier ? [{ l: "다음 등급", v: nextTier.min }] : []),
+        ]
+      : [],
+    [100, 250, 500, 750, 1000].map((v) => ({ l: `Lv ${v}`, v })),
+  ].filter((g) => g.length);
+
+  // 표 — 고른 등급 구간
+  const tt = VOICE_TIERS[tierTab];
+  const tNext = VOICE_TIERS[tierTab + 1];
   const rows = [];
-  for (let l = all ? 1 : Math.max(1, tt.min); l <= (all ? 1000 : tNext ? tNext.min - 1 : 1000); l++) {
+  for (let l = Math.max(1, tt.min); l <= (tNext ? tNext.min - 1 : 1000); l++) {
     const c = getCumulativeXpByLevel(l);
     rows.push({ l, c, r: l <= 1 ? 0 : c - getCumulativeXpByLevel(l - 1) });
   }
-  const COLS = { gridTemplateColumns: "88px minmax(0,1fr) minmax(0,1fr)" };
+  const colN = { "--n": mine ? 3 : 2, "--nm": 2 }; // 폰은 누적 XP 칸을 빼(로그인 때) 늘 레벨 + 두 칸
+  const myTier = mine ? getTierIndex(myLevel) : -1;
+  const lift = (t) => hexLift(t.c, 0.3);
 
   return (
-    <div className="space-y-10">
-      {/* 고른 레벨 — 등급 색 빛이 도는 잉크 카드 */}
-      <div
-        className="relative overflow-hidden rounded-3xl shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
-        style={{ background: `radial-gradient(560px 320px at 88% 18%, ${hexA(tier.c, 0.28)} 0%, ${hexA(tier.c, 0)} 70%), linear-gradient(180deg, #1b1b1b 0%, #131313 60%)` }}
-      >
-        <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
-        <div className="relative z-10 p-6 md:p-8">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-7">
-            <div>
-              <p className="text-[10px] font-black tracking-[0.35em] text-white/40 uppercase">LEVEL</p>
-              <div className="flex items-center gap-3 mt-3">
-                <button type="button" onClick={() => pick(lv - 1)} aria-label="한 레벨 아래" className="w-9 h-9 rounded-full border border-white/20 text-white/70 hover:text-white hover:border-white/45 transition-colors flex items-center justify-center outline-none focus:outline-none text-lg font-black">−</button>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  aria-label="레벨"
-                  value={draft !== "" ? draft : lv}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onBlur={() => draft !== "" && pick(draft)}
-                  onKeyDown={(e) => e.key === "Enter" && draft !== "" && pick(draft)}
-                  className="w-[3.4ch] bg-transparent text-center text-[52px] md:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-none outline-none focus:outline-none border-b-2 border-transparent focus:border-[#e91e3f]"
-                />
-                <button type="button" onClick={() => pick(lv + 1)} aria-label="한 레벨 위" className="w-9 h-9 rounded-full border border-white/20 text-white/70 hover:text-white hover:border-white/45 transition-colors flex items-center justify-center outline-none focus:outline-none text-lg font-black">+</button>
-              </div>
-              <div className="flex items-center gap-2.5 mt-4">
-                <TierEmblem tier={tier} size={24} />
-                {/* 📌 등급 이름 칸은 가장 긴 이름(그랜드마스터) 폭으로 고정 — 등급이 바뀔 때 옆 레벨 범위가 움직이지 않게(2026-10-10 "티어 바뀔 때마다 자꾸 움직여대") */}
-                <span className="inline-block min-w-[6.2em] text-[16px] font-black leading-none" style={tierText(tier, hexLift(tier.c, 0.3))}>{tier.name}</span>
-                <span className="text-[12px] font-bold text-white/40 tabular-nums">{tierRangeLabel(getTierIndex(lv))}</span>
-              </div>
-            </div>
-
-            {/* 📌 PC — 숫자 칸 폭을 남은 자리(최대 480)로 고정. 예전엔 숫자 자릿수에 따라 칸 전체가 좌우로 밀렸다(2026-10-10 "자꾸 움직여대") */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5 md:flex-1 md:max-w-[480px]">
-              <div>
-                <p className="text-[11px] font-bold text-white/45">필요 XP</p>
-                <p className="mt-2 text-[22px] font-black text-[#ff5c77] tabular-nums tracking-tight leading-none">{req.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-white/45">누적 XP</p>
-                <p className="mt-2 text-[22px] font-black text-white tabular-nums tracking-tight leading-none">{cum.toLocaleString()}</p>
-              </div>
-              {mine && (
-                <div className="col-span-2 md:col-span-1">
-                  <p className="text-[11px] font-bold text-white/45">내 레벨({myLevel})에서</p>
-                  <p className="mt-2 text-[22px] font-black text-white tabular-nums tracking-tight leading-none">
-                    {left > 0 ? <>{left.toLocaleString()}<span className="text-[12px] text-white/40 ml-1">XP 남음</span></> : <span className="text-white/60">도달함</span>}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 빠르게 고르기 */}
+    <div>
+      <style>{XPT_CSS}</style>
+      {/* ── 목표 계산기 — 평평한 먹 판 ── */}
+      <div className="rounded-2xl bg-[#131313] text-white px-5 pt-5 pb-5 sm:px-8 sm:pt-7 sm:pb-7">
+        <p className="text-[12px] font-bold text-white/50">목표 레벨</p>
+        <div className="flex items-center gap-3.5 mt-2">
+          <button type="button" onClick={() => pick(lv - 1)} aria-label="한 레벨 아래" className="w-9 h-9 rounded-full shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)] text-white/75 hover:text-white transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/50 text-lg font-black">−</button>
           <input
-            type="range"
-            min="1"
-            max="1000"
-            value={lv}
-            onChange={(e) => pick(e.target.value, false)}
-            aria-label="레벨 고르기"
-            className="w-full mt-8 accent-[#e91e3f] cursor-pointer"
+            type="number"
+            inputMode="numeric"
+            aria-label="목표 레벨"
+            value={draft !== "" ? draft : lv}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => draft !== "" && pick(draft)}
+            onKeyDown={(e) => e.key === "Enter" && draft !== "" && pick(draft)}
+            className="w-[3.4ch] bg-transparent text-center text-[48px] sm:text-[60px] font-black text-white tabular-nums tracking-[-0.04em] leading-none outline-none border-b-2 border-transparent focus:border-[#e91e3f] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
-          <div className="flex flex-wrap gap-1.5 mt-4">
-            {mine && (
-              <button type="button" onClick={() => pick(myLevel)} className={`h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${lv === myLevel ? "bg-white text-[#131313]" : "bg-white/[0.08] text-white/70 hover:text-white"}`}>
-                내 레벨
-              </button>
-            )}
-            {XP_JUMPS.map((n) => (
-              <button key={n} type="button" onClick={() => pick(n)} className={`h-8 px-3.5 rounded-full text-[12px] font-bold tabular-nums transition-colors outline-none focus:outline-none ${lv === n ? "bg-white text-[#131313]" : "bg-white/[0.08] text-white/70 hover:text-white"}`}>
-                Lv {n}
-              </button>
-            ))}
-          </div>
+          <button type="button" onClick={() => pick(lv + 1)} aria-label="한 레벨 위" className="w-9 h-9 rounded-full shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)] text-white/75 hover:text-white transition-colors flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-white/50 text-lg font-black">+</button>
+        </div>
+        <div className="flex items-center gap-2 mt-3 h-6">
+          <TierEmblem tier={tier} size={22} />
+          {/* 등급 이름 칸 폭 고정(가장 긴 그랜드마스터) — 등급이 바뀌어도 줄이 안 움직인다 */}
+          <span className="inline-block min-w-[6.2em] text-[15px] font-black leading-none" style={{ color: lift(tier) }}>{tier.name}</span>
+        </div>
+
+        {/* 막대 — 내 레벨까지 옅게 · 내 레벨 → 목표 빨간 줄 · 「나」 표시. 손잡이는 원래 범위 입력(키보드 · 끌기 그대로) */}
+        <div className="relative mt-4 pt-3">
+          <div aria-hidden className="absolute left-[9px] right-[9px] top-[26px] h-1.5 bg-[#2b2b2e]"></div>
+          {mine && <div aria-hidden className="absolute left-[9px] top-[26px] h-1.5 bg-white/35" style={{ width: `calc(${xptPos(myLevel)} - 9px)` }}></div>}
+          {mine && lv > myLevel && <div aria-hidden className="absolute top-[26px] h-1.5 bg-[#e91e3f]" style={{ left: xptPos(myLevel), width: `calc(${xptPos(lv)} - ${xptPos(myLevel)})` }}></div>}
+          {mine && (
+            <div aria-hidden className="absolute top-[20px] w-0.5 h-[18px] bg-white -translate-x-px" style={{ left: xptPos(myLevel) }}>
+              {/* 내 레벨 — 「나」 글자 대신 아래를 가리키는 작은 화살표(운영자 "나 말고 그냥 화살표로") */}
+              <svg viewBox="0 0 10 6" className="absolute -top-[9px] left-1/2 -translate-x-1/2 w-2.5 h-1.5 text-white/70"><path d="M0 0h10L5 6z" fill="currentColor" /></svg>
+            </div>
+          )}
+          <input type="range" min="1" max="1000" value={lv} onChange={(e) => pick(e.target.value, { tone: false })} aria-label="목표 레벨 고르기" className="xpt-range" />
+        </div>
+
+        <div className="xpt-nums mt-4 pt-5 border-t border-white/10">
+          {mine ? (
+            <>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-white/50">남은 XP</p>
+                {left > 0 ? (
+                  <XptFit k={left} className="mt-2 text-[24px] sm:text-[30px] font-black text-[#ff5c77] tabular-nums tracking-tight leading-none whitespace-nowrap overflow-hidden">{left.toLocaleString()}<span className="ml-1 text-[13px] text-white/45">XP</span></XptFit>
+                ) : (
+                  <p className="mt-2 text-[24px] sm:text-[30px] font-black text-white leading-none">달성</p>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-white/50">활동하면</p>
+                <XptFit k={eta} className="mt-2 text-[24px] sm:text-[30px] font-black text-white tabular-nums tracking-tight leading-none whitespace-nowrap overflow-hidden">{eta}</XptFit>
+                {/* 활동 1시간에 버는 XP — 최근 7일. 늘 한 줄 자리를 잡아 아래가 안 움직인다 */}
+                <p className="mt-2 text-[12px] font-bold text-white/45 tabular-nums h-4">{perHour > 0 ? `1시간에 약 ${(perHour >= 1000 ? Math.round(perHour / 100) * 100 : Math.round(perHour)).toLocaleString()}` : ""}</p>
+              </div>
+              {/* 그 레벨 필요 · 누적 — PC만(폰은 아래 레벨 표에 같은 숫자) */}
+              <div className="xpt-third min-w-0">
+                <p className="text-[12px] font-bold text-white/50">Lv.{lv} 필요</p>
+                <p className="mt-1 text-[16px] font-black tabular-nums">{req.toLocaleString()}</p>
+                <p className="mt-3 text-[12px] font-bold text-white/50">누적</p>
+                <p className="mt-1 text-[16px] font-black tabular-nums">{cum.toLocaleString()}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-white/50">필요 XP</p>
+                <XptFit k={req} className="mt-2 text-[24px] sm:text-[30px] font-black text-[#ff5c77] tabular-nums tracking-tight leading-none whitespace-nowrap overflow-hidden">{req.toLocaleString()}</XptFit>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-white/50">누적 XP</p>
+                <XptFit k={cum} className="mt-2 text-[24px] sm:text-[30px] font-black text-white tabular-nums tracking-tight leading-none whitespace-nowrap overflow-hidden">{cum.toLocaleString()}</XptFit>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="xpt-picks mt-5">
+          {pickGroups.map((g, gi) => (
+            <div key={gi} className="xpt-pg" style={{ "--n": g.length }}>
+              {g.map((p) => (
+                <button key={p.l} type="button" onClick={() => pick(p.v)} aria-pressed={lv === p.v}
+                  className={`h-8 px-0 sm:px-3.5 rounded-full text-[12px] font-bold tabular-nums whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${lv === p.v ? "bg-white text-[#131313]" : "bg-white/[0.08] text-white/75 hover:text-white"}`}>
+                  {p.l}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* 레벨 표 — 등급으로 나눈다 */}
-      <section>
-        <div className="flex items-end justify-between mb-4">
-          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">레벨 표</h3>
-          <span className="text-[11px] font-bold text-[#8a8a8a] tabular-nums">{all ? "Lv.1 – 1000" : tierRangeLabel(tierTab)}</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          <button
-            type="button"
-            onClick={() => { setTierTab(-1); onTone?.(); }}
-            className={`shrink-0 inline-flex items-center h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-              all ? "bg-[#131313] text-white" : "bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313]"
-            }`}
-          >
-            전체
+      {/* ── 레벨 표 — 등급 막대 한 줄 + 고른 등급 줄 ── */}
+      <section className="mt-9">
+        <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">레벨 표</h3>
+        <div className="flex items-center gap-2 mt-4 pt-4">
+          <button type="button" onClick={() => stepTier(-1)} disabled={tierTab <= 0} aria-label="앞 등급" className="shrink-0 w-8 h-8 rounded-full shadow-[inset_0_0_0_1px_#a3a3a3] text-[#5a5a5a] hover:text-[#131313] disabled:opacity-35 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+            <svg aria-hidden viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12.5 4.5 7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
-          {VOICE_TIERS.map((t, i) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => { setTierTab(i); onTone?.(); }}
-              className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-                tierTab === i ? "bg-[#131313] text-white" : "bg-[#f2f2f2] text-[#5a5a5a] hover:text-[#131313]"
-              }`}
-            >
-              <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: tierPaint(t) }}></span>
-              {t.name}
-            </button>
-          ))}
+          <div role="radiogroup" aria-label="등급" className="flex-1 grid grid-cols-10 gap-[3px]">
+            {VOICE_TIERS.map((t, i) => (
+              <button key={t.key} type="button" role="radio" aria-checked={tierTab === i} aria-label={t.name} title={t.name}
+                onClick={() => { setTierTab(i); onTone?.(); }}
+                className={`relative h-3.5 outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/40 transition-opacity ${tierTab === i ? "shadow-[0_0_0_2px_#ffffff,0_0_0_4px_#131313]" : "opacity-35 hover:opacity-60"}`}
+                style={{ background: t.c }}>
+                {/* 내 등급 — 위에서 가리키는 작은 화살표 */}
+                {i === myTier && <svg aria-hidden viewBox="0 0 10 6" className="absolute -top-[11px] left-1/2 -translate-x-1/2 w-2.5 h-1.5 text-[#131313]"><path d="M0 0h10L5 6z" fill="currentColor" /></svg>}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => stepTier(1)} disabled={tierTab >= VOICE_TIERS.length - 1} aria-label="다음 등급 보기" className="shrink-0 w-8 h-8 rounded-full shadow-[inset_0_0_0_1px_#a3a3a3] text-[#5a5a5a] hover:text-[#131313] disabled:opacity-35 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/30">
+            <svg aria-hidden viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7.5 4.5 13 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
         </div>
-        <div className="rounded-2xl border border-[#ededed] overflow-hidden">
-          <div className="grid px-5 h-10 items-center bg-[#fafafa] border-b border-[#ededed] text-[11px] font-bold text-[#8a8a8a]" style={COLS}>
+        <div className="flex items-center gap-2 mt-3.5 h-6">
+          <TierEmblem tier={tt} size={20} />
+          <span className="text-[15px] font-black text-[#131313] leading-none">{tt.name}</span>
+          <span className="text-[12px] font-bold text-[#5a5a5a] tabular-nums">{tierRangeLabel(tierTab)}</span>
+          <span className="hidden sm:inline ml-auto text-[12px] font-bold text-[#8a8a8a] tabular-nums">{tierTab + 1} / {VOICE_TIERS.length}</span>
+        </div>
+        <div className="mt-3 border border-[#ededed]">
+          {/* 머리 줄도 아래 목록과 같은 스크롤바 자리를 잡는다 — Windows PC 에서 칸이 스크롤바 폭만큼 어긋나지 않게 */}
+          <div className="xpt-cols px-3 sm:px-5 h-10 bg-[#f2f2f2] text-[11px] font-bold text-[#5a5a5a]" style={{ ...colN, overflow: "hidden", scrollbarGutter: "stable" }}>
             <span>레벨</span>
             <span className="text-right">필요 XP</span>
-            <span className="text-right">누적 XP</span>
+            <span className={`text-right ${mine ? "xpt-cum" : ""}`}>누적 XP</span>
+            {mine && <span className="text-right">남은 XP</span>}
           </div>
           <div ref={listRef} className="max-h-[440px] overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
             {rows.map((r) => {
-              const on = r.l === lv;
               const me = mine && r.l === myLevel;
+              const on = r.l === lv && !me;
               return (
                 <button
                   key={r.l}
                   type="button"
                   data-lv={r.l}
-                  onClick={() => pick(r.l, false)}
-                  className={`w-full grid px-5 h-10 items-center text-left tabular-nums border-b border-[#f5f5f5] last:border-0 transition-colors outline-none focus:outline-none ${
-                    on ? "bg-[#e91e3f]/[0.06]" : "hover:bg-black/[0.02]"
+                  onClick={() => pick(r.l, { tone: false, fromTable: true })}
+                  className={`w-full xpt-cols px-3 sm:px-5 h-[42px] text-left tabular-nums border-b border-[#f2f2f2] last:border-0 transition-colors outline-none focus-visible:bg-black/[0.03] ${
+                    me ? "bg-[#fff1f3] shadow-[inset_3px_0_0_#e91e3f]" : on ? "bg-[#f2f2f2] shadow-[inset_3px_0_0_#131313]" : "hover:bg-black/[0.02]"
                   }`}
-                  style={COLS}
+                  style={colN}
                 >
-                  <span className={`text-[13px] font-black ${on ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                  <span className="flex items-center gap-1.5 text-[12px] sm:text-[13px] font-black text-[#131313]">
                     {r.l}
-                    {all && tierStart.has(r.l) && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#5a5a5a] align-middle">
-                        <span aria-hidden className="w-1.5 h-1.5 rounded-full" style={{ background: tierStart.get(r.l).c }}></span>
-                        {tierStart.get(r.l).name}
-                      </span>
+                    {/* 내 줄 — 레벨 숫자를 가리키는 작은 빨간 화살표(「나」 알약 대신) */}
+                    {me && (
+                      <>
+                        <svg aria-hidden viewBox="0 0 6 10" className="w-1.5 h-2.5 text-[#e91e3f]"><path d="M6 0v10L0 5z" fill="currentColor" /></svg>
+                        <span className="sr-only">내 레벨</span>
+                      </>
                     )}
-                    {me && <span className="ml-2 inline-flex items-center h-4 px-1.5 rounded-full bg-[#131313] text-white text-[9px] font-black align-middle">나</span>}
                   </span>
-                  <span className={`text-[13px] font-bold text-right ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{r.r.toLocaleString()}</span>
-                  <span className={`text-[13px] font-bold text-right ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{r.c.toLocaleString()}</span>
+                  <span className={`text-right text-[12px] sm:text-[13px] font-bold ${me || on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{r.r.toLocaleString()}</span>
+                  <span className={`text-right text-[12px] sm:text-[13px] font-bold ${mine ? "xpt-cum" : ""} ${me || on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{r.c.toLocaleString()}</span>
+                  {mine && (
+                    <span className="flex items-center justify-end gap-1.5 text-[12px] sm:text-[13px] font-bold">
+                      {me ? (
+                        <>
+                          <span aria-hidden className="w-10 sm:w-16 h-1.5 bg-[#ededed]"><span className="block h-full bg-[#e91e3f]" style={{ width: `${myPct}%` }}></span></span>
+                          <span className="font-black text-[#e91e3f]">{myPct}%</span>
+                        </>
+                      ) : r.l < myLevel ? (
+                        <span className="text-[#8a8a8a]">달성</span>
+                      ) : (
+                        <span className={on ? "text-[#131313]" : "text-[#5a5a5a]"}>{(r.c - myCum).toLocaleString()}</span>
+                      )}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -519,6 +717,14 @@ const ENH_CSS = `
 [role="dialog"][aria-label="강화"] [data-pop-list]::-webkit-scrollbar, [role="dialog"][aria-label="강화"] [data-pop-body]::-webkit-scrollbar { display: none; }
 .enh-ic { --px: 3; }
 @media (min-width: 640px) { .enh-ic { --px: 4; } }
+/* 📌 2026-10-24 운영자 "강화창 수정" — PC 는 위아래 스크롤 없음(시즌 패스와 같은 규칙). 낮은 화면은 단추 · 단계표 위 여백을 줄이고, 줄 높이는 EnhanceModal 이 창에 맞춘다(rowH) */
+@media (min-width: 640px) and (max-height: 759.98px) { .enh-btns { margin-top: 14px; } .enh-thd { margin-top: 16px; } }
+/* 더 낮은 화면(높이 680 미만 — 1366 × 620 등) — 두 판 위아래 여백 · 단추 높이 · 다음 단계 숫자 · 왼쪽 무대 높이도 한 단 줄인다 */
+@media (min-width: 640px) and (max-height: 679.98px) {
+  [role="dialog"][aria-label="강화"] [data-pop-list], [role="dialog"][aria-label="강화"] [data-pop-body] > :first-child { padding-top: 16px; padding-bottom: 16px; }
+  .enh-btns > * { height: 40px; } .enh-btns { margin-top: 10px; } .enh-thd { margin-top: 10px; } .enh-nx { font-size: 28px; }
+  .enh-ic { height: 120px; }
+}
 @keyframes enhSegIn { 0% { transform: scaleX(0); background: #fff; } 55% { transform: scaleX(1); background: #fff; } 100% { transform: scaleX(1); background: var(--kc); } }
 @keyframes enhGold { 0% { background: var(--kc); } 45% { background: #fff; } 100% { background: ${ENH_GOLD}; } }
 @keyframes enhIn { 0% { transform: translateY(100%); } 62% { transform: translateY(-4%) scale(1.1); } 100% { transform: none; } }
@@ -575,6 +781,27 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
     return () => ts.forEach(clearTimeout);
   }, [enh.chat.level, enh.voice.level]);
   // 강화 누름 — 모으기를 걸고 서버로. 답이 왔는데 단계가 안 올랐으면(실패) 모으기를 거둔다
+  // 📌 단계표 줄 높이(PC) — 오른쪽 판에 남은 높이 ÷ 단계 수, 40(기본) ~ 24 사이. 판 크기가 바뀌면 다시 잰다(ResizeObserver).
+  //    24 로도 모자란 아주 낮은 창에서만 판이 스크롤된다. 폰(~639)은 rowH 없음 — 예전처럼 h-10
+  const rowsRef = useRef(null);
+  const [rowH, setRowH] = useState(0);
+  const rowCount = kind ? enh[kind].max : 0;
+  useLayoutEffect(() => {
+    const rows = rowsRef.current;
+    const pane = rows?.closest("[data-pop-list]");
+    if (!open || !rows || !pane || !rowCount) return;
+    const fit = () => {
+      if (!window.matchMedia("(min-width: 640px)").matches) { setRowH(0); return; }
+      // 표 위까지의 높이(판 위 여백 포함) — offsetTop 은 열림 움직임(transform)에 흔들리지 않는다
+      const top = rows.offsetParent === pane.offsetParent ? rows.offsetTop - pane.offsetTop : rows.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
+      const avail = pane.clientHeight - top - (parseFloat(getComputedStyle(pane).paddingBottom) || 0) - 1; // 1 = 표 윗줄
+      setRowH(Math.max(24, Math.min(40, Math.floor(avail / rowCount))));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(pane);
+    return () => ro.disconnect();
+  }, [open, rowCount, kind]);
   const doEnhance = (k, how, cost) => {
     const c = { k, t0: performance.now() };
     chargeRef.current = c;
@@ -621,6 +848,9 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
       open={open}
       onClose={onClose}
       theme="plain"
+      // 📌 2026-10-24 인벤토리 · 시즌 패스와 같은 창 크기(1100 × 800 · 모서리 16 — 운영자 "하나로 통일")
+      size="xl"
+      corner="2xl"
       title="강화"
       badge={
         <span className="min-w-0 inline-flex items-baseline gap-3 text-[12px] font-black tabular-nums">
@@ -766,7 +996,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[11px] font-bold text-white/45">{atMax ? "최대 단계" : "다음 단계"}</p>
-          <p key={`nx-${tick}`} className="enh-anim mt-2 text-[34px] font-black tabular-nums leading-none tracking-[-0.02em]" style={{ color: atMax ? ENH_GOLD : kt.c, "--kc": atMax ? ENH_GOLD : kt.c, ...(popped ? { animation: "enhVal .9s .3s ease-out both" } : {}) }}>{atMax ? "MAX" : `+${v.level + 1}`}</p>
+          <p key={`nx-${tick}`} className="enh-nx enh-anim mt-2 text-[34px] font-black tabular-nums leading-none tracking-[-0.02em]" style={{ color: atMax ? ENH_GOLD : kt.c, "--kc": atMax ? ENH_GOLD : kt.c, ...(popped ? { animation: "enhVal .9s .3s ease-out both" } : {}) }}>{atMax ? "MAX" : `+${v.level + 1}`}</p>
         </div>
         <div className="min-w-0 text-right">
           <p className="text-[11px] font-bold text-white/45">{perLabel}</p>
@@ -784,7 +1014,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
           </p>
         </div>
       </div>
-      <div className="mt-5 flex gap-2">
+      <div className="enh-btns mt-5 flex gap-2">
         {atMax ? (
           <div className="flex-1 h-12 rounded-full flex items-center justify-center text-[13px] font-black" style={{ color: ENH_GOLD, boxShadow: "inset 0 0 0 1px rgba(255,210,122,0.5)" }}>
             최대 단계
@@ -816,12 +1046,12 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
       </div>
 
       {/* 단계표 — 단계마다 1회 획득 · 비용. 지난 단계는 옅게 「완료」, 다음 단계는 그쪽 색 줄 · 바닥, 남은 단계는 그대로 */}
-      <div className="mt-7 grid items-center gap-x-3 px-3 pb-2 text-[11px] font-bold text-white/40" style={COLS}>
+      <div className="enh-thd mt-7 grid items-center gap-x-3 px-3 pb-2 text-[11px] font-bold text-white/40" style={COLS}>
         <span>단계</span>
         <span className="truncate">{perLabel} XP</span>
         <span className="text-right">비용</span>
       </div>
-      <div className="border-t border-white/10">
+      <div ref={rowsRef} className="border-t border-white/10">
         {steps.map((r) => {
           const done = r.n <= v.level;
           const next = r.n === v.level + 1;
@@ -829,7 +1059,7 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
             <div
               key={popped && r.n === v.level ? `row-${r.n}-${tick}` : r.n}
               className="enh-anim relative grid items-center gap-x-3 h-10 px-3 border-b border-white/[0.06] tabular-nums"
-              style={next ? { ...COLS, background: hexA(kt.c, 0.1), boxShadow: `inset 3px 0 0 ${kt.c}` } : popped && r.n === v.level ? { ...COLS, "--kf": hexA(cc, 0.28), animation: "enhRow 1s .25s ease-out both" } : COLS}
+              style={{ ...(next ? { ...COLS, background: hexA(kt.c, 0.1), boxShadow: `inset 3px 0 0 ${kt.c}` } : popped && r.n === v.level ? { ...COLS, "--kf": hexA(cc, 0.28), animation: "enhRow 1s .25s ease-out both" } : COLS), ...(rowH ? { height: rowH } : {}) }}
             >
               <span className={`text-[13px] font-black ${done ? "text-white/35" : next ? "text-white" : "text-white/70"}`}>+{r.n}</span>
               <span className={`text-[12px] font-bold truncate ${done ? "text-white/30" : next ? "text-white" : "text-white/60"}`}>{r.g}</span>
@@ -843,8 +1073,8 @@ const EnhanceModal = ({ open, onClose, enh, balance, busy, onEnhance, voiceMin =
 };
 
 // 📌 세부 효과 창 — 카드의 "1회 획득" 줄로 연다. 틀은 PopShell(잉크).
-//    왼쪽: 채팅 · 음성 · 출석 1회 획득과 그 내역(기본 · 강화 · 등급 · 역할 · 부스트 · 아이템). 출석은 연속 출석 보너스 규칙까지.
-//    오른쪽: 카드 숫자에 안 잡히는 것 — 보유 아이템의 효과 문장(서버 my-items 의 effectLines: "매일 음성 120분 +1,000 XP" 같은 발동형,
+//    위: 채팅 · 음성 · 출석 1회 획득과 그 내역(기본 · 강화 · 등급 · 역할 · 부스트 · 아이템) — 한 줄 세 칸(2026-10-24). 출석은 연속 출석 보너스 규칙까지.
+//    아래: 카드 숫자에 안 잡히는 것 — 보유 아이템의 효과 문장(서버 my-items 의 effectLines: "매일 음성 120분 +1,000 XP" 같은 발동형,
 //    역할 버프, 등급 보상)과 상시 효과(me.perks). 빈 묶음은 그리지 않는다.
 const fxFmt = (n) => (Number(n) || 0).toLocaleString();
 // 📌 꾸미기 문장(카드 스킨 · 프로필 배지 · 아바타 테두리)은 뺀다 — XP 효과가 아니고 아이템 이름과 같은 말이 한 번 더 붙는다("카드 스킨 · 골드" 아래 "카드 스킨 · 골드").
@@ -861,12 +1091,16 @@ const FX_COSMETIC_LINES = new Set([
   describeEffect({ on: "avatarFrame", frame: "all" }), // 관리자 전체(9종) 테두리
 ]);
 const fxLinesOf = (it) => (Array.isArray(it.effectLines) ? it.effectLines.filter((l) => l && (it.effectCustom || !FX_COSMETIC_LINES.has(l))) : []);
-const FxRow = ({ l, v, dim }) => (
-  <div className="flex items-center justify-between gap-3">
-    <span className={`min-w-0 truncate text-[11px] font-bold ${dim ? "text-white/35" : "text-white/45"}`}>{l}</span>
-    <span className={`shrink-0 text-[12px] font-black tabular-nums ${dim ? "text-white/55" : "text-white/80"}`}>{v}</span>
-  </div>
-);
+// 📌 아이템 몫(「아이템」 줄)은 노란 숫자 — 기본 · 강화 · 등급과 갈라 본다(2026-10-24 세부 효과 시안 합격)
+const FxRow = ({ l, v, dim }) => {
+  const item = /아이템/.test(String(l || ""));
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className={`min-w-0 truncate text-[11px] font-bold ${dim ? "text-white/35" : "text-white/45"}`}>{l}</span>
+      <span className={`shrink-0 text-[12px] font-black tabular-nums ${item ? "text-[#f2c35a]" : dim ? "text-white/55" : "text-white/80"}`}>{v}</span>
+    </div>
+  );
+};
 const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks, policy }) => {
   if (!open) return null;
   const blocks = [
@@ -902,78 +1136,86 @@ const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks,
       onClose={onClose}
       title="세부 효과"
       icon="sparkles"
-      left={blocks.map((b, i) => (
-        <div key={b.k} className={i ? "mt-5 pt-5 border-t border-white/[0.08]" : ""}>
-          <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/45">
-            <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
-              <path d={ICON_PATHS[b.icon]} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {b.l}
-          </p>
-          <p className="mt-2 text-[20px] font-black text-white tabular-nums tracking-tight leading-none">
-            {b.v}<span className="text-[11px] text-white/40 ml-1">XP</span>
-          </p>
-          <div className="mt-3 space-y-1.5">
-            {b.parts.map((p) => <FxRow key={p.l} l={p.l} v={p.v} />)}
-          </div>
-          {b.extra?.length > 0 && (
-            <div className="mt-2.5 pt-2.5 border-t border-dashed border-white/10 space-y-1.5">
-              {b.extra.map((p) => <FxRow key={p.l} l={p.l} v={p.v} dim />)}
-            </div>
-          )}
-        </div>
-      ))}
-    >
-      {/* 모바일은 왼쪽 묶음 바로 아래로 이어지므로 선 하나로 가른다 */}
-      <div className="border-t border-white/[0.08] pt-5 sm:border-t-0 sm:pt-0">
-        {fxItems.length > 0 && (
-          <section>
-            <p className="text-[11px] font-bold text-white/45 mb-3">아이템 효과</p>
-            <ul className="space-y-4">
-              {fxItems.map(({ it, lines }) => {
-                const accent = invAccentOf(it);
-                const tier = invTierOf(it);
-                return (
-                  <li key={it.uid} className="flex items-start gap-3">
-                    <span
-                      aria-hidden
-                      className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
-                      style={{ background: `linear-gradient(160deg, ${accent}33, ${accent}0f)`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
-                    >
-                      {tier
-                        ? <TierEmblem tier={tier} size={20} />
-                        : <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={18} color={accent} />}
-                    </span>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <p className="text-[13px] font-black text-white leading-snug break-keep break-words">{it.name}</p>
-                      <ul className="mt-1 space-y-0.5">
-                        {lines.map((l, j) => (
-                          <li key={j} className="text-[12px] font-bold text-white/70 leading-relaxed break-keep break-words">{l}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-        {perkRows.length > 0 && (
-          <section className={fxItems.length ? "mt-8" : ""}>
-            <p className="text-[11px] font-bold text-white/45 mb-3">상시 효과</p>
-            <div className="space-y-2">
-              {perkRows.map((p) => (
-                <div key={p.k} className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-[12px] font-bold text-white/70">{p.l}</span>
-                  <span className="shrink-0 text-[12px] font-black text-white tabular-nums">{p.v}</span>
+      theme="plain"
+      size="fit"
+      grab={false}
+      body={
+        // 📌 2026-10-24 시안 그대로 — 폭 860 · 높이는 내용만큼(공용 틀 기본 768 × 620 은 아래가 비었다) · 번짐 · 격자 없는 평평한 잉크(운영자 "시안이랑 다르잖아")
+        <div className="px-5 sm:px-[26px] pt-[22px] pb-[26px]">
+          {/* 📌 2026-10-24 1회 획득 — 채팅 · 음성 · 출석을 한 줄 세 칸으로(왼쪽 좁은 칸에 몰려 창 절반이 비던 것). 상자 없이 칸 사이 세로줄만
+                 (운영자 "윗 부분 애들은 굳이 박스일 필요는 없을 듯"). 폰은 위아래로 쌓고 가로줄로 가른다 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3">
+            {blocks.map((b, i) => (
+              <div key={b.k} className={`min-w-0 ${i ? "mt-5 pt-5 border-t border-white/[0.08] sm:mt-0 sm:pt-0 sm:border-t-0 sm:border-l sm:pl-6" : ""} ${i < blocks.length - 1 ? "sm:pr-6" : ""}`}>
+                <div className="flex items-baseline justify-between gap-3 sm:block">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold text-white/45">
+                    <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9">
+                      <path d={ICON_PATHS[b.icon]} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {b.l}
+                  </p>
+                  <p className="sm:mt-2 text-[20px] sm:text-[22px] font-black text-white tabular-nums tracking-tight leading-none whitespace-nowrap">
+                    {b.v}<span className="text-[11px] text-white/40 ml-1">XP</span>
+                  </p>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {empty && <p className="text-[12px] font-bold text-white/35">{loading ? "불러오는 중…" : "보유 효과 없음"}</p>}
-      </div>
-    </PopShell>
+                <div className="mt-3 pt-3 border-t border-dashed border-white/10 space-y-1.5">
+                  {b.parts.map((p) => <FxRow key={p.l} l={p.l} v={p.v} />)}
+                </div>
+                {b.extra?.length > 0 && (
+                  <div className="mt-2.5 pt-2.5 border-t border-dashed border-white/10 space-y-1.5">
+                    {b.extra.map((p) => <FxRow key={p.l} l={p.l} v={p.v} dim />)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 적용 중인 아이템 — 효과 문장이 있는 것만, PC 두 칸씩 */}
+          {fxItems.length > 0 && (
+            <section className="mt-7">
+              <p className="text-[11px] font-bold text-white/45 mb-3">적용 중인 아이템</p>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-x-3">
+                {fxItems.map(({ it, lines }) => {
+                  const accent = invAccentOf(it);
+                  const tier = invTierOf(it);
+                  return (
+                    <li key={it.uid} className="flex items-center gap-3 px-3 py-2.5 rounded-[14px] bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                      <span
+                        aria-hidden
+                        className="shrink-0 w-10 h-10 rounded-[11px] flex items-center justify-center"
+                        style={{ background: `${accent}22`, boxShadow: `inset 0 0 0 1px ${accent}55` }}
+                      >
+                        {tier
+                          ? <TierEmblem tier={tier} size={22} />
+                          : <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={32} color={accent} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-black text-white leading-snug break-keep break-words">{it.name}</p>
+                        <p className="mt-0.5 text-[11.5px] font-bold text-white/65 leading-relaxed break-keep break-words">{lines.join(" · ")}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+          {/* 상시 효과 — 작은 알약 */}
+          {perkRows.length > 0 && (
+            <section className="mt-7">
+              <p className="text-[11px] font-bold text-white/45 mb-3">상시 효과</p>
+              <div className="flex flex-wrap gap-1.5">
+                {perkRows.map((p) => (
+                  <span key={p.k} className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-white/[0.06] text-[11.5px] font-bold leading-7 text-white/70">
+                    {p.l}<b className="font-black text-white tabular-nums">{p.v}</b>
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+          {empty && <p className="mt-7 text-[12px] font-bold text-white/35">{loading ? "불러오는 중…" : "보유 효과 없음"}</p>}
+        </div>
+      }
+    />
   );
 };
 
@@ -1341,6 +1583,8 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
   const narrow = usePassNarrow();
   const trackRef = useRef(null);
   const bodyRef = useRef(null);
+  // PC 머리 + 본문 칸 — 아주 낮은 창에서만 통째로 세로로 넘어간다(폰은 contents 라 넘어가지 않는다)
+  const paneRef = useRef(null);
   // 📌 폰 탭 바꾸기 — 목록 중간에서 바꿨으면 그린 직후 목록 맨 위(탭 위 요약 높이 = 본문 첫 칸)로. 누를 때 바로 맞추면
   //    목록이 줄며 브라우저 스크롤 고정(scroll anchoring)이 남은 줄을 제자리에 두려고 본문을 맨 위(요약)까지 끌어올렸다
   const tabJumpRef = useRef(false);
@@ -1416,12 +1660,15 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     const off = () => setPeek(null);
     const track = trackRef.current;
     const body = bodyRef.current;
+    const pane = paneRef.current;
     track?.addEventListener("scroll", off, { passive: true });
     body?.addEventListener("scroll", off, { passive: true });
+    pane?.addEventListener("scroll", off, { passive: true });
     window.addEventListener("resize", off);
     return () => {
       track?.removeEventListener("scroll", off);
       body?.removeEventListener("scroll", off);
+      pane?.removeEventListener("scroll", off);
       window.removeEventListener("resize", off);
     };
   }, [peek]);
@@ -1439,16 +1686,15 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
     return () => cancelAnimationFrame(id);
   }, [ready, tab, nextIdx, tiers.length, narrow]);
 
-  // 📌 PC 마우스 휠 — 트랙 위에서 굴리면 가로로 넘긴다. 단 창 본문이 그 방향으로 아직 세로로 갈 수 있으면 세로가 먼저 —
-  //    트랙이 화면 대부분을 차지해 휠이 티어 끝까지 가로로 붙잡히면 위 · 아래로 못 가는 것처럼 느껴진다.
-  //    가로도 끝에 닿으면 막지 않는다. 트랙패드 가로 밀기 · Ctrl 확대는 그대로. React onWheel 은 passive 라 preventDefault 가 안 돼 직접 붙인다
+  // 📌 PC 마우스 휠 — 트랙 위에서 굴리면 늘 가로로 넘긴다. 가로 끝에 닿았을 때만 막지 않아 창 본문이 위 · 아래로 간다.
+  //    (2026-10-24 운영자 "옆으로 안 넘어가지잖아 · 위아래가 대체 왜 움직이냐고" — 예전엔 본문이 세로로 갈 수 있으면 세로가 먼저라,
+  //     창 크기를 인벤토리 틀로 맞추며 본문이 조금 넘치는 화면에서 티어 위 휠이 위아래만 움직였다)
+  //    트랙패드 가로 밀기 · Ctrl 확대는 그대로. React onWheel 은 passive 라 preventDefault 가 안 돼 직접 붙인다
   useEffect(() => {
     const box = trackRef.current;
     if (!ready || !box) return;
     const onWheel = (e) => {
       if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
-      const body = bodyRef.current;
-      if (body && (e.deltaY > 0 ? body.scrollTop + body.clientHeight < body.scrollHeight - 1 : body.scrollTop > 0)) return;
       const dy = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? box.clientWidth : 1);
       const to = Math.max(0, Math.min(box.scrollWidth - box.clientWidth, box.scrollLeft + dy));
       if (Math.abs(to - box.scrollLeft) < 1) return;
@@ -1607,14 +1853,16 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
       style={{ background: "rgba(10,10,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
       onClick={close}
     >
-      {/* 📌 PC 는 내용 높이만큼(트랙 높이가 탭과 무관하게 고정이라 탭을 바꿔도 창이 그대로), 넘치면 본문이 세로로 스크롤 */}
+      {/* 📌 2026-10-24 창 크기는 인벤토리 틀 하나로(운영자 "인벤토리 크기로 시즌 패스, 강화 탭 다 크기 맞춰 · 하나로 통일") — PC 1100 × min(800, 92vh) · 폰 86dvh · 모서리 16.
+             PC 는 위아래 스크롤이 없다(운영자 "위 아래 스크롤 되는 거 없애라고") — 창이 내용보다 낮으면 머리 그림이 줄고, 낮은 화면은 요약 · 탭 · 트랙 여백도 줄인다(.pass-sum 등).
+             폰은 본문만 세로로 스크롤(세로 목록). 예전: 폭 768 · 높이는 내용만큼 최대 900 */}
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="시즌 패스"
         onClick={(e) => { e.stopPropagation(); setPeek(null); }}
-        className="relative w-full sm:max-w-3xl h-[86dvh] sm:h-auto sm:max-h-[min(900px,94vh)] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        className="relative w-full sm:max-w-[1100px] h-[86dvh] sm:h-[min(800px,92vh)] overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ background: th.bg, animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ backgroundImage: th.dots }}></div>
@@ -1626,14 +1874,19 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
 
         {/* 📌 머리 — 시즌 배너 그림(2026-10-11 운영자 "배너 뜨는 거 감다살"). 위에 프리미엄 칩 · 닫기(폰은 칩을 오른쪽 아래로 — 좁은 배너에서 가운데 제목 글자를 가리지 않게), 왼쪽 아래 D-day · 기간.
                배너가 없는 시즌은 예전 머리: 눈썹 한 줄 · 제목 줄(제목 | 프리미엄 칩 · 닫기). 탭 · 상태와 무관하게 늘 같은 높이 */}
+        {/* 📌 PC — 머리 + 본문을 한 칸에. 본문은 늘 내용 높이라 세로 스크롤이 없고, 창이 모자라면 머리 그림만 줄어든다(184 → 최소 48).
+               그래도 모자란 아주 낮은 창에서만 이 칸이 통째로 넘어간다. 폰은 이 칸이 없다(contents) — 머리는 제자리, 본문만 세로로 */}
+        <div ref={paneRef} className="contents sm:flex sm:flex-col sm:flex-1 sm:min-h-0 sm:overflow-y-auto sm:overflow-x-hidden no-bar sm:relative sm:z-10">
         {banner ? (
-          // 📌 그림 이름(role img)은 따로 깐 빈 칸에 — 단추를 감싸면 화면 읽기에서 단추가 그림 속으로 사라진다.
+          // 📌 그림 이름(role img)은 따로 깐 빈 칸에 — 단추를 감싸면 화면 읽기에서 단추가 그림 속으로 사라진다. 그림도 그 칸에 깐다(.pass-art — 줄어든 머리에서 제목 자리 맞추기).
           //    가로 자리: 폰이 아주 좁으면(배너가 옆으로 넘칠 때) 제목 오른쪽 끝이 닫기 단추에 안 걸리게 왼쪽으로 조금 민다
-          <div
-            className="relative z-10 shrink-0 h-[112px] sm:h-[184px] bg-cover"
-            style={{ backgroundImage: `url(${banner})`, backgroundPosition: "min(50%, calc(100% + 44px)) 32%" }}
-          >
-            <span role="img" aria-label={`SEASON ${seasonNo}${seasonName ? ` · ${seasonName}` : ""}`} className="absolute inset-0 pointer-events-none"></span>
+          <div className="pass-banner relative z-10 shrink-0 h-[112px] sm:h-[184px] sm:shrink sm:min-h-12">
+            <span
+              role="img"
+              aria-label={`SEASON ${seasonNo}${seasonName ? ` · ${seasonName}` : ""}`}
+              className="pass-art absolute inset-0 pointer-events-none"
+              style={{ backgroundImage: `url(${banner})`, backgroundPositionX: "min(50%, calc(100% + 44px))" }}
+            ></span>
             <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(18,13,34,0) 45%, rgba(26,18,51,0.92) 100%)" }}></div>
             <div className="absolute right-3 bottom-2.5 sm:hidden">{premiumChip}</div>
             <div className="absolute top-3 right-3 sm:top-2.5 sm:right-5 flex items-center gap-2">
@@ -1662,13 +1915,13 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
           </div>
         )}
 
-        {/* 본문 — 요약 → 탭 → 가로 트랙을 한 번에 세로 스크롤. 폰은 탭이 위에 붙는다. 가로 넘침은 트랙 안에서만 */}
-        <div ref={bodyRef} className="no-bar relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="px-5 sm:px-7 pt-4 sm:pt-5 pb-4 sm:pb-5">
+        {/* 본문 — 요약 → 탭 → 트랙. 폰은 한 번에 세로 스크롤(탭이 위에 붙는다), PC 는 늘 내용 높이(sm:flex-[1_0_auto] — 줄지 않아 스크롤이 생기지 않는다). 가로 넘침은 트랙 안에서만 */}
+        <div ref={bodyRef} className="no-bar relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:flex-[1_0_auto]">
+          <div className="pass-sum px-5 sm:px-7 pt-4 sm:pt-5 pb-4 sm:pb-5">
             {/* 📌 진행도는 한 번만 — 링(T7 / T20) | "T8까지 6,500 XP" · 막대(링과 같은 비율). 예전 "T7 ━ T8" 막대 · "3,500 / 10,000 XP" · 받을 보상 숫자는 같은 정보라 뺐다(받을 수는 「모두 받기」 단추에).
                    넓은 화면(md~)은 오른쪽에 대표 보상 칸, 그보다 좁으면 그 아래 한 줄(옆에 두면 큰 XP 숫자가 잘린다) */}
             <div className="flex items-center">
-              <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct} size="w-[84px] h-[84px] sm:w-[112px] sm:h-[112px]">
+              <GlowRing id="passRing" from="#b69cff" to="#ff7ac6" pct={ringPct} size="pass-ring w-[84px] h-[84px] sm:w-[112px] sm:h-[112px]">
                 <span className="text-[26px] sm:text-[34px] font-black text-white tabular-nums tracking-[-0.03em] leading-none">T{tierNo}</span>
                 <span className="mt-1 text-[10px] sm:text-[11px] font-bold text-white/40 tabular-nums">/ T{maxTier}</span>
               </GlowRing>
@@ -1712,7 +1965,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
                       setPeek(null);
                       onTone?.();
                     }}
-                    className={`relative mr-5 sm:mr-8 last:mr-3 py-3.5 sm:py-4 text-[14px] sm:text-[15px] font-black whitespace-nowrap transition-colors rounded-sm outline-none focus-visible:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${on ? "text-white" : "text-white/45 hover:text-white/75"}`}
+                    className={`pass-tab relative mr-5 sm:mr-8 last:mr-3 py-3.5 sm:py-4 text-[14px] sm:text-[15px] font-black whitespace-nowrap transition-colors rounded-sm outline-none focus-visible:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${on ? "text-white" : "text-white/45 hover:text-white/75"}`}
                   >
                     {label}
                     <span className={`ml-1.5 text-[12px] tabular-nums ${on ? "text-[#d9c6ff]" : "text-white/30"}`}>{n}</span>
@@ -1808,7 +2061,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             </div>
           ) : (
           /* 가로 트랙(PC) — 왼쪽 줄 이름(무료 · 프리미엄)은 제자리, 티어 칸만 가로로 넘긴다. 폰은 위 세로 목록 */
-          <div className="flex px-5 sm:px-7 pt-4 pb-3">
+          <div className="pass-trk flex px-5 sm:px-7 pt-4 pb-3">
             {rows.length > 0 && (
               <div aria-hidden className="shrink-0 mr-2 flex flex-col" style={{ width: PT.label }}>
                 <div className="shrink-0" style={{ height: PT.head + PT.line }}></div>
@@ -1888,6 +2141,7 @@ const PassModal = ({ open, onClose, pass, tiers = [], tierNo = 0, maxTier = 0, c
             </div>
           </div>
           )}
+        </div>
         </div>
         {peek && <PassPeek peek={peek} boxW={peek.boxW} />}
       </div>
@@ -2411,6 +2665,7 @@ export default function LevelPage() {
   const [rankPage, setRankPage] = useState(0);
   const [rankRows, setRankRows] = useState([]);
   const [rankTotal, setRankTotal] = useState(0);
+  const [rankMembers, setRankMembers] = useState(0); // 2026-10-25 머리 「N명」 = 서버 사람 수 포함(API members) — rankTotal 은 쪽 넘기기용
   // 처음엔 불러오는 중으로 둔다 — 랭킹 탭을 처음 열 때 "기록이 없습니다" 가 한 번 번쩍였다가 스켈레톤으로 바뀌지 않게
   const [rankLoading, setRankLoading] = useState(true);
   const { data: session, status: authStatus } = useSession();
@@ -2467,17 +2722,6 @@ export default function LevelPage() {
   // 📌 2026-10-18 밤 운영자 "비공개긴 한데 이벤트 배너는 들어가지게 바꿔 · 사람들이 클릭해서 화면 보는 건 지금부터" —
   //    꺼져 있어도 · 시작 전이어도 누구나 띠가 보이고 창이 열린다(보기 전용 — 받기는 창 안에서 「10. 19. 에 열립니다」로 잠김). 끝 시각이 지나면 띠가 빠진다
   const eventPassOn = !!eventPassMeta && eventPassMeta.at < eventPassMeta.end;
-  const [eventPassOpen, setEventPassOpen] = useState(false);
-  const openEventPass = useCallback(() => {
-    playTone(660, 0.06, "sine", 0.03);
-    setEventPassOpen(true);
-  }, []);
-  // 닫는 소리 — 시즌 패스 창과 같다
-  const closeEventPass = useCallback(() => {
-    setEventPassOpen(false);
-    playTone(659.25, 0.06, "sine", 0.025);
-    setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
-  }, []);
   // 📌 2026-10-19 운영자 "보상 받을 수 있으면 배너에 뭐라도 띄워" — 띠 오른쪽 위 빨간 숫자(받을 단계 수 · 받기가 열렸을 때만 — 서버 claimable, 닫혀 있으면 0).
   //    읽는 때: 띠가 보일 때 한 번 · XP 가 바뀌면(30초 폴링) 1분에 한 번까지 · 창이 상태를 받을 때마다(받기 · 다시 읽기 — onCount)
   const [eventPassCount, setEventPassCount] = useState(0);
@@ -2517,17 +2761,203 @@ export default function LevelPage() {
     if (Date.now() - goedamAt.current > 60_000) loadGoedamMeta();
   }, [loadGoedamMeta, me?.xp]);
   const goedamOn = !!goedamMeta?.visible;
-  const [goedamOpen, setGoedamOpen] = useState(false);
-  const openGoedam = useCallback(() => {
-    playTone(660, 0.06, "sine", 0.03);
-    setGoedamOpen(true);
+
+  // 📌 2026-10-25 「친구 초대」 — 상시 이벤트(끝 날짜 없음) · 이벤트 창 탭(./InviteModal.js). 시안 .claude/mockups/invite/친구초대-창-시안5-보상.png
+  //    탭 노출 · 숫자는 GET /api/invite?meta=1 하나(visible = 켜짐 또는 운영진 미리보기 · claimable = 받을 누적 보상 단계 수 — 서버가 센다, 디스코드 조회 없음).
+  //    읽는 때: 처음 한 번 · XP 가 바뀌면(30초 폴링) 1분에 한 번까지 · 창이 상태를 받을 때마다(받기 · 코드 넣기 — onCount)
+  const [inviteMeta, setInviteMeta] = useState(null); // { visible } — 읽기 전은 null · 첫 읽기 실패는 { visible: false }(탭 없음)
+  const [inviteCount, setInviteCount] = useState(0); // 탭 빨간 숫자 — 받을 누적 보상 단계 수
+  const inviteAt = useRef(0);
+  const loadInviteMeta = useCallback(() => {
+    inviteAt.current = Date.now();
+    // 📌 첫 읽기가 실패(!ok · 네트워크)하면 「읽었고 안 보임」으로 둔다 — ?event=invite 바로가기가 그 자리에서 풀리게(null 로 두면 몇 분 뒤 다시 읽기에 창이 뒤늦게 뜬다).
+    //    이미 받은 meta 는 실패로 덮지 않는다(잠깐의 실패로 탭이 빠지지 않게)
+    const miss = () => setInviteMeta((m) => m || { visible: false });
+    fetch("/api/invite?meta=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j?.ok) { miss(); return; }
+        setInviteMeta({ visible: !!j.visible });
+        setInviteCount(Math.max(0, Math.floor(Number(j.claimable) || 0)));
+      })
+      .catch(miss);
   }, []);
-  // 닫는 소리 — 이벤트 패스 창과 같다
-  const closeGoedam = useCallback(() => {
-    setGoedamOpen(false);
+  useEffect(() => {
+    if (Date.now() - inviteAt.current > 60_000) loadInviteMeta();
+  }, [loadInviteMeta, me?.xp]);
+  const inviteOn = !!inviteMeta?.visible;
+
+  // 📌 2026-10-25 「게임 그룹 지원」(괴담회) — 이벤트 창 탭(./GoedamGroupModal.js). 약속 .claude/mockups/goedam-group/SPEC.md
+  //    탭 노출 · 숫자는 GET /api/goedam/group?meta=1 하나(visible = 열림 또는 운영진 · 기간 밖이어도 내 그룹이 있으면 · n = 지원할 수 있으면 1 — 서버가 센다, 디스코드 조회 없음).
+  //    읽는 때: 괴담회 · 친구 초대와 같다(처음 한 번 · XP 가 바뀌면 1분에 한 번까지 · 창이 상태를 받을 때마다 — onCount)
+  const [groupMeta, setGroupMeta] = useState(null); // { visible, end } — 읽기 전 · 실패는 null(탭 없음)
+  const [groupCount, setGroupCount] = useState(0); // 탭 빨간 숫자 — 지원할 수 있으면 1
+  const groupAt = useRef(0);
+  const loadGroupMeta = useCallback(() => {
+    groupAt.current = Date.now();
+    fetch("/api/goedam/group?meta=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j?.ok) return;
+        // 끝 시각(탭 마감 줄) — meta 의 end(ms · 괴담회 meta 와 같은 칸). 없으면 0(마감 줄 없음)
+        setGroupMeta({ visible: !!j.visible, end: Number(j.end) > 0 ? Number(j.end) : 0 });
+        setGroupCount(Math.max(0, Math.floor(Number(j.n) || 0)));
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (Date.now() - groupAt.current > 60_000) loadGroupMeta();
+  }, [loadGroupMeta, me?.xp]);
+  const groupOn = !!groupMeta?.visible;
+
+  // 📌 2026-10-24 「이벤트」 단추 — 카드 아래 띠는 이벤트마다 쌓지 않고 「이벤트」 단추 하나(운영자 "그게 앞으로 이벤트 창 버튼인걸로" ·
+  //    "할로윈 컨셉이 아니라 평소에도 사용 가능한 팝업 버튼"). 누르면 이벤트 창(./EventTabs.js EventHub) 하나가 열린다 —
+  //    받을 것이 있는 이벤트(빨간 숫자)부터, 그다음 끝나는 날이 가까운 순으로 첫 이벤트를 보여 주고, 창 안 탭으로 다른 이벤트로 넘어간다.
+  //    창 틀은 하나라 크기 · 자리 · 탭 줄이 이벤트마다 같다(운영자 "이벤트마다 크기가 달라서 ui 가 이동하면 어쩌자는 거야").
+  //    탭 순서는 연 순간에 정해 두고 닫을 때까지 그대로(받기 · 뽑기로 숫자가 바뀌어도 탭 줄이 움직이지 않게).
+  //    새 이벤트 = 아래 목록에 한 줄(key · 띠 그림 · 이름 · 숫자 · 끝 시각) + EventHub 안에 그 창을 embedded · open={evTab === key} · onClose={closeEvents} 로.
+  //    단추 빨간 숫자 = 이벤트마다 숫자(이벤트 패스 받을 단계 · 괴담회 추첨권)의 합
+  const evItems = useMemo(() => {
+    const list = [];
+    // 친구 초대 — 상시라 끝 시각 없음(end 0 — 탭에 마감 줄 없음) · 탭 줄 맨 앞(아래 openEvents)
+    if (inviteOn) list.push({ key: "invite", src: "/banners/invite-strip.png", label: "친구 초대", n: inviteCount, end: 0 });
+    if (eventPassOn) list.push({ key: "pass", src: "/banners/event-pass-strip.png", label: "유령 펭귄의 초대", n: eventPassCount, end: eventPassMeta?.end || 0 });
+    if (goedamOn) list.push({ key: "goedam", src: "/banners/goedam-strip.png", label: "방구석 심야 괴담회", n: goedamCount, end: goedamMeta?.end || 0 });
+    // 게임 그룹 지원 — 괴담회 띠 그림 그대로
+    if (groupOn) list.push({ key: "group", src: "/banners/goedam-strip.png", label: "게임 그룹 지원", n: groupCount, end: groupMeta?.end || 0 });
+    return list;
+  }, [inviteOn, inviteCount, eventPassOn, eventPassCount, eventPassMeta?.end, goedamOn, goedamCount, goedamMeta?.end, groupOn, groupCount, groupMeta?.end]);
+  const evTotal = evItems.reduce((a, e) => a + (e.n > 0 ? e.n : 0), 0);
+  const [evTab, setEvTab] = useState(null); // 열린 이벤트 key — null 이면 닫힘
+  const [evOrder, setEvOrder] = useState([]); // 연 순간의 탭 순서(key)
+  const openEvents = useCallback(() => {
+    const endOf = (e) => (e.end > 0 ? e.end : Number.MAX_SAFE_INTEGER);
+    const sorted = [...evItems].sort((a, b) => Number(b.n > 0) - Number(a.n > 0) || endOf(a) - endOf(b)).map((e) => e.key);
+    if (!sorted.length) return;
+    // 📌 2026-10-25 운영자 — 친구 초대(상시) 탭은 탭 줄 맨 앞에 고정. 처음 여는 탭은 그대로(받을 것 → 마감이 가까운 순의 첫째)
+    const order = sorted.includes("invite") ? ["invite", ...sorted.filter((k) => k !== "invite")] : sorted;
+    playTone(660, 0.06, "sine", 0.03);
+    setEvOrder(order);
+    setEvTab(sorted[0]);
+  }, [evItems]);
+  const pickEvent = useCallback((key) => {
+    playTone(620, 0.04, "sine", 0.025);
+    setEvTab(key);
+  }, []);
+  // 📌 「이벤트」 단추 한 벌 — 폰은 카드 바로 아래(전체 폭), PC 는 2026-10-25 운영자 "카드 아래 말고 현황 - 퀘스트 사이에 넣자 · 길게 해서 · 모바일은 그대로"로
+  //    오른쪽 칸 맨 위 [이벤트 띠 | XP 테이블] 줄(탭 줄은 뺐다 — 아래 「PC 맨 위 한 줄」). 자리 class 만 다르게 두 번 그린다
+  //    📌 PC 는 먹색 · 그림자 없음(운영자 같은 날 "그리고 검은색으로 바꿔" · "뒤에 그림자 빼면 어때?"). 폰은 검은 카드 바로 아래라 흰 반투명 그대로(먹이면 카드와 붙어 보인다 — 10/24 "검은색 좀 구린데")
+  const eventBtn = (place, ink = false) => (
+    <button
+      type="button"
+      onClick={openEvents}
+      aria-haspopup="dialog"
+      aria-label={evTotal > 0 ? `이벤트 · ${evTotal}` : "이벤트"}
+      className={`group relative z-10 ${place} w-full items-center gap-3 h-14 pl-5 pr-4 rounded-2xl ${ink ? "bg-[#131313] hover:bg-[#1f1f1f] text-white" : "bg-white/70 backdrop-blur-xl text-[#131313] shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_6px_18px_-10px_rgba(0,0,0,0.12)]"} transition-[transform,background-color] hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40`}
+    >
+      <svg aria-hidden viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${ink ? "text-[#ff5c77]" : "text-[#e91e3f]"}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.gift} strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="text-[15px] font-black tracking-tight">이벤트</span>
+      <span className="ml-auto flex items-center gap-2.5">
+        {evTotal > 0 && (
+          <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums">
+            {evTotal > 99 ? "99+" : evTotal}
+          </span>
+        )}
+        <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 transition-colors ${ink ? "text-white/45 group-hover:text-white" : "text-[#a3a3a3] group-hover:text-[#131313]"}`} fill="none" stroke="currentColor" strokeWidth="2.4"><path d={ICON_PATHS.chevronRight} strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </span>
+    </button>
+  );
+  // 📌 핫타임 진행도 창(./HotTime.js) — 카드 아래 핫타임 띠로 연다. 여닫는 소리는 이벤트 창과 같다
+  const [hotOpen, setHotOpen] = useState(false);
+  const openHot = useCallback(() => {
+    playTone(660, 0.06, "sine", 0.03);
+    setHotOpen(true);
+  }, []);
+  const closeHot = useCallback(() => {
+    setHotOpen(false);
     playTone(659.25, 0.06, "sine", 0.025);
     setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
   }, []);
+  // 닫는 소리 — 시즌 패스 창과 같다
+  const closeEvents = useCallback(() => {
+    setEvTab(null);
+    playTone(659.25, 0.06, "sine", 0.025);
+    setTimeout(() => playTone(440, 0.08, "sine", 0.025), 90);
+  }, []);
+  const [evLocked, setEvLocked] = useState(false); // 괴담회 뽑기 연출 중 — 다른 탭을 잠근다(GoedamModal onBusy)
+  const evTabs = useMemo(() => ({
+    items: evOrder.map((k) => evItems.find((e) => e.key === k)).filter(Boolean),
+    active: evTab,
+    onPick: pickEvent,
+    locked: evLocked,
+  }), [evOrder, evItems, evTab, pickEvent, evLocked]);
+
+  // 📌 게임 그룹 참여 링크(/level?gg=CODE — ./GoedamGroupModal.js 「링크 복사」) — 이벤트 창을 「게임 그룹 지원」 탭으로 열고 코드를 그 창에 넘긴다(그 그룹 미리보기).
+  //    주소에서 gg 는 바로 걷는다(새로 고침 · 뒤로가기에 다시 안 열리게 — ?bag=1 과 같은 replaceState, router.replace 는 위 setActiveMainTab 까닭으로 쓰지 않는다).
+  //    탭은 group meta 를 받은 뒤에 연다(보이는 이벤트일 때만). 탭 순서는 「이벤트」 단추(openEvents)와 같은 셈이고, 그 뒤에 meta 가 온 이벤트는 줄 끝에 붙인다
+  const ggParam = searchParams.get("gg") || "";
+  const [ggSeen, setGgSeen] = useState(""); // 마지막으로 본 gg 값(렌더 중 맞춤)
+  const [ggCode, setGgCode] = useState(""); // 그룹 창에 넘길 코드
+  const [ggOpened, setGgOpened] = useState(""); // 이벤트 창을 이미 연 코드
+  const [ggFill, setGgFill] = useState(false); // 링크로 연 이벤트 창 — 늦게 온 이벤트 탭을 줄 끝에 붙인다
+  if (ggParam !== ggSeen) {
+    setGgSeen(ggParam);
+    const c = ggParam.toUpperCase().replace(/[\s-]+/g, "").slice(0, 6);
+    if (c) {
+      setGgCode(c);
+      setGgOpened("");
+    }
+  }
+  if (ggCode && ggOpened !== ggCode && groupMeta) {
+    setGgOpened(ggCode);
+    if (groupMeta.visible) {
+      const endOf = (e) => (e.end > 0 ? e.end : Number.MAX_SAFE_INTEGER);
+      const sorted = [...evItems].sort((a, b) => Number(b.n > 0) - Number(a.n > 0) || endOf(a) - endOf(b)).map((e) => e.key);
+      setEvOrder(sorted.includes("invite") ? ["invite", ...sorted.filter((k) => k !== "invite")] : sorted);
+      setEvTab("group");
+      setGgFill(true);
+    }
+  }
+  if (ggFill) {
+    const miss = evTab ? evItems.map((e) => e.key).filter((k) => !evOrder.includes(k)) : [];
+    if (!evTab) setGgFill(false);
+    else if (miss.length) setEvOrder([...evOrder, ...miss]);
+  }
+  useEffect(() => {
+    if (!ggParam) return;
+    const u = new URL(window.location.href);
+    u.searchParams.delete("gg");
+    window.history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+  }, [ggParam]);
+
+  // 📌 2026-10-25 이벤트 바로가기(/level?event=invite — /event 목록 「친구 초대」 배너) — 이벤트 창을 그 탭으로 한 번 연다. ?gg 와 같은 결:
+  //    탭은 그 이벤트 meta 를 받은 뒤(evItems 에 들어온 뒤)에 열고(안 보이는 이벤트면 열지 않는다), 주소의 event 는 바로 걷는다(replaceState — router.replace 는 위 setActiveMainTab 까닭으로 쓰지 않는다).
+  //    탭 순서는 「이벤트」 단추(openEvents)와 같은 셈 · 그 뒤에 meta 가 온 이벤트 탭은 줄 끝에(위 ggFill)
+  const evParam = searchParams.get("event") || "";
+  const evLinkMeta = { invite: inviteMeta, pass: eventPassMeta, goedam: goedamMeta, group: groupMeta }; // key → 읽기 전이면 null(친구 초대는 첫 읽기 실패면 { visible: false })
+  const [evLinkSeen, setEvLinkSeen] = useState(""); // 마지막으로 본 event 값(렌더 중 맞춤)
+  const [evLink, setEvLink] = useState(""); // 열 탭 key — 열었거나 안 보이는 이벤트면 비운다
+  if (evParam !== evLinkSeen) {
+    setEvLinkSeen(evParam);
+    if (Object.prototype.hasOwnProperty.call(evLinkMeta, evParam)) setEvLink(evParam);
+  }
+  // 📌 meta 를 한 번이라도 읽으면(실패로 { visible: false } 인 것도) 바로가기를 푼다 — 안 보이는 이벤트면 열지 않고 비우기만(나중 다시 읽기에 뒤늦게 안 뜨게)
+  if (evLink && evLinkMeta[evLink]) {
+    setEvLink("");
+    if (evItems.some((e) => e.key === evLink)) {
+      const endOf = (e) => (e.end > 0 ? e.end : Number.MAX_SAFE_INTEGER);
+      const sorted = [...evItems].sort((a, b) => Number(b.n > 0) - Number(a.n > 0) || endOf(a) - endOf(b)).map((e) => e.key);
+      setEvOrder(sorted.includes("invite") ? ["invite", ...sorted.filter((k) => k !== "invite")] : sorted);
+      setEvTab(evLink);
+      setGgFill(true);
+    }
+  }
+  useEffect(() => {
+    if (!evParam) return;
+    const u = new URL(window.location.href);
+    u.searchParams.delete("event");
+    window.history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+  }, [evParam]);
 
   // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
   const [quests, setQuests] = useState(null);
@@ -3026,9 +3456,10 @@ export default function LevelPage() {
         }
         setRankRows(Array.isArray(d?.data) ? d.data : []);
         setRankTotal(d?.total || 0);
+        setRankMembers(d?.members || 0);
         setRankMe({ mode: rankMode, row: d?.me || null });
       })
-      .catch(() => { if (alive) { setRankRows([]); setRankTotal(0); setRankMe({ mode: rankMode, row: null }); } })
+      .catch(() => { if (alive) { setRankRows([]); setRankTotal(0); setRankMembers(0); setRankMe({ mode: rankMode, row: null }); } })
       .finally(() => { if (alive && !hold) setRankLoading(false); });
     return () => { alive = false; };
   }, [activeMainTab, rankMode, rankPage]);
@@ -3117,22 +3548,6 @@ export default function LevelPage() {
   // 모두 받기 단추 · 모바일 아이콘 배지 — 주기 상관없이 받을 수 있는 퀘스트 수
   const claimableAll = claimableBy.daily + claimableBy.weekly + claimableBy.monthly;
 
-  // 📌 획득 피드 펼치기 — 5건 ↔ 전체를 그 자리에서(2026-10-03 팝업 → 다시 펼치기, "퀘스트 UI까지 움직이니까").
-  //    펼칠 때는 아래로만 늘어난다(위 퀘스트 · 옆 랭킹은 그대로 — 2026-10-03 PC 1440 · 폰 375 실측 이동 0).
-  //    📌 접을 때 — 문서가 짧아지면 브라우저가 스크롤을 당겨 화면 전체가 튄다(폰: 붙어 있던 아이콘 줄이 56 → 339px 로 내려앉았다).
-  //       보던 자리를 그대로 두거나(피드 머리가 보이던 때), 머리가 바 뒤로 지나가 있었으면 머리를 바 바로 아래로 맞추고,
-  //       그 자리까지 내려갈 문서 길이가 모자라면 피드 칸에 모자란 만큼 최소 높이를 잠깐 준다(다시 펼치거나 섹션을 바꾸면 푼다)
-  const [feedOpen, setFeedOpen] = useState(false);
-  const feedRef = useRef(null);
-  const feedFixRef = useRef(null); // 접기 직전 { top: 피드 머리 화면 위치, scroll }
-  const toggleFeed = () => {
-    const sec = feedRef.current;
-    feedFixRef.current = feedOpen && sec ? { top: sec.getBoundingClientRect().top, scroll: window.scrollY } : null;
-    if (!feedOpen && sec) sec.style.minHeight = "";
-    setFeedOpen(!feedOpen);
-    playTone(620, 0.04, "sine", 0.025);
-  };
-
   // 진행 중 이벤트 — 대시보드 맨 아래 판(EventBoard). null = 불러오는 중(자리를 잡는다), [] = 없음(판을 숨긴다)
   const [events, setEvents] = useState(null);
 
@@ -3151,25 +3566,6 @@ export default function LevelPage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [meLoaded]);
-  // 피드 머리를 둘 자리 — 접힌 상단 바(폰 56 · md 이상 60, 아이콘 줄 sticky top-14 · md:top-[60px] 와 같은 값) 아래,
-  //    폰은 그 아래 붙는 아이콘 줄까지. 지금 위치가 아니라 "붙어 있을 때" 기준(스크롤이 당겨지면 줄이 떨어져 있다). 16 은 숨 쉴 틈
-  const feedTopLimit = () => {
-    const n = mNavRef.current;
-    const bar = window.innerWidth >= 768 ? 60 : 56;
-    return bar + (n && n.offsetParent ? n.offsetHeight : 0) + 16;
-  };
-  useLayoutEffect(() => {
-    const fix = feedFixRef.current;
-    if (feedOpen || !fix) return;
-    feedFixRef.current = null;
-    const sec = feedRef.current;
-    if (!sec) return;
-    const lim = feedTopLimit();
-    const target = fix.top < lim ? sec.getBoundingClientRect().top + window.scrollY - lim : fix.scroll;
-    const max = document.documentElement.scrollHeight - window.innerHeight;
-    if (target > max) sec.style.minHeight = `${sec.offsetHeight + Math.ceil(target - max)}px`;
-    window.scrollTo({ top: target });
-  }, [feedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const dashCardRef = useRef(null);
   const mobSecs = [
     { k: "quest", l: "퀘스트", icon: "flag", n: claimableAll },
@@ -3179,10 +3575,6 @@ export default function LevelPage() {
     { k: "table", l: "XP 테이블", icon: "receipt", n: 0 },
   ];
   const mSecOn = mobSecs.some((x) => x.k === mSec) ? mSec : "quest";
-  // 피드를 접을 때 잠깐 준 최소 높이(toggleFeed)는 섹션을 바꾸면 푼다
-  useEffect(() => {
-    if (feedRef.current) feedRef.current.style.minHeight = "";
-  }, [mSecOn]);
   // PC — 오른쪽 카테고리(현황 · XP 테이블). 현황이면 퀘스트 · 랭킹 · 피드를 다 펼치고, 아니면 그 카테고리 하나만
   //    📌 시뮬레이터는 2026-10-01 뺐다(나중에 다시 만들 예정 — 옛 코드는 14ae06a 이전 git 기록)
   const deskOverview = mSecOn !== "table";
@@ -3340,7 +3732,7 @@ export default function LevelPage() {
       chatHi: enh.chat.range[1] + hotHi + buff + boost + itemChat,
       chatParts: [{ l: "기본", v: `${fmt(P_chatBase[0])}~${fmt(P_chatBase[1])}` }, chatEnh > 0 && { l: "강화", v: `+${fmt(chatEnh)}` }, hm > 1 && { l: hl, v: `+${fmt(hotLo)}~${fmt(hotHi)}` }, ...extra, itemChat > 0 && { l: "아이템", v: `+${fmt(itemChat)}` }].filter(Boolean),
       voice: P.voiceXp + tier + voiceEnh + voiceHot + buff + boost + itemVoice,
-      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, hm > 1 && { l: hl, v: `+${fmt(voiceHot)}` }, ...extra, itemVoice > 0 && { l: "아이템", v: `+${fmt(itemVoice)}` }].filter(Boolean),
+      voiceParts: [{ l: "기본", v: fmt(P.voiceXp) }, tier > 0 && { l: tierCur?.name ? `등급 · ${tierCur.name}` : "등급", v: `+${fmt(tier)}` }, voiceEnh > 0 && { l: "강화", v: `+${fmt(voiceEnh)}` }, hm > 1 && { l: hl, v: `+${fmt(voiceHot)}` }, ...extra, itemVoice > 0 && { l: "아이템", v: `+${fmt(itemVoice)}` }].filter(Boolean),
       // 📌 출석 1회 — 시뮬레이터 출석 줄과 같은 값(기본 + 역할 · 아이템 출석 가산). 아이템 몫은 서버가 따로 준다(attendItemXp)
       attend: P.attendXp + attendBuff,
       attendParts: [{ l: "기본", v: fmt(P.attendXp) }, attendRole > 0 && { l: "역할", v: `+${fmt(attendRole)}` }, attendItem > 0 && { l: "아이템", v: `+${fmt(attendItem)}` }].filter(Boolean),
@@ -3531,7 +3923,7 @@ export default function LevelPage() {
           100% { background-position: 200% center; }
         }
         @keyframes toastIn {
-          from { opacity: 0; transform: translateY(12px) scale(0.97); }
+          from { opacity: 0; transform: translateY(-12px) scale(0.97); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
         @keyframes barSheen {
@@ -3552,6 +3944,21 @@ export default function LevelPage() {
         /* 팝업 목록 — 스크롤바 자리를 늘 비워 둔다. 목록이 길어 스크롤바가 생기고 없어질 때마다
            폭이 10px 바뀌어 칸이 움찔하던 것(시즌 패스 전체 ↔ 받을 보상). 어두운 창이라 막대는 얇고 옅게 */
         .pop-scroll { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.22) transparent; }
+        /* 📌 2026-10-24 시즌 패스 PC 는 위아래 스크롤 없음(운영자 "위 아래 스크롤 되는 거 없애라고") — 낮은 화면은 요약 · 탭 · 트랙 여백과 링을 줄이고(내용 508 → 460),
+               그래도 남는 넘침은 머리 그림이 줄어 받는다(PassModal 머리 sm:shrink) */
+        @media (min-width: 640px) and (max-height: 759.98px) {
+          .pass-sum { padding-top: 12px; padding-bottom: 12px; }
+          .pass-ring { width: 96px; height: 96px; }
+          .pass-tab { padding-top: 12px; padding-bottom: 12px; }
+          .pass-trk { padding-top: 12px; padding-bottom: 8px; }
+        }
+        /* 머리 그림 — 줄어든 머리에서 배지 · 제목이 칸 끝에 걸려 잘리지 않게 세로 자리를 고른다(그림 높이 = 폭 / 4 = 25cqw).
+           시즌 2 그림 기준: 배지 9~24% · 제목 26~52%(그림 높이 대비). 넉넉하면 예전 자리(32%) · 좀 낮으면 배지 + 제목을 가운데 ·
+           더 낮으면 배지는 통째로 빼고(배지 밑에서부터) 큰 제목 */
+        .pass-banner { container: pass-banner / size; }
+        .pass-art { background-size: cover; background-repeat: no-repeat; background-position-y: 32%; }
+        @container pass-banner (min-aspect-ratio: 6/1) { .pass-art { background-position-y: clamp(-1.875cqw, calc(50cqh - 7.625cqw), 0px); } }
+        @container pass-banner (min-aspect-ratio: 87/10) { .pass-art { background-position-y: min(-6.2cqw, calc(50cqh - 9.75cqw)); } }
         /* 강화 — 숫자가 튀어 오르고 불티가 퍼진다. 최종 단계는 금빛 링 둘레로 빛이 돈다 */
         @keyframes numPop {
           0%   { transform: scale(0.55); opacity: 0; filter: brightness(2.2); }
@@ -3697,11 +4104,20 @@ export default function LevelPage() {
         />
       )}
 
-      {/* 이벤트 패스 창 — 받으면 잔액 · XP 를 다시 읽는다 */}
-      <EventPassModal open={eventPassOpen} onClose={closeEventPass} pushToast={pushToast} onClaimed={loadMe} onCount={setEventPassCount} />
+      {/* 이벤트 창 — 카드 아래 「이벤트」 단추로 연다(evTab). 틀 · 탭은 EventHub, 안쪽은 이벤트마다 창(embedded) */}
+      <EventHub open={!!evTab} tabs={evTabs} onClose={closeEvents}>
+        {/* 이벤트 패스 — 받으면 잔액 · XP 를 다시 읽는다 */}
+        <EventPassModal embedded open={evTab === "pass"} onClose={closeEvents} pushToast={pushToast} onClaimed={loadMe} onCount={setEventPassCount} />
+        {/* 괴담회 추첨 — 뽑으면 잔액 · XP 를 다시 읽고, 남은 추첨권 수를 이벤트 숫자에 */}
+        <GoedamModal embedded open={evTab === "goedam"} onClose={closeEvents} pushToast={pushToast} onDrawn={loadMe} onCount={setGoedamCount} onBusy={setEvLocked} />
+        {/* 친구 초대 — 받거나 코드를 넣으면 잔액 · XP 를, 코드로 추첨권(괴담회 보너스)이 생기면 괴담회 숫자도 다시 읽는다 */}
+        <InviteModal embedded open={evTab === "invite"} onClose={closeEvents} pushToast={pushToast} onClaimed={loadMe} onCount={setInviteCount} onTickets={loadGoedamMeta} />
+        {/* 게임 그룹 지원 — 지원할 수 있으면 탭 숫자 1. 참여 링크(?gg)로 들어오면 그 코드를 넘긴다(그룹 미리보기) */}
+        <GoedamGroupModal embedded open={evTab === "group"} onClose={closeEvents} pushToast={pushToast} onCount={setGroupCount} joinCode={ggCode} />
+      </EventHub>
 
-      {/* 괴담회 추첨 창 — 뽑으면 잔액 · XP 를 다시 읽고, 남은 추첨권 수를 띠 배지에 */}
-      <GoedamModal open={goedamOpen} onClose={closeGoedam} pushToast={pushToast} onDrawn={loadMe} onCount={setGoedamCount} />
+      {/* 핫타임 진행도 — 카드 아래 핫타임 띠로 연다 */}
+      <HotTimeModal open={hotOpen && !!me?.hotTime?.on} onClose={closeHot} hot={me?.hotTime} />
 
       {promo && <PromoOverlay from={promo.from} to={promo.to} onClose={closePromo} />}
 
@@ -3720,12 +4136,7 @@ export default function LevelPage() {
               <span className="lux-shimmer">LEVEL</span>
             </h1>
             <span className="hidden sm:inline text-[12px] font-black text-[#d01634] whitespace-nowrap">SEASON {SEASON.number} · {SEASON.name}</span>
-            {/* 📌 핫타임(2026-10-19 운영자 "이 부분 옆에 핫타임 표시 띄워") — 기간 안일 때만(/api/xp/me hotTime). 오늘 배수(평일 · 주말)를 글자로, 폰도 보인다 */}
-            {me?.hotTime?.on && (
-              <span title={me.hotTime.name || "핫타임"} className="self-center shrink-0 inline-flex items-center h-[22px] px-2.5 rounded-full bg-[#e91e3f] text-white text-[11px] font-black leading-[22px] tracking-[0.04em] whitespace-nowrap tabular-nums">
-                HOT TIME ×{Number(me.hotTime.mult).toLocaleString("en-US", { maximumFractionDigits: 1 })}
-              </span>
-            )}
+            {/* 📌 핫타임 알약은 2026-10-25 카드 바로 아래 띠로 옮겼다(운영자 "상단이 아니라 카드 아래로") — ./HotTime.js */}
           </div>
           <div className="inline-flex items-center gap-2 md:gap-2.5 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap">
             {seasonDday.ended ? "시즌 종료" : <><span className="sm:hidden">시즌 </span><span className="hidden sm:inline">종료까지 </span>D-{seasonDday.days}</>}
@@ -3818,7 +4229,7 @@ export default function LevelPage() {
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="rounded-full object-cover" style={{ width: avatarPx.m, height: avatarPx.m }} />
                               ) : (
-                                <span className="rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60" style={{ width: avatarPx.m, height: avatarPx.m }}>{guest ? <GuestAvatar className="w-8 h-8" /> : (session.user.name || "?").slice(0, 1)}</span>
+                                <span className="rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60" style={{ width: avatarPx.m, height: avatarPx.m }}>{guest ? <GuestAvatar className="w-8 h-8" /> : (me?.displayName || session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
                             {!guest && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.m} />}
@@ -3829,13 +4240,14 @@ export default function LevelPage() {
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="rounded-full object-cover" style={{ width: avatarPx.d, height: avatarPx.d }} />
                               ) : (
-                                <span className="rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: avatarPx.d, height: avatarPx.d }}>{guest ? <GuestAvatar className="w-9 h-9" /> : (session.user.name || "?").slice(0, 1)}</span>
+                                <span className="rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: avatarPx.d, height: avatarPx.d }}>{guest ? <GuestAvatar className="w-9 h-9" /> : (me?.displayName || session.user.name || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
                             {!guest && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.d} />}
                           </span>
                           <div className="relative min-w-0 flex-1">
-                          <p className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none">{guest ? "— — —" : session.user.name}</p>
+                          {/* 📌 2026-10-24 이름 = 서버 별명(/api/xp/me displayName — 랭킹 · 피드와 같은 이름), 없으면 로그인 이름 */}
+                          <FitName className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none" text={guest ? "— — —" : (me?.displayName || session.user.name)} />
                           <div className="flex flex-wrap items-center gap-2 mt-3">
                             <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 tabular-nums">
                               {guest ? "랭크 —" : <>랭크 #{me.rank.toLocaleString()}<span className="text-white/40 ml-1">/ {me.total.toLocaleString()}</span></>}
@@ -3898,9 +4310,11 @@ export default function LevelPage() {
 
                         {/* 경험치 — 막대 하나, 글자 둘 */}
                         <div className="mt-6">
-                          {/* 📌 카드 배경이 막대 모양을 정하면(유령 펭귄의 밤 — 「유령 꼬리」) 그 막대로, 아니면 기본 막대 */}
+                          {/* 📌 카드 배경이 막대 모양을 정하면(유령 펭귄의 밤 — 「유령 꼬리」 · 바람의 클로버 언덕 — 「덩굴 줄기」) 그 막대로, 아니면 기본 막대 */}
                           {!guest && sceneBarOf(me?.cardScene) === "ghostTrail" ? (
                             <div data-skin-bar className="ml-[12px]"><GhostTrailBar pct={progPct} /></div>
+                          ) : !guest && sceneBarOf(me?.cardScene) === "cloverVine" ? (
+                            <div data-skin-bar><CloverVineBar pct={progPct} /></div>
                           ) : (
                             <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
                               <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${progPct}%`, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }}></div>
@@ -3971,9 +4385,9 @@ export default function LevelPage() {
                         )}
 
                         {/* 스탯 — 두 줄 두 칸. 선은 위 한 줄과 가운데 세로선만. 빙옥은 재화라 뺐다 */}
-                        {/* 스탯 — 모바일에서 XP 테이블 · 시뮬레이터를 볼 때는 접는다 (화면이 너무 길어진다) */}
+                        {/* 스탯 — 예전엔 폰에서 XP 테이블을 볼 때 접었다. 2026-10-25 운영자 "제발 모바일에서 XP 테이블 켰을 때 아래부분 없어지는 거 개선 좀" → 늘 보인다 */}
                         {/* data-skin-line — 카드 스킨(항해도 · 새로운 세계)이 배 · 섬을 이 선 위에 얹는다(SkinFrame) */}
-                        <div data-skin-line className={`${deskOverview ? "grid" : "hidden lg:grid"} grid-cols-2 mt-4 pt-2 border-t border-white/10`}>
+                        <div data-skin-line className="grid grid-cols-2 mt-4 pt-2 border-t border-white/10">
                           {[
                             { l: "현재 XP", v: guest ? "—" : (me.xp || 0).toLocaleString(), wallet: true },
                             { l: "오늘 획득", v: guest ? "—" : `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0, fx: true },
@@ -4013,48 +4427,14 @@ export default function LevelPage() {
                       </div>
                     </div>
 
-                    {/* 📌 이벤트 패스 바로가기(2026-10-17 운영자 시안 합격) — 카드 안이 아니라 카드 바로 아래 가로 띠. PC 카드 폭 · 폰 전체 폭, 같은 그림 한 장.
-                           그림: public/banners/event-pass-strip.png(992 × 240, .claude/mockups/event-pass/strip.mjs). 이벤트 끝(10. 31. 24:00 KST)나면 빠진다 */}
-                    {eventPassOn && (
-                      <div className="relative mt-3 lg:mt-3.5">
-                        <button
-                          type="button"
-                          onClick={openEventPass}
-                          aria-label={eventPassCount > 0 ? `유령 펭귄의 초대 · 이벤트 패스 · 받을 보상 ${eventPassCount}` : "유령 펭귄의 초대 · 이벤트 패스"}
-                          className="block w-full rounded-[18px] overflow-hidden shadow-[0_18px_40px_-22px_rgba(30,10,80,0.7)] transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#9ff8ff]/70"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/banners/event-pass-strip.png" alt="" width={992} height={240} draggable={false} className="block w-full h-auto select-none" />
-                        </button>
-                        {/* 받을 보상 수 — 시즌 패스 단추 배지와 같은 빨간 둥근 숫자(띠 크기에 맞춰 조금 크게 · 글자 줄 높이 = 높이 22 — 반 픽셀 쏠림 없게). 띠 둥근 모서리 밖에 걸친다 */}
-                        {eventPassCount > 0 && (
-                          <span aria-hidden className="pointer-events-none absolute -top-2 -right-2 z-10 min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums ring-2 ring-white">
-                            {eventPassCount}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {/* 📌 2026-10-23 「방구석 심야 괴담회」 추첨 띠 — 이벤트 패스 띠 바로 아래, 같은 모양 · 같은 둥근 모서리 · 그림자 · 위 간격(mt-3 · lg:mt-3.5 — 둘 다 있으면 띠 사이도 이 간격).
-                           그림: public/banners/goedam-strip.png(992 × 240, .claude/mockups/goedam/out/goedam-strip-final.png). 추첨이 닫히면(drawClosesAt) 서버 visible 이 꺼져 빠진다 */}
-                    {goedamOn && (
-                      <div className="relative mt-3 lg:mt-3.5">
-                        <button
-                          type="button"
-                          onClick={openGoedam}
-                          aria-label={goedamCount > 0 ? `방구석 심야 괴담회 · 추첨 · 추첨권 ${goedamCount}` : "방구석 심야 괴담회 · 추첨"}
-                          className="block w-full rounded-[18px] overflow-hidden shadow-[0_18px_40px_-22px_rgba(30,10,80,0.7)] transition-transform hover:-translate-y-px outline-none focus-visible:ring-2 focus-visible:ring-[#9ff8ff]/70"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/banners/goedam-strip.png" alt="" width={992} height={240} draggable={false} className="block w-full h-auto select-none" />
-                        </button>
-                        {/* 내 추첨권 수 — 이벤트 패스 띠 배지와 같은 빨간 둥근 숫자 */}
-                        {goedamCount > 0 && (
-                          <span aria-hidden className="pointer-events-none absolute -top-2 -right-2 z-10 min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums ring-2 ring-white">
-                            {goedamCount}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {/* 📌 2026-10-24 「이벤트」 단추 — 앞으로 이벤트 창 단추(위 evItems · openEvents). 카드 바로 아래(PC 카드 폭 · 폰 전체 폭) — 예전 이벤트 패스 · 괴담회 띠 자리.
+                           시즌 · 이벤트를 타지 않는 평소 단추(운영자 "할로윈 컨셉이 아니라 평소에도 사용 가능한 팝업 버튼") — 반투명 흰 단추 + 흐림(운영자 "흰 버튼만으로 블러 느낌" — 헤더 창과 같은 흐림 판) · 옅은 테 · 옅은 그림자(진하면 카드와 사이가 어둑해진다 — "그림자 때문에 어둡잖아") · 붉은 선물 아이콘 · 「이벤트」 · 빨간 숫자 · ›.
+                           (먹 단추는 "검은색 좀 구린데" — 색 시안 넷 중 2번)
+                           진행 중인 이벤트가 없으면 빠진다. 빨간 숫자 = 이벤트마다 숫자의 합(글자 줄 높이 = 높이 22 — 반 픽셀 쏠림 없게)
+                           📌 2026-10-25 PC 는 오른쪽 「현황」 탭 줄 아래로 옮겼다(eventBtn) — 여기는 폰만 */}
+                    {/* 📌 2026-10-25 핫타임 띠 — 카드 바로 아래(PC 카드 폭 · 폰 전체 폭, 폰은 이벤트 단추 위). 기간 안일 때만, 누르면 진행도 창(./HotTime.js) */}
+                    {!guest && me?.hotTime?.on && <HotTimeStrip hot={me.hotTime} onOpen={openHot} className="mt-3 flex" />}
+                    {evItems.length > 0 && eventBtn("mt-3 flex lg:hidden")}
                     </div>
 
                 </div>
@@ -4087,18 +4467,23 @@ export default function LevelPage() {
                       </div>
                     </nav>
 
-                    {/* PC 카테고리 — 사이트 공통 밑줄 탭. 모바일은 위 아이콘 줄이 같은 일을 한다 */}
-                    <div role="tablist" aria-label="대시보드 카테고리" className="hidden lg:flex lg:col-span-2 lg:-mb-6 border-b border-[#ededed]">
-                      {[{ k: "quest", l: "현황" }, { k: "table", l: "XP 테이블" }].map((t) => {
-                        const on = t.k === "quest" ? deskOverview : mSecOn === t.k;
-                        return (
-                          <button key={t.k} type="button" role="tab" aria-selected={on} onClick={() => { setMSec(t.k); playTone(620, 0.04, "sine", 0.025); }}
-                            className={`relative py-3 mr-7 text-[15px] font-extrabold transition-colors outline-none focus-visible:text-[#131313] ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
-                            {t.l}
-                            {on && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-                          </button>
-                        );
-                      })}
+                    {/* 📌 PC 맨 위 한 줄 — [이벤트 띠 | XP 테이블]. 2026-10-25 운영자 "현황 이라는 거 좀 맘에 안드는데 · 약간 다르게 배치" → 「현황 · XP 테이블」 밑줄 탭을 뺐다.
+                           XP 테이블 단추를 누르면 창 없이 그 자리에서 아래(퀘스트 · 랭킹 · 피드)가 XP 테이블로 바뀌고("굳이 창으로 띄우는 건 비효율적"), 단추가 먹 테 · ✕ 로 — 한 번 더 누르면 돌아온다.
+                           단추 폭 168px 고정(✕ 는 켰을 때만 오른쪽 끝에 얹음) — 눌러도 이벤트 띠 폭 · 줄이 안 움직인다. 그림자 없음("뒤에 그림자 빼면 어때?" → 단색 + 흰 단추는 1px 테).
+                           이벤트가 없으면 단추만 오른쪽 끝(같은 자리). 아래 줄과 사이는 −mb-6(32px). 폰은 아래 아이콘 줄이 같은 일을 한다(이벤트 띠는 카드 아래 그대로) */}
+                    <div className="hidden lg:flex lg:col-span-2 lg:-mb-6 gap-3">
+                      {evItems.length > 0 && eventBtn("flex flex-1 min-w-0", true)}
+                      <button
+                        type="button"
+                        aria-pressed={!deskOverview}
+                        onClick={() => { setMSec(deskOverview ? "table" : "quest"); playTone(620, 0.04, "sine", 0.025); }}
+                        className={`relative ml-auto shrink-0 w-[168px] flex items-center gap-2.5 h-14 pl-5 pr-[18px] rounded-2xl bg-white text-[#131313] text-[15px] font-black tracking-[-0.01em] transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${deskOverview ? "shadow-[inset_0_0_0_1px_#e3e3e6] hover:shadow-[inset_0_0_0_1px_#c9c9ce]" : "shadow-[inset_0_0_0_2px_#131313]"}`}
+                      >
+                        <svg aria-hidden viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${deskOverview ? "text-[#e91e3f]" : "text-[#131313]"}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.receipt} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        <span>XP 테이블</span>
+                        {/* ✕ 는 켰을 때만 — 오른쪽 끝에 얹어(absolute) 글자 자리가 안 움직인다. 기본 › 는 뺐다(운영자 "> 이 화살표는 뭔가 안 어울리긴하는데" — 그 자리에서 바뀌는 단추라) */}
+                        {!deskOverview && <svg aria-hidden viewBox="0 0 24 24" className="absolute right-[18px] top-1/2 -translate-y-1/2 w-4 h-4 text-[#131313]" fill="none" stroke="currentColor" strokeWidth="2.4"><path d={ICON_PATHS.close} strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                      </button>
                     </div>
 
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
@@ -4174,7 +4559,8 @@ export default function LevelPage() {
                         {questClaimable > 0
                           ? <span className="text-[#e91e3f]">받을 수 있는 보상 {questClaimable}개</span>
                           : questTotal > 0 && questDone === questTotal
-                          ? "이 주기의 퀘스트를 모두 마쳤습니다"
+                          // 📌 2026-10-24 운영자 "이 멘트도 좀 바꿔라"(예전 「이 주기의 퀘스트를 모두 마쳤습니다」) — 탭 기간 이름 + 다음 퀘스트 시각을 한 줄로(다 깨면 아래 교체 안내가 가려지던 것까지)
+                          ? `${questPeriod === "monthly" ? "이번 달" : questPeriod === "weekly" ? "이번 주" : "오늘"} 퀘스트 완료 · ${questPeriod === "monthly" ? "매월 1일" : questPeriod === "weekly" ? "월요일" : "자정"}(KST)에 ${questRotates ? "새 퀘스트" : "초기화"}`
                           : questPeriod === "monthly"
                           ? questRotates ? "매월 1일(KST)에 새 퀘스트로 교체됩니다" : "매월 1일(KST)에 초기화됩니다"
                           : questPeriod === "weekly"
@@ -4303,10 +4689,10 @@ export default function LevelPage() {
                     <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} min-w-0`}>
                     {/* 서버 랭킹 */}
                     <section className={secCls("rank")}>
-                      <div className="flex items-end justify-between mb-5">
+                      <div className="flex items-end justify-between mb-4">
                         <div>
                           {/* 📌 기준 글자 탭이 셋이라 칸이 좁은 폭(360 미만 · PC 두 칸 lg~xl 약 293px)에서는 TOP 10 꼬리를 접는다 — 제목이 두 줄로 꺾이지 않게 */}
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1 max-[360px]:hidden lg:max-xl:hidden">TOP 10</span></h3>
+                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">서버 랭킹 <span className="text-xs font-bold text-[#a3a3a3] ml-1.5 max-[360px]:hidden lg:max-xl:hidden">TOP 10</span></h3>
                         </div>
                         <span className="flex items-center gap-3 shrink-0">
                           {LB_MODES.map((m) => (
@@ -4330,16 +4716,45 @@ export default function LevelPage() {
                         //    같은 화면 프로필 카드 "랭크 #N" · 봇 /레벨 · /랭크 와 같은 순위. 배지 · 이름은 랭킹 API 의 me
                         //    2026-10-04 동점 규칙 하나 — XP 내림차순, 동점은 userId 오름차순(글자 비교 — 가입 순서 아님. 목록 · 내 정보 · 봇이 모두 같다)
                         guest ? (
-                          // 로그인 전 — 공개 TOP 10 만(내 줄 없음)
-                          <RankRows rows={lb[lbTab].data} />
-                        ) : (
-                        <RankRows
-                          rows={lb[lbTab].data}
-                          myId={session.user.id}
-                          me={lbTab === "all" ? (lb.all.me ? { ...lb.all.me, rank: me.rank ?? lb.all.me.rank } : me) : lb[lbTab].me}
-                          myName={lb[lbTab].me?.name || session.user.name}
-                        />
-                        )
+                          // 로그인 전 — 공개 TOP 10 만(내 순위 판 없음 — 맨 윗줄을 굵은 선으로)
+                          <RankRows rows={lb[lbTab].data} strongTop />
+                        ) : (() => {
+                          // 📌 2026-10-24 「내 순위」 판(운영자 고른 시안 — "아까 넣었던 바 디자인 넣어") — 목록 아래 ··· 내 줄 대신 목록 위에 한 판.
+                          //    #순위 / 전체 · 막대 = 전체 중 내 자리(위에서부터 — 상위 N% 와 같은 뜻, 최소 2%) · LV · XP · 상위 N%(프로필 카드 「상위 N%」와 같은 계산).
+                          //    「1위까지」 · YOU 는 운영자 "빼고" · "어차피 내 순위로 되어 있으면서"(10/24) — 1위 대비 XP 막대는 글이 빠지니 뜻이 안 보여 자리 막대로 높이 92 — 옆 획득 피드 「오늘」 판과 같아 두 칸 줄이 나란히 간다
+                          //    (판을 빼고 「오늘」 판을 아래로 내린 판은 운영자 "내리니까 별론데 · 내 카드도 없어지고" — 되돌림)
+                          const mine = lbTab === "all" ? (lb.all.me ? { ...lb.all.me, rank: me.rank ?? lb.all.me.rank } : me) : lb[lbTab].me;
+                          const rows = lb[lbTab].data;
+                          const myXp = Math.max(0, Number(mine?.xp) || 0);
+                          const total = lbTab === "all" ? (me?.total ?? lb.all.members ?? lb.all.total) : (lb[lbTab].members ?? lb[lbTab].total); // 서버 사람 수 포함(2026-10-25)
+                          const rk = Math.max(0, Number(mine?.rank) || 0);
+                          const pct = total > 0 && rk > 0 ? Math.max(2, Math.min(100, ((total - rk + 1) / total) * 100)) : 0;
+                          const topPct = total > 0 && rk > 0 ? Math.max(1, Math.ceil((rk / total) * 100)) : null;
+                          return (
+                            <>
+                              {mine?.rank > 0 && (
+                                <div className="border-t border-[#131313] pt-3.5 pb-3 h-[92px]">
+                                  <div className="flex items-baseline justify-between gap-3">
+                                    <span className="text-[11px] font-bold text-[#5a5a5a]">내 순위</span>
+                                    <span className="text-[20px] font-black text-[#131313] tracking-tight tabular-nums leading-none">
+                                      #{Number(mine.rank).toLocaleString()}
+                                      {total > 0 && <span className="text-[11px] font-bold text-[#a3a3a3] ml-1">/ {Number(total).toLocaleString()}</span>}
+                                    </span>
+                                  </div>
+                                  <div aria-hidden className="h-2 mt-2.5 rounded-full bg-black/[0.06] overflow-hidden">
+                                    <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${pct}%` }}></div>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-[9px]">
+                                    <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap">LV <b className="font-black text-[#131313] tabular-nums">{Number(mine.level ?? me?.level ?? 0).toLocaleString()}</b></span>
+                                    <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap"><b className="font-black text-[#131313] tabular-nums">{myXp.toLocaleString()}</b> XP</span>
+                                    {topPct != null && <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap">상위 <b className="font-black text-[#e91e3f] tabular-nums">{topPct}%</b></span>}
+                                  </div>
+                                </div>
+                              )}
+                              <RankRows rows={rows} myId={session.user.id} meRow={false} strongTop={!(mine?.rank > 0)} />
+                            </>
+                          );
+                        })()
                       )}
                     </section>
                     </div>
@@ -4347,8 +4762,9 @@ export default function LevelPage() {
                     {/* 아래 오른쪽 — 획득 피드 (진행 중 이벤트는 2026-10-03 대시보드 맨 아래 전체 폭 판으로 옮겼다 — EventBoard) */}
                     {/* 피드 묶음 — 현황이 아닐 때는 빈 틀도 숨긴다 (남겨 두면 빈 줄 하나만큼 간격이 벌어진다) */}
                     <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} lg:space-y-14 min-w-0`}>
-                    {/* 획득 피드 — 5건, [전체 N건 보기]로 그 자리에서 펼친다. 줄을 낮게 */}
-                    <section ref={feedRef} className={secCls("feed")}>
+                    {/* 획득 피드 — 최근 15건(/api/xp/my-logs FEED_LIMIT). 📌 2026-10-24 운영자 "획득 피드 단추 없애" — 「전체 N건 보기」 · 「접기」 단추를 뺐다.
+                           PC 는 10줄 틀 안에서 휠로 나머지를 넘기고, 폰은 피드만 따로 보는 칸이라 15건을 다 늘어놓는다 */}
+                    <section className={secCls("feed")}>
                       <div className="flex items-end justify-between mb-4">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
@@ -4359,23 +4775,56 @@ export default function LevelPage() {
                         <LockedSlot />
                       ) : myLogs?.logs?.length ? (
                         <>
-                          {/* 📌 [overflow-anchor:none] — 늘어나는 줄이 스크롤 기준점으로 잡혀 위 화면(퀘스트 · 랭킹)이 밀려 보이지 않게 */}
-                          <div className="border-t border-black/[0.08] [overflow-anchor:none]">
-                            {(feedOpen ? myLogs.logs : myLogs.logs.slice(0, 5)).map((l, i) => (
-                              <div key={`${l.createdAt}-${i}`} className="flex items-center h-10 gap-3 border-b border-black/[0.05]">
-                                <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: REASON_COLORS[l.reason] || "#6b7280" }}></span>
-                                {/* 보상 XP(퀘스트 · 운영진 지급)는 +1,000,000 처럼 길 수 있다 — 기본 폭은 그대로, 넘칠 때만 그 줄이 넓어진다(옆 글자와 겹치지 않게) */}
-                                <span className="shrink-0 min-w-16 whitespace-nowrap text-[13px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}</span>
-                                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#8a8a8a]">{feedLabel(l)}</span>
-                                <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">{fmtRel(l.createdAt)}</span>
+                          {/* 📌 2026-10-24 오늘 — 합계 + 종류별 막대 · 범례(XP 가 어디서 늘었는지 한눈에). 0 인 종류는 막대 · 범례에서 뺀다.
+                                 옛 응답(today 에 effect · payout 없음)이면 합계에서 채팅 · 음성 · 출석을 뺀 나머지를 아이템으로 본다 */}
+                          {(() => {
+                            const td = myLogs.today || {};
+                            const val = (k) => Math.max(0, Number(td[k]) || 0);
+                            const legacy = td.effect == null && td.payout == null;
+                            const rest = legacy ? Math.max(0, (Number(td.total) || 0) - val("chat") - val("voice") - val("attend")) : 0;
+                            const parts = FEED_KINDS.map((x) => ({ ...x, v: legacy && x.k === "effect" ? rest : val(x.k) })).filter((x) => x.v > 0);
+                            const total = Math.max(0, Number(td.total) || 0);
+                            return (
+                              <div className="border-t border-[#131313] pt-3.5 pb-3 h-[92px]">
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <span className="text-[11px] font-bold text-[#5a5a5a]">오늘</span>
+                                  <span className="text-[20px] font-black text-[#131313] tracking-tight tabular-nums leading-none">+{total.toLocaleString()}<span className="text-[11px] font-bold text-[#a3a3a3] ml-1">XP</span></span>
+                                </div>
+                                <div aria-hidden className={`flex h-2 gap-0.5 mt-2.5 rounded-full overflow-hidden ${parts.length ? "" : "bg-black/[0.06]"}`}>
+                                  {parts.map((x) => <span key={x.k} className="block h-full" style={{ flex: x.v, background: x.c }}></span>)}
+                                </div>
+                                {parts.length > 0 && (
+                                  <div className="flex flex-nowrap overflow-hidden gap-x-2.5 mt-[9px]">
+                                    {parts.map((x) => (
+                                      <span key={x.k} className="inline-flex items-center gap-1 text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap">
+                                        <span aria-hidden className="w-[7px] h-[7px] rounded-[2px]" style={{ background: x.c }}></span>
+                                        {x.l} <b className="font-black text-[#131313] tabular-nums">{feedAmt(x.v)}</b>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            ))}
+                            );
+                          })()}
+                          {/* 📌 [overflow-anchor:none] — 늘어나는 줄이 스크롤 기준점으로 잡혀 위 화면(퀘스트 · 랭킹)이 밀려 보이지 않게.
+                                 2026-10-24 줄 앞 색 점(뜻이 안 보였다) → 종류 아이콘(옅은 판) · 숫자 뒤 XP · 10줄(옆 서버 랭킹 10줄과 나란히 — 두 칸 다 92 판 + 46 줄).
+                                 📌 PC 틀 높이는 10줄(1 + 46 × 10 = 461px) 그대로 — 나머지는 틀 안에서 휠로 넘긴다(운영자 "획득피드 펼치면 늘어나는 거 개선") */}
+                          <div className="border-t border-[#ededed] [overflow-anchor:none] lg:max-h-[461px] lg:overflow-y-auto lg:overscroll-contain no-bar">
+                            {myLogs.logs.map((l, i) => {
+                              const kd = feedKindOf(l.reason);
+                              return (
+                                <div key={`${l.createdAt}-${i}`} className="flex items-center h-[46px] gap-3 border-b border-[#ededed]">
+                                  <span aria-hidden className="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center" style={{ background: kd.bg, color: kd.c }}>
+                                    <svg viewBox="0 0 24 24" className="w-[15px] h-[15px]" fill="none" stroke="currentColor" strokeWidth="2"><path d={ICON_PATHS[kd.icon]} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                  </span>
+                                  {/* 보상 XP(퀘스트 · 운영진 지급)는 +1,000,000 처럼 길 수 있다 — 기본 폭은 그대로, 넘칠 때만 그 줄이 넓어진다(옆 글자와 겹치지 않게) */}
+                                  <span className="shrink-0 min-w-[68px] whitespace-nowrap text-[13.5px] font-black text-[#131313] tabular-nums">+{(l.amount || 0).toLocaleString()}<span className="text-[10px] font-bold text-[#a3a3a3] ml-0.5">XP</span></span>
+                                  <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-[#5a5a5a]">{feedLabel(l)}</span>
+                                  <span className="shrink-0 text-[10px] font-bold text-[#a3a3a3] tabular-nums">{fmtRel(l.createdAt)}</span>
+                                </div>
+                              );
+                            })}
                           </div>
-                          {(myLogs.logs.length > 5) && (
-                            <button type="button" onClick={toggleFeed} aria-expanded={feedOpen} className="block w-full text-center text-[11px] font-bold text-[#a3a3a3] hover:text-[#131313] transition-colors mt-3.5 outline-none focus:outline-none [overflow-anchor:none]">
-                              {feedOpen ? "접기 ↑" : `전체 ${myLogs.logs.length}건 보기 ↓`}
-                            </button>
-                          )}
                         </>
                       ) : (
                         <EmptySlot>기록 없음 — 첫 활동을 시작하세요</EmptySlot>
@@ -4386,7 +4835,8 @@ export default function LevelPage() {
 
                     {/* XP 테이블 — 예전엔 탭, 이제 대시보드 카테고리. 왼쪽 카드와 나란히 오른쪽 8칸 */}
                     <section className={`${mSecOn === "table" ? "block" : "hidden"} lg:col-span-2 min-w-0`}>
-                      <XpTableView myLevel={me?.level || 0} myXp={me?.xp ?? null} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+                      {/* 활동 속도 — 최근 7일 활동 XP ÷ XP 를 받은 분(/api/xp/my-logs pace) · 목표 계산기 「활동하면 약 N분」 */}
+                      <XpTableView myLevel={me?.level || 0} myXp={me?.xp ?? null} perMin={myLogs?.pace?.minutes > 0 ? myLogs.pace.xp / myLogs.pace.minutes : 0} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
                     </section>
                 </div>
 
@@ -4436,7 +4886,7 @@ export default function LevelPage() {
               title="서버 랭킹"
               right={
                 <span className="shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
-                  {rankTotal.toLocaleString()}명
+                  {(rankMembers || rankTotal).toLocaleString()}명
                 </span>
               }
             />
@@ -4634,11 +5084,12 @@ export default function LevelPage() {
         {/* ══ TAB : POLICY ═════════════════ */}
       </div>
 
-      {/* 토스트 — XP 획득/레벨업/동기화 피드백 (모바일 하단바 위로 띄움) */}
-      <div className="fixed bottom-24 md:bottom-8 right-4 md:right-6 z-[200] pointer-events-none">
+      {/* 토스트 — XP 획득/레벨업/동기화 피드백. 📌 2026-10-25 운영자 "위치 좀 옮겨 · 오른 구석이라 보이지도 않아" → 오른쪽 아래 구석에서 위 가운데(헤더 바로 아래)로.
+             새 알림이 아래로 쌓이고 위에서 내려오며 나타난다. 업적 달성 알림은 토스트 바로 아래 가운데 */}
+      <div className="fixed left-1/2 -translate-x-1/2 top-[68px] md:top-[76px] z-[200] w-max max-w-[calc(100vw-32px)] flex flex-col items-center pointer-events-none">
         {/* 📌 업적 달성 알림 — 토스트 줄 바로 위(absolute 라 토스트 폭을 넓히지 않는다). 누르면 업적 창. 업적 창이 열려 있으면 숨긴다(창 위에 겹쳐 목록을 가렸다) */}
         {ACHIEVEMENTS_ON && ach.notice && !achOpen && (
-          <div className="absolute bottom-full right-0">
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2">
             <AchievementNotice notice={ach.notice} onOpen={openAch} />
           </div>
         )}
@@ -4646,7 +5097,7 @@ export default function LevelPage() {
           <div
             key={t.id}
             style={{ animation: "toastIn 0.35s cubic-bezier(0.16,1,0.3,1)" }}
-            className={`mt-2 px-5 py-3 rounded-2xl border text-xs font-bold shadow-2xl backdrop-blur-md text-right ${t.accent ? "bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_10px_30px_rgba(233,30,63,0.45)]" : "bg-white/95 border-black/10 text-[#131313] shadow-xl"}`}
+            className={`mt-2 first:mt-0 px-5 py-3 rounded-2xl border text-xs font-bold shadow-2xl backdrop-blur-md text-center ${t.accent ? "bg-[#e91e3f] border-[#e91e3f] text-white shadow-[0_10px_30px_rgba(233,30,63,0.45)]" : "bg-white/95 border-black/10 text-[#131313] shadow-xl"}`}
           >
             {t.msg}
           </div>

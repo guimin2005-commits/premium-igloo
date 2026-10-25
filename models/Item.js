@@ -22,6 +22,9 @@ const ItemSchema = new mongoose.Schema({
   roleName: { type: String, default: "" },
   detachOnSeason: { type: Boolean, default: false }, // role 유형만 의미. perk 는 항상 false
   visible: { type: Boolean, default: true },         // 인벤토리에 표시
+  // 📌 2026-10-24 서버 부스터 혜택 — 켜면 부스팅 중인 동안 이 아이템을 가진 것으로 친다(효과 · 꾸미기 그대로 — lib/booster.js isBoosterPerkItem).
+  //    숨김(visible false) · 기프트카드면 빠진다. 봇 스키마(bot/src/db.js Item)도 같은 칸
+  boosterPerk: { type: Boolean, default: false },
   sortOrder: { type: Number, default: 0 },
   // 📌 그룹 — 상점 관리 › 아이템 목록에서 묶어 보여 줄 이름("" = 묶지 않음). 관리 화면 정리용이라 인벤토리 · 상품 · 봇은 쓰지 않는다.
   //    2026-10-10 운영자: "시즌 끝나면 등급별 지급되는 아이템들이 너무 많아져서 다 관리하기 힘드니까 그룹 시스템을 만들어 줘". 정리는 lib/items.js normalizeItemGroup

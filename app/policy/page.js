@@ -86,13 +86,15 @@ const voiceRule = (p) => {
 };
 // 음소거 — 봇 getMuteMultiplier(bot/src/botSettings.js): 적용 기준 both = 마이크 · 헤드셋 둘 다, any = 하나라도. 끔(off)이면 이 항이 없다
 //    감소율 0% 도 봇 배수가 1(끔과 같다)이라 항을 뺀다 — "0% 감소" 로 보이지 않게
-const muteNone = (p) => p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0));
+//    📌 2026-10-25 헤드셋 끔은 설정과 상관없이 XP · 음성 시간 모두 없음(봇 voiceTime.js multOf) — 늘 이 문장이 먼저.
+//       설정 문장은 마이크만 끈 경우 — 적용 기준 any 일 때만(both 는 헤드셋까지 끈 때라 위 문장과 같다)
+const DEAF_RULE = "음성 채널에서 헤드셋을 끈 상태에서는 XP가 지급되지 않고 음성 시간도 쌓이지 않습니다.";
+const muteNone = (p) => p.muteTarget !== "any" || p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0));
 const muteRule = (p) => {
-  if (muteNone(p)) return null;
-  const who = p.muteTarget === "any" ? "마이크 또는 헤드셋을 음소거한" : "마이크와 헤드셋을 모두 음소거한";
+  if (muteNone(p)) return DEAF_RULE;
   return p.muteMode === "block"
-    ? `음성 채널에서 ${who} 상태에서는 XP가 지급되지 않습니다.`
-    : `음성 채널에서 ${who} 상태에서는 XP 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
+    ? `${DEAF_RULE} 마이크를 음소거한 상태에서는 XP가 지급되지 않습니다.`
+    : `${DEAF_RULE} 마이크를 음소거한 상태에서는 XP 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
 };
 
 function PolicyContent() {

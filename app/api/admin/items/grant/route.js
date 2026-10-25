@@ -9,6 +9,7 @@ import UserXp from "@/models/UserXp";
 import ShopItem from "@/models/ShopItem";
 import mongoose from "mongoose";
 import { unitThingSet, MAX_PER_ORDER } from "@/lib/unitSale";
+import { goedamTicketInfo } from "@/lib/goedam";
 import { revokeFreeRows } from "@/lib/itemRevoke";
 import { parseTargetKeys, resolveTargets, unresolvedMessage, MAX_TARGETS } from "@/lib/adminTargets";
 import { isDraftMode, catalogFindById } from "@/lib/catalogDraft";
@@ -102,7 +103,9 @@ export async function POST(request) {
     }
     const qtyIn = Math.max(1, Math.min(MAX_PER_ORDER, Math.trunc(Number(b?.qty) || 1)));
     const linkedShops = await ShopItem.find({ itemId: String(item._id) }, { type: 1, roleId: 1, itemId: 1, unitSale: 1, durations: 1 }).lean();
-    const stackable = unitThingSet(linkedShops, [item]).has(`i:${item._id}`);
+    // 괴담회 추첨권 아이템도 ×N(관리 아이템 목록 stackable · 인벤토리와 같다 — 2026-10-25 추첨권을 여러 장 수동 지급할 수 있게)
+    const ticket = await goedamTicketInfo().catch(() => ({ id: "" }));
+    const stackable = (!!ticket.id && ticket.id === String(item._id)) || unitThingSet(linkedShops, [item]).has(`i:${item._id}`);
     if (qtyIn > 1 && !stackable) {
       return NextResponse.json({ success: false, message: "이 아이템은 1개만 지급할 수 있습니다." }, { status: 400 });
     }

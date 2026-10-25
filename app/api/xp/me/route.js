@@ -13,7 +13,9 @@ import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import BotSetting from "@/models/BotSetting";
 import { hotTimeState } from "@/lib/hotTime";
-import { fetchMemberRoles } from "@/lib/discordMember";
+import { fetchMemberRoleInfo } from "@/lib/discordMember";
+import { serverMemberCount } from "@/lib/serverMembers";
+import { rankTotalOf } from "@/lib/rankBoards";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
 import { perksOfItems, discountedCost, pickCardSkin, pickCardScene, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin, normalizeEffects } from "@/lib/itemEffects";
@@ -79,10 +81,13 @@ export async function GET() {
     const now = new Date();
     // 📌 순위 = 나보다 위인 사람 + 1. 동점은 userId 오름차순 — 서버 랭킹(app/api/xp/leaderboard) · 봇 /레벨 · /랭크와 같은 규칙
     //    2026-10-04 "규칙 하나로 맞추면, 같은 사람이 화면마다 다른 순위로 보이는 일이 없습니다" — 예전엔 동점이면 모두 같은 순위였다
-    const [above, total, heldRoles, buffCfgs, boostRows, myPurchases, itemsAll, shopItems, setting] = await Promise.all([
+    //    📌 2026-10-25 전체 인원 = 서버 사람 수와 기록 수 중 큰 쪽(rankTotalOf — 기록 없는 멤버도 센다)
+    const [above, docCount, members, roleInfo, buffCfgs, boostRows, myPurchases, itemsAll, shopItems, setting] = await Promise.all([
       UserXp.countDocuments({ $or: [{ xp: { $gt: xp } }, { xp, userId: { $lt: session.user.id } }] }),
       UserXp.countDocuments(),
-      fetchMemberRoles(session.user.id),
+      serverMemberCount().catch(() => 0),
+      // 역할 · 서버 부스터 — 같은 멤버 조회(60초 캐시). 확인 못 하면 역할 null(구매 건만) · 부스터 null(부스터 혜택 아이템 없음)
+      fetchMemberRoleInfo(session.user.id).catch(() => ({ roles: null, booster: null })),
       RoleConfig.find({ $or: [{ buffXp: { $gt: 0 } }, { attendBuffXp: { $gt: 0 } }] }, { roleId: 1, roleName: 1, buffXp: 1, attendBuffXp: 1 }).lean(),
       XpBoost.find({ startAt: { $lte: now }, endAt: { $gte: now } }, { name: 1, boostXp: 1, targetRoleId: 1, targetChannelId: 1 }).lean(),
       // 📌 보유 아이템 판정 재료 — 봇(bot/src/itemEffects.js)이 읽는 조건과 같게: 결제된 건(pending · completed), 기프트카드 · 소모된 건 제외
@@ -93,7 +98,9 @@ export async function GET() {
       // 강화 정책 — 다음 단계 비용(할인 반영)을 여기서 함께 준다(app/api/xp/enhance 와 같은 값)
       BotSetting.findOne({ key: "main" }).lean(),
     ]);
-    const owned = ownedItems({ purchases: myPurchases, items: itemsAll, shopItems, heldRoles });
+    const heldRoles = roleInfo.roles;
+    // 📌 서버 부스터면 부스터 혜택 아이템(Item.boosterPerk)도 가진 것 — 봇 채팅 · 음성 · 출석 가산과 같은 판정(lib/booster.js ↔ bot/src/booster.js)
+    const owned = ownedItems({ purchases: myPurchases, items: itemsAll, shopItems, heldRoles, booster: roleInfo.booster === true });
     // 📌 상시 효과(강화 할인 · 캐시백 · 퀘스트 보상 …) · 프로필 배지 · 카드 스킨 — lib/itemPerks.js getPerks 와 같은 계산
     const perks = perksOfItems(owned);
 
@@ -149,7 +156,10 @@ export async function GET() {
         xp,
         level,
         rank: above + 1,
-        total,
+        total: rankTotalOf(docCount, members),
+        // 📌 2026-10-24 표시 이름 — 랭킹(app/api/xp/leaderboard)과 같은 서버 별명(봇이 적는 displayName → 없으면 username). 대시보드 카드가 쓴다
+        //    (운영자 "다른 거 다 별명인데 얘만 굳이 이거일 필요가 있을까" — 카드만 디스코드 계정 이름이었다). 둘 다 비면 "" — 화면이 로그인 이름으로
+        displayName: String(doc?.displayName || doc?.username || "").trim(),
         point: doc?.point || 0,
         attendCount: doc?.attendCount || 0,
         // 통산 음성 참여 시간(초) — 시즌이 바뀌어도 이어진다
@@ -186,8 +196,9 @@ export async function GET() {
         // 지난 시즌 기록 — 최근 시즌부터 [{ season, name, level, tier, rank, total, at }] (등급 창 「지난 시즌」 탭)
         seasonHistory: seasonHistoryOf(doc),
         rolesSynced: heldRoles !== null,
-        // 📌 지금 핫타임(lib/hotTime — 관리 › 레벨 설정 「핫타임」) — 레벨 화면 머리 줄 「HOT TIME ×배수」(2026-10-19 운영자 "이 부분 옆에 핫타임 표시 띄워"). 꺼짐 · 기간 밖이면 on false
-        hotTime: (() => { const h = hotTimeState(setting, now.getTime()); return { on: h.on, mult: h.mult, weekend: h.weekend, name: h.name, until: h.until }; })(),
+        // 📌 지금 핫타임(lib/hotTime — 관리 › 레벨 설정 「핫타임」) — 레벨 화면 카드 아래 핫타임 띠(app/level/HotTime.js — 2026-10-25 머리 줄에서 옮김). 꺼짐 · 기간 밖이면 on false
+        //    from · until — 띠의 남은 시간 · 기간 진행 줄
+        hotTime: (() => { const h = hotTimeState(setting, now.getTime()); return { on: h.on, mult: h.mult, weekend: h.weekend, name: h.name, from: h.from, until: h.until }; })(),
         // 진행률 표시용: 현재 레벨 구간 내 진행 XP / 구간 총 XP
         levelProgress: {
           current: Math.max(0, xp - currentCum),

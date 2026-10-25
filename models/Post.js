@@ -14,6 +14,7 @@ const PostSchema = new mongoose.Schema({
   
   eventTag: { type: String, default: "NONE" },
   bannerUrl: { type: String, default: "" },
+  bannerInBody: { type: Boolean, default: true }, // 이벤트 글 보기 화면에 배너를 그릴지(목록 카드에는 늘 나온다) — 2026-10-25
   eventPeriod: { type: String, default: "" },
 
   // 📌 대회 전용 데이터 항목

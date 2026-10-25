@@ -5,6 +5,7 @@
 //    사이트가 찍을 값과 같은 기준(시즌 시작 시점 기준선 · 해금 · 수령 초기화)으로 보여 주기만 한다.
 //    📌 시즌 종료 전 미수령 DM(features/passReminder.js)도 passView 의 claimable 로 대상을 고른다 — 판정을 따로 두지 않는다
 import mongoose from "mongoose";
+import { isBoosterMember } from "../booster.js";
 import { UserXp, XpLog, Payout, Item } from "../db.js";
 import { currentSeason } from "../leveling.js";
 import { progressBar } from "../botMessages.js";
@@ -87,18 +88,7 @@ function rewardKeys(tid, list) {
   });
 }
 
-// 📌 서버 부스터 — lib/seasonPass.js 의 isBoosterMember 와 같은 규칙(부스터 역할 DISCORD_BOOSTER_ROLE_ID 또는 부스트 시작일).
-//    discord.js GuildMember(premiumSinceTimestamp · roles.cache)와 캐시 안 된 날것(premium_since · roles 배열)을 다 받는다.
-function isBoosterMember(member) {
-  if (!member) return false;
-  const roleId = process.env.DISCORD_BOOSTER_ROLE_ID;
-  const hasRole = roleId
-    ? member.roles?.cache
-      ? member.roles.cache.has(roleId)
-      : Array.isArray(member.roles) && member.roles.includes(roleId)
-    : false;
-  return hasRole || !!(member.premiumSinceTimestamp || member.premiumSince || member.premium_since);
-}
+// 📌 서버 부스터 판정 — 2026-10-24 공용 블록 ../booster.js(사이트 lib/booster.js 와 글자 그대로)로 옮겼다(위 import)
 
 // 📌 티어 정리 — lib/seasonPass.js 의 normalizeTiers 와 같아야 한다.
 //    tid 가 없는 옛 티어에 붙는 번호까지 같아야 수령 기록(passClaimed*)이 사이트와 같게 맞는다
@@ -148,9 +138,10 @@ async function seasonStartBaseXp(userId, xp, season, docId) {
     ]),
     // 📌 패스 보상 · 역할 환불(role-refund)은 뺀다 — 지급할 때 기준선도 같이 올리는 지급(grantQueue PASS_NEUTRAL). 관리자 초기화(kind "reset")도 뺀다. 사이트 lib/season.js passEarnedPipelines 와 같게
     //    📌 퀘스트 보상의 패스 가속(Payout.passBoost — grantQueue PASS_BOOSTED)도 XpLog 처럼 더한다 — 빠지면 기준선을 되짚을 때 가속분이 사라진다
-    //    📌 2026-10-23 괴담회 추첨 XP 상품(source "goedam")도 뺀다 — 사이트 lib/season.js PASS_NEUTRAL_SOURCES · grantQueue PASS_NEUTRAL 과 같은 글자
+    //    📌 2026-10-23 괴담회 추첨 XP 상품(source "goedam") · 2026-10-25 최초 부스팅 보상(source "booster")도 뺀다 — 사이트 lib/season.js PASS_NEUTRAL_SOURCES · grantQueue PASS_NEUTRAL 과 같은 글자
+    //    📌 2026-10-25 친구 초대 누적 보상(source "invite")도 뺀다 — 사이트 lib/season.js PASS_NEUTRAL_SOURCES · grantQueue PASS_NEUTRAL 과 같은 글자
     Payout.aggregate([
-      { $match: { userId, status: "paid", currency: { $ne: "point" }, source: { $nin: ["pass", "role-refund", "event-pass", "goedam"] }, kind: { $ne: "reset" }, paidAt: { $gte: since } } },
+      { $match: { userId, status: "paid", currency: { $ne: "point" }, source: { $nin: ["pass", "role-refund", "event-pass", "goedam", "booster", "invite"] }, kind: { $ne: "reset" }, paidAt: { $gte: since } } },
       { $group: { _id: null, s: { $sum: { $add: ["$amount", { $ifNull: ["$passBoost", 0] }] } } } },
     ]),
   ]);

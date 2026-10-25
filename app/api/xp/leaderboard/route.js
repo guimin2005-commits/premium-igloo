@@ -15,7 +15,8 @@ import { isAdminViewer } from "@/lib/adminViewServer";
 import BotSetting from "@/models/BotSetting";
 import { fetchGuildMember } from "@/lib/discordMember";
 import { badgesOfUsers, framesOfUsers } from "@/lib/itemPerks";
-import { monthBoard as monthBoardOf, totalBoard as totalBoardOf, rankTotalSince } from "@/lib/rankBoards";
+import { monthBoard as monthBoardOf, totalBoard as totalBoardOf, rankTotalSince, rankTotalOf } from "@/lib/rankBoards";
+import { serverMemberCount } from "@/lib/serverMembers";
 
 // 📌 디스코드 멤버 정보 — 프로필 사진과 표시 이름을 함께 가져온다.
 //    사진은 시상대(1~3위)에만, 이름은 UserXp 에 비어 있는 사람에게만 쓴다.
@@ -141,6 +142,7 @@ async function withMyBadges(row) {
 //   period=voice 누적 음성 시간 (UserXp.voiceSeconds — 시즌 2 개시일부터 적립, 10/3부터 실제 접속 초 · 봇 features/voiceTime.js)
 //   skip/limit 으로 페이지를 넘긴다. 순위는 skip 을 더해 이어진다.
 //   me=1 이면 로그인한 본인의 순위 · 값 · 쪽(me)을 함께 준다 — 목록에 없을 때 화면이 내 줄을 따로 그린다
+//   📌 2026-10-25 members = 순위의 전체 인원(서버 사람 수 포함 — rankTotalOf). 화면의 「N명」 · 「/ 전체」 · 「상위 N%」가 쓴다. total 은 목록에 오른 수(쪽 넘기기)
 export async function GET(request) {
   try {
     await connectToDatabase();
@@ -161,6 +163,8 @@ export async function GET(request) {
     const myId = session?.user?.id || "";
     const myName = session?.user?.name || "";
     const pageOf = (rank) => Math.floor((rank - 1) / limit);
+    const memberCount = serverMemberCount().catch(() => 0); // 기다리지 않고 시작 — 응답 직전에 받는다
+    const membersOf = async (n) => rankTotalOf(n, await memberCount);
 
     if (period === "total") {
       // 전원 값을 세어(캐시) 자른다 — 총원은 0 보다 큰 사람 전체
@@ -179,7 +183,7 @@ export async function GET(request) {
           name: r.name === NO_NAME ? myName || NO_NAME : r.name,
         });
       }
-      return NextResponse.json({ success: true, period, since, data: totalData, total: board.length, ...(wantMe ? { me } : {}) });
+      return NextResponse.json({ success: true, period, since, data: totalData, total: board.length, members: await membersOf(board.length), ...(wantMe ? { me } : {}) });
     }
 
     if (period === "month") {
@@ -218,7 +222,7 @@ export async function GET(request) {
           level: byId.get(myId)?.level ?? 0,
         });
       }
-      return NextResponse.json({ success: true, period, monthStart, data: monthData, total: board.length, ...(wantMe ? { me } : {}) });
+      return NextResponse.json({ success: true, period, monthStart, data: monthData, total: board.length, members: await membersOf(board.length), ...(wantMe ? { me } : {}) });
     }
 
     // 현재 · 음성 — 내 문서 하나로 내 순위를 센다(정렬과 같은 규칙: 값 내림차순, 동점은 userId 오름차순)
@@ -259,7 +263,7 @@ export async function GET(request) {
         level: myDoc.level ?? 0,
         voiceSeconds: myV,
       });
-      return NextResponse.json({ success: true, period, data: voiceData, total, ...(wantMe ? { me } : {}) });
+      return NextResponse.json({ success: true, period, data: voiceData, total, members: await membersOf(total), ...(wantMe ? { me } : {}) });
     }
 
     const myXp = myDoc?.xp || 0;
@@ -293,7 +297,7 @@ export async function GET(request) {
       level: myDoc.level ?? 0,
       attendCount: myDoc.attendCount || 0,
     });
-    return NextResponse.json({ success: true, period, data: allData, total, ...(wantMe ? { me } : {}) });
+    return NextResponse.json({ success: true, period, data: allData, total, members: await membersOf(total), ...(wantMe ? { me } : {}) });
   } catch (e) {
     console.error("리더보드 조회 오류:", e);
     return NextResponse.json({ success: false, data: [], total: 0 }, { status: 500 });

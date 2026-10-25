@@ -56,7 +56,8 @@ const AucModal = ({
 }) => {
   const t = MODAL_TONE[tone] || MODAL_TONE.default;
   return (
-    <div className="auc-modal-back animate-in fade-in" onClick={onClose}>
+    // 📌 "fixed inset-0" = 전역 ScrollLock 표시(그 글자가 든 z-50 이상 오버레이가 보이면 뒤 화면을 잠근다). 자리 · 층은 .auc-modal-back 이 정한다
+    <div className="auc-modal-back fixed inset-0 animate-in fade-in" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
         className={`auc-modal ${wide ? "sm:max-w-lg" : "sm:max-w-sm"} max-h-[88dvh] overflow-y-auto animate-in zoom-in-95 duration-200`}
@@ -2534,7 +2535,7 @@ export default function AuctionRoomPage({ params }: { params: Promise<{ id: stri
           doPlace(invIdx, slot);
         };
         return (
-          <div className="auc-modal-back z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }}>
+          <div className="auc-modal-back fixed inset-0 z-[118] animate-in fade-in" onClick={() => { setInvModal(null); setDragCard(null); setSwapMode(false); setSwapPick([]); setMoveFrom(null); setMobPick(null); }}>
             {/* 공지는 팝업 '바깥 위' 에 별도로 띄운다 → 세로로 [공지] / [인벤토리] 두 덩어리 */}
             <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-4xl flex flex-col max-h-[88dvh] h-[88dvh] sm:h-auto sm:max-h-[90vh]">
 

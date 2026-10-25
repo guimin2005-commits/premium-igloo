@@ -11,7 +11,7 @@ import { playTone } from "@/lib/sfx";
 import ItemIcon from "./ItemIcon";
 import TierEmblem from "./TierEmblem";
 import AvatarFrame from "./AvatarFrame";
-import { SceneBack, sceneBarOf, GhostTrailBar } from "./SceneBack";
+import { SceneBack, sceneBarOf, GhostTrailBar, CloverVineBar } from "./SceneBack";
 import { sceneMetaOf } from "@/lib/cardScenes";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { ICON_PATHS } from "./Icons";
@@ -51,8 +51,11 @@ export const invSubLabel = (it) => {
   if (it.source === "pass") return `${base} · 시즌 패스`;
   if (it.source === "event") return `${base} · 이벤트 패스`;
   if (it.source === "goedam") return `${base} · 괴담회`;
+  if (it.source === "invite") return `${base} · 친구 초대`;
   if (it.source === "grant") return `${base} · 운영진 지급`;
   if (it.source === "season") return `${base} · 시즌 ${it.seasonNo} 보상`;
+  // 2026-10-24 서버 부스터 — 부스팅 중인 동안 가진 부스터 혜택 아이템(lib/inventory.js (C))
+  if (it.source === "booster") return `${base} · 서버 부스터`;
   if (it.days > 0) return `${base} · ${it.days}일 이용권`;
   return base;
 };
@@ -391,7 +394,7 @@ const InvSlot = ({ it, on, onClick, worn = false, fav = false, onWear }) => {
           {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
           {hasSlotStatus(it) && (
             <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
-              {[it.count > 1 ? `×${it.count}` : "", it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" · ")}
+              {[it.count > 1 ? `×${it.count}` : "", it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" ")}
             </span>
           )}
         </span>
@@ -467,8 +470,8 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
           <span className="text-[11px] font-bold text-white/45">{it.count != null ? "수량" : "기간"}</span>
           <span className="text-[12px] font-black text-white/80 tabular-nums">
             {it.count != null
-              ? `×${it.count}${it.pendingCount > 0 ? ` · 지급 대기 ${it.pendingCount}` : ""}`
-              : it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : it.source === "season" ? "다음 시즌까지" : "영구"}
+              ? `×${it.count}${it.pendingCount > 0 ? ` 지급 대기 ${it.pendingCount}` : ""}`
+              : it.expiresAt ? `${it.days > 0 ? `${it.days}일 · ` : ""}기간제` : it.source === "season" ? "다음 시즌까지" : it.source === "booster" ? "부스팅 중" : "영구"}
           </span>
         </div>
         {it.expiresAt && !it.provisional && (
@@ -596,7 +599,8 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
 };
 
 // 📌 인벤토리 미리보기 — 아이템 등록 칸에서 "가방에 이렇게 보인다" 를 입력과 함께 바로 보여 준다.
-//    가방(BagOverlay)과 같은 잉크 판 · 같은 상세 · 같은 칸을 작게. 상태는 늘 "보유 중", 기간은 영구로 둔다.
+//    가방(BagOverlay)과 같은 잉크 판 · 같은 상세 · 같은 칸을 작게. 상태는 늘 "보유 중", 기간은 영구로 둔다
+//    (2026-10-25 넘겨준 count 가 있으면 「수량 ×N」 — 쌓이는 아이템, expiresAt 이 있으면 만료 줄 — 괴담회 추첨권. app/admin/shop/page.tsx regPreviewItem).
 //    📌 2026-10-17 분류 · 짧은 이름 — 넘겨준 값(categoryLabel · shortName)이 있으면 그대로, 없으면 입력값으로 정한다(lib/itemCategory.js —
 //       직접 정한 분류(category) > 이름 머리말 > 자동(유형 · 효과 effects)). 가방 칸 · 상세와 같은 글자가 보이게
 export function InventoryItemPreview({ item, effectLines }) {
@@ -870,6 +874,8 @@ function EquipCard({ w, skin, scene, frame, image, name, info = null, bare = fal
         </div>
         {bare ? null : sceneBar === "ghostTrail" ? (
           <div data-skin-bar className="absolute" style={{ left: 40, right: 28, top: 333 }}><GhostTrailBar pct={pct} /></div>
+        ) : sceneBar === "cloverVine" ? (
+          <div data-skin-bar className="absolute" style={{ left: 28, right: 28, top: 333 }}><CloverVineBar pct={pct} /></div>
         ) : (
           <div data-skin-bar className="absolute rounded-full overflow-hidden" style={{ left: 28, right: 28, top: 334, height: 10, background: "rgba(255,255,255,0.1)" }}>
             <div className="h-full rounded-full bg-[#e91e3f]" style={{ width: `${pct}%` }}></div>
@@ -947,8 +953,9 @@ function DetailRow({ it, worn, busy, onWear, onBadge, fav = null, onFav }) {
   const dday = ddayOf(it);
   // 종류 글자 — 서버가 정한 분류(categoryLabel), 없는 칸(옛 응답)만 꾸미기 키 → 유형 이름
   const kind = it.categoryLabel || (it.sceneKey ? "카드 배경" : it.skinKey ? "카드 테두리" : it.frameKey ? "프로필 테두리" : it.badgeId ? "프로필 배지" : itemTypeLabel(it.type || it.kind));
-  const from = { shop: "상점", pass: "시즌 패스", event: "이벤트 패스", grant: "지급", season: "시즌 보상", trial: "체험" }[it.source] || "";
-  const sub = [from, it.expiresAt ? (dday !== null ? `D-${dday}` : "기간제") : "영구"].filter(Boolean).join(" · ");
+  const from = { shop: "상점", pass: "시즌 패스", event: "이벤트 패스", invite: "친구 초대", grant: "지급", season: "시즌 보상", trial: "체험" }[it.source] || "";
+  // 서버 부스터 혜택(부스팅 중인 동안 가진 것 — lib/inventory.js (C))은 기간 대신 출처 한 마디
+  const sub = it.source === "booster" ? "서버 부스터" : [from, it.expiresAt ? (dday !== null ? `D-${dday}` : "기간제") : "영구"].filter(Boolean).join(" · ");
   // 📌 아래 줄 — 꾸미기는 「적용 범위」 아래 줄에 「대시보드 / …」(2026-10-18 운영자 — 예전「효과  프로필 배지」), 그 밖은 첫 효과 줄
   const scope = invScopeOf(it);
   const fx = scope ? "" : invEffectLinesOf(it)[0] || "";

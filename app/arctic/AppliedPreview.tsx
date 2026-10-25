@@ -118,10 +118,12 @@ const Label = ({ children }: { children: React.ReactNode }) => (
   <p className="mb-2 text-[12px] font-bold text-[#5a5a5a]">{children}</p>
 );
 
-export default function AppliedPreview({ item, user, me }: {
+// 📌 bare — 바깥 윗줄 · 「적용 미리보기」 제목 없이(부스터 혜택 화면 「전용 꾸미기」처럼 부르는 쪽이 제목을 단다, 2026-10-25)
+export default function AppliedPreview({ item, user, me, bare = false }: {
   item: Item;
   user: { name?: string | null; image?: string | null } | null | undefined;
   me: unknown;
+  bare?: boolean;
 }) {
   // 세트면 구성의 꾸미기를 종류별로 모은다(구성 차례 그대로)
   const parts = Array.isArray(item?.bundleItems) ? item.bundleItems.filter((p) => cosOf(p)) : [];
@@ -194,8 +196,8 @@ export default function AppliedPreview({ item, user, me }: {
   const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`;
 
   return (
-    <div className="mt-14 pt-10 border-t border-[#ededed]">
-      <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">적용 미리보기</h2>
+    <div className={bare ? "" : "mt-14 pt-10 border-t border-[#ededed]"}>
+      {!bare && <h2 className="text-base font-black text-[#131313] tracking-tight mb-5">적용 미리보기</h2>}
       {/* 세트 — 카드 배경 · 카드 테두리가 둘 이상일 때만 고르기 칩(하나뿐이면 칩 없이 그것) */}
       {sceneChips && (
         <div className="mb-5">

@@ -102,6 +102,10 @@ export const CARD_SKINS = {
   hw_blackcat: { label: "검은 고양이", grid: "dot", tint: "#8f88c8", gridOp: 0.07 },
   // 📌 할로윈 「유령 펭귄의 초대」 이벤트 카드 테두리(2026-10) — 그림은 cardSkins/ev_ghost.js. 바탕 결이 없는 테라 무늬는 기본 카드 그대로
   ev_ghost: { label: "유령 펭귄의 초대", grid: "line", tint: "#ffffff", gridOp: 0.05 },
+  // 📌 친구 초대 「네잎클로버 덩굴」 카드 테두리(2026-10-25) — 그림은 cardSkins/ev_clover.js. 카드를 칠하지 않는 덩굴 테라 무늬는 기본 카드 그대로
+  ev_clover: { label: "네잎클로버 덩굴", grid: "line", tint: "#ffffff", gridOp: 0.05 },
+  // 📌 서버 부스터 전용 「흩날리는 깃털과 엔젤 링」 카드 테두리(2026-10-25) — 그림은 cardSkins/bs_feather.js. 카드를 칠하지 않는 테라 무늬는 기본 카드 그대로
+  bs_feather: { label: "흩날리는 깃털과 엔젤 링", grid: "line", tint: "#ffffff", gridOp: 0.05 },
 };
 export const CARD_SKIN_KEYS = Object.keys(CARD_SKINS);
 export const SKIN_CARD_KINDS = ["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "autoAttend", "cmdQuest", "cmdInventory", "cmdPass"];
@@ -470,7 +474,8 @@ ${corners}<path d="${[[i, i], [w - i, i], [i, h - i], [w - i, h - i]].map(([x, y
   // 할로윈 시즌 — 사이트 프로필 카드와 같은 그림 함수(S=SK 배율 · 그림 한 장 — 움직임은 사이트에서만).
   //   카드 종류(kind)를 넘긴다 — 오른쪽 위 달 · 빼꼼은 레벨업 · 역할 지급, 바닥 큰 무리(솥 · 큰 유령)는 역할 지급 카드에만(cardSkins/hwFloor.js botTopOpen · botFloorOpen)
   //   「유령 펭귄의 초대」(ev_ghost — 이벤트) 도 같은 규칙: 테 · 메달 · 안개는 모든 카드, 랜턴 든 유령 펭귄은 레벨업 · 역할 지급 카드에만
-  ...Object.fromEntries(["hw_pumpkin", "hw_ghost", "hw_witch", "hw_candy", "hw_grave", "hw_blackcat", "ev_ghost"].map((k) => [k, (w, h, kind, o = {}) => STRING_SKINS[k].deco(w, h, SK, false, { kind, onScene: !!o.onScene })])),
+  //   「네잎클로버 덩굴」(ev_clover — 친구 초대) 도: 덩굴 · 싹 · 꽃은 모든 카드, 네잎 덤불은 역할 지급(아래 오른쪽 구석) · 레벨업(아래 막대 위)에만
+  ...Object.fromEntries(["hw_pumpkin", "hw_ghost", "hw_witch", "hw_candy", "hw_grave", "hw_blackcat", "ev_ghost", "ev_clover", "bs_feather"].map((k) => [k, (w, h, kind, o = {}) => STRING_SKINS[k].deco(w, h, SK, false, { kind, onScene: !!o.onScene })])),
 };
 
 const checkSvg = (color, sw = 3.2) =>
@@ -653,6 +658,35 @@ function ghostBar(k, pct, width) {
   return k.img(svgUri(svg), W0, GHOST_H, { flexShrink: 0, marginLeft: -GHOST_OUT });
 }
 const ghostBarOn = (k) => k.scene?.bar === "ghostTrail";
+// 📌 「덩굴 줄기」 막대(카드 배경 sc_clover — meta.bar "cloverVine") — 사이트 app/components/SceneBack CloverVineBar 와 같은 그림을 칸 VINE_C px 로(6칸 높이).
+//    0줄 위 잎 · 1줄 테 · 2 · 3줄 빈 관(두 톤) / 채운 곳은 줄기 밝음 · 몸 · 4줄 테 자리에 줄기 밑 · 5줄 아래 잎. 잎은 9칸마다 위아래 번갈아(줄기 끝 7칸 앞까지), 줄기 끝 다음 칸에 세잎 봉오리(6 × 6 — 끝까지 차면 n−7 ~ n−2칸)
+const VINE_C = 4;
+const VINE_H = 6 * VINE_C;
+const VINE_PAL = { frame: "#0a1517", track: "#1f3537", track2: "#182a2c", s1: "#a6e57c", s2: "#5aa83e", s3: "#24502a", lL: "#c8f2a0", lM: "#6cc24a", lD: "#3f8a35" };
+const VINE_BUD = [".oLLo.", "oLMMDo", "oLDWMo", "LMDDMD", "oMDoDo", ".oo.o."];
+const VINE_BUD_PAL = { o: "#0a1517", L: "#c8f2a0", M: "#8fd46a", D: "#4c9a3a", W: "#ffffff" };
+function cloverBar(k, pct, width) {
+  const c = VINE_C, n = Math.floor(width / c), P = VINE_PAL;
+  let s = "";
+  const r = (i, j, w, fill, hh = 1) => { if (w > 0) s += `<rect x="${i * c}" y="${j * c}" width="${w * c}" height="${hh * c}" fill="${fill}"/>`; };
+  r(1, 1, n - 2, P.frame); r(1, 4, n - 2, P.frame); r(0, 2, 1, P.frame, 2); r(n - 1, 2, 1, P.frame, 2);
+  r(1, 2, n - 2, P.track); r(1, 3, n - 2, P.track2);
+  // 줄기 칸 수 — 사이트와 같은 비율(끝 테 · 봉오리 자리 8칸을 뺀 길이 × 진행). 조금이라도 진행했으면 한 칸(봉오리가 보이게) · 끝까지 차도 봉오리는 끝 테 안
+  const p = clamp01(pct), f = p > 0 ? Math.max(1, Math.min(n - 8, Math.round((n - 8) * p))) : 0;
+  if (f > 0) {
+    r(1, 2, f, P.s1); r(1, 3, f, P.s2); r(1, 4, f, P.s3);
+    let up = true;
+    for (let i = 5; i < f - 7; i += 9) {
+      if (up) { r(i, 0, 2, P.lL); r(i + 2, 0, 1, P.lM); r(i - 1, 1, 1, P.s2); r(i, 1, 2, P.lM); }
+      else { r(i - 1, 4, 1, P.s2); r(i, 4, 2, P.lM); r(i, 5, 1, P.lM); r(i + 1, 5, 2, P.lD); }
+      up = !up;
+    }
+    VINE_BUD.forEach((row, j) => [...row].forEach((ch, i) => { if (VINE_BUD_PAL[ch]) r(1 + f + i, j, 1, VINE_BUD_PAL[ch]); }));
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${VINE_H}" viewBox="0 0 ${width} ${VINE_H}" shape-rendering="crispEdges">${s}</svg>`;
+  return k.img(svgUri(svg), width, VINE_H, { flexShrink: 0 });
+}
+const cloverBarOn = (k) => k.scene?.bar === "cloverVine";
 
 // 글자 폭(em) — Pretendard Black 실측(숫자 0.64 · 쉼표 0.31 · 한글 0.86 · W 1.06)을 조금 넉넉히
 const emOf = (ch) =>
@@ -732,7 +766,9 @@ function levelUpCard(k, kind, d, text) {
     // 막대 — 카드 배경이 막대 모양을 정하면(유령 꼬리) 그 막대(막대 가운데 높이는 그대로)
     ghostBarOn(k)
       ? k.box({ position: "absolute", left: 88, right: 88, bottom: 56 + 7 - GHOST_H / 2 }, ghostBar(k, pct, 1200 - 88 * 2))
-      : k.box({ position: "absolute", left: 88, right: 88, bottom: 56 }, bar(k, pct, 14, ACCENT))
+      : cloverBarOn(k)
+        ? k.box({ position: "absolute", left: 88, right: 88, bottom: 56 + 7 - VINE_H / 2 }, cloverBar(k, pct, 1200 - 88 * 2))
+        : k.box({ position: "absolute", left: 88, right: 88, bottom: 56 }, bar(k, pct, 14, ACCENT))
   );
 }
 
@@ -957,7 +993,7 @@ function profileCard(k, kind, d, text) {
     k.box(
       { position: "absolute", left: 72, right: 72, bottom: 54, alignItems: "center" },
       k.box({ width: 140, fontSize: 28, fontWeight: 900, color: W(0.75) }, `Lv.${num(level)}`),
-      k.box({ width: INNER - 280 }, ghostBarOn(k) ? ghostBar(k, pct, INNER - 280) : bar(k, pct, 16, ACCENT)),
+      k.box({ width: INNER - 280 }, ghostBarOn(k) ? ghostBar(k, pct, INNER - 280) : cloverBarOn(k) ? cloverBar(k, pct, INNER - 280) : bar(k, pct, 16, ACCENT)),
       k.box({ width: 140, justifyContent: "flex-end", fontSize: 28, fontWeight: 900, color: W(0.4) }, maxed ? "MAX" : `Lv.${num(level + 1)}`)
     )
   );

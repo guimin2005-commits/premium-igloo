@@ -136,6 +136,7 @@ const ItemSchema = new mongoose.Schema({
   type: { type: String, default: "item" },       // "role" | "perk" | "item" | "cosmetic"(꾸미기 — 역할 없음) | "physical"(기프트카드 — 효과 없음)
   roleId: { type: String, default: "" },
   visible: { type: Boolean, default: true },     // false 면 (B) 역할 보유 판정에서 "없는 것"으로 본다
+  boosterPerk: { type: Boolean, default: false }, // 2026-10-24 서버 부스터 혜택 — 부스팅 중인 동안 가진 것으로 친다(./booster.js · 사이트 models/Item.js 와 같은 칸)
   sortOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
   chatBuffXp: { type: Number, default: 0 },      // 채팅 1회당 +N XP
@@ -175,6 +176,13 @@ const AttendStreakRuleSchema = new mongoose.Schema({
   repeat: { type: Boolean, default: false }, // true 면 days 의 배수마다
 }, { _id: false });
 
+// 📌 연속 부스팅 보상 단계 한 줄 (models/BotSetting.js 의 BoosterStepRuleSchema 와 같아야 한다 — 정리는 사이트 app/api/bot-settings · booster.js boosterRewardsOf)
+const BoosterStepRuleSchema = new mongoose.Schema({
+  months: { type: Number, default: 1 }, // 연속 개월
+  xp: { type: Number, default: 0 },
+  point: { type: Number, default: 0 },  // 빙옥
+}, { _id: false });
+
 // 대시보드에서 관리하는 XP 기본 정책 (단일 문서 key:"main")
 const BotSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, default: "main" },
@@ -203,6 +211,12 @@ const BotSettingSchema = new mongoose.Schema({
   // 📌 연속 출석 보너스 — 기본 꺼짐. days 일 연속 달성 시 xp·point, repeat 면 days 의 배수마다 (attend.js)
   attendStreakEnabled: { type: Boolean, default: false },
   attendStreakRules: { type: [AttendStreakRuleSchema], default: [] },
+  // 📌 서버 부스터 보상(2026-10-25 · features/boosterBonus.js) — 최초 부스팅 XP · 빙옥, 연속 부스팅 단계. 비어 있으면 booster.js 기본값(boosterRewardsOf).
+  //    사다리는 default undefined — 칸이 없는 옛 문서와 "끔"(빈 배열)을 가른다. models/BotSetting.js 와 같아야 한다
+  boosterStartXp: { type: Number, default: 150000 },
+  boosterStartPoint: { type: Number, default: 30 },
+  boosterLadder: { type: [BoosterStepRuleSchema], default: undefined },
+  boosterLadderOn: { type: Boolean, default: false }, // 연속 부스팅 「사용」 — 켜야만 준다(booster.js boosterRewardsOf). models/BotSetting.js 와 같아야 한다
   // 📌 시즌 결산 RANKER 역할 — 비우면 결산 기록만 하고 역할은 주지 않는다
   rankerRoleId: { type: String, default: "" },
   // 📌 기간제 만료 임박 DM — 만료 N시간 전에 한 번 (features/expiryReminder.js)
@@ -606,12 +620,23 @@ const GoedamPrizeSchema = new mongoose.Schema({
   amount: { type: Number, default: 0 },      // xp · point
   itemId: { type: String, default: "" },
   itemName: { type: String, default: "" },
-  days: { type: Number, default: 0 },        // item 기간(일) — 0 = 무기한
+  count: { type: Number, default: 1 },       // item 개수(1~99) — 사이트 models/Goedam.js 와 같은 칸(봇은 상품을 쓰지 않는다)
   roleId: { type: String, default: "" },
   roleName: { type: String, default: "" },
   qty: { type: Number, default: null },      // null = 무제한(code 는 코드 수가 곧 수량)
   weight: { type: Number, default: 1 },      // 비중(1~1000000)
   rarity: { type: String, default: "" },     // rarity.js 키(표시용)
+}, { _id: false });
+// 📌 2026-10-24 운영자 "디코 일정 시간한 것도 지급할 거고 상점에도 판매할 거라서 회차라는 개념이 좀 애매한데" — 받는 길이 상영 · 음성 · 상점 셋이 됐다.
+//    음성 활동 = 하루(KST 자정 기준) 음성 minutes 분을 채우면 추첨권 tickets 장(하루 한 번 — features/goedamWatch.js 5분 주기). 기본 꺼짐(관리자가 채널을 정한 뒤 켠다).
+//    사이트 models/Goedam.js voice 와 같은 칸 · 같은 기본값, 범위는 lib/goedamRules.js ↔ features/goedamWatch.js normalizeGoedam 이 같게 자른다(분 10~1440 · 장 수 1~10)
+//    📌 채널 조건은 아직 없다(음성 XP 기록 전부) — 추후 셀 채널을 정하면 여기 channels(채널 · 카테고리 id 목록)를 더한다
+const GoedamVoiceSchema = new mongoose.Schema({
+  enabled: { type: Boolean, default: false },
+  minutes: { type: Number, default: 60 },    // 하루 음성 기준(분, 10~1440)
+  tickets: { type: Number, default: 1 },     // 채운 날 주는 추첨권 장 수(1~10)
+  startsAt: { type: Date, default: () => new Date("2026-10-30T00:00:00+09:00") }, // 기간 [시작, 끝) — 이 안의 음성만 센다
+  endsAt: { type: Date, default: () => new Date("2026-11-06T00:00:00+09:00") },
 }, { _id: false });
 const GoedamSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
@@ -620,10 +645,11 @@ const GoedamSchema = new mongoose.Schema({
   channelId: { type: String, default: "" },            // 스테이지 채널 ID — "" 이면 기록하지 않는다
   ticketItemId: { type: String, default: "" },         // 「할로윈 추첨권」 아이템(Item) id — "" 이면 지급을 미룬다
   ticketItemName: { type: String, default: "" },       // 표시 스냅샷 — 추첨권 Purchase.itemName
-  drawOpensAt: { type: Date, default: () => new Date("2026-10-30T20:00:00+09:00") },
-  drawClosesAt: { type: Date, default: () => new Date("2026-11-09T00:00:00+09:00") }, // 끝은 들어가지 않는다
+  drawOpensAt: { type: Date, default: () => new Date("2026-10-26T00:00:00+09:00") },
+  drawClosesAt: { type: Date, default: () => new Date("2026-11-06T00:00:00+09:00") }, // 끝은 들어가지 않는다
   screenings: { type: [GoedamScreeningSchema], default: [] },
   prizes: { type: [GoedamPrizeSchema], default: [] },
+  voice: { type: GoedamVoiceSchema, default: () => ({}) }, // 음성 활동 지급(위 GoedamVoiceSchema)
   nextSid: { type: Number, default: 1 },
   nextPid: { type: Number, default: 1 },
   updatedAt: { type: Date, default: Date.now },
@@ -632,6 +658,7 @@ export const Goedam = mongoose.models.Goedam || mongoose.model("Goedam", GoedamS
 
 // 📌 괴담회 회차별 머문 시간 — 한 줄 = (이벤트 키 · 회차 sid · 유저). 봇이 20초마다 seconds 를 $inc(upsert)하고,
 //    회차가 끝나면 완청인 줄의 grantedAt 을 { grantedAt: null } 조건부로 세운 뒤 추첨권을 넣는다(features/goedamWatch.js).
+//    📌 2026-10-24 음성 활동 줄도 같은 모델 — sid "voice:<YYYY-MM-DD>"(KST 날짜), seconds = 그날 음성 초 합(기준을 넘은 사람만 줄이 생긴다 · $max 로 갱신)
 //    사이트 관리 화면은 명단을 읽고, 손 지급(POST /api/admin/goedam/grant)은 manual 을 세운다. unique(eventKey, sid, userId)
 const GoedamWatchSchema = new mongoose.Schema({
   eventKey: { type: String, required: true },
@@ -646,6 +673,39 @@ const GoedamWatchSchema = new mongoose.Schema({
 }, { versionKey: false, autoCreate: false, autoIndex: false });
 GoedamWatchSchema.index({ eventKey: 1, sid: 1, userId: 1 }, { unique: true });
 export const GoedamWatch = mongoose.models.GoedamWatch || mongoose.model("GoedamWatch", GoedamWatchSchema);
+
+// 📌 최초 부스팅 보상 — 한 사람 한 줄(userId 유니크 · 2026-10-25, features/boosterBonus.js). 퇴장 초기화(leaveReset.js)가 지우지 않는다 — 다시 들어와 부스트해도 한 번뿐
+//    status: "granted"(보상 줌) · "baseline"(기능이 켜지기 전부터 부스팅 중이던 사람 — 안 줌) · "start"(userId "#start" 한 줄 — 기능이 처음 켜진 시각 at)
+//    ⚠️ autoCreate · autoIndex 를 끈다(사이트 · 테스트 사이트가 같은 DB) — 첫 쓰기 직전에 createIndexes() 를 한 번
+const BoosterBonusSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  userName: { type: String, default: "" },
+  status: { type: String, default: "granted" },
+  premiumSince: { type: Date, default: null }, // 그때 본 부스트 시작일
+  xp: { type: Number, default: 0 },            // 준 값(granted)
+  point: { type: Number, default: 0 },
+  payoutId: { type: String, default: "" },     // XP 지급 대기열 Payout _id
+  error: { type: String, default: "" },        // 지급이 반만 된 경우(빙옥 실패 · 큐가 이미 XP 를 집어 감) — 관리자가 손으로 맞춘다
+  at: { type: Date, default: Date.now },
+}, { versionKey: false, autoCreate: false, autoIndex: false });
+BoosterBonusSchema.index({ userId: 1 }, { unique: true });
+export const BoosterBonus = mongoose.models.BoosterBonus || mongoose.model("BoosterBonus", BoosterBonusSchema);
+
+// 📌 연속 부스팅 보상 — 한 사람 한 단계 한 줄(userId · months 유니크 · 2026-10-25, features/boosterBonus.js). 단계마다 사람당 한 번 — 퇴장 초기화도 지우지 않는다.
+//    사이트 models/BoosterStep.js(읽기만 — 혜택 화면 「받음」)와 같아야 한다. autoCreate · autoIndex 끔 — 첫 쓰기 직전에 createIndexes()
+const BoosterStepSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  months: { type: Number, required: true },   // 단계(연속 개월)
+  userName: { type: String, default: "" },
+  premiumSince: { type: Date, default: null }, // 그때 본 부스트 시작일
+  xp: { type: Number, default: 0 },
+  point: { type: Number, default: 0 },
+  payoutId: { type: String, default: "" },
+  error: { type: String, default: "" },        // 지급이 반만 된 경우 — BoosterBonus 와 같다
+  at: { type: Date, default: Date.now },
+}, { versionKey: false, autoCreate: false, autoIndex: false });
+BoosterStepSchema.index({ userId: 1, months: 1 }, { unique: true });
+export const BoosterStep = mongoose.models.BoosterStep || mongoose.model("BoosterStep", BoosterStepSchema);
 
 export const connectDb = (uri) => mongoose.connect(uri);
 export const disconnectDb = () => mongoose.disconnect();

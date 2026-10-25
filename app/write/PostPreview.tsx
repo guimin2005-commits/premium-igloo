@@ -22,6 +22,7 @@ export type PreviewPost = {
   noticeTag: string;
   isPinned: boolean;
   bannerUrl: string;
+  bannerInBody: boolean; // 이벤트 — false 면 글 보기에 배너 칸 없음
   eventTag: string;
   eventPeriod: string;
   tournamentGame: string;
@@ -192,12 +193,17 @@ function EventArticle({ p }: { p: PreviewPost }) {
           <CopyChip />
         </div>
 
-        <div className="mt-7 w-full aspect-[16/7] bg-[#f2f2f2] overflow-hidden flex items-center justify-center">
-          {p.bannerUrl
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={p.bannerUrl} alt="" className="w-full h-full object-cover" />
-            : <span className="text-[12px] font-bold text-[#a3a3a3]">이벤트</span>}
-        </div>
+        {/* 📌 상세(app/event/[id])와 같게 — 그림은 원래 비율(긴 이미지 그대로), 없으면 16:7 빈 칸, 「본문에 배너 표시」 끄면 없음 */}
+        {p.bannerInBody === false ? null : p.bannerUrl ? (
+          <div className="mt-7 w-full bg-[#f2f2f2]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.bannerUrl} alt="" className="block w-full h-auto" />
+          </div>
+        ) : (
+          <div className="mt-7 w-full aspect-[16/7] bg-[#f2f2f2] flex items-center justify-center">
+            <span className="text-[12px] font-bold text-[#a3a3a3]">이벤트</span>
+          </div>
+        )}
 
         <div className={`mt-7 ${NOTICE_BODY}`}>
           <RenderFormattedText text={p.content} />

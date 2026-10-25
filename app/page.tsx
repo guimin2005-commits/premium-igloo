@@ -385,8 +385,8 @@ export default function Home() {
               pill={`대회 ${tnCount.all} · 접수 중 ${tnCount.open}`} />,
             <InkBanner key="booster" href="/booster" eyebrow="서버 부스터" glow="rgba(255,65,207,0.2)" dot="#ff41cf"
               title={<>부스터 전용 <span className="text-[#e91e3f]">혜택</span></>}
-              sub="시작 100,000 XP · 상시 +2,000 XP" mark="35%"
-              pill="ARCTIC 환급 35%" />,
+              sub="채팅 · 음성 · 출석 XP 추가" mark="+XP"
+              pill="시즌 패스 프리미엄 자동 해금" />,
           ].filter(Boolean) as React.ReactElement[];
           return (
             <div className="relative mt-7 md:mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">

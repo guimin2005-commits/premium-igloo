@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { playTone } from "@/lib/sfx";
 
 /* 📌 멤버 인증 — 1단계 서버 이용 동의(필수) → 2단계 내전 채널 인증(선택)
    약관 요약은 /policy 의 운영정책·개인정보처리방침 조항을 그대로 따른다. 전문이 바뀌면 여기도 맞춘다. */
@@ -231,6 +232,20 @@ const SCRIM_RULES = [
   { no: "제4조", title: "채널 이용", desc: "내전은 반드시 지정된 내전 전용 음성 채널에서만 진행해야 하며, 내전 목적 외 해당 채널의 사적 이용은 제한됩니다." },
 ];
 
+// 📌 친구 초대 코드 — 2026-10-25 "친구 초대 코드 입력은 그 최초 로그인? 동의하는 곳에서 할 수 있게 하자 · 물론 이벤트 창에서도 되고".
+//    입력 정리는 서버(lib/invite.js normalizeCode)와 같게 — 대문자 · 빈칸 · 붙임표 빼기, 6자까지(붙여넣은 「K7Q-2ZP」가 정리 전에 잘리지 않게 여기서 자른다)
+const normInviteCode = (v: string) => String(v || "").toUpperCase().replace(/[\s\-‐-―−－]+/g, "").slice(0, 6);
+// 효과음 — 레벨 화면 친구 초대 창(app/level/InviteModal.js)과 같은 어휘: 넣기는 오름 넷, 거절은 낮게 하나
+const sfxInviteOk = () => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => playTone(f, 0.16, "triangle", 0.05), i * 110));
+const sfxInviteNo = () => playTone(330, 0.12, "sine", 0.03);
+// 거절 한 줄 id — 칸의 aria-describedby 가 가리킨다
+const INVITE_ERROR_ID = "verify-invite-error";
+// 📌 포커스가 <body> 로 떨어지지 않게 — 포커스가 초대 코드 자리 안(또는 이미 <body>)일 때만 el 로 옮긴다. 다른 곳(약관 등)으로 옮겼으면 건드리지 않는다
+const focusIfLost = (box: HTMLElement | null, el: HTMLElement | null) => {
+  const a = document.activeElement;
+  if (el && (!a || a === document.body || !!box?.contains(a))) el.focus();
+};
+
 const CheckIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
 );
@@ -260,6 +275,79 @@ export default function VerifyPage() {
   const isAllChecked = checkedCount === AGREEMENTS.length;
 
   const isRevisiting = (session?.user as any)?.isVerified === true;
+
+  // 📌 초대 코드(선택) — 칸은 서버가 넣을 수 있다고 할 때만(GET /api/invite?enter=1 enter.show — 가벼운 판정만 · 코드를 만들지 않는다 · 조건 판정은 lib/invite.js). 어떤 실패든 숨긴다.
+  //    처음 인증하는 서버 멤버만 묻는다(입장 안내 화면 · 다시 온 인증 회원은 1단계가 없다). 「다음」은 이 칸과 상관없다
+  const inviteUser = session?.user as { id?: string; isGuildMember?: boolean } | undefined;
+  const sessionUserId = String(inviteUser?.id || "");
+  const askInvite = status === "authenticated" && !!sessionUserId && inviteUser?.isGuildMember !== false && !isRevisiting;
+  const [inviteShow, setInviteShow] = useState(false);
+  const [inviteInput, setInviteInput] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [invited, setInvited] = useState<{ name: string; code: string } | null>(null);
+  // 📌 넣는 중인 요청 — 「다음」이 끝날 때까지 기다린다(결과를 잃지 않게). 값: 넣었으면 true · 거절 · 오류면 false
+  const inviteJob = useRef<Promise<boolean> | null>(null);
+  const inviteBoxRef = useRef<HTMLDivElement>(null);
+  const inviteInputRef = useRef<HTMLInputElement>(null);
+  const inviteDoneRef = useRef<HTMLDivElement>(null);
+  // 넣으면 칸 · 단추가 사라진다 — 포커스를 확인 줄로
+  useEffect(() => {
+    if (invited) focusIfLost(inviteBoxRef.current, inviteDoneRef.current);
+  }, [invited]);
+  useEffect(() => {
+    if (!askInvite) return;
+    let alive = true;
+    fetch("/api/invite?enter=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setInviteShow(!!(d?.ok && d.enter?.show)); })
+      .catch(() => { if (alive) setInviteShow(false); });
+    return () => { alive = false; };
+  }, [askInvite, sessionUserId]);
+
+  // 넣기 — 거절이면 서버 글 그대로 한 줄(포커스는 칸으로). 넣으면 칸이 확인 줄(「OO 님 초대」 + 코드)로 바뀐다
+  const handleInviteRedeem = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (inviteBusy || inviteJob.current) return;
+    const code = normInviteCode(inviteInput);
+    if (code.length !== 6) {
+      sfxInviteNo();
+      setInviteError("코드 6자리를 넣어 주세요.");
+      focusIfLost(inviteBoxRef.current, inviteInputRef.current);
+      return;
+    }
+    setInviteBusy(true);
+    setInviteError("");
+    let settle: (ok: boolean) => void = () => {};
+    inviteJob.current = new Promise<boolean>((r) => { settle = r; });
+    let ok = false;
+    try {
+      const res = await fetch("/api/invite/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.ok) {
+        ok = true;
+        sfxInviteOk();
+        setInvited({ name: String(d.inviterName || ""), code });
+        setInviteInput("");
+      } else {
+        sfxInviteNo();
+        setInviteError(d?.error || d?.message || "넣지 못했습니다.");
+        focusIfLost(inviteBoxRef.current, inviteInputRef.current);
+      }
+    } catch {
+      sfxInviteNo();
+      setInviteError("네트워크 오류로 넣지 못했습니다.");
+      focusIfLost(inviteBoxRef.current, inviteInputRef.current);
+    } finally {
+      setInviteBusy(false);
+      inviteJob.current = null;
+      settle(ok);
+    }
+  };
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -292,8 +380,11 @@ export default function VerifyPage() {
     setOpenTab(openTab === tab ? null : tab);
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (!isAllChecked) return;
+    // 📌 초대 코드를 넣는 중이면 결과를 기다린다 — 거절이면 1단계에 남아 그 줄을 보여 준다(한 번 더 누르면 넘어간다 · 그 밖엔 칸과 상관없다)
+    const job = inviteJob.current;
+    if (job && !(await job)) return;
     setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -456,6 +547,50 @@ export default function VerifyPage() {
                 );
               })}
             </div>
+
+            {/* 초대 코드(선택) — 약관 아래 · 「다음」 위. 넣으면 같은 자리가 확인 줄로 */}
+            {(inviteShow || invited) && (
+              <div ref={inviteBoxRef} className="mb-8">
+                <p className="flex items-center gap-2 mb-2.5">
+                  <span className="text-sm font-black text-[#131313]">초대 코드</span>
+                  <span className="text-[#5a5a5a] text-xs font-bold bg-[#f2f2f2] px-2 py-0.5 rounded">선택</span>
+                </p>
+                {invited ? (
+                  <div ref={inviteDoneRef} role="status" tabIndex={-1} className="h-12 px-4 rounded-xl bg-[#f2f2f2] flex items-center gap-2.5 outline-none">
+                    <span className="shrink-0 grid place-items-center text-[#e91e3f]"><CheckIcon className="w-4 h-4" /></span>
+                    <span className="flex-1 min-w-0 truncate text-sm font-bold text-[#131313]">{invited.name} 님 초대</span>
+                    <span className="shrink-0 text-xs font-bold text-[#5a5a5a] tabular-nums tracking-[0.08em]">{invited.code}</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleInviteRedeem} className="flex items-center gap-2">
+                    <input
+                      ref={inviteInputRef}
+                      value={inviteInput}
+                      onChange={(e) => { setInviteInput(normInviteCode(e.target.value)); if (inviteError) setInviteError(""); }}
+                      placeholder="코드 6자리"
+                      aria-label="초대 코드"
+                      aria-invalid={inviteError ? true : undefined}
+                      aria-describedby={inviteError ? INVITE_ERROR_ID : undefined}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      enterKeyHint="done"
+                      readOnly={inviteBusy}
+                      className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white border border-[#a3a3a3] text-base font-bold uppercase tracking-[0.12em] text-[#131313] outline-none focus:border-[#131313] transition-colors placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-[#8a8a8a] read-only:bg-[#f2f2f2]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={inviteBusy}
+                      className="relative shrink-0 h-12 px-5 rounded-xl bg-[#131313] hover:bg-[#3a3a3a] text-white text-sm font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
+                    >
+                      <span className={inviteBusy ? "invisible" : undefined}>넣기</span>
+                      {inviteBusy && <span className="absolute inset-0 grid place-items-center">…</span>}
+                    </button>
+                  </form>
+                )}
+                {inviteError && !invited && <p id={INVITE_ERROR_ID} role="alert" aria-live="assertive" className="mt-2 text-xs font-bold text-[#d01634] break-keep">{inviteError}</p>}
+              </div>
+            )}
 
             <button
               onClick={handleNextStep}
