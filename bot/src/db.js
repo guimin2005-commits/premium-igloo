@@ -707,7 +707,8 @@ const BoosterStepSchema = new mongoose.Schema({
 BoosterStepSchema.index({ userId: 1, months: 1 }, { unique: true });
 export const BoosterStep = mongoose.models.BoosterStep || mongoose.model("BoosterStep", BoosterStepSchema);
 
-export const connectDb = (uri) => mongoose.connect(uri);
+// 📌 2026-10-25 Atlas 연결 한도(500)에 닿아 본 사이트가 DB 를 못 잡음 — 봇도 기본 100개 대신 작게(20초마다 bulkWrite 정도라 충분)
+export const connectDb = (uri) => mongoose.connect(uri, { maxPoolSize: 10, minPoolSize: 0, maxIdleTimeMS: 60_000 });
 export const disconnectDb = () => mongoose.disconnect();
 
 // MongoDB 중복 키 오류 (원자적 쿨타임/출석 체크에서 "이미 처리됨" 신호로 사용)

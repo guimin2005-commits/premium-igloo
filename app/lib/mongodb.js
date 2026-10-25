@@ -18,8 +18,12 @@ export async function connectToDatabase() {
   }
 
   if (!cached.promise) {
+    // 연결 한도 — lib/mongodb.js 와 같다(2026-10-25 Atlas 500 한도에 닿음). 같은 global.mongoose 캐시를 쓴다
     const opts = {
       bufferCommands: false,
+      maxPoolSize: 8,
+      minPoolSize: 0,
+      maxIdleTimeMS: 15_000,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
