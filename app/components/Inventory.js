@@ -155,8 +155,8 @@ const untilOf = (it) =>
     : "";
 
 // 칸 이름 아래 상태 · 기간 줄이 있는 항목 (지급 대기 · 확인 필요 · 기간제 · 여러 개 묶음)
-//    📌 ×N — 1개 단위 상품 · 소모품 묶음(서버 my-items 의 count). 모서리 배지 대신 이 줄 맨 앞에 글자로
-const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt || it.count > 1;
+//    📌 ×N — 1개 단위 상품 · 소모품 묶음(서버 my-items 의 count). 2026-10-25 운영자 "인벤토리 오른 아래에 몇 개인지 적어" — 이 줄이 아니라 칸 오른쪽 아래에(1개여도)
+const hasSlotStatus = (it) => it.status === "pending" || it.status === "missing" || !!it.expiresAt;
 
 // 📌 2026-10-11 「다듬은 잉크 판」(운영자 "다듬으니까 좋네") — 칸 · 상세 이름은 유형 머리말(카드 테두리 · 배지 …)을 뗀 이름.
 //    유형은 탭 · 상세의 유형 글자(invKindOf)가 알려 준다. 떼고 남는 글자가 없으면 원래 이름 그대로. title(마우스 올림)은 원래 이름
@@ -377,6 +377,10 @@ const InvSlot = ({ it, on, onClick, worn = false, fav = false, onWear }) => {
       {/* 📌 칸 아래 띠는 희귀도 색(2026-10-17 — 예전엔 유형 색) · 빛 · 테 · 반짝이 — 지급 대기 · 확인 필요는 장식 없이. 아이콘 · 착용 꺾쇠는 아이템 색 그대로 */}
       <RarityDeco r={rar} on={on} fav={fav} stripe={dead ? "" : accent} />
       {worn && !dead && <WornMark accent={accent} />}
+      {/* 수량 — 쌓이는 묶음(count 가 오면)만 칸 오른쪽 아래 */}
+      {it.count != null && (
+        <span aria-label={`수량 ${it.count}`} className={`absolute right-1.5 bottom-2 text-[10px] font-black tabular-nums leading-none ${dead ? "text-white/35" : "text-white/85"}`}>×{it.count}</span>
+      )}
       {/* 아이콘 자리는 늘 28px — 등급 문장(32)은 이 자리 가운데서 위아래로 2px 씩 넘친다(문장 그림에 여백이 있어 괜찮다).
           아이템 아이콘(28)과 칸마다 높이가 달라 아이콘이 오르내리지 않게 */}
       <span aria-hidden className="mb-1.5 h-7 flex items-center justify-center">
@@ -388,13 +392,13 @@ const InvSlot = ({ it, on, onClick, worn = false, fav = false, onWear }) => {
       <span className="relative w-full h-[12.5px]">
         <span className="absolute inset-x-0 top-0 flex flex-col items-center">
           {/* 이름은 낱말 단위로 줄바꿈(break-keep — "테/두리"처럼 끊기지 않게), 한 낱말이 칸보다 길 때만 그 안에서 */}
-          <span className={`w-full text-[10px] font-black leading-tight text-center break-keep [overflow-wrap:anywhere] ${hasSlotStatus(it) ? "line-clamp-1" : "line-clamp-2"} ${dead ? "text-white/35" : "text-white/85"}`}>
+          <span className={`w-full text-[10px] font-black leading-tight text-center break-keep [overflow-wrap:anywhere] ${hasSlotStatus(it) || it.count != null ? "line-clamp-1" : "line-clamp-2"} ${dead ? "text-white/35" : "text-white/85"}`}>
             {invShortName(it)}
           </span>
           {/* 상태 · 기간 — 모서리 배지 · 점 대신 이름 아래 한 줄 글자로 (3일 이하 · 확인 필요는 빨강) */}
           {hasSlotStatus(it) && (
             <span className={`mt-1 text-[9px] font-bold tabular-nums leading-none ${it.status === "missing" || (dday !== null && dday <= 3) ? "text-[#ff5c77]" : "text-white/45"}`}>
-              {[it.count > 1 ? `×${it.count}` : "", it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" ")}
+              {[it.status === "pending" ? "지급 대기" : it.status === "missing" ? "확인 필요" : "", dday !== null ? `D-${dday}` : ""].filter(Boolean).join(" ")}
             </span>
           )}
         </span>

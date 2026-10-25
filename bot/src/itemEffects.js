@@ -463,7 +463,8 @@ export function ownedItemList({ purchases, items, shopItems, heldRoles = null, b
     const o = owned.get(id);
     if (!o) continue;
     // 묶음 — 개수는 묶음 건 수, 만료는 무기한이 있으면 없음 · 모두 기간제면 가장 빠른 것(먼저 쓰이는 것)
-    if (o.units > 0) out.push({ item, expiresAt: o.perm || !o.first ? null : new Date(o.first), pending: o.pending, count: o.units, bought: !!o.bought });
+    // stack — 쌓이는 묶음(1장이어도) · /인벤토리 카드 칸 오른쪽 아래 수량(views/inventory.js)
+    if (o.units > 0) out.push({ item, expiresAt: o.perm || !o.first ? null : new Date(o.first), pending: o.pending, count: o.units, stack: true, bought: !!o.bought });
     else out.push({ item, expiresAt: o.exp ? new Date(o.exp) : null, pending: o.pending, count: 1, bought: !!o.bought });
   }
   return out;

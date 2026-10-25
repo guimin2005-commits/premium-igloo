@@ -5,6 +5,7 @@ import { Item, ShopItem, Purchase, UserXp } from "../db.js";
 import { ownedItemList, pickCardSkin, pickCardScene, scenesOf, pickAvatarFrame, framesOf, withSeasonFrame, seasonFrameOf, skinsOf, seasonSkinOf, withSeasonSkin } from "../itemEffects.js";
 import { isBoosterMember } from "../booster.js";
 import { formatUntil } from "../botMessages.js";
+import { goedamTicketInfo } from "../goedamTicket.js";
 import { SEASONS, seasonEndMs } from "../leveling.js";
 import { normalizeRarity } from "../rarity.js";
 
@@ -88,6 +89,9 @@ export async function inventoryView(member) {
   const heldRoles = roles ? [...roles.keys()] : Array.isArray(member?.roles) ? member.roles.map(String) : null;
   // 서버 부스터면 부스터 혜택 아이템(boosterPerk)도 — 사이트 인벤토리 (C) 와 같다(../booster.js)
   const owned = ownedItemList({ purchases, items, shopItems, heldRoles, booster: isBoosterMember(member) });
+  // 📌 2026-10-25 괴담회 추첨권은 추첨 마감에 끝난다(../goedamTicket.js — 사이트 lib/inventory.js 와 같다). 만료가 없거나 더 늦으면 마감으로 읽는다(DB 는 그대로)
+  const tk = await goedamTicketInfo().catch(() => null);
+  if (tk?.id && tk.closesAt) for (const o of owned) if (String(o.item?._id) === tk.id && (!o.expiresAt || new Date(o.expiresAt) > tk.closesAt)) o.expiresAt = tk.closesAt;
   const worn = await wornOf(userId, owned).catch(() => ({ skin: "", scene: "", frame: "", badges: new Set(), season: null, seasonSkin: null }));
   // 📌 시즌 티어 테두리(UserXp.seasonFrame) — 아이템이 아니어도 가진 것으로 한 줄(사이트 인벤토리의 꾸미기 카드와 같다). 다음 시즌 끝(그 결산이 덮어쓴다)
   if (worn.season) {
@@ -139,7 +143,7 @@ export async function inventoryView(member) {
     const k = m[1].toLowerCase();
     return TIER_KEYS.includes(k) ? `tier-frame-${k}` : DECO_ART[k] || "avatar-frame";
   };
-  const bag = owned.map(({ item, expiresAt, pending, count, season }) => {
+  const bag = owned.map(({ item, expiresAt, pending, count, stack, season }) => {
     const skin = skinOf(item);
     const scene = sceneOf(item);
     const frame = frameOf(item);
@@ -155,6 +159,7 @@ export async function inventoryView(member) {
       // 📌 2026-10-17 희귀도 — 아이템 문서가 있는 칸만(""·모르는 값 = 일반). 시즌 보상(아이템 문서 없음)은 null → 카드에서 예전 모습
       rarity: season ? null : normalizeRarity(item.rarity),
       count,
+      stack: !!stack,
       expiresAt,
       pending: !!pending,
       worn: (!!worn.skin && skinsOf(skin).includes(worn.skin)) || (!!worn.scene && scenesOf(scene).includes(worn.scene)) || (!!worn.frame && framesOf(frame).includes(worn.frame)) || worn.badges.has(String(item._id)),
@@ -195,6 +200,7 @@ export async function inventoryCardData(v, name, cards) {
         icon: b.imageUrl && !image ? "" : b.icon,
         image,
         count: b.count,
+        stack: !!b.stack,
         pending: b.pending,
         worn: b.worn,
         days: exp ? Math.max(0, Math.ceil((exp - now) / 86400000)) : null,

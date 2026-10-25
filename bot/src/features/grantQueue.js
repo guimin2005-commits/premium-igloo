@@ -16,6 +16,7 @@ import { bumpActivity } from "./activityStats.js";
 import { noteXpStop, stopUntilOf } from "../xpStop.js";
 import { config } from "../config.js";
 import { buildMessage, commonVars, formatUntil } from "../botMessages.js";
+import { goedamTicketInfo, isTicketPurchase } from "../goedamTicket.js";
 
 const TICK_MS = 30 * 1000;
 const DAY_MS = 86400000;
@@ -198,8 +199,12 @@ async function processPurchases(guild) {
       console.log(`🛒 역할 지급 완료: ${p.userName} ← ${itemName}${p.days > 0 ? ` (${p.days}일)` : ""}${p.renewOf ? " · 연장" : ""}`);
 
       // 본인에게 알린다 — 연장 · 기간제(언제까지) · 영구
+      //    📌 2026-10-25 괴담회 추첨권은 기간 0(영구)으로 팔려도 추첨 마감에 끝난다(../goedamTicket.js) — 「영구」 대신 마감까지 남은 날 · 마감 시각(끝은 안 들어가 1분 앞)
       const until = formatUntil(expiresAt);
+      const tk = await goedamTicketInfo().catch(() => null);
+      const tkEnd = tk?.closesAt && isTicketPurchase(p, tk) ? tk.closesAt.getTime() : 0;
       if (p.renewOf) sendDm(member, "renewed", { item: itemName, days: p.days, until });
+      else if (tkEnd > grantedAt.getTime()) sendDm(member, "purchaseGrantedTimed", { item: itemName, days: Math.max(1, Math.ceil((tkEnd - grantedAt.getTime()) / 86400000)), until: formatUntil(tkEnd - 60_000) });
       else if (p.days > 0 && expiresAt) sendDm(member, "purchaseGrantedTimed", { item: itemName, days: p.days, until });
       else sendDm(member, "purchaseGranted", { item: itemName });
     } catch (e) {

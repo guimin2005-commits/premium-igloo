@@ -74,7 +74,7 @@ export const CARD_FIELDS = {
   rankerAnnounce: ["season", "seasonName", "top: [{ name, avatar, xp }] — 1위부터 최대 3명"],
   //  item: { name, type, icon("art:키" · "svg:키" · 짧은 글자), image?(png · jpeg data URI — 원격 주소는 받지 않는다), color? } — 그림은 itemIconEl
   cmdQuest: ["name", "claimable", "periods: [{ key: daily|weekly|monthly, left: 초기화까지 ms, quests: [{ name, metric: count|minute|xp|day|run|channel|point, unit?: 회|분|일|곳|건|개|빙옥, current, target, rewardXp, rewardPoint, done, claimed, claimable }] }]", "skin?", "scene?"],
-  cmdInventory: ["name", "total", "items: [item + { count, days?: 남은 일수(영구면 없음), pending?, worn?, rarity?: 희귀도 키(\"\" = 일반 · 없으면 등급 없는 칸) }] — 앞에서 BAG_SLOTS 칸까지", "skin?", "scene?"],
+  cmdInventory: ["name", "total", "items: [item + { count, stack?: 쌓이는 묶음(칸 오른쪽 아래 ×N — 1개여도), days?: 남은 일수(영구면 없음), pending?, worn?, rarity?: 희귀도 키(\"\" = 일반 · 없으면 등급 없는 칸) }] — 앞에서 BAG_SLOTS 칸까지", "skin?", "scene?"],
   cmdPass: ["season", "seasonName", "tier", "maxTier", "progress — 다음 티어까지 0~1", "need — 다음 티어까지 남은 XP", "claimFree", "claimPaid", "premium", "nextTier — 다음 보상 티어(다 넘었으면 0)", "next: [{ kind: xp|point|role|item, amount?, label?, premium, ...item }] — 그 티어의 무료 → 프리미엄 전부(최대 PASS_MAX)"],
 };
 
@@ -1663,15 +1663,15 @@ function bagCard(k, kind, d, text, art) {
     // 희귀도 — rarity 가 문자열인 칸만(""은 일반). 지급 대기는 띠 · 빛 없이 흐리게
     const rar = typeof it.rarity === "string" && !dead ? rarityOf(it.rarity) : null;
     const days = it.days == null || it.days === "" ? null : Math.max(0, int(it.days));
+    // 📌 2026-10-25 운영자 "인벤토리 오른 아래에 몇 개인지 적어" — 수량은 상태 줄이 아니라 칸 오른쪽 아래(쌓이는 묶음이면 1개여도)
+    const qty = it.stack || int(it.count) > 1 ? int(it.count) : 0;
     let status = [
-      int(it.count) > 1 ? { k: "count", t: `×${num(it.count)}`, c: W(0.6) } : null,
       dead ? { k: "pending", t: "지급 대기", c: W(0.45) } : null,
       days != null ? { k: "days", t: `D-${days}`, c: days <= 3 ? "#ff5c77" : W(0.55) } : null,
     ].filter(Boolean);
     const statusW = (list) => list.reduce((a, x, j) => a + emWidth(x.t) * 22 * 0.95 + (j ? 8 : 0), 0);
     const wide = () => statusW(status) > BAG_W - 24;
     if (wide() && dead) status = status.map((x) => (x.k === "pending" ? { ...x, t: "대기" } : x));
-    if (wide()) status = status.filter((x) => x.k !== "count");
     while (status.length > 1 && wide()) status = status.slice(0, -1);
     const band = dead ? null : rar ? rar.c : accent;
     return cell(
@@ -1690,6 +1690,7 @@ function bagCard(k, kind, d, text, art) {
       it.worn && !dead ? k.box({ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundImage: `linear-gradient(0deg, ${rgba(accent, 0.2)} 0%, ${rgba(accent, 0)} 62%)` }) : null,
       ...(it.worn && !dead ? corners(accent) : []),
       band ? k.box({ position: "absolute", left: 0, right: 0, bottom: 0, height: 6, backgroundColor: band }) : null,
+      qty > 0 ? k.box({ position: "absolute", right: 12, bottom: 14, fontSize: 21, fontWeight: 900, lineHeight: 1, color: dead ? W(0.4) : W(0.9) }, `×${num(qty)}`) : null,
       itemIconEl(k, it, 64, text, art, dead),
       k.para(text(bagName(it.name)) || "아이템", 2, { marginTop: 10, width: BAG_W - 24, textAlign: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, lineHeight: 1.15, color: dead ? W(0.4) : W(0.88) }),
       status.length
