@@ -688,9 +688,11 @@ const Gauge = ({ ratio }) => {
 const innerHref = (v) => (typeof v === "string" && /^\/(?![/\\])/.test(v) ? v : "");
 
 // 상품 그림 — XP 번개 도트 · 빙옥 구슬 도트 · 아이템 유형 기본 모양 · 역할 방패 · 코드는 선물 상자 도트(lib/itemArt "starter-pack") · 꽝은 유령 펭귄("ghost-penguin")
-const PrizeIcon = ({ kind, size }) => {
+//    📌 아이템은 그 아이템 그림(art — 상품 줄 icon · imageUrl · color, 결과는 pid 로 찾음). 그림이 없을 때만 기본 모양(2026-10-26 「한 번 더!」가 상자로 보이던 것)
+const PrizeIcon = ({ kind, size, art = null }) => {
   if (kind === "xp") return <ItemIcon icon="art:xp-bolt" size={size} />;
   if (kind === "point") return <Sprite rows={CURRENCY_PIXEL.point.rows} pal={CURRENCY_PIXEL.point.pal} size={size} />;
+  if (kind === "item" && (art?.icon || art?.imageUrl)) return <ItemIcon icon={art.icon} imageUrl={art.imageUrl} type="item" size={size} color={art.color || itemTypeColor("item")} />;
   if (kind === "item") return <ItemIcon type="item" size={size} color={itemTypeColor("item")} />;
   if (kind === "none") return <ItemIcon icon="art:ghost-penguin" size={size} />;
   if (kind === "code") return <ItemIcon icon="art:starter-pack" size={size} />;
@@ -1088,6 +1090,8 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
   const screenings = Array.isArray(data?.screenings) ? data.screenings : [];
   const history = Array.isArray(data?.history) ? data.history : [];
   const rarityByPid = Object.fromEntries(prizes.map((p) => [p.pid, p.rarity]));
+  // 결과 카드 그림 — 상품 줄의 아이템 그림(icon · imageUrl · color)을 pid 로(지운 상품이면 없음 → 기본 모양)
+  const prizeArt = new Map(prizes.map((p) => [p.pid, p]));
   const running = busyNow; // 단추도 다 보일 때까지 잠근다
   // 커튼 — 결과 때 여는 움직임은 이번에 닫혔을 때만(건너뛰어 닫히기 전에 결과가 오면 제자리 그대로 — 닫힌 척 튀었다 열리지 않게)
   const drape = anim?.step === "close" ? " shut" : anim?.step === "result" && anim.curtain ? " open" : "";
@@ -1199,7 +1203,7 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
         <div className="gd-flip" style={c ? { "--f0": ms(c.flip), "--f1": ms(c.flip + R_FOLD), ...(c.hold != null ? { "--h": ms(c.hold) } : null) } : undefined}>
           {c && <BackCard card={c} />}
           <div className={`gd-card t-${cardTier(rank)}${none ? " none" : ""}`} style={{ "--rc": rc }} {...live} onClick={(e) => { if (r.code && anim.done) e.stopPropagation(); }}>
-            <span className="gd-ci"><PrizeIcon kind={r.kind} size={wide ? 96 : 48} /></span>
+            <span className="gd-ci"><PrizeIcon kind={r.kind} size={wide ? 96 : 48} art={prizeArt.get(r.pid)} /></span>
             <div className="gd-ct">
               {!none && <RarityChip v={r.rarity} />}
               <p className="gd-cn">{nameOf(r)}</p>
@@ -1229,7 +1233,7 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
                 {/* 마지막이 아닌 전설 이상 칸 — 펴질 때 그 칸 둘레 고리 하나(큰 효과는 마지막 한 장만) */}
                 {c?.ring && <i aria-hidden className="gd-mring" style={{ "--rc": c.c }} />}
                 <div className={`gd-mc t-${cardTier(rk)}${rk < 0 ? " none" : ""}${c?.jolt ? " jolt" : ""}`} style={{ "--rc": rk < 0 ? "#3a3186" : rarityOf(r.rarity).c }}>
-                  <span className="gd-mic"><PrizeIcon kind={r.kind} size={narrow ? 22 : 30} /></span>
+                  <span className="gd-mic"><PrizeIcon kind={r.kind} size={narrow ? 22 : 30} art={prizeArt.get(r.pid)} /></span>
                   <span className="gd-mn">{nameOf(r)}</span>
                   {amt && <span className="gd-ma">{amt}</span>}
                 </div>
