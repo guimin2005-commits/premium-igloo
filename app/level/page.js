@@ -4623,7 +4623,8 @@ export default function LevelPage() {
                                   <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
                                     <div className={`h-full rounded-full transition-[width] duration-700 ${done ? "bg-emerald-600" : "bg-[#131313]"}`} style={{ width: `${pct}%` }}></div>
                                   </div>
-                                  <span className="shrink-0 w-[60px] sm:w-16 text-right text-[11px] font-black text-[#5a5a5a] tabular-nums whitespace-nowrap">
+                                  {/* 📌 2026-10-25 숫자가 길면(5,000,000/5,000,000 XP) 고정 폭을 넘쳐 오른쪽 「완료」와 겹쳤다 — 최소 폭만 두고 넘치면 칸이 넓어져 그 카드의 막대만 짧아진다 */}
+                                  <span className="shrink-0 min-w-[60px] sm:min-w-16 text-right text-[11px] font-black text-[#5a5a5a] tabular-nums whitespace-nowrap">
                                     {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
                                   </span>
                                   <div className="shrink-0 w-[72px] sm:w-20 h-8 flex items-center justify-center">

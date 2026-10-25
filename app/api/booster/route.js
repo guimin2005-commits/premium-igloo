@@ -41,7 +41,8 @@ export async function GET() {
     await connectToDatabase();
     const [rows, setting, session] = await Promise.all([
       catalogFind(Item, { boosterPerk: true }, { select: FIELDS, sort: { sortOrder: 1, createdAt: 1 } }),
-      BotSetting.findOne({ key: "main" }, { chatXpMin: 1, chatXpMax: 1, voiceXp: 1, voiceIntervalSec: 1, attendXp: 1, boosterStartXp: 1, boosterStartPoint: 1, boosterLadder: 1 }).lean(),
+      // 📌 boosterLadderOn 을 꼭 같이 — 빠지면 boosterRewardsOf 가 늘 꺼짐으로 보고 연속 부스팅 칸이 안 나왔다(2026-10-25)
+      BotSetting.findOne({ key: "main" }, { chatXpMin: 1, chatXpMax: 1, voiceXp: 1, voiceIntervalSec: 1, attendXp: 1, boosterStartXp: 1, boosterStartPoint: 1, boosterLadder: 1, boosterLadderOn: 1 }).lean(),
       getServerSession(authOptions).catch(() => null),
     ]);
     const list = rows.filter(isBoosterPerkItem);
