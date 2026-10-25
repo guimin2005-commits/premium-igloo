@@ -1498,6 +1498,21 @@ export default function AdminGoedamPage() {
   const [paneErr, setPaneErr] = useState("");
   const [del, setDel] = useState<{ type: "screening" | "prize"; key: string } | null>(null);
 
+  // 📌 code 상품 편집 창 — 등록된 코드 목록(2026-10-25 운영자 "등록한 거 왜 안 보여" — 남은 수만 보이고 코드는 안 보였다).
+  //    창을 열 때 · 저장 뒤(설정을 다시 받으면) 다시 읽는다. 저장 전 새 상품(pid 없음)은 목록 없음
+  const codePaneKey = pane?.type === "prize" && pane.d.kind === "code" ? pane.d.key : "";
+  const codePanePid = codePaneKey ? cfg.prizes.find((p) => p.key === codePaneKey)?.pid || "" : "";
+  const [codeList, setCodeList] = useState<{ pid: string; rows: { code: string; used: boolean; userName: string; at: string | null }[] } | null>(null);
+  useEffect(() => {
+    if (!codePanePid) return;
+    let live = true;
+    fetch(`/api/admin/goedam?codes=${encodeURIComponent(codePanePid)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.success && Array.isArray(j.data)) setCodeList({ pid: codePanePid, rows: j.data }); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [codePanePid, cfg]);
+
   const roleNameOf = useCallback((id: string) => guildRoles.find((r) => r.id === id)?.name || "", [guildRoles]);
   const itemOf = useCallback((id: string) => regItems.find((it) => it._id === id) || null, [regItems]);
   // 📌 아이템 상품 개수 2개 이상이 되는 아이템 — 추첨권 아이템 · 쌓이는 아이템(/api/admin/items stackable — 1개 단위 상품이 가리키거나 소모형). 서버 저장도 같은 판정.
@@ -2999,6 +3014,22 @@ export default function AdminGoedamPage() {
                   남은 {fmt(pdStock?.left ?? 0)} / 전체 {fmt(pdStock?.total ?? 0)}
                 </p>
               </label>
+            )}
+            {/* 등록된 코드 — 넣은 순서. 나간 코드는 흐리게 · 받은 사람 · 시각 */}
+            {pd.kind === "code" && codeList && codeList.pid === pdPrize?.pid && codeList.rows.length > 0 && (
+              <div>
+                <span className={labelClass}>등록된 코드</span>
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-[#e5e5e5] divide-y divide-[#f0f0f0] bg-white">
+                  {codeList.rows.map((r) => (
+                    <div key={r.code} className="flex items-center gap-3 px-3 py-2">
+                      <span className={`min-w-0 flex-1 truncate font-mono text-[13px] ${r.used ? "text-[#a3a3a3] line-through" : "text-[#131313]"}`}>{r.code}</span>
+                      <span className={`shrink-0 text-[12px] font-bold tabular-nums ${r.used ? "text-[#8a8a8a]" : "text-[#131313]"}`}>
+                        {r.used ? `${r.userName || "당첨"} ${isoLabel(r.at)}` : "남음"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">

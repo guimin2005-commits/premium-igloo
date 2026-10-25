@@ -31,6 +31,7 @@ import {
   goedamRoster,
   goedamDraws,
   addGoedamCodes,
+  listGoedamCodes,
   writeGoedamConfig,
 } from "@/lib/goedam";
 
@@ -73,6 +74,8 @@ export async function GET(request) {
       return NextResponse.json({ success: true, data: rows });
     }
     if (sp.get("draws") === "1") return NextResponse.json({ success: true, data: await goedamDraws() });
+    // 📌 code 상품의 등록된 코드 목록(상품 편집 창) — ?codes=<pid>
+    if (sp.has("codes")) return NextResponse.json({ success: true, data: await listGoedamCodes(String(sp.get("codes") || "").slice(0, 40)) });
     return NextResponse.json({ success: true, data: await getGoedamAdmin() });
   } catch (e) {
     console.error("괴담회 설정 조회 오류:", e);
