@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import ItemIcon from "../components/ItemIcon";
 import { openLogin } from "../components/LoginPrompt";
 import { playTone } from "@/lib/sfx";
-import { GROUP_GAMES } from "@/lib/goedamGames";
+import { GROUP_GAMES, GAME_OTHER } from "@/lib/goedamGames";
 
 // 📌 「게임 그룹 지원」(방구석 심야 괴담회) 창 — 이벤트 창(./EventTabs.js EventHub) 안 탭 하나(embedded). 약속 .claude/mockups/goedam-group/SPEC.md 5절.
 //    서버는 app/api/goedam/group(GET 상태 · ?code= 초대 미리보기 · POST action — lib/goedamGroup.js). 인원 · 상태 · 참여 가능 여부 · 상품권 번호는 서버가 센다 — 화면은 받은 대로만 그린다.
@@ -274,6 +274,7 @@ const GG_CSS = `
 .grp-gm:focus-visible { border-color: ${GD.cyan}; }
 .grp-gm.on { color: #2a1006; --bg: #ff8a3d; --hi: #ffc08a; --sh: #b4521b; }
 .grp-gm:disabled { cursor: default; opacity: .6; }
+.grp-oth { margin-top: 8px; } /* 기타 — 칩 바로 아래 게임 이름 칸 */
 .grp-in.empty { color: #5a5390; } /* 비어 있는 날짜 · 시간 칸 — 자리 글자(연도-월-일 · --:--)를 자리표시 색으로 */
 .grp-in:focus { border-color: #4a3fa0; }
 .grp-in:disabled { color: rgba(241,236,255,.45); }
@@ -415,7 +416,10 @@ const stateOf = (j) => {
 // 장 수 — 0 이상 정수(못 읽으면 0)
 const countOf = (v) => Math.max(0, Math.floor(Number(v) || 0));
 
-const EMPTY_FORM = { name: "", game: "", date: "", time: "" };
+// other — 「기타」를 골랐나(그때 game 은 직접 적은 이름)
+const EMPTY_FORM = { name: "", game: "", other: false, date: "", time: "" };
+// 게임 칸 비었을 때 — 기타면 이름을 적으라고
+const noGameMsg = (v) => (v.other ? "게임 이름을 넣어 주세요." : "게임을 골라 주세요.");
 
 // 지원서 — 새 그룹 · 고치기가 같은 칸을 쓴다(그룹 이름 · 함께 할 게임 · 언제(선택 — 날짜 · 시간) · 금색 단추 · 고치기면 「취소」)
 //    k = 이 지원서의 동작 이름(create · edit) — 그 동작 중이면 칸을 잠그고 단추에 「…」. locked = 기간 밖 잠금 글자(단추 글자를 대신한다)
@@ -429,20 +433,37 @@ const ApplyForm = ({ v, set, onSubmit, label, k, busy, locked = "", onCancel = n
       {/* 📌 2026-10-25 운영자 "게임 이름 적는 게 아니라 선택하는 방식" — 정해진 게임(lib/goedamGames.js) 칩에서 하나 고른다(서버도 같은 표로 확인) */}
       <span className="grp-fl" id="grp-game">함께 할 게임</span>
       <div className="grp-games" role="radiogroup" aria-labelledby="grp-game">
-        {GROUP_GAMES.map((g) => (
-          <button
-            key={g}
-            type="button"
-            role="radio"
-            aria-checked={v.game === g}
-            className={`grp-gm grp-pp${v.game === g ? " on" : ""}`}
-            onClick={() => { if (v.game !== g) { sfxTick(); set({ ...v, game: g }); } }}
-            disabled={mine}
-          >
-            {g}
-          </button>
-        ))}
+        {GROUP_GAMES.map((g) => {
+          const on = !v.other && v.game === g;
+          return (
+            <button
+              key={g}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              className={`grp-gm grp-pp${on ? " on" : ""}`}
+              onClick={() => { if (!on) { sfxTick(); set({ ...v, game: g, other: false }); } }}
+              disabled={mine}
+            >
+              {g}
+            </button>
+          );
+        })}
+        {/* 📌 2026-10-26 운영자 "함께할 게임에 기타 칸" — 고르면 바로 아래 칸에 게임 이름을 적는다(서버 checkGame 이 표에 없는 이름을 받는다) */}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={v.other}
+          className={`grp-gm grp-pp${v.other ? " on" : ""}`}
+          onClick={() => { if (!v.other) { sfxTick(); set({ ...v, game: "", other: true }); } }}
+          disabled={mine}
+        >
+          {GAME_OTHER}
+        </button>
       </div>
+      {v.other && (
+        <input className="grp-in grp-pp grp-oth" value={v.game} onChange={(e) => set({ ...v, game: e.target.value })} maxLength={30} placeholder="게임 이름" aria-label="게임 이름" autoComplete="off" autoFocus disabled={mine} />
+      )}
       <label className="grp-fl" htmlFor="grp-date">언제<i>선택</i></label>
       <div className="grp-two">
         <input id="grp-date" type="date" className={`grp-in grp-pp${v.date ? "" : " empty"}`} value={v.date} onChange={(e) => set({ ...v, date: e.target.value })} aria-label="날짜" disabled={mine} />
@@ -631,7 +652,7 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
     if (busyRef.current) return;
     const name = draft.name.trim(), game = draft.game.trim();
     const w = whenOut(draft.date, draft.time);
-    const err = !name ? "그룹 이름을 넣어 주세요." : !game ? "게임을 골라 주세요." : w.error || "";
+    const err = !name ? "그룹 이름을 넣어 주세요." : !game ? noGameMsg(draft) : w.error || "";
     if (err) {
       sfxNo();
       pushToast?.(err);
@@ -644,7 +665,7 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
     if (busyRef.current || !edit) return;
     const name = edit.name.trim(), game = edit.game.trim();
     const w = whenOut(edit.date, edit.time);
-    const err = !name ? "그룹 이름을 넣어 주세요." : !game ? "게임을 골라 주세요." : w.error || "";
+    const err = !name ? "그룹 이름을 넣어 주세요." : !game ? noGameMsg(edit) : w.error || "";
     if (err) {
       sfxNo();
       pushToast?.(err);
@@ -654,7 +675,9 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
   };
   const startEdit = (g) => {
     sfxTick();
-    setEdit({ name: String(g.name || ""), game: String(g.game || ""), date: dateIn(g.when), time: hmOf(g.when) });
+    const gm = String(g.game || "");
+    // 표에 없는 이름 = 「기타」로 적은 게임
+    setEdit({ name: String(g.name || ""), game: gm, other: !!gm && !GROUP_GAMES.includes(gm), date: dateIn(g.when), time: hmOf(g.when) });
   };
   const cancelEdit = () => {
     sfxTick();
