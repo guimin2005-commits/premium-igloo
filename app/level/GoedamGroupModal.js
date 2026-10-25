@@ -111,221 +111,223 @@ const sfxNo = () => playTone(330, 0.12, "sine", 0.03);
 const sfxTick = () => playTone(660, 0.05, "sine", 0.025);
 
 // ── 창 CSS — 단색 · 도트 테만(그라데이션 · 흐린 빛 금지). 틀 문법은 GoedamModal(.gd-win · .gd-wi · .gd-pp)과 같다 ──
-//    📌 PC 높이 맞춤은 @container gg(본문 .gg-main 의 실제 크기) — 화면 높이가 아니라 이벤트 창 칸 높이(탭 줄이 위에 붙으면 그만큼 낮다)를 본다
+//    ⚠ 2026-10-25 클래스 머리를 gg- 로 두지 말 것 — 「gg」는 중국어 광고(广告) 줄임말이라 광고 차단 목록(EasyList China `##.gg-box`)이
+//       웨일 · 확장 광고 차단에서 오른쪽 칸(문화상품권 · 참여 코드)을 통째로 숨겼다(테스트 사이트 localhost 는 차단이 안 돌아 보였다) → grp-
+//    📌 PC 높이 맞춤은 @container gg(본문 .grp-main 의 실제 크기) — 화면 높이가 아니라 이벤트 창 칸 높이(탭 줄이 위에 붙으면 그만큼 낮다)를 본다
 const GG_CSS = `
 @keyframes ggIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
-.gg-win { position: relative; width: 100%; height: 88vh; height: 88dvh; padding: 3px 3px 0; background: ${GD.ink}; clip-path: ${NOTCH6_TOP}; animation: ggIn .32s cubic-bezier(0.16,1,0.3,1); color: ${GD.text}; }
-.gg-wi { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: ${GD.panel}; clip-path: ${NOTCH_TOP}; }
-.gg-wi::after { content: ""; position: absolute; inset: 0; z-index: 40; pointer-events: none; box-shadow: inset 3px 3px 0 #2c2468, inset -3px 0 0 #0b0822; }
+.grp-win { position: relative; width: 100%; height: 88vh; height: 88dvh; padding: 3px 3px 0; background: ${GD.ink}; clip-path: ${NOTCH6_TOP}; animation: ggIn .32s cubic-bezier(0.16,1,0.3,1); color: ${GD.text}; }
+.grp-wi { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: ${GD.panel}; clip-path: ${NOTCH_TOP}; }
+.grp-wi::after { content: ""; position: absolute; inset: 0; z-index: 40; pointer-events: none; box-shadow: inset 3px 3px 0 #2c2468, inset -3px 0 0 #0b0822; }
 @media (min-width: 640px) {
-  .gg-win { max-width: 1100px; height: min(800px, 92vh); padding: 3px; clip-path: ${NOTCH6}; }
-  .gg-wi { clip-path: ${NOTCH}; }
-  .gg-wi::after { box-shadow: inset 3px 3px 0 #2c2468, inset -3px -3px 0 #0b0822; }
+  .grp-win { max-width: 1100px; height: min(800px, 92vh); padding: 3px; clip-path: ${NOTCH6}; }
+  .grp-wi { clip-path: ${NOTCH}; }
+  .grp-wi::after { box-shadow: inset 3px 3px 0 #2c2468, inset -3px -3px 0 #0b0822; }
 }
 /* 📌 이벤트 창 안(embedded) — 크기는 이벤트 창(./EventTabs.js EventHub)이 정하고 창은 그 칸을 꽉 채운다. 열림 움직임도 이벤트 창이 한 번만 */
-.gg-win.emb { max-width: none; height: 100%; animation: none; }
-.gg-wi *, .gg-wi *::before, .gg-wi *::after { box-sizing: border-box; }
-.gg-px { image-rendering: pixelated; }
-.gg-pp { border: 3px solid ${GD.ink}; background: var(--bg, #17123a); box-shadow: inset 3px 3px 0 var(--hi, #2c2468), inset -3px -3px 0 var(--sh, #0d0a26); clip-path: ${NOTCH}; }
-.gg-grab { position: absolute; z-index: 20; left: 50%; top: 9px; width: 36px; height: 6px; margin-left: -18px; background: #3a3186; }
-.gg-x { position: absolute; z-index: 30; right: 12px; top: 14px; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; --bg: #221a52; --hi: #3a3186; --sh: #120e30; outline: none; cursor: pointer; }
-.gg-x:hover { --bg: #2c2468; }
-.gg-x:focus-visible { border-color: ${GD.cyan}; }
-@media (min-width: 640px) { .gg-x { right: 18px; top: 18px; width: 36px; height: 36px; } }
+.grp-win.emb { max-width: none; height: 100%; animation: none; }
+.grp-wi *, .grp-wi *::before, .grp-wi *::after { box-sizing: border-box; }
+.grp-px { image-rendering: pixelated; }
+.grp-pp { border: 3px solid ${GD.ink}; background: var(--bg, #17123a); box-shadow: inset 3px 3px 0 var(--hi, #2c2468), inset -3px -3px 0 var(--sh, #0d0a26); clip-path: ${NOTCH}; }
+.grp-grab { position: absolute; z-index: 20; left: 50%; top: 9px; width: 36px; height: 6px; margin-left: -18px; background: #3a3186; }
+.grp-x { position: absolute; z-index: 30; right: 12px; top: 14px; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; --bg: #221a52; --hi: #3a3186; --sh: #120e30; outline: none; cursor: pointer; }
+.grp-x:hover { --bg: #2c2468; }
+.grp-x:focus-visible { border-color: ${GD.cyan}; }
+@media (min-width: 640px) { .grp-x { right: 18px; top: 18px; width: 36px; height: 36px; } }
 /* 머리 — 괴담회 띠 배너. 칩(비공개)은 왼쪽 위에 얹는다 */
-.gg-hd { flex: none; position: relative; }
-.gg-hdi { display: block; width: 100%; height: auto; }
-.gg-tags { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; align-items: center; }
-@media (max-width: 639.98px) { .gg-tags { top: 21px; } }
-.gg-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font-size: 11px; font-weight: 900; line-height: 18px; color: rgba(241,236,255,.6); white-space: nowrap; --bg: #221a52; --hi: #3a3186; --sh: #120e30; }
+.grp-hd { flex: none; position: relative; }
+.grp-hdi { display: block; width: 100%; height: auto; }
+.grp-tags { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; align-items: center; }
+@media (max-width: 639.98px) { .grp-tags { top: 21px; } }
+.grp-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font-size: 11px; font-weight: 900; line-height: 18px; color: rgba(241,236,255,.6); white-space: nowrap; --bg: #221a52; --hi: #3a3186; --sh: #120e30; }
 /* 📌 본문 — 폰은 한 줄(이 칸만 세로 스크롤), PC 는 왼쪽 · 오른쪽 330 두 칸(칸 높이 안에서 — 멤버 칸만 안에서 스크롤) */
-.gg-main { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); }
-.gg-main::-webkit-scrollbar, .gg-l::-webkit-scrollbar, .gg-r::-webkit-scrollbar, .gg-seatbox::-webkit-scrollbar { display: none; }
-.gg-l, .gg-r { display: flex; flex-direction: column; min-width: 0; }
-.gg-r { margin-top: 14px; }
+.grp-main { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); }
+.grp-main::-webkit-scrollbar, .grp-l::-webkit-scrollbar, .grp-r::-webkit-scrollbar, .grp-seatbox::-webkit-scrollbar { display: none; }
+.grp-l, .grp-r { display: flex; flex-direction: column; min-width: 0; }
+.grp-r { margin-top: 14px; }
 @media (min-width: 640px) {
-  .gg-main { display: flex; padding: 22px 24px 24px; overflow: hidden; container: gg / size; }
-  .gg-l { flex: 1 1 0%; min-height: 0; overflow: hidden; }
-  .gg-l.scroll { overflow-y: auto; scrollbar-width: none; }
-  .gg-r { flex: none; width: 330px; min-height: 0; margin: 0 0 0 20px; overflow-y: auto; scrollbar-width: none; }
+  .grp-main { display: flex; padding: 22px 24px 24px; overflow: hidden; container: gg / size; }
+  .grp-l { flex: 1 1 0%; min-height: 0; overflow: hidden; }
+  .grp-l.scroll { overflow-y: auto; scrollbar-width: none; }
+  .grp-r { flex: none; width: 330px; min-height: 0; margin: 0 0 0 20px; overflow-y: auto; scrollbar-width: none; }
 }
 /* 그룹 카드 — 이름 크게 · 상태 칩 / 게임 · 언제 */
-.gg-big { flex: none; padding: 12px 14px; --bg: #17123a; }
-.gg-top { display: flex; align-items: center; }
-.gg-t { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 19px; font-weight: 900; line-height: 26px; color: #fff; overflow-wrap: anywhere; }
-.gg-chip { flex: none; display: inline-flex; align-items: center; height: 24px; margin-left: 8px; padding: 0 8px; font-size: 12px; font-weight: 900; line-height: 18px; color: #2a1006; white-space: nowrap; --bg: #ff8a3d; --hi: #ffc08a; --sh: #b4521b; }
-.gg-chip.wait { color: ${GD.text}; --bg: #3a3186; --hi: #5a4fc0; --sh: #1d1745; }
-.gg-chip.ok { color: #2a1606; --bg: #e2b04a; --hi: ${GD.gold}; --sh: #9c6a22; }
-.gg-chip.no { color: #fff; --bg: #d9435e; --hi: #ff8a9c; --sh: #8c1d33; }
-.gg-sub { display: flex; flex-wrap: wrap; gap: 0 12px; margin: 5px 0 0; font-size: 12px; font-weight: 700; line-height: 17px; color: ${GD.text}; overflow-wrap: anywhere; }
-.gg-sub span { min-width: 0; }
+.grp-big { flex: none; padding: 12px 14px; --bg: #17123a; }
+.grp-top { display: flex; align-items: center; }
+.grp-t { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 19px; font-weight: 900; line-height: 26px; color: #fff; overflow-wrap: anywhere; }
+.grp-chip { flex: none; display: inline-flex; align-items: center; height: 24px; margin-left: 8px; padding: 0 8px; font-size: 12px; font-weight: 900; line-height: 18px; color: #2a1006; white-space: nowrap; --bg: #ff8a3d; --hi: #ffc08a; --sh: #b4521b; }
+.grp-chip.wait { color: ${GD.text}; --bg: #3a3186; --hi: #5a4fc0; --sh: #1d1745; }
+.grp-chip.ok { color: #2a1606; --bg: #e2b04a; --hi: ${GD.gold}; --sh: #9c6a22; }
+.grp-chip.no { color: #fff; --bg: #d9435e; --hi: #ff8a9c; --sh: #8c1d33; }
+.grp-sub { display: flex; flex-wrap: wrap; gap: 0 12px; margin: 5px 0 0; font-size: 12px; font-weight: 700; line-height: 17px; color: ${GD.text}; overflow-wrap: anywhere; }
+.grp-sub span { min-width: 0; }
 @media (min-width: 640px) {
-  .gg-big { padding: 16px 18px; }
-  .gg-t { font-size: 24px; line-height: 32px; }
-  .gg-chip { height: 28px; padding: 0 10px; font-size: 13px; line-height: 22px; }
-  .gg-sub { margin-top: 7px; font-size: 13px; line-height: 18px; }
+  .grp-big { padding: 16px 18px; }
+  .grp-t { font-size: 24px; line-height: 32px; }
+  .grp-chip { height: 28px; padding: 0 10px; font-size: 13px; line-height: 22px; }
+  .grp-sub { margin-top: 7px; font-size: 13px; line-height: 18px; }
 }
 /* 칸 머리 글 — 「멤버」 + 인원 */
-.gg-sh { flex: none; display: flex; justify-content: space-between; margin: 0; padding: 14px 0 6px; font-size: 11px; font-weight: 900; line-height: 15px; color: ${GD.sub}; }
-.gg-sh b { color: #d8d2f5; font-weight: 900; font-variant-numeric: tabular-nums; }
-@media (min-width: 640px) { .gg-sh { padding-top: 18px; } }
+.grp-sh { flex: none; display: flex; justify-content: space-between; margin: 0; padding: 14px 0 6px; font-size: 11px; font-weight: 900; line-height: 15px; color: ${GD.sub}; }
+.grp-sh b { color: #d8d2f5; font-weight: 900; font-variant-numeric: tabular-nums; }
+@media (min-width: 640px) { .grp-sh { padding-top: 18px; } }
 /* 📌 멤버 칸 — 사진 자리 = 이름 첫 글자 원. 빈 자리 칸은 없다(운영자). 폰 2칸 · PC 4칸(칸 폭이 좁으면 3 · 2)
      칸이 낮아지면(여러 줄 · 낮은 창) 원이 「그룹장」 표와 겹치지 않게 위를 --pt 만큼 비운다(표 아래부터 가운데 맞춤 — 줄의 원 높이는 같다) */
-.gg-seatbox { flex: none; }
-.gg-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; --seat: 92px; --av: 40px; --pt: 0px; }
-.gg-seat { position: relative; height: var(--seat); min-width: 0; padding: var(--pt) 8px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; --bg: #17123a; }
-.gg-seat.me { --bg: #1d1748; }
-.gg-av { flex: none; width: var(--av); height: var(--av); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: calc(var(--av) * .36); font-weight: 900; line-height: 1; color: #fff; background: var(--c); box-shadow: 0 0 0 3px ${GD.ink}; }
-.gg-n { display: block; max-width: 100%; margin-top: 6px; font-size: 13.5px; font-weight: 800; line-height: 18px; color: ${GD.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gg-lead { position: absolute; left: 7px; top: 7px; display: inline-flex; align-items: center; height: 22px; padding: 0 7px; font-size: 11px; font-weight: 900; line-height: 16px; color: ${GD.gold}; white-space: nowrap; --bg: #221a52; --hi: #3a3186; --sh: #120e30; }
-.gg-kick { position: absolute; right: 7px; top: 7px; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; line-height: 1; color: ${GD.sub}; outline: none; cursor: pointer; --bg: #221a52; --hi: #3a3186; --sh: #120e30; }
-.gg-kick:hover:not(:disabled) { --bg: #2c2468; }
-.gg-kick:focus-visible { border-color: ${GD.cyan}; }
-.gg-kick:disabled { cursor: default; }
-@media (max-width: 369.98px) { .gg-seats { --seat: 104px; --pt: 32px; } }
+.grp-seatbox { flex: none; }
+.grp-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; --seat: 92px; --av: 40px; --pt: 0px; }
+.grp-seat { position: relative; height: var(--seat); min-width: 0; padding: var(--pt) 8px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; --bg: #17123a; }
+.grp-seat.me { --bg: #1d1748; }
+.grp-av { flex: none; width: var(--av); height: var(--av); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: calc(var(--av) * .36); font-weight: 900; line-height: 1; color: #fff; background: var(--c); box-shadow: 0 0 0 3px ${GD.ink}; }
+.grp-n { display: block; max-width: 100%; margin-top: 6px; font-size: 13.5px; font-weight: 800; line-height: 18px; color: ${GD.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grp-lead { position: absolute; left: 7px; top: 7px; display: inline-flex; align-items: center; height: 22px; padding: 0 7px; font-size: 11px; font-weight: 900; line-height: 16px; color: ${GD.gold}; white-space: nowrap; --bg: #221a52; --hi: #3a3186; --sh: #120e30; }
+.grp-kick { position: absolute; right: 7px; top: 7px; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; line-height: 1; color: ${GD.sub}; outline: none; cursor: pointer; --bg: #221a52; --hi: #3a3186; --sh: #120e30; }
+.grp-kick:hover:not(:disabled) { --bg: #2c2468; }
+.grp-kick:focus-visible { border-color: ${GD.cyan}; }
+.grp-kick:disabled { cursor: default; }
+@media (max-width: 369.98px) { .grp-seats { --seat: 104px; --pt: 32px; } }
 @media (min-width: 640px) {
-  .gg-seatbox { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-  .gg-seats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; --seat: 196px; --av: 68px; --pt: 0px; }
-  .gg-seats.multi { --seat: 136px; --av: 52px; --pt: 28px; }
-  .gg-n { margin-top: 12px; font-size: 16px; line-height: 20px; }
-  .gg-lead { left: 10px; top: 10px; height: 24px; padding: 0 8px; font-size: 12px; line-height: 18px; }
-  .gg-kick { right: 10px; top: 10px; }
+  .grp-seatbox { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  .grp-seats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; --seat: 196px; --av: 68px; --pt: 0px; }
+  .grp-seats.multi { --seat: 136px; --av: 52px; --pt: 28px; }
+  .grp-n { margin-top: 12px; font-size: 16px; line-height: 20px; }
+  .grp-lead { left: 10px; top: 10px; height: 24px; padding: 0 8px; font-size: 12px; line-height: 18px; }
+  .grp-kick { right: 10px; top: 10px; }
 }
 /* 오른쪽 칸 — 문화상품권 · 참여 링크(또는 내 문화상품권 · 참여 코드) */
-.gg-box { flex: none; padding: 12px 14px; --bg: #17123a; }
-.gg-box + .gg-box { margin-top: 12px; }
-@media (min-width: 640px) { .gg-box { padding: 14px 16px; } }
+.grp-box { flex: none; padding: 12px 14px; --bg: #17123a; }
+.grp-box + .grp-box { margin-top: 12px; }
+@media (min-width: 640px) { .grp-box { padding: 14px 16px; } }
 /* 폰 — 시안대로 링크 칸은 판 없이 · 문화상품권 칸은 내 그룹 화면에서 뺀다(.pc) */
 @media (max-width: 639.98px) {
-  .gg-box.flat { padding: 0; border: 0; background: none; box-shadow: none; clip-path: none; }
-  .gg-box.flat, .gg-box + .gg-box.flat { margin-top: 8px; }
-  .gg-box.pc { display: none; }
+  .grp-box.flat { padding: 0; border: 0; background: none; box-shadow: none; clip-path: none; }
+  .grp-box.flat, .grp-box + .grp-box.flat { margin-top: 8px; }
+  .grp-box.pc { display: none; }
 }
-.gg-prize { display: flex; align-items: center; }
-.gg-gc { flex: none; display: flex; line-height: 0; } /* 도트 상품권(24×16 · u=2 → 48×32) */
-.gg-pt { min-width: 0; margin-left: 12px; }
-.gg-pt b { display: block; font-size: 16px; font-weight: 900; line-height: 20px; color: #fff; }
-.gg-pt small { display: block; margin-top: 3px; font-size: 12px; font-weight: 700; line-height: 16px; color: ${GD.sub}; }
+.grp-prize { display: flex; align-items: center; }
+.grp-gc { flex: none; display: flex; line-height: 0; } /* 도트 상품권(24×16 · u=2 → 48×32) */
+.grp-pt { min-width: 0; margin-left: 12px; }
+.grp-pt b { display: block; font-size: 16px; font-weight: 900; line-height: 20px; color: #fff; }
+.grp-pt small { display: block; margin-top: 3px; font-size: 12px; font-weight: 700; line-height: 16px; color: ${GD.sub}; }
 /* 지원 보너스 줄(괴담회 추첨권) · 재고 주의(작은 mute 글자) — 문화상품권 칸 안, 상품권 줄 아래 */
-.gg-bonus { display: flex; align-items: center; min-width: 0; margin: 10px 0 0; padding-top: 10px; box-shadow: inset 0 3px 0 #221a52; font-size: 13px; font-weight: 800; line-height: 18px; color: ${GD.sub}; white-space: nowrap; }
-.gg-bonus b { font-weight: 900; color: ${GD.text}; font-variant-numeric: tabular-nums; }
-.gg-mi { flex: none; display: flex; margin: 0 4px 0 auto; padding-left: 10px; line-height: 0; } /* 라벨은 왼쪽 · 추첨권 값은 오른쪽 끝(멤버 줄 「멤버 … 3 / 4」와 같은 짝) */ /* ItemIcon 이 제 여백(가운데 맞춤)을 인라인으로 쓰므로 한 겹 감싼다 */
-.gg-mnote { margin-top: 12px; }
-.gg-mnote .gg-bonus { margin-top: 0; }
-@media (min-width: 640px) { .gg-mnote { display: none; } }
-.gg-cau { margin: 8px 0 0; font-size: 11px; font-weight: 700; line-height: 15px; color: ${GD.mute}; word-break: keep-all; overflow-wrap: anywhere; }
-.gg-bl { margin: 0 0 6px; font-size: 11px; font-weight: 900; line-height: 15px; color: ${GD.sub}; }
-.gg-code { display: flex; align-items: center; min-width: 0; margin: 0; }
-.gg-code code, .gg-cin { flex: 1 1 auto; min-width: 0; height: 40px; margin: 0; padding: 0 12px; border: 0; border-radius: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 16px; font-weight: 700; line-height: 40px; color: #fff; background: ${GD.ink}; clip-path: ${NOTCH}; }
-.gg-code code { user-select: all; -webkit-user-select: all; }
-.gg-cin { letter-spacing: .08em; outline: none; -webkit-appearance: none; appearance: none; }
-.gg-cin::placeholder { color: #5a5390; letter-spacing: 0; font-family: inherit; opacity: 1; }
-.gg-cin:focus { box-shadow: inset 0 0 0 2px #4a3fa0; }
-.gg-code .gg-sb { flex: none; margin-left: 8px; }
+.grp-bonus { display: flex; align-items: center; min-width: 0; margin: 10px 0 0; padding-top: 10px; box-shadow: inset 0 3px 0 #221a52; font-size: 13px; font-weight: 800; line-height: 18px; color: ${GD.sub}; white-space: nowrap; }
+.grp-bonus b { font-weight: 900; color: ${GD.text}; font-variant-numeric: tabular-nums; }
+.grp-mi { flex: none; display: flex; margin: 0 4px 0 auto; padding-left: 10px; line-height: 0; } /* 라벨은 왼쪽 · 추첨권 값은 오른쪽 끝(멤버 줄 「멤버 … 3 / 4」와 같은 짝) */ /* ItemIcon 이 제 여백(가운데 맞춤)을 인라인으로 쓰므로 한 겹 감싼다 */
+.grp-mnote { margin-top: 12px; }
+.grp-mnote .grp-bonus { margin-top: 0; }
+@media (min-width: 640px) { .grp-mnote { display: none; } }
+.grp-cau { margin: 8px 0 0; font-size: 11px; font-weight: 700; line-height: 15px; color: ${GD.mute}; word-break: keep-all; overflow-wrap: anywhere; }
+.grp-bl { margin: 0 0 6px; font-size: 11px; font-weight: 900; line-height: 15px; color: ${GD.sub}; }
+.grp-code { display: flex; align-items: center; min-width: 0; margin: 0; }
+.grp-code code, .grp-cin { flex: 1 1 auto; min-width: 0; height: 40px; margin: 0; padding: 0 12px; border: 0; border-radius: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 16px; font-weight: 700; line-height: 40px; color: #fff; background: ${GD.ink}; clip-path: ${NOTCH}; }
+.grp-code code { user-select: all; -webkit-user-select: all; }
+.grp-cin { letter-spacing: .08em; outline: none; -webkit-appearance: none; appearance: none; }
+.grp-cin::placeholder { color: #5a5390; letter-spacing: 0; font-family: inherit; opacity: 1; }
+.grp-cin:focus { box-shadow: inset 0 0 0 2px #4a3fa0; }
+.grp-code .grp-sb { flex: none; margin-left: 8px; }
 /* 보라 도트 단추(링크 복사 · 복사 · 참여) */
-.gg-sb { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 88px; height: 40px; padding: 0 12px 2px; font-family: inherit; font-size: 13px; font-weight: 900; color: ${GD.text}; white-space: nowrap; outline: none; cursor: pointer; --bg: #2c2468; --hi: #4a3fa0; --sh: #17133a; }
-.gg-sb:hover:not(:disabled) { --bg: #3a3186; }
-.gg-sb:active:not(:disabled) { transform: translateY(2px); }
-.gg-sb:focus-visible { border-color: ${GD.cyan}; }
-.gg-sb:disabled { cursor: default; color: rgba(241,236,255,.45); }
+.grp-sb { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 88px; height: 40px; padding: 0 12px 2px; font-family: inherit; font-size: 13px; font-weight: 900; color: ${GD.text}; white-space: nowrap; outline: none; cursor: pointer; --bg: #2c2468; --hi: #4a3fa0; --sh: #17133a; }
+.grp-sb:hover:not(:disabled) { --bg: #3a3186; }
+.grp-sb:active:not(:disabled) { transform: translateY(2px); }
+.grp-sb:focus-visible { border-color: ${GD.cyan}; }
+.grp-sb:disabled { cursor: default; color: rgba(241,236,255,.45); }
 /* 단계 — 모집 중 → 심사 중 → 승인(반려면 셋째 칸 「반려」 + 사유 줄) */
-.gg-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
-.gg-st { height: 30px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; line-height: 16px; color: #5a5390; background: #0f0b24; white-space: nowrap; clip-path: ${NOTCH}; }
-.gg-st.on { color: #2a1006; background: #ff8a3d; }
-.gg-st.ok { color: #2a1606; background: #e2b04a; }
-.gg-st.done { color: ${GD.sub}; background: #221a52; }
-.gg-st.no { color: #fff; background: #d9435e; }
-.gg-why { margin: 8px 0 0; font-size: 12px; font-weight: 700; line-height: 17px; color: #ff9aac; overflow-wrap: anywhere; }
+.grp-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.grp-st { height: 30px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; line-height: 16px; color: #5a5390; background: #0f0b24; white-space: nowrap; clip-path: ${NOTCH}; }
+.grp-st.on { color: #2a1006; background: #ff8a3d; }
+.grp-st.ok { color: #2a1606; background: #e2b04a; }
+.grp-st.done { color: ${GD.sub}; background: #221a52; }
+.grp-st.no { color: #fff; background: #d9435e; }
+.grp-why { margin: 8px 0 0; font-size: 12px; font-weight: 700; line-height: 17px; color: #ff9aac; overflow-wrap: anywhere; }
 /* 아래 단추 — PC 는 오른쪽 칸 맨 아래
    📌 PC 는 늘 칸 바닥에 붙는다(sticky) — 오른쪽 칸이 넘치면(문화상품권 칸의 보너스 · 주의 줄 · 반려 사유 · 낮은 창) 단추 줄은 늘 보이고 위 칸들이 그 밑으로 스크롤된다.
       넘치지 않으면 margin-top auto 로 이미 바닥이라 아무것도 안 움직인다(오른쪽 칸 스크롤 막대는 숨김이라 잘린 단추로는 스크롤을 알 수 없다) */
-.gg-foot { flex: none; margin-top: 14px; }
-@media (min-width: 640px) { .gg-foot { position: sticky; bottom: 0; z-index: 1; margin-top: auto; padding-top: 14px; background: ${GD.panel}; } }
+.grp-foot { flex: none; margin-top: 14px; }
+@media (min-width: 640px) { .grp-foot { position: sticky; bottom: 0; z-index: 1; margin-top: auto; padding-top: 14px; background: ${GD.panel}; } }
 /* 금색 도트 단추 — 괴담회 추첨 단추와 같은 결 */
-.gg-gb { position: relative; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; font-family: inherit; background: #e2b04a; color: #2a1606; font-weight: 900; white-space: nowrap; border: 3px solid ${GD.ink}; box-shadow: inset 0 3px 0 ${GD.gold}, inset 0 -4px 0 #9c6a22; clip-path: ${NOTCH}; outline: none; cursor: pointer; }
-.gg-gb:active:not(:disabled):not(.off) { transform: translateY(2px); box-shadow: inset 0 2px 0 ${GD.gold}, inset 0 -2px 0 #9c6a22; }
-.gg-gb:focus-visible { border-color: #fff; }
-.gg-gb:disabled { cursor: default; }
-.gg-gb.off { background: #2a2458; color: rgba(241,236,255,.45); box-shadow: inset 0 3px 0 #3a3186, inset 0 -4px 0 #17133a; }
-.gg-gb.lg { width: 100%; height: 50px; padding: 0 16px 3px; font-size: 16px; }
-.gg-gb.md { height: 36px; padding: 0 18px 2px; font-size: 13px; }
-@media (min-width: 640px) { .gg-gb.lg { height: 54px; font-size: 17px; } }
-.gg-lk { display: block; margin-right: 8px; line-height: 0; }
-.gg-busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.gg-ghosts { display: flex; justify-content: center; margin-top: 6px; }
-.gg-ghost { position: relative; height: 28px; margin: 0; padding: 0 10px; border: 0; background: none; font-family: inherit; font-size: 12px; font-weight: 800; line-height: 28px; color: ${GD.mute}; white-space: nowrap; outline: none; cursor: pointer; }
-.gg-ghost:hover:not(:disabled) { color: ${GD.sub}; }
-.gg-ghost:focus-visible { color: ${GD.cyan}; }
-.gg-ghost:disabled { cursor: default; }
-.gg-note { margin: 8px 0 0; text-align: center; font-size: 12px; font-weight: 700; line-height: 17px; color: ${GD.sub}; }
+.grp-gb { position: relative; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; font-family: inherit; background: #e2b04a; color: #2a1606; font-weight: 900; white-space: nowrap; border: 3px solid ${GD.ink}; box-shadow: inset 0 3px 0 ${GD.gold}, inset 0 -4px 0 #9c6a22; clip-path: ${NOTCH}; outline: none; cursor: pointer; }
+.grp-gb:active:not(:disabled):not(.off) { transform: translateY(2px); box-shadow: inset 0 2px 0 ${GD.gold}, inset 0 -2px 0 #9c6a22; }
+.grp-gb:focus-visible { border-color: #fff; }
+.grp-gb:disabled { cursor: default; }
+.grp-gb.off { background: #2a2458; color: rgba(241,236,255,.45); box-shadow: inset 0 3px 0 #3a3186, inset 0 -4px 0 #17133a; }
+.grp-gb.lg { width: 100%; height: 50px; padding: 0 16px 3px; font-size: 16px; }
+.grp-gb.md { height: 36px; padding: 0 18px 2px; font-size: 13px; }
+@media (min-width: 640px) { .grp-gb.lg { height: 54px; font-size: 17px; } }
+.grp-lk { display: block; margin-right: 8px; line-height: 0; }
+.grp-busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.grp-ghosts { display: flex; justify-content: center; margin-top: 6px; }
+.grp-ghost { position: relative; height: 28px; margin: 0; padding: 0 10px; border: 0; background: none; font-family: inherit; font-size: 12px; font-weight: 800; line-height: 28px; color: ${GD.mute}; white-space: nowrap; outline: none; cursor: pointer; }
+.grp-ghost:hover:not(:disabled) { color: ${GD.sub}; }
+.grp-ghost:focus-visible { color: ${GD.cyan}; }
+.grp-ghost:disabled { cursor: default; }
+.grp-note { margin: 8px 0 0; text-align: center; font-size: 12px; font-weight: 700; line-height: 17px; color: ${GD.sub}; }
 /* 지원서 — 그룹 이름 · 함께 할 게임 · 언제(선택 — 날짜 · 시간) */
-.gg-form { flex: none; display: block; margin: 0; padding: 14px; --bg: #17123a; }
-@media (min-width: 640px) { .gg-form { flex: 1 1 auto; padding: 16px 18px; } }
-.gg-fl { display: block; margin: 14px 0 7px; font-size: 13px; font-weight: 800; line-height: 18px; color: #d8d2f5; }
-.gg-fl i { margin-left: 5px; font-style: normal; font-weight: 700; color: ${GD.mute}; }
-.gg-in { display: block; width: 100%; min-width: 0; height: 46px; margin: 0; padding: 0 14px; border-radius: 0; font-family: inherit; font-size: 16px; font-weight: 700; line-height: normal; color: #fff; outline: none; color-scheme: dark; -webkit-appearance: none; appearance: none; --bg: #0b0822; --hi: #07051a; --sh: #241d58; }
-.gg-in::placeholder { color: #5a5390; opacity: 1; }
+.grp-form { flex: none; display: block; margin: 0; padding: 14px; --bg: #17123a; }
+@media (min-width: 640px) { .grp-form { flex: 1 1 auto; padding: 16px 18px; } }
+.grp-fl { display: block; margin: 14px 0 7px; font-size: 13px; font-weight: 800; line-height: 18px; color: #d8d2f5; }
+.grp-fl i { margin-left: 5px; font-style: normal; font-weight: 700; color: ${GD.mute}; }
+.grp-in { display: block; width: 100%; min-width: 0; height: 46px; margin: 0; padding: 0 14px; border-radius: 0; font-family: inherit; font-size: 16px; font-weight: 700; line-height: normal; color: #fff; outline: none; color-scheme: dark; -webkit-appearance: none; appearance: none; --bg: #0b0822; --hi: #07051a; --sh: #241d58; }
+.grp-in::placeholder { color: #5a5390; opacity: 1; }
 /* 📌 2026-10-25 게임 고르기 칩 — 입력 칸과 같은 짙은 바탕 · 고른 것은 주황(모집 중 칩 색). 줄바꿈하며 쌓이고 칩 폭은 글자대로 */
-.gg-games { display: flex; flex-wrap: wrap; gap: 8px; }
-.gg-gm { height: 40px; padding: 0 14px 1px; font-family: inherit; font-size: 14px; font-weight: 800; color: #d8d2f5; white-space: nowrap; outline: none; cursor: pointer; --bg: #0b0822; --hi: #07051a; --sh: #241d58; }
-.gg-gm:hover:not(:disabled):not(.on) { color: #fff; --bg: #120e30; }
-.gg-gm:focus-visible { border-color: ${GD.cyan}; }
-.gg-gm.on { color: #2a1006; --bg: #ff8a3d; --hi: #ffc08a; --sh: #b4521b; }
-.gg-gm:disabled { cursor: default; opacity: .6; }
-.gg-in.empty { color: #5a5390; } /* 비어 있는 날짜 · 시간 칸 — 자리 글자(연도-월-일 · --:--)를 자리표시 색으로 */
-.gg-in:focus { border-color: #4a3fa0; }
-.gg-in:disabled { color: rgba(241,236,255,.45); }
-.gg-in::-webkit-date-and-time-value { text-align: left; }
-.gg-in::-webkit-calendar-picker-indicator { opacity: .6; cursor: pointer; }
-.gg-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.gg-fa { display: flex; align-items: center; margin-top: 20px; }
-.gg-fa .gg-gb { width: 100%; }
-.gg-fa .gg-ghost { flex: none; margin-left: 8px; }
+.grp-games { display: flex; flex-wrap: wrap; gap: 8px; }
+.grp-gm { height: 40px; padding: 0 14px 1px; font-family: inherit; font-size: 14px; font-weight: 800; color: #d8d2f5; white-space: nowrap; outline: none; cursor: pointer; --bg: #0b0822; --hi: #07051a; --sh: #241d58; }
+.grp-gm:hover:not(:disabled):not(.on) { color: #fff; --bg: #120e30; }
+.grp-gm:focus-visible { border-color: ${GD.cyan}; }
+.grp-gm.on { color: #2a1006; --bg: #ff8a3d; --hi: #ffc08a; --sh: #b4521b; }
+.grp-gm:disabled { cursor: default; opacity: .6; }
+.grp-in.empty { color: #5a5390; } /* 비어 있는 날짜 · 시간 칸 — 자리 글자(연도-월-일 · --:--)를 자리표시 색으로 */
+.grp-in:focus { border-color: #4a3fa0; }
+.grp-in:disabled { color: rgba(241,236,255,.45); }
+.grp-in::-webkit-date-and-time-value { text-align: left; }
+.grp-in::-webkit-calendar-picker-indicator { opacity: .6; cursor: pointer; }
+.grp-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.grp-fa { display: flex; align-items: center; margin-top: 20px; }
+.grp-fa .grp-gb { width: 100%; }
+.grp-fa .grp-ghost { flex: none; margin-left: 8px; }
 /* 폰 — 날짜 · 시간 값(「2026-10-31」 · 「오후 10:00」 + 달력 · 시계 단추)이 안 잘리게 안쪽 여백을 줄인다. 아주 좁으면 위아래로 */
-@media (max-width: 639.98px) { .gg-in { padding: 0 10px; } .gg-two { gap: 8px; } }
-@media (max-width: 359.98px) { .gg-two { grid-template-columns: minmax(0, 1fr); } }
-@media (min-width: 640px) { .gg-in { font-size: 15px; } .gg-fa { margin-top: 22px; } .gg-fa .gg-gb { width: 300px; } }
+@media (max-width: 639.98px) { .grp-in { padding: 0 10px; } .grp-two { gap: 8px; } }
+@media (max-width: 359.98px) { .grp-two { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 640px) { .grp-in { font-size: 15px; } .grp-fa { margin-top: 22px; } .grp-fa .grp-gb { width: 300px; } }
 /* 읽는 중 · 실패 · 로그인 필요 */
-.gg-msg { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 160px; font-size: 13px; font-weight: 700; color: rgba(241,236,255,.55); }
-.gg-msg .gg-gb { margin-top: 12px; }
-.gg-form > .gg-msg { height: 100%; }
+.grp-msg { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 160px; font-size: 13px; font-weight: 700; color: rgba(241,236,255,.55); }
+.grp-msg .grp-gb { margin-top: 12px; }
+.grp-form > .grp-msg { height: 100%; }
 /* 📌 칸 폭 맞춤(PC) — 이벤트 창 칸이 좁으면(탭 줄이 위 · 작은 창) 오른쪽 칸을 줄이고 멤버 칸 줄을 4 → 3 → 2 */
-@container gg (max-width: 860px) { .gg-r { width: 280px; margin-left: 16px; } }
-@container gg (max-width: 760px) { .gg-seats { grid-template-columns: repeat(3, minmax(0, 1fr)); --seat: 150px; --av: 56px; --pt: 18px; } .gg-seats.multi { --seat: 120px; --av: 44px; --pt: 36px; } }
-@container gg (max-width: 620px) { .gg-r { width: 250px; } .gg-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container gg (max-width: 860px) { .grp-r { width: 280px; margin-left: 16px; } }
+@container gg (max-width: 760px) { .grp-seats { grid-template-columns: repeat(3, minmax(0, 1fr)); --seat: 150px; --av: 56px; --pt: 18px; } .grp-seats.multi { --seat: 120px; --av: 44px; --pt: 36px; } }
+@container gg (max-width: 620px) { .grp-r { width: 250px; } .grp-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* 재고 주의는 한 줄(약속 문서 6b) — 250 칸 안쪽 212px 에 Noto Sans KR 은 206px 로 빠듯하고, 글꼴이 늦게 오는 동안(맑은 고딕 220px)은 두 줄이 된다 → 줄바꿈 없이 · 자간만 살짝 */
-@container gg (max-width: 620px) { .gg-cau { white-space: nowrap; letter-spacing: -.02em; } }
+@container gg (max-width: 620px) { .grp-cau { white-space: nowrap; letter-spacing: -.02em; } }
 /* 📌 칸 높이 맞춤(PC) — 본문이 낮으면(노트북 · 탭 줄이 위에 붙은 창) 멤버 칸 · 입력 칸 · 단추를 줄인다. 그래도 넘치면 멤버 칸 · 지원서 · 오른쪽 칸이 안에서 스크롤 */
 @container gg (max-height: 400px) {
-  .gg-seats { --seat: 150px; --av: 56px; --pt: 18px; }
-  .gg-seats.multi { --seat: 120px; --av: 44px; --pt: 36px; }
-  .gg-sh { padding-top: 12px; }
-  .gg-fl { margin-top: 10px; }
-  .gg-in { height: 40px; }
-  .gg-gm { height: 36px; }
-  .gg-fa { margin-top: 14px; }
-  .gg-gb.lg { height: 46px; font-size: 15px; }
-  .gg-big { padding: 12px 16px; }
-  .gg-box { padding: 10px 14px; }
-  .gg-box + .gg-box { margin-top: 10px; }
-  .gg-bonus { margin-top: 6px; padding-top: 7px; }
-  .gg-cau { margin-top: 4px; }
-  .gg-steps { margin-top: 8px; }
-  .gg-foot { padding-top: 10px; }
-  .gg-ghosts { margin-top: 2px; }
+  .grp-seats { --seat: 150px; --av: 56px; --pt: 18px; }
+  .grp-seats.multi { --seat: 120px; --av: 44px; --pt: 36px; }
+  .grp-sh { padding-top: 12px; }
+  .grp-fl { margin-top: 10px; }
+  .grp-in { height: 40px; }
+  .grp-gm { height: 36px; }
+  .grp-fa { margin-top: 14px; }
+  .grp-gb.lg { height: 46px; font-size: 15px; }
+  .grp-big { padding: 12px 16px; }
+  .grp-box { padding: 10px 14px; }
+  .grp-box + .grp-box { margin-top: 10px; }
+  .grp-bonus { margin-top: 6px; padding-top: 7px; }
+  .grp-cau { margin-top: 4px; }
+  .grp-steps { margin-top: 8px; }
+  .grp-foot { padding-top: 10px; }
+  .grp-ghosts { margin-top: 2px; }
 }
 @container gg (max-height: 320px) {
-  .gg-seats, .gg-seats.multi { --seat: 112px; --av: 40px; --pt: 36px; }
-  .gg-n { margin-top: 8px; font-size: 14px; }
-  .gg-form { padding: 12px 16px; }
-  .gg-form .gg-t { font-size: 20px; line-height: 26px; }
-  .gg-fl { margin: 8px 0 5px; }
-  .gg-in { height: 36px; }
-  .gg-gm { height: 32px; padding: 0 11px 1px; font-size: 13px; }
-  .gg-games { gap: 6px; }
-  .gg-fa { margin-top: 12px; }
+  .grp-seats, .grp-seats.multi { --seat: 112px; --av: 40px; --pt: 36px; }
+  .grp-n { margin-top: 8px; font-size: 14px; }
+  .grp-form { padding: 12px 16px; }
+  .grp-form .grp-t { font-size: 20px; line-height: 26px; }
+  .grp-fl { margin: 8px 0 5px; }
+  .grp-in { height: 36px; }
+  .grp-gm { height: 32px; padding: 0 11px 1px; font-size: 13px; }
+  .grp-games { gap: 6px; }
+  .grp-fa { margin-top: 12px; }
 }
-@media (prefers-reduced-motion: reduce) { .gg-win { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .grp-win { animation: none !important; } }
 `;
 
 // 도트 그림(rows · pal) — 같은 색 가로 줄을 rect 하나로(crispEdges · 정수 배율 u). 괴담회 창 Sprite 와 같은 그리기
@@ -376,9 +378,9 @@ const Steps = ({ status }) => {
   const k = status === "approved" || status === "rejected" ? 2 : status === "review" ? 1 : 0;
   const last = status === "rejected" ? "반려" : "승인";
   return (
-    <div className="gg-steps" aria-hidden>
+    <div className="grp-steps" aria-hidden>
       {["모집 중", "심사 중", last].map((l, i) => (
-        <span key={l} className={`gg-st${i < k ? " done" : i === k ? (k < 2 ? " on" : status === "rejected" ? " no" : " ok") : ""}`}>{l}</span>
+        <span key={l} className={`grp-st${i < k ? " done" : i === k ? (k < 2 ? " on" : status === "rejected" ? " no" : " ok") : ""}`}>{l}</span>
       ))}
     </div>
   );
@@ -420,20 +422,20 @@ const EMPTY_FORM = { name: "", game: "", date: "", time: "" };
 const ApplyForm = ({ v, set, onSubmit, label, k, busy, locked = "", onCancel = null }) => {
   const mine = busy === k;
   return (
-    <form className="gg-form gg-pp" onSubmit={onSubmit}>
-      <h3 className="gg-t">지원서</h3>
-      <label className="gg-fl" htmlFor="gg-name">그룹 이름</label>
-      <input id="gg-name" className="gg-in gg-pp" value={v.name} onChange={(e) => set({ ...v, name: e.target.value })} maxLength={20} placeholder="예) 야간 괴담 파티" autoComplete="off" disabled={mine} />
+    <form className="grp-form grp-pp" onSubmit={onSubmit}>
+      <h3 className="grp-t">지원서</h3>
+      <label className="grp-fl" htmlFor="grp-name">그룹 이름</label>
+      <input id="grp-name" className="grp-in grp-pp" value={v.name} onChange={(e) => set({ ...v, name: e.target.value })} maxLength={20} placeholder="예) 야간 괴담 파티" autoComplete="off" disabled={mine} />
       {/* 📌 2026-10-25 운영자 "게임 이름 적는 게 아니라 선택하는 방식" — 정해진 게임(lib/goedamGames.js) 칩에서 하나 고른다(서버도 같은 표로 확인) */}
-      <span className="gg-fl" id="gg-game">함께 할 게임</span>
-      <div className="gg-games" role="radiogroup" aria-labelledby="gg-game">
+      <span className="grp-fl" id="grp-game">함께 할 게임</span>
+      <div className="grp-games" role="radiogroup" aria-labelledby="grp-game">
         {GROUP_GAMES.map((g) => (
           <button
             key={g}
             type="button"
             role="radio"
             aria-checked={v.game === g}
-            className={`gg-gm gg-pp${v.game === g ? " on" : ""}`}
+            className={`grp-gm grp-pp${v.game === g ? " on" : ""}`}
             onClick={() => { if (v.game !== g) { sfxTick(); set({ ...v, game: g }); } }}
             disabled={mine}
           >
@@ -441,17 +443,17 @@ const ApplyForm = ({ v, set, onSubmit, label, k, busy, locked = "", onCancel = n
           </button>
         ))}
       </div>
-      <label className="gg-fl" htmlFor="gg-date">언제<i>선택</i></label>
-      <div className="gg-two">
-        <input id="gg-date" type="date" className={`gg-in gg-pp${v.date ? "" : " empty"}`} value={v.date} onChange={(e) => set({ ...v, date: e.target.value })} aria-label="날짜" disabled={mine} />
-        <input type="time" className={`gg-in gg-pp${v.time ? "" : " empty"}`} value={v.time} onChange={(e) => set({ ...v, time: e.target.value })} aria-label="시간" disabled={mine} />
+      <label className="grp-fl" htmlFor="grp-date">언제<i>선택</i></label>
+      <div className="grp-two">
+        <input id="grp-date" type="date" className={`grp-in grp-pp${v.date ? "" : " empty"}`} value={v.date} onChange={(e) => set({ ...v, date: e.target.value })} aria-label="날짜" disabled={mine} />
+        <input type="time" className={`grp-in grp-pp${v.time ? "" : " empty"}`} value={v.time} onChange={(e) => set({ ...v, time: e.target.value })} aria-label="시간" disabled={mine} />
       </div>
-      <div className="gg-fa">
-        <button type="submit" className={`gg-gb lg${locked ? " off" : ""}`} disabled={!!locked || !!busy}>
+      <div className="grp-fa">
+        <button type="submit" className={`grp-gb lg${locked ? " off" : ""}`} disabled={!!locked || !!busy}>
           <span style={mine ? { visibility: "hidden" } : undefined}>{locked || label}</span>
-          {mine && <span className="gg-busy">…</span>}
+          {mine && <span className="grp-busy">…</span>}
         </button>
-        {onCancel && <button type="button" className="gg-ghost" onClick={onCancel} disabled={mine}>취소</button>}
+        {onCancel && <button type="button" className="grp-ghost" onClick={onCancel} disabled={mine}>취소</button>}
       </div>
     </form>
   );
@@ -616,7 +618,7 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
       : nowMs > 0 && nowMs >= endMs
         ? "종료"
         : "준비 중";
-  const busyDots = <span className="gg-busy">…</span>;
+  const busyDots = <span className="grp-busy">…</span>;
   const hide = (k) => (busy === k ? { visibility: "hidden" } : undefined);
 
   // ── 동작 ──
@@ -697,22 +699,22 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
   //    pcOnly — 폰 내 그룹 화면은 시안대로 이 칸을 통째로 뺀다(보너스 · 주의 줄도 같이)
   const bonusN = countOf(data?.applyTickets);
   const prizeBox = (pcOnly) => (
-    <div className={`gg-box gg-pp${pcOnly ? " pc" : ""}`}>
-      <div className="gg-prize">
-        <span aria-hidden className="gg-gc"><Sprite {...GIFT} u={2} /></span>
-        <span className="gg-pt">
+    <div className={`grp-box grp-pp${pcOnly ? " pc" : ""}`}>
+      <div className="grp-prize">
+        <span aria-hidden className="grp-gc"><Sprite {...GIFT} u={2} /></span>
+        <span className="grp-pt">
           <b>문화상품권(3천원권)</b>
           <small>{fmt(minN)}인 팀 구성 시 신청 가능</small>
         </span>
       </div>
       {bonusN > 0 && (
-        <p className="gg-bonus">
+        <p className="grp-bonus">
           지원 보너스
-          <span aria-hidden className="gg-mi"><ItemIcon icon="art:goedam-ticket" size={16} /></span>
+          <span aria-hidden className="grp-mi"><ItemIcon icon="art:goedam-ticket" size={16} /></span>
           <b>추첨권 ×{fmt(bonusN)}</b>
         </p>
       )}
-      <p className="gg-cau">※ 상품권이 모두 소진되면 지급되지 않습니다</p>
+      <p className="grp-cau">※ 상품권이 모두 소진되면 지급되지 않습니다</p>
     </div>
   );
   // 그룹 카드 — 이름 · 상태 칩 / 게임 · 언제
@@ -721,12 +723,12 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
     // 📌 게임 · 언제는 가운데 점으로 잇지 않고 두 조각을 띄워 놓는다(운영자 "중간 점 빼라고 제발")
     const sub = [String(g.game || "").trim(), whenText(g.when)].filter(Boolean);
     return (
-      <div className="gg-big gg-pp">
-        <div className="gg-top">
-          <h3 className="gg-t">{g.name}</h3>
-          <span className={`gg-chip gg-pp${st.c}`}>{st.l}</span>
+      <div className="grp-big grp-pp">
+        <div className="grp-top">
+          <h3 className="grp-t">{g.name}</h3>
+          <span className={`grp-chip grp-pp${st.c}`}>{st.l}</span>
         </div>
-        {sub.length > 0 && <p className="gg-sub">{sub.map((s, i) => <span key={i}>{s}</span>)}</p>}
+        {sub.length > 0 && <p className="grp-sub">{sub.map((s, i) => <span key={i}>{s}</span>)}</p>}
       </div>
     );
   };
@@ -736,22 +738,22 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
     const n = Math.max(ms.length, Math.floor(Number(g.count) || 0));
     return (
       <>
-        <p className="gg-sh"><span>멤버</span><b>{n < minN ? `${fmt(n)} / ${fmt(minN)}` : `${fmt(n)}명`}</b></p>
-        <div className="gg-seatbox">
-          <div className={`gg-seats${ms.length > 4 ? " multi" : ""}`}>
+        <p className="grp-sh"><span>멤버</span><b>{n < minN ? `${fmt(n)} / ${fmt(minN)}` : `${fmt(n)}명`}</b></p>
+        <div className="grp-seatbox">
+          <div className={`grp-seats${ms.length > 4 ? " multi" : ""}`}>
             {ms.map((m, i) => {
               const nm = String(m?.name || "").trim() || "—";
               const k = `kick:${m.mid}`;
               return (
-                <div key={m.mid || i} className={`gg-seat gg-pp${m.me ? " me" : ""}`}>
-                  {m.leader && <span className="gg-lead gg-pp">그룹장</span>}
+                <div key={m.mid || i} className={`grp-seat grp-pp${m.me ? " me" : ""}`}>
+                  {m.leader && <span className="grp-lead grp-pp">그룹장</span>}
                   {canKick && !m.leader && !m.me && m.mid && (
-                    <button type="button" className="gg-kick gg-pp" onClick={() => kick(m)} disabled={!!busy} aria-label={`${nm} 내보내기`}>
+                    <button type="button" className="grp-kick grp-pp" onClick={() => kick(m)} disabled={!!busy} aria-label={`${nm} 내보내기`}>
                       {busy === k ? "…" : <Sprite {...KICK} u={2} />}
                     </button>
                   )}
-                  <span aria-hidden className="gg-av" style={{ "--c": AV[i % AV.length] }}>{initialOf(nm)}</span>
-                  <span className="gg-n">{nm}</span>
+                  <span aria-hidden className="grp-av" style={{ "--c": AV[i % AV.length] }}>{initialOf(nm)}</span>
+                  <span className="grp-n">{nm}</span>
                 </div>
               );
             })}
@@ -790,7 +792,7 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
         <>
           <button
             type="button"
-            className={`gg-gb lg${off ? " off" : ""}`}
+            className={`grp-gb lg${off ? " off" : ""}`}
             aria-disabled={off || undefined}
             disabled={!!lockText || !!busy}
             onClick={() => {
@@ -803,14 +805,14 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
             }}
           >
             <span className="inline-flex items-center" style={hide("submit")}>
-              {off && <i className="gg-lk"><Sprite {...LOCK} u={2} /></i>}
+              {off && <i className="grp-lk"><Sprite {...LOCK} u={2} /></i>}
               {lockText || "지원하기"}
             </span>
             {busy === "submit" && busyDots}
           </button>
-          <div className="gg-ghosts">
-            <button type="button" className="gg-ghost" onClick={() => startEdit(g)} disabled={!!busy || !!edit}>고치기</button>
-            <button type="button" className="gg-ghost" onClick={disband} disabled={!!busy}>
+          <div className="grp-ghosts">
+            <button type="button" className="grp-ghost" onClick={() => startEdit(g)} disabled={!!busy || !!edit}>고치기</button>
+            <button type="button" className="grp-ghost" onClick={disband} disabled={!!busy}>
               <span style={hide("disband")}>그룹 해체</span>
               {busy === "disband" && busyDots}
             </button>
@@ -818,11 +820,11 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
         </>
       );
     } else if (leader && g.status === "review") {
-      foot = <button type="button" className="gg-gb lg off" disabled>심사 중</button>;
+      foot = <button type="button" className="grp-gb lg off" disabled>심사 중</button>;
     } else if (!leader && editable) {
       foot = (
-        <div className="gg-ghosts">
-          <button type="button" className="gg-ghost" onClick={leave} disabled={!!busy}>
+        <div className="grp-ghosts">
+          <button type="button" className="grp-ghost" onClick={leave} disabled={!!busy}>
             <span style={hide("leave")}>나가기</span>
             {busy === "leave" && busyDots}
           </button>
@@ -832,41 +834,41 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
     right = (
       <>
         {prizeBox(true)}
-        <div className="gg-box gg-pp flat">
+        <div className="grp-box grp-pp flat">
           {approved ? (
             <>
-              <p className="gg-bl">내 문화상품권</p>
-              <div className="gg-code">
+              <p className="grp-bl">내 문화상품권</p>
+              <div className="grp-code">
                 <code>{gift || "—"}</code>
-                <button type="button" className="gg-sb gg-pp" onClick={() => copy(gift, "번호를 복사했습니다")} disabled={!gift}>복사</button>
+                <button type="button" className="grp-sb grp-pp" onClick={() => copy(gift, "번호를 복사했습니다")} disabled={!gift}>복사</button>
               </div>
             </>
           ) : (
             <>
-              <p className="gg-bl">참여 링크</p>
-              <div className="gg-code">
+              <p className="grp-bl">참여 링크</p>
+              <div className="grp-code">
                 <code>{g.code || "—"}</code>
-                <button type="button" className="gg-sb gg-pp" onClick={() => copy(g.code ? `${window.location.origin}/level?gg=${g.code}` : "", "링크를 복사했습니다")} disabled={!g.code}>링크 복사</button>
+                <button type="button" className="grp-sb grp-pp" onClick={() => copy(g.code ? `${window.location.origin}/level?gg=${g.code}` : "", "링크를 복사했습니다")} disabled={!g.code}>링크 복사</button>
               </div>
             </>
           )}
           <Steps status={g.status} />
-          {g.status === "rejected" && String(g.reason || "").trim() && <p className="gg-why">사유: {g.reason}</p>}
+          {g.status === "rejected" && String(g.reason || "").trim() && <p className="grp-why">사유: {g.reason}</p>}
         </div>
         {/* 📌 폰 내 그룹 화면 — 문화상품권 칸은 빠지지만 보너스 · 재고 주의 두 줄은 단추 위에(운영자 "주의 문구 필요" · 승인 뒤엔 없음). PC 는 위 칸에 이미 있다 */}
         {!approved && (
-          <div className="gg-mnote">
+          <div className="grp-mnote">
             {bonusN > 0 && (
-              <p className="gg-bonus">
+              <p className="grp-bonus">
                 지원 보너스
-                <span aria-hidden className="gg-mi"><ItemIcon icon="art:goedam-ticket" size={16} /></span>
+                <span aria-hidden className="grp-mi"><ItemIcon icon="art:goedam-ticket" size={16} /></span>
                 <b>추첨권 ×{fmt(bonusN)}</b>
               </p>
             )}
-            <p className="gg-cau">※ 상품권이 모두 소진되면 지급되지 않습니다</p>
+            <p className="grp-cau">※ 상품권이 모두 소진되면 지급되지 않습니다</p>
           </div>
         )}
-        {foot && <div className="gg-foot">{foot}</div>}
+        {foot && <div className="grp-foot">{foot}</div>}
       </>
     );
   } else if (invite) {
@@ -882,21 +884,21 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
     right = (
       <>
         {prizeBox(false)}
-        <div className="gg-foot">
+        <div className="grp-foot">
           {guest ? (
-            <button type="button" className="gg-gb lg" onClick={login}>로그인</button>
+            <button type="button" className="grp-gb lg" onClick={login}>로그인</button>
           ) : (
-            <button type="button" className={`gg-gb lg${can ? "" : " off"}`} onClick={join} disabled={!can || !!busy}>
+            <button type="button" className={`grp-gb lg${can ? "" : " off"}`} onClick={join} disabled={!can || !!busy}>
               <span className="inline-flex items-center" style={hide("join")}>
-                {!can && <i className="gg-lk"><Sprite {...LOCK} u={2} /></i>}
+                {!can && <i className="grp-lk"><Sprite {...LOCK} u={2} /></i>}
                 이 그룹에 참여
               </span>
               {busy === "join" && busyDots}
             </button>
           )}
-          {!can && why && <p className="gg-note">{why}</p>}
-          <div className="gg-ghosts">
-            <button type="button" className="gg-ghost" onClick={cancelPeek} disabled={!!busy}>취소</button>
+          {!can && why && <p className="grp-note">{why}</p>}
+          <div className="grp-ghosts">
+            <button type="button" className="grp-ghost" onClick={cancelPeek} disabled={!!busy}>취소</button>
           </div>
         </div>
       </>
@@ -904,21 +906,21 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
   } else if (data) {
     leftScroll = true;
     left = guest ? (
-      <div className="gg-form gg-pp">
-        <div className="gg-msg">
+      <div className="grp-form grp-pp">
+        <div className="grp-msg">
           로그인 필요
-          <button type="button" className="gg-gb md" onClick={login}>로그인</button>
+          <button type="button" className="grp-gb md" onClick={login}>로그인</button>
         </div>
       </div>
     ) : <ApplyForm v={draft} set={setDraft} onSubmit={create} label="그룹 만들기" k="create" busy={busy} locked={lockText} />;
     right = (
       <>
         {prizeBox(false)}
-        <form className="gg-box gg-pp" onSubmit={peekSubmit}>
-          <p className="gg-bl">참여 코드</p>
-          <div className="gg-code">
+        <form className="grp-box grp-pp" onSubmit={peekSubmit}>
+          <p className="grp-bl">참여 코드</p>
+          <div className="grp-code">
             <input
-              className="gg-cin"
+              className="grp-cin"
               value={codeIn}
               onChange={(e) => setCodeIn(normCode(e.target.value))}
               placeholder="코드 6자리"
@@ -928,9 +930,9 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
               spellCheck={false}
               enterKeyHint="go"
             />
-            <button type="submit" className="gg-sb gg-pp" disabled={peeking || !!busy}>
+            <button type="submit" className="grp-sb grp-pp" disabled={peeking || !!busy}>
               <span style={peeking ? { visibility: "hidden" } : undefined}>참여</span>
-              {peeking && <span className="gg-busy">…</span>}
+              {peeking && <span className="grp-busy">…</span>}
             </button>
           </div>
         </form>
@@ -940,35 +942,35 @@ export default function GoedamGroupModal({ open, onClose, pushToast, onCount, jo
 
   // 비었을 때 — 읽는 중 · 실패
   const body = !data ? (
-    <div className="gg-main">
+    <div className="grp-main">
       {status === "error" ? (
-        <div className="gg-msg">
+        <div className="grp-msg">
           불러오지 못했습니다
-          <button type="button" className="gg-gb md" onClick={() => { sfxTick(); setStatus("loading"); load(); }}>다시 시도</button>
+          <button type="button" className="grp-gb md" onClick={() => { sfxTick(); setStatus("loading"); load(); }}>다시 시도</button>
         </div>
-      ) : <div className="gg-msg">…</div>}
+      ) : <div className="grp-msg">…</div>}
     </div>
   ) : (
-    <div className="gg-main">
-      <div className={`gg-l${leftScroll ? " scroll" : ""}`}>{left}</div>
-      <div className="gg-r">{right}</div>
+    <div className="grp-main">
+      <div className={`grp-l${leftScroll ? " scroll" : ""}`}>{left}</div>
+      <div className="grp-r">{right}</div>
     </div>
   );
 
   const win = (
-    <div role={embedded ? "group" : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="게임 그룹 지원" onClick={(e) => e.stopPropagation()} className={`gg-win${embedded ? " emb" : ""}`}>
-      <div className="gg-wi">
-        <button ref={closeRef} type="button" onClick={closeAll} aria-label="닫기" className="gg-x gg-pp">
+    <div role={embedded ? "group" : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="게임 그룹 지원" onClick={(e) => e.stopPropagation()} className={`grp-win${embedded ? " emb" : ""}`}>
+      <div className="grp-wi">
+        <button ref={closeRef} type="button" onClick={closeAll} aria-label="닫기" className="grp-x grp-pp">
           <Sprite {...XMARK} u={2} />
         </button>
         {/* 머리 = 괴담회 띠 배너(제목 · 기간이 그림 안에). 제목 글은 화면 읽기용으로만 */}
-        <div className="gg-hd">
+        <div className="grp-hd">
           <h2 className="sr-only">게임 그룹 지원</h2>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`${ART}/header.png`} alt="" width={992} height={240} draggable={false} className="gg-hdi gg-px" />
+          <img src={`${ART}/header.png`} alt="" width={992} height={240} draggable={false} className="grp-hdi grp-px" />
           {data?.adminPreview && (
-            <div className="gg-tags">
-              <span className="gg-tag gg-pp">비공개</span>
+            <div className="grp-tags">
+              <span className="grp-tag grp-pp">비공개</span>
             </div>
           )}
         </div>
