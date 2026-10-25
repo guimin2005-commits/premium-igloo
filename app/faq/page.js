@@ -24,7 +24,9 @@ const DEAF_CLAUSE = "헤드셋을 끄면 XP 획득과 음성 시간 누적이 �
 const muteClause = (p) => {
   if (!p) return DEAF_CLAUSE;
   if (p.muteTarget !== "any" || p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0))) return DEAF_CLAUSE;
-  return DEAF_CLAUSE + (p.muteMode === "block" ? "마이크 음소거 시 XP 획득이 불가하며, " : `마이크 음소거 시 XP 획득량이 ${Number(p.muteReducePct).toLocaleString("ko-KR")}% 감소되며, `);
+  // 막기 · 감소 100%(봇 배수 0)면 그 시간은 세지 않아 음성 시간도 멈춘다
+  const stop = p.muteMode === "block" || Number(p.muteReducePct) >= 100;
+  return DEAF_CLAUSE + (stop ? "마이크 음소거 시 XP 획득과 음성 시간 누적이 되지 않으며, " : `마이크 음소거 시 XP 획득량이 ${Number(p.muteReducePct).toLocaleString("ko-KR")}% 감소되며, `);
 };
 
 export default function FaqPage() {

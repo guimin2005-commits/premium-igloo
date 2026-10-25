@@ -274,8 +274,11 @@ async function doFlush(final) {
   const isOff = (userId) => docOf.get(userId)?.voiceXpOff === true || stopUntilOf(docOf.get(userId), now) > 0;
 
   // ── 음성 XP 바퀴 진행 ──
+  // 📌 세는 동안(since 있음)만 잰다 — 헤드셋 끔 · 음소거 막기로 멈춘 동안의 무활동이 바퀴 ctx.idle 에 들어가
+  //    관리 › 이상 활동 점수를 부풀리지 않게(2026-10-25 헤드셋 끔 차단과 같이)
   const touchIdle = (userId, c) => {
-    if (sessions.get(userId)?.ch !== c.ch) return;
+    const ses = sessions.get(userId);
+    if (ses?.ch !== c.ch || ses.since == null) return;
     const m = idleMinutes(userId, now); // null = 모름 — 잰 값이 없으면 바퀴 값을 그대로 둔다
     if (m != null) c.idle = Math.max(c.idle ?? 0, m);
   };

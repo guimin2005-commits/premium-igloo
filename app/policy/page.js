@@ -92,8 +92,9 @@ const DEAF_RULE = "음성 채널에서 헤드셋을 끈 상태에서는 XP가 �
 const muteNone = (p) => p.muteTarget !== "any" || p.muteMode === "off" || (p.muteMode !== "block" && !(Number(p.muteReducePct) > 0));
 const muteRule = (p) => {
   if (muteNone(p)) return DEAF_RULE;
-  return p.muteMode === "block"
-    ? `${DEAF_RULE} 마이크를 음소거한 상태에서는 XP가 지급되지 않습니다.`
+  // 막기 · 감소 100%(봇 배수 0)면 그 시간은 세지 않아 음성 시간도 멈춘다
+  return p.muteMode === "block" || Number(p.muteReducePct) >= 100
+    ? `${DEAF_RULE} 마이크를 음소거한 상태에서도 XP가 지급되지 않고 음성 시간도 쌓이지 않습니다.`
     : `${DEAF_RULE} 마이크를 음소거한 상태에서는 XP 획득량이 ${num(p.muteReducePct)}% 감소합니다.`;
 };
 
@@ -111,7 +112,7 @@ function PolicyContent() {
       .then((d) => { if (d?.success && d.data) setXp(d.data); })
       .catch(() => {});
   }, []);
-  const mute = xp ? muteRule(xp) : "—";
+  const mute = xp ? muteRule(xp) : DEAF_RULE; // 헤드셋 문장은 설정과 상관없어 받기 전에도 그대로
 
   const activeDoc = DOCS.find((d) => d.id === tab) || DOCS[0];
 
@@ -404,8 +405,8 @@ function PolicyContent() {
           <Article title="제3조 (XP 획득 제한)">
             <NumberedList items={[
               "잠수 전용 음성 채널 이용 시 XP가 지급되지 않습니다.",
-              // 음소거 — 실제 설정(감소 · 막기 · 끔, 적용 기준)대로. 끔이면 이 항이 빠진다
-              ...(mute ? [mute] : []),
+              // 헤드셋 끔(늘) + 마이크 음소거(실제 설정 — 감소 · 막기 · 끔, 적용 기준 any 일 때만)
+              mute,
               "동일하거나 무의미한 메시지를 반복 전송하는 등 획득량을 늘리기 위한 도배 행위는 운영정책 제3조에 따른 금지 행위에 해당합니다.",
             ]} />
           </Article>

@@ -91,8 +91,9 @@ const ENHANCE_FIELDS: {
 const ENHANCE_COLS = ["단계당 +XP", "최대 단계", "1단계 비용", "비용 상승 %"];
 
 const MUTE_MODES = [{ v: "off", l: "제한 없음" }, { v: "reduce", l: "감소" }, { v: "block", l: "차단" }];
-// 📌 2026-10-25 헤드셋 끔은 늘 차단(아래 「헤드셋 끔」 줄) — 그래서 any 는 사실상 마이크만 끈 사람, both 는 헤드셋까지 끈 사람(이미 차단)에게만 걸린다
-const MUTE_TARGETS = [{ v: "both", l: "헤드셋까지 끔" }, { v: "any", l: "마이크만 꺼도" }];
+// 📌 2026-10-25 헤드셋 끔은 늘 차단(아래 「헤드셋 끔」 줄) — 그래서 any 는 사실상 마이크만 끈 사람에게 걸리고,
+//    both 는 헤드셋까지 끈 사람(이미 차단)에게만 걸려 음소거 처리 · 감소 비율이 아무 효과가 없다(= 헤드셋 끔만 막음)
+const MUTE_TARGETS = [{ v: "both", l: "헤드셋 끔만" }, { v: "any", l: "마이크만 꺼도" }];
 
 // ── 탭 ──────────────────────────────────────────────────────
 //    운영 흐름대로 네 갈래다: 규칙을 정하고(정책 — XP 가 얼마나 · 언제 더 붙는지) → 역할에 잇고(역할) →
@@ -1981,7 +1982,7 @@ export default function AdminBotPage() {
               </Panel>
 
               <Panel id="sec-muting" className="scroll-mt-24" title="음소거 처리" flush>
-                <FieldRow label="음소거 시 처리" changed={chg("muteMode")} hint="차단은 지급 자체를 건너뜁니다">
+                <FieldRow label="음소거 시 처리" changed={chg("muteMode")} hint="차단은 지급과 음성 시간을 모두 건너뜁니다">
                   <Segmented options={MUTE_MODES} value={settings.muteMode || "off"} onChange={(v) => setSettings({ ...settings, muteMode: v })} />
                 </FieldRow>
                 <FieldRow label="감소 비율" changed={chg("muteReducePct")} hint="90 = 원래 지급량의 10%만 지급">

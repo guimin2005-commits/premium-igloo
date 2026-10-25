@@ -72,7 +72,7 @@ export default function SystemGuide({ P, chatBase, chatCooldownLabel, voiceMin, 
   // 📌 2026-10-25 헤드셋 끔은 설정과 상관없이 XP · 음성 시간 모두 없음(봇 voiceTime.js multOf) — 「헤드셋 끔」 줄은 늘.
   //    설정 줄은 마이크만 끈 경우라 적용 기준 any 일 때만(both 는 헤드셋까지 끈 때라 위 줄과 같다) · 감소율 0% 면 뺀다
   const muteV = P.muteTarget !== "any" || P.muteMode === "off" || (P.muteMode !== "block" && !(Number(P.muteReducePct) > 0))
-    ? null : P.muteMode === "block" ? "음성 XP 없음" : `음성 XP −${P.muteReducePct}%`;
+    ? null : P.muteMode === "block" || Number(P.muteReducePct) >= 100 ? "음성 XP와 음성 시간 없음" : `음성 XP −${P.muteReducePct}%`;
 
   // 📌 연속 출석 보너스 — 관리자가 꺼 두면 policy 가 [] 를 준다(api/xp/policy) → 줄이 아예 안 생긴다.
   //    봇 streakBonusOf(bot/src/attend.js)와 같은 읽기: days 일째 한 번, repeat 면 days 의 배수마다
