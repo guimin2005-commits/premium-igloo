@@ -504,6 +504,7 @@ export default function AdminWritePage() {
   const storeEdit = (id: string, d: any, w: string) => { try { localStorage.setItem(EDIT_KEY(id), JSON.stringify({ w, d, savedAt: new Date().toISOString() })); return true; } catch { return false; } };
   const [editPending, setEditPending] = useState<{ w: string; d: any; savedAt?: string } | null>(null);
   const autoWrote = useRef(false); // 이 화면이 보류 칸(DRAFT_KEY)에 자동 저장했다 — 「보류 안 함」 · 등록 뒤 지운다
+  const loadSeq = useRef(0); // 주소의 글이 바뀐 횟수(아래 searchParams 효과) — 앞 글의 늦은 응답 · 타이머를 버린다
   const live = useRef({ dirty: false, isNew: true, hasDraft: false, collect: collectDraft, editId: "", editPending: false, written: "" });
   live.current = { dirty: leaveDirty, isNew: isNewPost, hasDraft, collect: collectDraft, editId, editPending: !!editPending, written };
   const latestWritten = useRef(written);
@@ -511,7 +512,8 @@ export default function AdminWritePage() {
   // 수정 글 — 불러와 채운 뒤 잠시 기다렸다 그때의 written 을 기준으로(채운 뒤 맞추는 효과가 한 번 더 바꿔도 묻지 않게)
   useEffect(() => {
     if (!loadedTick) return;
-    const t = window.setTimeout(() => { keptWritten.current = latestWritten.current; }, 400);
+    const seq = loadSeq.current;
+    const t = window.setTimeout(() => { if (seq === loadSeq.current) keptWritten.current = latestWritten.current; }, 400);
     return () => window.clearTimeout(t);
   }, [loadedTick]);
   useEffect(() => {
@@ -582,7 +584,9 @@ export default function AdminWritePage() {
   // 수정 글 — 불러와 기준을 잡은 뒤(위 loadedTick 0.4초) 이 글의 저장 안 한 수정이 남아 있으면 띠로 묻는다
   useEffect(() => {
     if (!loadedTick || !editId) return;
+    const seq = loadSeq.current;
     const t = window.setTimeout(() => {
+      if (seq !== loadSeq.current) return; // 그새 다른 글로 옮겨 갔다 — 앞 글의 저장 안 한 수정을 새 글 띠에 올리지 않는다
       try {
         const s = JSON.parse(localStorage.getItem(EDIT_KEY(editId)) || "null");
         if (s?.d && s.w !== keptWritten.current) setEditPending(s);
@@ -633,9 +637,8 @@ export default function AdminWritePage() {
   const searchParams = useSearchParams();
   // 📌 2026-10-25 운영자 "수정을 누르면 다른 글이 나온다" — 화면이 그대로 남은 채 주소의 글이 바뀌면(관리 메뉴 · 기능 검색 · 뒤로/앞으로)
   //    앞 글의 칸이 남아 섞였다. 주소의 id 가 바뀌면 칸을 비우고 그 글만 채운다 — 늦게 온 앞 글의 답은 버린다(loadSeq).
-  //    수정 화면에서 새 글 주소(?category=)로 오면 새 글로 비운다(editId 가 남아 「등록」이 앞 글을 덮어쓰던 길)
-  const loadSeq = useRef(0);
-  const loadedFor = useRef<string | null>(null); // 마지막으로 맞춘 주소의 id("" = 새 글, null = 처음)
+  //    수정 화면에서 새 글 주소(?category=)로 오면 새 글로 비운다(editId 가 남아 「등록」이 앞 글을 덮어쓰던 길). 새 글끼리(?category= 가 바뀜)도 같다
+  const loadedFor = useRef<string | null>(null); // 마지막으로 맞춘 주소("글 id" 또는 "new:글 종류", null = 처음)
   const resetForm = (cat: string) => {
     applyDraft({ category: cat });
     setSurvey({ enabled: false, title: "", desc: "", closed: false, questions: [], privacy: { ...EMPTY_PRIVACY } });
@@ -647,21 +650,29 @@ export default function AdminWritePage() {
     const params = new URLSearchParams(searchParams.toString());
     const id = params.get("id") || "";
     const categoryParam = params.get("category");
+    const cat = categoryParam && categories.includes(categoryParam) ? categoryParam : "";
+    const target = id || `new:${cat}`;
     const prev = loadedFor.current;
-    loadedFor.current = id;
+    loadedFor.current = target;
     const seq = ++loadSeq.current;
-    // 다른 글로 옮겨 왔다(같은 화면) — 앞 화면에서 「나가기」로 닫아 둔 묻기 · 자동 저장을 새 글에 다시 건다
-    if (prev !== null && prev !== id) { leftRef.current = false; setLeaveAsk(null); }
+    const moved = prev !== null && prev !== target;
+    // 다른 글로 옮겨 왔다(같은 화면) — 화면을 떠날 때와 같게 앞 글을 보류 · 자동 저장해 두고(「나가기」로 답했으면 건너뛴다),
+    // 닫아 둔 묻기 · 자동 저장을 새 글에 다시 건다. autoWrote 도 비운다 — 이제 보류 칸에 있는 것은 이 글이 쓴 것이 아니다(지우지 않게)
+    if (moved) {
+      keepOnExit();
+      leftRef.current = false;
+      setLeaveAsk(null);
+      autoWrote.current = false;
+    }
     if (!id) {
-      const cat = categoryParam && categories.includes(categoryParam) ? categoryParam : "";
-      if (prev) {
+      if (moved) {
         setEditId("");
         resetForm(cat || "공지사항");
-        try { if (localStorage.getItem(DRAFT_KEY)) setHasDraft(true); } catch {}
+        try { setHasDraft(!!localStorage.getItem(DRAFT_KEY)); } catch {}
       } else if (cat) setCategory(cat);
       return;
     }
-    if (prev !== null && prev !== id) resetForm(category);
+    if (moved) resetForm(category);
     setHasDraft(false); // 보류 띠는 새 글에서만
     setEditId(id);
     const failed = () => { if (seq === loadSeq.current) setPopupConfig({ isOpen: true, message: "글을 불러오지 못했습니다.", isError: true }); };
