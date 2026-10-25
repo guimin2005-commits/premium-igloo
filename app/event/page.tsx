@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Reveal } from "../components/Lux";
@@ -31,11 +31,15 @@ export default function EventPage() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 1800); };
 
+  // 늦게 온 앞 요청(관리자 여부가 바뀌기 전 목록 등)은 버린다 — 목록이 뒤늦게 바뀌어 누르려던 칸에 다른 글이 오지 않게
+  const fetchSeq = useRef(0);
   const fetchEvents = async (admin = false) => {
+    const seq = ++fetchSeq.current;
     try {
       const res = await fetch(`/api/posts?category=이벤트${admin ? "&all=1" : ""}`, { cache: "no-store" });
-      if (res.ok) setPosts((await res.json()).data);
-    } catch { console.error("로드 에러"); } finally { setIsLoading(false); }
+      const data = res.ok ? (await res.json()).data : null;
+      if (seq === fetchSeq.current && data) setPosts(data);
+    } catch { console.error("로드 에러"); } finally { if (seq === fetchSeq.current) setIsLoading(false); }
   };
 
   useEffect(() => { if (status !== "loading") fetchEvents(!!isAdmin); }, [status, isAdmin]);
@@ -49,7 +53,7 @@ export default function EventPage() {
     finally { setDeleteConfirmId(null); }
   };
 
-  const handleEdit = (id: string, e: React.MouseEvent) => { e.stopPropagation(); router.push(`/write?id=${id}`); };
+  const handleEdit = (id: string, e: React.MouseEvent) => { e.stopPropagation(); keepTab(); router.push(`/write?id=${id}`); };
 
   const getEventStatus = (event: any) => {
     if (event.eventTag === "종료") return "ended";
@@ -66,6 +70,32 @@ export default function EventPage() {
     }
     return "ongoing";
   };
+
+  // 📌 목록에서 상세 · 수정으로 나갔다 돌아오면 보던 탭 그대로 — 나갈 때 한 번 쓰는 표시(sessionStorage · 10분)를 남기고 돌아온 목록이 지운다.
+  //    메뉴 · LEVEL 「전체 →」처럼 새로 들어오면 늘 「진행 중」. 늘 「진행 중」으로 되돌아가 첫 칸에 다른 글이 와 있어, 같은 자리의 「수정」이 다른 글을 열었다(2026-10-25)
+  const TAB_KEY = "eventTabBack";
+  const keepTab = () => { try { sessionStorage.setItem(TAB_KEY, JSON.stringify({ t: activeTab, at: Date.now() })); } catch {} };
+  useLayoutEffect(() => {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(TAB_KEY) || "null");
+      sessionStorage.removeItem(TAB_KEY);
+      if (v && STATUS_LABEL[v.t] && Date.now() - Number(v.at) < 10 * 60 * 1000) setActiveTab(v.t);
+    } catch {}
+  }, []);
+
+  // 📌 글쓰기에서 올린 뒤(?focus=글 id) — 그 글이 있는 탭을 연다. 기간을 바꿔 「예정」 · 「종료」로 옮겨 간 글을 놓치지 않게(2026-10-25)
+  const focusDone = useRef(false);
+  useEffect(() => {
+    if (focusDone.current || isLoading) return;
+    const id = new URLSearchParams(window.location.search).get("focus");
+    if (!id) { focusDone.current = true; return; }
+    const hit = posts.find((p) => p._id === id);
+    if (!hit) return; // 가린 글이 든 관리자 목록이 아직 안 왔을 수 있다
+    focusDone.current = true;
+    setActiveTab(getEventStatus(hit));
+    window.history.replaceState(null, "", "/event");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, posts]);
 
   const ongoingEvents = posts.filter(p => getEventStatus(p) === "ongoing");
   const upcomingEvents = posts.filter(p => getEventStatus(p) === "upcoming");
@@ -98,7 +128,7 @@ export default function EventPage() {
           {TABS.map((t) => {
             const on = activeTab === t.id;
             return (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
+              <button key={t.id} onClick={() => { focusDone.current = true; setActiveTab(t.id); }} /* 직접 고른 탭이 ?focus= 보다 먼저 */
                 className={`relative py-3 mr-6 md:mr-7 text-[14px] font-extrabold transition-colors outline-none ${on ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"}`}>
                 {t.label}
                 <span className="ml-1.5 text-[11px] font-bold text-[#a3a3a3] tabular-nums">{t.count}</span>
@@ -123,7 +153,7 @@ export default function EventPage() {
 
               return (
                 <Reveal key={event._id} delay={Math.min(listIdx, 5) * 90}>
-                  <div onClick={() => router.push(`/event/${event._id}`)} className="group cursor-pointer">
+                  <div onClick={() => { keepTab(); router.push(`/event/${event._id}`); }} className="group cursor-pointer">
                     {/* 배너 */}
                     <div className="w-full aspect-[16/7] rounded-none bg-[#f2f2f2] overflow-hidden flex items-center justify-center">
                       {event.bannerUrl ? (

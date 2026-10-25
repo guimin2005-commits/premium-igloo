@@ -71,12 +71,15 @@ export default function EventDetailPage() {
               </button>
             </div>
 
-            <div className="mt-7 w-full aspect-[16/7] bg-[#f2f2f2] overflow-hidden flex items-center justify-center">
-              {post.bannerUrl
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={post.bannerUrl} alt="" className="w-full h-full object-cover" />
-                : <span className="text-[12px] font-bold text-[#a3a3a3]">이벤트</span>}
-            </div>
+            {/* 📌 글쓰기 「본문에 배너 표시」를 끄면(bannerInBody false) 이 칸 없이 바로 본문 — 목록 카드에는 그대로 나온다(2026-10-25) */}
+            {post.bannerInBody !== false && (
+              <div className="mt-7 w-full aspect-[16/7] bg-[#f2f2f2] overflow-hidden flex items-center justify-center">
+                {post.bannerUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={post.bannerUrl} alt="" className="w-full h-full object-cover" />
+                  : <span className="text-[12px] font-bold text-[#a3a3a3]">이벤트</span>}
+              </div>
+            )}
 
             <div className="mt-7 text-[14px] md:text-[15px] leading-[1.9] text-[#5a5a5a] break-keep">
               <RenderFormattedText text={post.content || ""} />
