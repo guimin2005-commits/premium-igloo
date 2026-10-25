@@ -31,6 +31,12 @@ export async function connectToDatabase() {
     });
   }
   
-  cached.conn = await cached.promise;
+  // 실패한 연결을 붙들고 있지 않는다(lib/mongodb.js 와 같다) — 다음 요청이 다시 붙는다
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
   return cached.conn;
 }
