@@ -7,7 +7,7 @@
 //       · 20초마다 열린 구간을 끊어(마지막으로 끊은 시각 ~ 지금) 회차 창 [startsAt, endsAt] 과 겹친 초를 GoedamWatch.seconds 에 $inc(upsert, userName 갱신)
 //       · 회차 끝 + 60초가 지나면 완청(seconds ≥ ratio × 회차 길이) · grantedAt null 인 줄을 { grantedAt: null } 조건부로 세운 뒤 추첨권 Purchase N건(1장 = 1건)을 넣는다.
 //         회차 끝 + 6시간이 지나면 그 회차는 더 보지 않는다. 추첨권 아이템(ticketItemId)이 비었거나 실사이트에 없으면 지급을 미룬다(다음 주기에 다시)
-//       · DM 없음(운영자가 원하면 나중에)
+//       · DM 없음(운영자가 원하면 나중에) — 📌 2026-10-26 음성 활동 지급만 DM(dmVoiceTicket — 관리 › 봇 메시지 「괴담회 음성 추첨권」 + 「뽑기 하러 가기」 단추)
 //    📌 시작할 때(설정을 처음 읽은 뒤) 채널에 이미 있는 사람은 지금부터 구간을 연다. 봇이 꺼져 있던 동안은 못 센다(features/voiceTime.js 와 같다)
 //    📌 겹침 계산(overlapMs · splitByScreenings) · 완청 판정(isFullWatch) · 설정 정리(normalizeGoedam)는 순수 함수로 내보낸다 — node 로 바로 확인할 수 있게
 //    ⚠️ GoedamWatch 는 autoIndex 가 꺼져 있다(사이트 · 테스트 사이트가 같은 DB) — 첫 쓰기 직전에 createIndexes() 를 한 번(ensureWatchIndexes)
@@ -23,10 +23,11 @@
 //       (xp.js grantXp · features/voiceXp.js payVoiceCycle) 그동안의 음성은 저절로 세지 않는다. 0 XP 바퀴(채널 정책 · 음소거 막기 등)도 줄이 없어 빠진다
 //    📌 채널 조건은 아직 없다(음성 XP 기록 전부) — 추후 설정에 voice.channels 를 더하면 voiceDayPipeline 의 $match 에 붙인다
 //    📌 날짜 · 합 · 기준 판정(kstDayKey · voiceDays · daySeconds · voiceQualifiers)도 순수 함수로 내보낸다
-import { Events } from "discord.js";
+import { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { Goedam, GoedamWatch, Purchase, Item, XpLog, UserXp } from "../db.js";
 import { config } from "../config.js";
 import { recordBotError } from "./heartbeat.js";
+import { buildMessage, commonVars, SITE_URL } from "../botMessages.js";
 
 // 📌 세 갈래(사이트 · 봇 · 화면)가 같은 글자를 쓴다 — 약속 문서 「키 · 표식」
 export const GOEDAM_KEY = "goedam-2026";
@@ -507,6 +508,20 @@ async function usernames(ids) {
   return out;
 }
 
+// 📌 음성 추첨권 DM(2026-10-26 운영자 "60분 채워서 할로윈 추첨권 받으면 갠디 알람 · 이미지로 어떻게 하는지 · 바로 뽑기 화면 링크") —
+//    관리 › 봇 메시지 「괴담회 음성 추첨권」 틀(뽑는 법 그림 public/notices/goedam-draw-guide.png) + 아래 「뽑기 하러 가기」 단추(사이트 뽑기 창 /level?event=goedam).
+//    이번에 새로 넣은 장 수가 있을 때만(못다 준 줄 채우기 · 손 지급은 보내지 않는다). 끈 틀(null) · 멤버 못 찾음 · DM 막힘은 조용히 넘어간다(지급은 이미 끝났다)
+const DRAW_PATH = "/level?event=goedam";
+async function dmVoiceTicket(userId, item, count, minutes) {
+  if (!guildRef || !(count > 0)) return;
+  const member = guildRef.members.cache.get(userId) || (await guildRef.members.fetch(userId).catch(() => null));
+  if (!member || member.user?.bot) return;
+  const msg = buildMessage("goedamVoiceTicket", { ...commonVars(member, member.guild), item: item.name, count, minutes });
+  if (!msg) return;
+  const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("뽑기 하러 가기").setURL(`${SITE_URL}${DRAW_PATH}`));
+  await member.send({ ...msg, components: [row] }).catch(() => {});
+}
+
 // 음성 날 하나 — 그날 기준을 넘은 사람의 줄(sid "voice:<날짜>")에 그날 합을 쓰고(새 줄 · 늘어난 줄만, $max), 아직 안 받은 줄을
 //    { grantedAt: null } 조건부로 세운 뒤(손 지급 · 다른 봇과 겹쳐도 한 번만) 추첨권을 넣는다. 넣지 못하면 표시를 되돌려 다음 주기에 다시(grantScreening 과 같다).
 //    돌려주는 값: 이번에 못다 준 줄까지 살폈나(지난날이면 voiceDone 에 넣는다)
@@ -553,6 +568,8 @@ async function grantVoiceDay(day, voice, item, now) {
       try {
         const n = await fillTickets(row, g, item, voice.tickets);
         console.log(`🎟️ 괴담회 추첨권 지급: ${row.userName || row.userId} ← ${item.name} ×${n} (${g.label} · ${Math.floor(h.seconds / 60)}분)`);
+        // 알림은 기다리지 않는다(DM 이 느려도 다음 사람 지급이 밀리지 않게) — 실패는 안에서 삼킨다
+        dmVoiceTicket(h.userId, item, n, voice.minutes).catch((e) => console.error("🎟️ 괴담회 음성 추첨권 DM 오류:", e?.message || e));
       } catch (e) {
         await GoedamWatch.updateOne(
           { eventKey: GOEDAM_KEY, sid: g.sid, userId: h.userId, grantedAt: at, manual: { $ne: true } },

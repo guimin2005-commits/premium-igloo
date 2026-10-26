@@ -347,6 +347,31 @@ export const MESSAGE_DEFS = {
       }),
     },
   },
+  // 📌 2026-10-26 운영자 "60분 채워서 할로윈 추첨권 받으면 갠디 알람 · 이미지로 어떻게 하는지 · 바로 뽑기 화면 링크" — 봇 features/goedamWatch.js 음성 지급.
+  //    아래 「뽑기 하러 가기」 단추는 봇이 붙인다(이 틀은 임베드만 — 단추 주소 {site}/level?event=goedam)
+  goedamVoiceTicket: {
+    group: "dm",
+    label: "괴담회 음성 추첨권",
+    desc: "괴담회 음성 채널 참여로 추첨권을 받으면 DM 으로 보냅니다.",
+    vars: [
+      { name: "item", label: "추첨권 이름", sample: "[할로윈] 추첨권" },
+      { name: "count", label: "장 수", sample: 1 },
+      { name: "minutes", label: "채운 분", sample: 60 },
+    ],
+    defaults: {
+      enabled: true,
+      content: "",
+      embed: embed({
+        authorName: "방구석 심야 괴담회",
+        title: "추첨권 지급",
+        url: "{site}/level?event=goedam",
+        description: "음성 채널 **{minutes}분**을 채워 **{item} {count}장**을 받았습니다.",
+        image: "{site}/notices/goedam-draw-guide.png",
+        footerText: FOOTER_LEVEL,
+        timestamp: true,
+      }),
+    },
+  },
   renewed: {
     group: "dm",
     label: "기간 연장",
