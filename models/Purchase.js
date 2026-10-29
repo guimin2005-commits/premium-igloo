@@ -74,6 +74,15 @@ const PurchaseSchema = new mongoose.Schema({
   contact: { type: String, default: "" },   // 실물 상품 수령 정보 (구매자 입력)
   adminNote: { type: String, default: "" }, // 운송장 번호 등
   error: { type: String, default: "" },     // 역할 지급 실패 사유
+  // 📌 운영진 지급 DM 알림(2026-10-28 운영자 "전체 지급하는 건 있는데 봇 메시지가 가지 않으니까") — 아이템 지급 창 「DM 알림」을 켜면
+  //    한 사람분 주문(orderId)의 첫 건에만 grantDm true. 봇 features/grantDm.js 가 grantDmAt 을 조건부로 세우고 「운영진 지급」 DM 을 보낸다.
+  //    역할 아이템(pending)은 봇 지급 큐가 이미 지급 DM 을 보내므로 세우지 않는다(app/api/admin/items/grant). grantDmError — 못 보낸 까닭
+  grantDm: { type: Boolean, default: false },
+  grantDmAt: { type: Date, default: null },
+  grantDmError: { type: String, default: "" },
+  //    2026-10-29 지급 창에서 고친 DM 제목 · 본문(이번 지급만) — null 이면 「운영진 지급」 틀 그대로. 지급 창이 아이템 · 수량 · 사유를 채운 글
+  grantDmTitle: { type: String, default: null },
+  grantDmBody: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   processedAt: { type: Date },
 });

@@ -45,6 +45,7 @@ import {
   M_CLOSE,
   MENTION_VARS,
   DiscordPreview,
+  GRANT_TICKET_EXTRAS,
   TextBox,
   Dot,
   Blk,
@@ -76,6 +77,11 @@ const SCENE_OPTIONS = [{ v: "", l: "없음" }, ...SCENES.map((s: { v: string; l:
 const SKIN_OPTIONS = [{ v: "", l: "없음" }, ...SKINS.filter((s: { v: string }) => s.v !== SKIN_RANK_ALL).map((s: { v: string; l: string }) => ({ v: s.v, l: s.l }))];
 const FRAME_OPTIONS = [{ v: "", l: "없음" }, ...FRAMES.filter((f: { v: string }) => f.v !== FRAME_ALL).map((f: { v: string; l: string }) => ({ v: f.v, l: f.l }))];
 const DRESS_KEYS = new Set<string>(SKIN_CARD_KINDS as string[]);
+// 📌 틀 밖에서 봇이 붙이는 것도 미리보기에(2026-10-29 운영자 "미리보기가 이건데" — 추첨권 뽑는 법이 안 보였다)
+//    운영진 지급은 추첨권일 때 뽑는 법 그림 임베드 + 단추(봇 features/grantDm.js) — 예시 아이템이 추첨권이라 붙여 그린다
+const BOT_EXTRAS: Record<string, { images?: string[]; buttons?: string[] }> = {
+  itemGrantNotice: GRANT_TICKET_EXTRAS,
+};
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 type Item = { key: string; custom: boolean; template: Tpl; updatedAt: string | null; updatedBy: string };
@@ -735,7 +741,7 @@ export default function AdminBotMessagesPage() {
                     </div>
                   )}
                   {/* 공지는 봇이 링크 버튼을 붙인다 — 글자는 글마다(글쓰기 › 디스코드 공지), 여기선 기본 글자로 */}
-                  <DiscordPreview r={rendered} clock={clock} off={!draft.enabled} card={cardView} buttons={sel === NOTICE_KEY ? [NOTICE_BUTTON_LABEL] : undefined} />
+                  <DiscordPreview r={rendered} clock={clock} off={!draft.enabled} card={cardView} buttons={sel === NOTICE_KEY ? [NOTICE_BUTTON_LABEL] : BOT_EXTRAS[sel]?.buttons} images={BOT_EXTRAS[sel]?.images} />
                 </Panel>
               </div>
             </div>

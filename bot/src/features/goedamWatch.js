@@ -24,7 +24,7 @@
 //    📌 채널 조건은 아직 없다(음성 XP 기록 전부) — 추후 설정에 voice.channels 를 더하면 voiceDayPipeline 의 $match 에 붙인다
 //    📌 날짜 · 합 · 기준 판정(kstDayKey · voiceDays · daySeconds · voiceQualifiers)도 순수 함수로 내보낸다
 import { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import { Goedam, GoedamWatch, Purchase, Item, XpLog, UserXp } from "../db.js";
+import { Goedam, GoedamWatch, GoedamDraw, Purchase, Item, XpLog, UserXp } from "../db.js";
 import { config } from "../config.js";
 import { recordBotError } from "./heartbeat.js";
 import { buildMessage, commonVars, SITE_URL } from "../botMessages.js";
@@ -605,6 +605,50 @@ async function grantVoice(now) {
   }
 }
 
+// ── 문화상품권 안내 DM(2026-10-28) ─────────────────
+// 📌 운영자 "현재 문화상품권 뽑은 인원들에게 해당 안내사항 갠디로 · 추후 뽑는 인원들도 마찬가지로" — 1분마다 안내를 아직 안 보낸 문화상품권(kind "code") 당첨 줄을 찾아
+//    관리 › 봇 메시지 「괴담회 문화상품권 안내」를 DM 으로. 핀번호는 싣지 않는다(당첨 화면 · 내 당첨에서 본다).
+//    줄마다 { noticeAt: null } 조건부로 먼저 세운 뒤 보낸다(재시작 · 겹친 봇에도 한 번만). 서버를 나간 사람 · DM 막힘은 까닭(noticeError)만 적고 다시 두드리지 않는다.
+//    지급 전(granted false — 관리자가 다시 지급할 줄)은 기다린다. 틀을 꺼 두었거나 디스코드 조회가 잠깐 실패하면 표시를 되돌려 다음에 다시
+const NOTICE_MS = 60 * 1000;
+const NOTICE_BATCH = 20;
+const GONE_CODES = new Set([10007, 10013]); // Unknown Member · Unknown User
+async function noticeGifts() {
+  if (!guildRef) return;
+  const rows = await GoedamDraw.find(
+    { eventKey: GOEDAM_KEY, kind: "code", granted: true, noticeAt: null },
+    { userId: 1, userName: 1, prizeName: 1 }
+  ).sort({ createdAt: 1 }).limit(NOTICE_BATCH).lean();
+  for (const r of rows) {
+    const claim = await GoedamDraw.updateOne({ _id: r._id, noticeAt: null }, { $set: { noticeAt: new Date() } });
+    if (!claim.modifiedCount) continue; // 그새 다른 쪽이 보냈다
+    const undo = () => GoedamDraw.updateOne({ _id: r._id }, { $set: { noticeAt: null } }).catch(() => {});
+    let member = guildRef.members.cache.get(r.userId) || null;
+    if (!member) {
+      try {
+        member = await guildRef.members.fetch(r.userId);
+      } catch (e) {
+        if (!GONE_CODES.has(e?.code)) {
+          await undo(); // 잠깐 실패 — 다음 주기에 다시
+          return;
+        }
+      }
+    }
+    if (!member) {
+      await GoedamDraw.updateOne({ _id: r._id }, { $set: { noticeError: "no-member" } }).catch(() => {});
+      continue;
+    }
+    const msg = buildMessage("goedamGiftNotice", { ...commonVars(member, member.guild), prize: r.prizeName || "문화상품권" });
+    if (!msg) {
+      await undo(); // 관리자가 꺼 두었다 — 켜면 그때 보낸다
+      return;
+    }
+    const ok = await member.send(msg).then(() => true).catch(() => false);
+    if (ok) console.log(`🎟️ 괴담회 문화상품권 안내 DM: ${r.userName || r.userId}`);
+    else await GoedamDraw.updateOne({ _id: r._id }, { $set: { noticeError: "dm" } }).catch(() => {});
+  }
+}
+
 // ── 주기 ─────────────────────────────────────
 
 function tick() {
@@ -662,6 +706,10 @@ export function startGoedamWatch(client) {
   refreshGoedam();
   setInterval(refreshGoedam, REFRESH_MS);
   setInterval(tick, FLUSH_MS);
+  // 문화상품권 안내 DM — 켜지고 20초 뒤 한 번(그동안 쌓인 당첨자), 그 뒤 1분마다
+  const notice = () => noticeGifts().catch((e) => console.error("🎟️ 괴담회 문화상품권 안내 DM 오류:", e?.message || e));
+  setTimeout(notice, 20_000);
+  setInterval(notice, NOTICE_MS);
   console.log(
     `✅ 괴담회 시청 기록 시작 — 스테이지 채널 머문 시간 ${FLUSH_MS / 1000}초마다 기록 · 회차 끝 + 60초 완청 추첨권 지급 · 하루 음성 ${VOICE_MS / 60000}분마다 확인 (설정 1분 주기)`
   );

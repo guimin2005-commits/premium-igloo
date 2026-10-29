@@ -110,6 +110,12 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "이 아이템은 1개만 지급할 수 있습니다." }, { status: 400 });
     }
     const qty = stackable ? qtyIn : 1;
+    // 📌 DM 알림(2026-10-28) — 켜면 한 사람분 주문의 첫 건에 grantDm(봇 features/grantDm.js 가 「운영진 지급」 DM). 역할 아이템은 봇 지급 큐가 이미 DM 을 보내 세우지 않는다
+    const dm = b?.dm === true && !item.roleId;
+    // 📌 2026-10-29 지급 창에서 고친 DM 제목 · 본문(이번 지급만) — 고치지 않은 칸은 오지 않는다(null → 봇이 틀 그대로). 빈 글도 고친 글로 둔다
+    const ownText = (v, max) => (dm && typeof v === "string" ? v.replace(/\r\n?/g, "\n").trim().slice(0, max) : null);
+    const dmTitle = ownText(b?.dmTitle, 256);
+    const dmBody = ownText(b?.dmBody, 4096);
 
     // 대상 — "all" 이면 XP 기록이 있는 전원, 아니면 ID·닉네임으로 찾는다 (XP 수동 지급과 같은 규칙)
     //    📌 여러 명 — { targets: [...] }(lib/adminTargets.js). 키가 하나면 { target } 한 명 경로와 똑같이(응답도 같다).
@@ -199,6 +205,9 @@ export async function POST(request) {
         // 역할이 있으면 봇이 붙인 뒤 completed 로 바꾼다. 없으면 사이트 보유라 바로 완료.
         status: item.roleId ? "pending" : "completed",
         processedAt: item.roleId ? null : now,
+        ...(dm && k === 0
+          ? { grantDm: true, grantDmAt: null, ...(dmTitle != null ? { grantDmTitle: dmTitle } : {}), ...(dmBody != null ? { grantDmBody: dmBody } : {}) }
+          : {}),
       });
     }
     for (let i = 0; i < rows.length; i += INSERT_CHUNK) await Purchase.insertMany(rows.slice(i, i + INSERT_CHUNK));
@@ -210,8 +219,8 @@ export async function POST(request) {
     }
     return NextResponse.json({
       success: true,
-      message: `${people}명에게 ${qty > 1 ? `${qty}개씩 ` : ""}지급했습니다.${skipped > 0 ? ` (이미 보유 ${skipped}명 건너뜀)` : ""}`,
-      data: { count: people, qty, skipped },
+      message: `${people}명에게 ${qty > 1 ? `${qty}개씩 ` : ""}지급했습니다.${skipped > 0 ? ` (이미 보유 ${skipped}명 건너뜀)` : ""}${dm ? " DM 은 봇이 차례로 보냅니다." : ""}`,
+      data: { count: people, qty, skipped, dm },
     });
   } catch (e) {
     console.error("아이템 수동 지급 오류:", e);

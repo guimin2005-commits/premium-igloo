@@ -403,7 +403,8 @@ const GD_CSS = `
 .gd-gb:focus-visible { border-color: #fff; }
 .gd-gb:disabled { cursor: default; }
 .gd-gb.md { height: 34px; padding: 0 16px 2px; font-size: 12.5px; }
-.gd-act { flex: none; display: flex; justify-content: center; padding: 12px 15px; }
+.gd-act { flex: none; display: flex; flex-direction: column; align-items: center; padding: 12px 15px; }
+.gd-sb.gd-buy { width: 100%; height: 40px; margin-top: 9px; font-size: 13px; line-height: 32px; text-decoration: none; }
 .gd-go { width: 100%; height: 56px; padding: 0 20px 3px; font-size: 17px; }
 .gd-go.off { background: #2a2458; color: rgba(241,236,255,.45); box-shadow: inset 0 3px 0 #3a3186, inset 0 -4px 0 #17133a; }
 .gd-go .gd-lk { display: block; margin-right: 9px; line-height: 0; }
@@ -1416,7 +1417,13 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
               </div>
               {/* 📌 2026-10-25 결과 읽어 주기 — 늘 있는 빈 상태 칸에 다 보인 뒤 글을 넣는다(글이 이미 든 칸에 role 을 늦게 붙이면 화면 읽기가 안 읽는다). 화면엔 안 보임 */}
               <p className="sr-only" role="status">{anim?.step === "result" && anim.done && anim.results?.length ? batchText(anim.results) : ""}</p>
-              <div className="gd-act">{action}</div>
+              <div className="gd-act">
+                {action}
+                {/* 📌 2026-10-29 운영자 "추첨권 구매하러가기 바로가기" — 뽑기 단추 바로 아래 한 줄(받는 법 › 상점 줄과 같은 주소 · 같은 결) */}
+                {shopHref && (
+                  <Link href={shopHref} className="gd-sb gd-pp gd-buy" onClick={sfxTick} onNavigate={closeAll}>추첨권 구매하러 가기</Link>
+                )}
+              </div>
             </div>
             <div className="gd-r gd-pp">
               <div className="gd-tabs" role="tablist">

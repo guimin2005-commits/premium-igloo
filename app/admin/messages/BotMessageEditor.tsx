@@ -438,9 +438,12 @@ function EmbedView({ e, clock, card }: { e: REmbed; clock: string; card: CardVie
   );
 }
 
+// 📌 운영진 지급 DM 이 괴담회 추첨권일 때 봇이 틀 아래 붙이는 것(봇 features/grantDm.js) — 봇 메시지 화면 · 아이템 지급 창 미리보기가 같이 쓴다
+export const GRANT_TICKET_EXTRAS = { images: ["/notices/goedam-draw-guide.png"], buttons: ["뽑기 하러 가기"] };
+
 // 카드가 켜져 있으면 — 임베드가 있으면 그 안, 없으면(임베드 꺼짐 · 빈 임베드) 본문 아래 첨부. 글이 전부 비어도 카드만 간다
-//    buttons: 메시지 아래 링크 버튼 글자(디스코드 공지)
-export function DiscordPreview({ r, clock, off, card, buttons }: { r: Rendered | null; clock: string; off: boolean; card: CardView | null; buttons?: string[] }) {
+//    buttons: 메시지 아래 링크 버튼 글자(디스코드 공지) · images: 틀 아래 봇이 덧붙이는 그림 임베드(운영진 지급 추첨권의 뽑는 법)
+export function DiscordPreview({ r, clock, off, card, buttons, images }: { r: Rendered | null; clock: string; off: boolean; card: CardView | null; buttons?: string[]; images?: string[] }) {
   const nothing = (!r || r.empty) && !card;
   return (
     <div className="dc-root px-4 py-4">
@@ -460,6 +463,11 @@ export function DiscordPreview({ r, clock, off, card, buttons }: { r: Rendered |
               {r?.content && <div className="dc-text" dangerouslySetInnerHTML={{ __html: md(r.content) }} />}
               {r?.embed && <EmbedView e={r.embed} clock={clock} card={card} />}
               {card && !r?.embed && <CardImg key={card.src} card={card} alone />}
+              {images?.map((src) => (
+                <div key={src} className="dc-embed" style={{ borderLeftColor: r?.embed?.color || "#1e1f22" }}>
+                  <img src={src} alt="" className="dc-image" onError={hideImg} />
+                </div>
+              ))}
               {buttons && buttons.length > 0 && (
                 <div className="dc-btns">
                   {buttons.map((b, i) => (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Dropdown from "../../components/Dropdown";
 import ItemIcon from "../../components/ItemIcon";
+import GrantDmBox from "./GrantDmBox";
 import PromoOverlay from "@/app/level/PromoOverlay";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { VOICE_TIERS, tierPaint, tierText } from "@/lib/voiceTiers";
@@ -214,7 +215,9 @@ const payoutCompletable = (p?: PayoutDoc) => !!p && p.currency === "point" && p.
 type GrantKind = "xp" | "point" | "item";
 const GRANT_KINDS = [{ v: "xp", l: "XP" }, { v: "point", l: "빙옥" }, { v: "item", l: "아이템" }];
 const ITEM_GRANT_DAYS = [{ v: "0", l: "영구" }, { v: "7", l: "7일" }, { v: "30", l: "30일" }, { v: "custom", l: "직접 입력" }];
-const EMPTY_ITEM_GRANT = { itemId: "", daysMode: "0", days: "", target: "", reason: "", qty: "1" };
+// 📌 dm — 「DM 알림」(2026-10-28) 켜면 받은 사람마다 봇이 「운영진 지급」 DM 한 통(여러 개면 ×N 한 통 · 역할 아이템은 봇 지급 DM 이 이미 간다)
+//    dmTitle · dmBody — 지급 창에서 고친 DM 제목 · 본문(2026-10-29, 이번 지급만 · null = 틀 그대로 — ./GrantDmBox.tsx)
+const EMPTY_ITEM_GRANT = { itemId: "", daysMode: "0", days: "", target: "", reason: "", qty: "1", dm: false, dmTitle: null as string | null, dmBody: null as string | null };
 const GRANT_STATUS: Record<string, { l: string; tone: "ok" | "warn" | "neutral" }> = {
   pending: { l: "지급 대기", tone: "warn" },
   completed: { l: "보유", tone: "ok" },
@@ -1117,12 +1120,14 @@ export default function AdminBotPage() {
       const res = await fetch("/api/admin/items/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
         // 수량 — ×N 으로 쌓이는 아이템(stackable)만. 나머지는 늘 1개(서버도 다시 판정한다)
-        body: JSON.stringify({ itemId: itemGrant.itemId, ...(target === "all" ? { target } : { targets: target }), days, reason: itemGrant.reason, qty: grantQty }),
+        body: JSON.stringify({ itemId: itemGrant.itemId, ...(target === "all" ? { target } : { targets: target }), days, reason: itemGrant.reason, qty: grantQty, dm: itemGrant.dm,
+          ...(itemGrant.dm && itemGrant.dmTitle != null ? { dmTitle: itemGrant.dmTitle } : {}),
+          ...(itemGrant.dm && itemGrant.dmBody != null ? { dmBody: itemGrant.dmBody } : {}) }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
         notify(d.message || "지급했습니다.");
-        setItemGrant({ ...itemGrant, target: "", reason: "" });
+        setItemGrant((g) => ({ ...g, target: "", reason: "", dmTitle: null, dmBody: null }));
         loadItemGrants();
       } else {
         notify(d.message || "지급에 실패했습니다.", true);
@@ -1139,7 +1144,8 @@ export default function AdminBotPage() {
   };
 
   // 📌 고른 아이템이 ×N 으로 쌓이는지(1개 단위 상품이 가리키거나 역할 없는 소모형 — /api/admin/items 의 stackable)
-  const grantStackable = !!grantItems.find((it: any) => it._id === itemGrant.itemId)?.stackable;
+  const grantItem: any = grantItems.find((it: any) => it._id === itemGrant.itemId) || null;
+  const grantStackable = !!grantItem?.stackable;
   // 보낼 수량 — 1 ~ 99 로 자른 값. 확인 창 · 요청 · 서버가 같은 수를 쓴다
   const grantQty = grantStackable ? Math.min(99, Math.max(1, Math.trunc(Number(itemGrant.qty) || 1))) : 1;
   // 보낼 기간(일, 0 = 영구) — 확인 창 · 요청이 같은 수를 쓴다
@@ -2413,7 +2419,8 @@ export default function AdminBotPage() {
                         theme="light"
                         buttonClassName={DD}
                         value={itemGrant.itemId}
-                        onChange={(v) => setItemGrant({ ...itemGrant, itemId: v })}
+                        // 아이템을 바꾸면 고친 DM 글(앞 아이템 이름이 든 글)은 버리고 새 아이템의 기본 글로
+                        onChange={(v) => setItemGrant((g) => ({ ...g, itemId: v, ...(v !== g.itemId ? { dmTitle: null, dmBody: null } : {}) }))}
                         placeholder={grantItems.length ? "지급할 아이템을 선택하세요" : "등록된 아이템이 없습니다"}
                         options={grantItems.map((it: any) => ({
                           value: it._id, label: it.shortName || it.name, hint: it.categoryLabel || itemTypeLabel(it.type),
@@ -2445,9 +2452,24 @@ export default function AdminBotPage() {
                       <TargetChips check={itemCheck} onPick={(k, id) => setItemGrant((g) => ({ ...g, target: pickTargetKey(itemCheck.keys, k, id) }))} />
                     </Field>
                     <Field label="사유">
-                      <input type="text" value={itemGrant.reason} onChange={(e) => setItemGrant({ ...itemGrant, reason: e.target.value })}
+                      <input type="text" value={itemGrant.reason} maxLength={120} onChange={(e) => setItemGrant({ ...itemGrant, reason: e.target.value })}
                         placeholder="예: 이벤트 우승 보상" className={inputClass} />
                     </Field>
+                    <Field label="DM 알림" hint="관리 › 봇 메시지 「운영진 지급」">
+                      <Switch on={itemGrant.dm} onChange={(v) => setItemGrant((g) => ({ ...g, dm: v }))} label="받은 사람에게 DM 보내기" />
+                    </Field>
+                    {/* 📌 DM 제목 · 본문 · 미리보기 — 아이템을 고르기 전에도 연다(2026-10-29 "내용이 없는데"). 역할 아이템은 봇 지급 DM 이 따로 가서(서버도 DM 을 세우지 않는다) 열지 않는다 */}
+                    {itemGrant.dm && !grantItem?.roleId && (
+                      <GrantDmBox
+                        itemName={grantItem?.name || ""}
+                        ticket={!!grantItem?.goedamTicket}
+                        qty={grantQty}
+                        reason={itemGrant.reason}
+                        title={itemGrant.dmTitle}
+                        body={itemGrant.dmBody}
+                        onChange={(p) => setItemGrant((g) => ({ ...g, ...(p.title !== undefined ? { dmTitle: p.title } : {}), ...(p.body !== undefined ? { dmBody: p.body } : {}) }))}
+                      />
+                    )}
 
                     <div className="flex flex-wrap gap-2">
                       <Btn type="submit" variant="primary" disabled={isGranting || !itemGrant.itemId || itemCheck.locked}>{isGranting ? "처리 중…" : "지급"}</Btn>
@@ -2977,6 +2999,7 @@ export default function AdminBotPage() {
             XP 기록이 있는 <strong className="text-[#131313]">모든 유저</strong>에게{" "}
             <strong className="text-[#e91e3f]">{grantItems.find((it) => it._id === itemGrant.itemId)?.name || "아이템"}</strong>
             을 {grantQty > 1 ? `${grantQty}개씩 ` : ""}지급합니다.{grantStackable ? "" : " 이미 보유한 유저는 건너뜁니다."}
+            {itemGrant.dm && <> 받은 사람마다 <strong className="text-[#131313]">DM</strong>이 갑니다.</>}
           </p>
         }
       />

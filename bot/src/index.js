@@ -24,6 +24,7 @@ import { registerWispHunt } from "./features/wispHunt.js";
 import { registerActivity, startActivity, flushLastActive } from "./features/activity.js";
 import { registerLeaveReset } from "./features/leaveReset.js";
 import { startGrantQueue } from "./features/grantQueue.js";
+import { startGrantDm } from "./features/grantDm.js";
 import { startScrimNudge } from "./features/scrimNudge.js";
 import { startHeartbeat, recordBotError } from "./features/heartbeat.js";
 import { startExpiryReminder } from "./features/expiryReminder.js";
@@ -92,6 +93,7 @@ client.once(Events.ClientReady, async (c) => {
   startAfkCheck(c); // AFK 방지 시스템 — 음성 채널에 혼자 1시간이면 [확인] 버튼, 이후 20~60분 무작위, 5분 안에 안 누르면 잠수 채널로(관리자 · 서포터즈 제외)
   startActivityStats(c); // 퀘스트용 활동 횟수 — 메시지 · 답장 · 멘션 · 반응 · 스레드 · 스티커 · 명령어 · 음성 입장 · 레벨 업, 20초마다 기록
   startGrantQueue(c);
+  startGrantDm(c); // 📌 운영진 지급 DM 알림 — 관리 아이템 지급 「DM 알림」을 켠 지급마다 한 통(20초 주기 · 1.5초 간격, 2026-10-28)
   startExpiryReminder(c); // 기간제 만료 임박 DM (10분 주기)
   startPassReminder(c); // 시즌 종료 D-7 · D-1 안 받은 시즌 패스 보상 DM (10분 주기)
   startScheduledChanges(); // 예약 변경 — 정한 시각에 설정 · 아이템 값 바꾸기 (1분 주기)

@@ -214,6 +214,8 @@ export async function GET(request) {
     for (const r of rows) {
       r.stackable = units.has(`i:${r._id}`);
       if (ticket.id && ticket.closesAt && String(r._id) === ticket.id) r.ticketUntil = ticket.closesAt.toISOString();
+      // 괴담회 추첨권인가 — 수동 지급 DM 미리보기(뽑는 법 그림 · 단추 · 「장」)가 본다(봇 features/grantDm.js 와 같은 판정)
+      if (ticket.id && String(r._id) === ticket.id) r.goedamTicket = true;
       // 그룹 — 칸이 생기기 전 문서는 비어 있다("" = 묶지 않음)
       r.group = typeof r.group === "string" ? r.group : "";
       attachCategory(attachEffects(r));

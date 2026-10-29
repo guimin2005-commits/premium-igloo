@@ -19,6 +19,9 @@ const GoedamDrawSchema = new mongoose.Schema(
     ticketId: { type: String, default: "" },  // 소모한 추첨권 Purchase _id
     granted: { type: Boolean, default: false },
     error: { type: String, default: "" },     // 지급 실패 사유
+    // 📌 문화상품권(code) 안내 DM — 봇이 적는다(bot/src/features/goedamWatch.js noticeGifts · 2026-10-28). 사이트는 읽지도 쓰지도 않는다
+    noticeAt: { type: Date, default: null },
+    noticeError: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false, autoCreate: false, autoIndex: false }

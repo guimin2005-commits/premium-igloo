@@ -365,6 +365,12 @@ const PurchaseSchema = new mongoose.Schema({
   contact: { type: String, default: "" },
   adminNote: { type: String, default: "" },
   error: { type: String, default: "" },
+  // 📌 운영진 지급 DM 알림 — 사이트 models/Purchase.js 와 같은 칸(features/grantDm.js)
+  grantDm: { type: Boolean, default: false },
+  grantDmAt: { type: Date, default: null },
+  grantDmError: { type: String, default: "" },
+  grantDmTitle: { type: String, default: null },
+  grantDmBody: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   processedAt: { type: Date },
 });
@@ -673,6 +679,24 @@ const GoedamWatchSchema = new mongoose.Schema({
 }, { versionKey: false, autoCreate: false, autoIndex: false });
 GoedamWatchSchema.index({ eventKey: 1, sid: 1, userId: 1 }, { unique: true });
 export const GoedamWatch = mongoose.models.GoedamWatch || mongoose.model("GoedamWatch", GoedamWatchSchema);
+
+// 📌 괴담회 추첨 기록 — 사이트 models/GoedamDraw.js 와 같은 모델 이름 · 컬렉션(goedamdraws). 쓰기는 사이트가 하고 봇은 문화상품권 안내 DM 표시만 한다
+//    (2026-10-28 운영자 "문화상품권 뽑은 인원들에게 안내사항 갠디 · 추후 뽑는 인원들도" — features/goedamWatch.js noticeGifts).
+//    noticeAt — 안내 DM 을 보낸(보내려 한) 시각 · null 이면 아직. noticeError — 못 보낸 까닭("no-member" · "dm" · "off"). 사이트 모델에도 같은 칸
+//    ⚠️ autoCreate · autoIndex 를 끈다(컬렉션 · 인덱스는 사이트 몫)
+const GoedamDrawSchema = new mongoose.Schema({
+  eventKey: { type: String, required: true },
+  userId: { type: String, required: true },
+  userName: { type: String, default: "" },
+  pid: { type: String, default: "" },
+  prizeName: { type: String, default: "" },
+  kind: { type: String, default: "none" },
+  granted: { type: Boolean, default: false },
+  noticeAt: { type: Date, default: null },
+  noticeError: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+}, { versionKey: false, autoCreate: false, autoIndex: false, strict: false });
+export const GoedamDraw = mongoose.models.GoedamDraw || mongoose.model("GoedamDraw", GoedamDrawSchema);
 
 // 📌 최초 부스팅 보상 — 한 사람 한 줄(userId 유니크 · 2026-10-25, features/boosterBonus.js). 퇴장 초기화(leaveReset.js)가 지우지 않는다 — 다시 들어와 부스트해도 한 번뿐
 //    status: "granted"(보상 줌) · "baseline"(기능이 켜지기 전부터 부스팅 중이던 사람 — 안 줌) · "start"(userId "#start" 한 줄 — 기능이 처음 켜진 시각 at)
