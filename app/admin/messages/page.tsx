@@ -26,6 +26,7 @@ import {
   type Draft,
   type VarDef,
   type Rendered,
+  type REmbed,
   type EmbedText,
   type CardView,
   COMMON,
@@ -79,8 +80,10 @@ const FRAME_OPTIONS = [{ v: "", l: "없음" }, ...FRAMES.filter((f: { v: string 
 const DRESS_KEYS = new Set<string>(SKIN_CARD_KINDS as string[]);
 // 📌 틀 밖에서 봇이 붙이는 것도 미리보기에(2026-10-29 운영자 "미리보기가 이건데" — 추첨권 뽑는 법이 안 보였다)
 //    운영진 지급은 추첨권일 때 뽑는 법 그림 임베드 + 단추(봇 features/grantDm.js) — 예시 아이템이 추첨권이라 붙여 그린다
-const BOT_EXTRAS: Record<string, { images?: string[]; buttons?: string[] }> = {
+//    게임 그룹 지원 승인은 아래에 「괴담회 문화상품권 안내」 임베드(with — 그 틀이 켜져 있으면) + 단추(봇 features/goedamWatch.js noticeGroups)
+const BOT_EXTRAS: Record<string, { images?: string[]; buttons?: string[]; with?: string }> = {
   itemGrantNotice: GRANT_TICKET_EXTRAS,
+  goedamGroupApprove: { with: "goedamGiftNotice", buttons: ["번호 확인하러 가기"] },
 };
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -299,6 +302,17 @@ export default function AdminBotMessagesPage() {
     () => (draft ? (renderTemplate(fromDraft(draft), pv) as unknown as Rendered) : null),
     [draft, pv]
   );
+  // 봇이 아래에 붙이는 다른 틀(저장본 · 꺼져 있으면 안 붙는다). 두 임베드 글자 합이 6,000 을 넘으면 봇이 빼고 보내므로 미리보기도 뺀다
+  const withKey = BOT_EXTRAS[sel]?.with || "";
+  const withTpl = withKey ? items[withKey]?.template : undefined;
+  const extraEmbeds = useMemo(() => {
+    if (!withKey || !withTpl?.enabled) return undefined;
+    const e = (renderTemplate(withTpl, sampleVars(withKey)) as unknown as Rendered).embed;
+    if (!e) return undefined;
+    const chars = (x: REmbed | null | undefined) =>
+      x ? x.title.length + x.description.length + x.authorName.length + x.footerText.length + x.fields.reduce((a, f) => a + f.name.length + f.value.length, 0) : 0;
+    return chars(rendered?.embed) + chars(e) > LIM.total ? undefined : [e];
+  }, [withKey, withTpl, rendered]);
   const cardView = useMemo<CardView | null>(() => {
     if (!cardOn) return null;
     const size = (CARD_SIZE as Record<string, { width: number; height: number }>)[sel];
@@ -741,7 +755,7 @@ export default function AdminBotMessagesPage() {
                     </div>
                   )}
                   {/* 공지는 봇이 링크 버튼을 붙인다 — 글자는 글마다(글쓰기 › 디스코드 공지), 여기선 기본 글자로 */}
-                  <DiscordPreview r={rendered} clock={clock} off={!draft.enabled} card={cardView} buttons={sel === NOTICE_KEY ? [NOTICE_BUTTON_LABEL] : BOT_EXTRAS[sel]?.buttons} images={BOT_EXTRAS[sel]?.images} />
+                  <DiscordPreview r={rendered} clock={clock} off={!draft.enabled} card={cardView} buttons={sel === NOTICE_KEY ? [NOTICE_BUTTON_LABEL] : BOT_EXTRAS[sel]?.buttons} images={BOT_EXTRAS[sel]?.images} extra={extraEmbeds} />
                 </Panel>
               </div>
             </div>

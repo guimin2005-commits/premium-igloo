@@ -23,11 +23,11 @@
 //       (xp.js grantXp · features/voiceXp.js payVoiceCycle) 그동안의 음성은 저절로 세지 않는다. 0 XP 바퀴(채널 정책 · 음소거 막기 등)도 줄이 없어 빠진다
 //    📌 채널 조건은 아직 없다(음성 XP 기록 전부) — 추후 설정에 voice.channels 를 더하면 voiceDayPipeline 의 $match 에 붙인다
 //    📌 날짜 · 합 · 기준 판정(kstDayKey · voiceDays · daySeconds · voiceQualifiers)도 순수 함수로 내보낸다
-import { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import { Goedam, GoedamWatch, GoedamDraw, Purchase, Item, XpLog, UserXp } from "../db.js";
+import { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, embedLength } from "discord.js";
+import { Goedam, GoedamWatch, GoedamDraw, GoedamGroup, GoedamGiftCode, Purchase, Item, XpLog, UserXp } from "../db.js";
 import { config } from "../config.js";
 import { recordBotError } from "./heartbeat.js";
-import { buildMessage, commonVars, SITE_URL } from "../botMessages.js";
+import { buildMessage, currentTemplate, commonVars, SITE_URL } from "../botMessages.js";
 
 // 📌 세 갈래(사이트 · 봇 · 화면)가 같은 글자를 쓴다 — 약속 문서 「키 · 표식」
 export const GOEDAM_KEY = "goedam-2026";
@@ -649,6 +649,63 @@ async function noticeGifts() {
   }
 }
 
+// ── 게임 그룹 지원 승인 DM(2026-10-30) ─────────────
+// 📌 운영자 "괴담회 그룹 문상 주는 것도 봇 메시지 · 승인도 가" — 1분마다 승인된 그룹(GoedamGroup approved)의 번호 줄(GoedamGiftCode — 멤버마다 한 장) 중
+//    DM 을 아직 안 보낸 줄을 찾아 그 멤버에게 한 통: 「게임 그룹 지원 승인」 + 「괴담회 문화상품권 안내」(켜져 있으면) 임베드 · 「번호 확인하러 가기」 단추(/level?event=group).
+//    핀번호는 싣지 않는다. 승인 중(번호만 잡히고 아직 review)인 그룹은 보지 않는다 — 승인이 끝난 그룹만.
+//    줄마다 { noticeAt: null } 조건부로 먼저 세운 뒤 보낸다(noticeGifts 와 같은 결). 「게임 그룹 지원 승인」을 꺼 두면 줄을 건드리지 않는다 — 켜면 그때 보낸다
+const GROUP_PATH = "/level?event=group";
+const GROUP_GAP_MS = 1500; // 한 통씩 — 여러 그룹을 한꺼번에 승인해도 디스코드가 스팸으로 막지 않게
+const EMBEDS_MAX = 10; // 디스코드 한 메시지 임베드 수 · 글자 합 한도
+const EMBED_CHARS_MAX = 6000;
+const embedChars = (list) => list.reduce((s, e) => s + embedLength(e?.data ?? e), 0);
+async function noticeGroups() {
+  if (!guildRef) return;
+  if (!currentTemplate("goedamGroupApprove")) return;
+  const groups = await GoedamGroup.find({ status: "approved" }, { name: 1 }).lean();
+  if (!groups.length) return;
+  const nameOf = new Map(groups.map((g) => [String(g._id), g.name || ""]));
+  const rows = await GoedamGiftCode.find(
+    { groupId: { $in: [...nameOf.keys()] }, userId: { $type: "string" }, noticeAt: null },
+    { groupId: 1, userId: 1 }
+  ).sort({ assignedAt: 1, _id: 1 }).limit(NOTICE_BATCH).lean();
+  for (const r of rows) {
+    const claim = await GoedamGiftCode.updateOne({ _id: r._id, groupId: r.groupId, userId: r.userId, noticeAt: null }, { $set: { noticeAt: new Date() } });
+    if (!claim.modifiedCount) continue; // 그새 다른 쪽이 보냈다
+    const undo = () => GoedamGiftCode.updateOne({ _id: r._id }, { $set: { noticeAt: null } }).catch(() => {});
+    let member = guildRef.members.cache.get(r.userId) || null;
+    if (!member) {
+      try {
+        member = await guildRef.members.fetch(r.userId);
+      } catch (e) {
+        if (!GONE_CODES.has(e?.code)) {
+          await undo(); // 잠깐 실패 — 다음 주기에 다시
+          return;
+        }
+      }
+    }
+    if (!member) {
+      await GoedamGiftCode.updateOne({ _id: r._id }, { $set: { noticeError: "no-member" } }).catch(() => {});
+      continue;
+    }
+    const base = commonVars(member, member.guild);
+    const msg = buildMessage("goedamGroupApprove", { ...base, group: nameOf.get(r.groupId) || "게임 그룹" });
+    if (!msg) {
+      await undo(); // 그새 틀이 꺼졌다 — 켜면 그때 보낸다
+      return;
+    }
+    // 사용 안내는 틀이 켜져 있고 한 메시지 한도 안일 때만 붙인다(넘치면 승인 글만)
+    const embeds = [...(msg.embeds || [])];
+    const guide = buildMessage("goedamGiftNotice", { ...base, prize: "문화상품권" })?.embeds || [];
+    if (guide.length && embeds.length + guide.length <= EMBEDS_MAX && embedChars([...embeds, ...guide]) <= EMBED_CHARS_MAX) embeds.push(...guide);
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("번호 확인하러 가기").setURL(`${SITE_URL}${GROUP_PATH}`));
+    const ok = await member.send({ ...msg, embeds, components: [row] }).then(() => true).catch(() => false);
+    if (ok) console.log(`🎟️ 게임 그룹 지원 승인 DM: ${member.user?.username || r.userId} (${nameOf.get(r.groupId)})`);
+    else await GoedamGiftCode.updateOne({ _id: r._id }, { $set: { noticeError: "dm" } }).catch(() => {});
+    await new Promise((res) => setTimeout(res, GROUP_GAP_MS));
+  }
+}
+
 // ── 주기 ─────────────────────────────────────
 
 function tick() {
@@ -710,6 +767,19 @@ export function startGoedamWatch(client) {
   const notice = () => noticeGifts().catch((e) => console.error("🎟️ 괴담회 문화상품권 안내 DM 오류:", e?.message || e));
   setTimeout(notice, 20_000);
   setInterval(notice, NOTICE_MS);
+  // 게임 그룹 지원 승인 DM — 같은 주기(한 번에 하나만 돌게 — 한 통씩 쉬어 가서 1분을 넘길 수 있다)
+  let groupBusy = false;
+  const groupNotice = () => {
+    if (groupBusy) return;
+    groupBusy = true;
+    noticeGroups()
+      .catch((e) => console.error("🎟️ 게임 그룹 지원 승인 DM 오류:", e?.message || e))
+      .finally(() => {
+        groupBusy = false;
+      });
+  };
+  setTimeout(groupNotice, 25_000);
+  setInterval(groupNotice, NOTICE_MS);
   console.log(
     `✅ 괴담회 시청 기록 시작 — 스테이지 채널 머문 시간 ${FLUSH_MS / 1000}초마다 기록 · 회차 끝 + 60초 완청 추첨권 지급 · 하루 음성 ${VOICE_MS / 60000}분마다 확인 (설정 1분 주기)`
   );

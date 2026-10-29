@@ -698,6 +698,24 @@ const GoedamDrawSchema = new mongoose.Schema({
 }, { versionKey: false, autoCreate: false, autoIndex: false, strict: false });
 export const GoedamDraw = mongoose.models.GoedamDraw || mongoose.model("GoedamDraw", GoedamDrawSchema);
 
+// 📌 게임 그룹 지원 — 사이트 models/GoedamGroup.js · GoedamGiftCode.js 와 같은 모델 이름 · 컬렉션(goedamgroups · goedamgiftcodes). 쓰기는 사이트가 하고
+//    봇은 승인 DM 표시만 한다(2026-10-30 운영자 "그룹 문상 주는 것도 봇 메시지 · 승인도 가" — features/goedamWatch.js noticeGroups).
+//    GoedamGiftCode 한 줄 = 번호 한 장(승인된 그룹이면 멤버마다 한 장). noticeAt — 승인 DM 을 보낸(보내려 한) 시각 · null 이면 아직. noticeError — 못 보낸 까닭("no-member" · "dm")
+//    ⚠️ autoCreate · autoIndex 를 끈다(컬렉션 · 인덱스는 사이트 몫). 봇은 번호(code)를 읽지 않는다
+const GoedamGroupSchema = new mongoose.Schema({
+  name: { type: String, default: "" },
+  status: { type: String, default: "open" },
+}, { versionKey: false, autoCreate: false, autoIndex: false, strict: false });
+export const GoedamGroup = mongoose.models.GoedamGroup || mongoose.model("GoedamGroup", GoedamGroupSchema);
+const GoedamGiftCodeSchema = new mongoose.Schema({
+  groupId: { type: String, default: null },
+  userId: { type: String, default: null },
+  assignedAt: { type: Date, default: null },
+  noticeAt: { type: Date, default: null },
+  noticeError: { type: String, default: "" },
+}, { versionKey: false, autoCreate: false, autoIndex: false, strict: false });
+export const GoedamGiftCode = mongoose.models.GoedamGiftCode || mongoose.model("GoedamGiftCode", GoedamGiftCodeSchema);
+
 // 📌 최초 부스팅 보상 — 한 사람 한 줄(userId 유니크 · 2026-10-25, features/boosterBonus.js). 퇴장 초기화(leaveReset.js)가 지우지 않는다 — 다시 들어와 부스트해도 한 번뿐
 //    status: "granted"(보상 줌) · "baseline"(기능이 켜지기 전부터 부스팅 중이던 사람 — 안 줌) · "start"(userId "#start" 한 줄 — 기능이 처음 켜진 시각 at)
 //    ⚠️ autoCreate · autoIndex 를 끈다(사이트 · 테스트 사이트가 같은 DB) — 첫 쓰기 직전에 createIndexes() 를 한 번

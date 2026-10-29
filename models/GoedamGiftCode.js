@@ -11,6 +11,10 @@ const GoedamGiftCodeSchema = new mongoose.Schema(
     groupId: { type: String, default: null },
     userId: { type: String, default: null },
     assignedAt: { type: Date, default: null },
+    // 📌 승인 DM — 봇이 적는다(bot/src/features/goedamWatch.js noticeGroups · 2026-10-30). noticeAt null = 아직, noticeError = 못 보낸 까닭.
+    //    사이트는 번호를 풀로 되돌릴 때만 비운다(releaseCodes — 다음에 받는 사람이 DM 을 받게)
+    noticeAt: { type: Date, default: null },
+    noticeError: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false, autoCreate: false, autoIndex: false }

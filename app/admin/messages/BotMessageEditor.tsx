@@ -443,7 +443,8 @@ export const GRANT_TICKET_EXTRAS = { images: ["/notices/goedam-draw-guide.png"],
 
 // 카드가 켜져 있으면 — 임베드가 있으면 그 안, 없으면(임베드 꺼짐 · 빈 임베드) 본문 아래 첨부. 글이 전부 비어도 카드만 간다
 //    buttons: 메시지 아래 링크 버튼 글자(디스코드 공지) · images: 틀 아래 봇이 덧붙이는 그림 임베드(운영진 지급 추첨권의 뽑는 법)
-export function DiscordPreview({ r, clock, off, card, buttons, images }: { r: Rendered | null; clock: string; off: boolean; card: CardView | null; buttons?: string[]; images?: string[] }) {
+//    extra: 틀 아래 봇이 덧붙이는 다른 틀의 임베드(게임 그룹 지원 승인 아래 문화상품권 안내)
+export function DiscordPreview({ r, clock, off, card, buttons, images, extra }: { r: Rendered | null; clock: string; off: boolean; card: CardView | null; buttons?: string[]; images?: string[]; extra?: REmbed[] }) {
   const nothing = (!r || r.empty) && !card;
   return (
     <div className="dc-root px-4 py-4">
@@ -463,6 +464,7 @@ export function DiscordPreview({ r, clock, off, card, buttons, images }: { r: Re
               {r?.content && <div className="dc-text" dangerouslySetInnerHTML={{ __html: md(r.content) }} />}
               {r?.embed && <EmbedView e={r.embed} clock={clock} card={card} />}
               {card && !r?.embed && <CardImg key={card.src} card={card} alone />}
+              {extra?.map((e, i) => <EmbedView key={`x${i}`} e={e} clock={clock} card={null} />)}
               {images?.map((src) => (
                 <div key={src} className="dc-embed" style={{ borderLeftColor: r?.embed?.color || "#1e1f22" }}>
                   <img src={src} alt="" className="dc-image" onError={hideImg} />
