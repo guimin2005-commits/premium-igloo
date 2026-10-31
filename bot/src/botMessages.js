@@ -418,6 +418,31 @@ export const MESSAGE_DEFS = {
       }),
     },
   },
+  // 📌 2026-11-01 운영자 "문화상품권 16개가 추가 됐거든 그거 홍보성 dm 보낼 거니까" — 관리 › 괴담회 「홍보 DM」 탭에서 보내면 고른 사람에게 한 통씩(봇 features/dmBlast.js · 1.5초 간격).
+  //    아래 「뽑기 하러 가기」 단추는 봇이 붙인다(이 틀은 임베드만). prize · count — 보낼 때 관리자가 넣는다 · until — 추첨 마감(마감 1분 전 시각)
+  goedamPromo: {
+    group: "dm",
+    label: "괴담회 홍보",
+    desc: "관리 › 괴담회 「홍보 DM」에서 보내면 고른 사람에게 DM 으로 보냅니다.",
+    vars: [
+      { name: "prize", label: "상품 이름", sample: "문화상품권" },
+      { name: "count", label: "늘어난 수", sample: 16 },
+      { name: "until", label: "추첨 마감", sample: "2026.11.05 23:59" },
+    ],
+    defaults: {
+      enabled: true,
+      content: "",
+      embed: embed({
+        authorName: "방구석 심야 괴담회",
+        title: "{prize} {count}장 추가!",
+        url: "{site}/level?event=goedam",
+        description: "괴담회 추첨에 **{prize} {count}장**이 더 들어왔습니다.\n추첨권이 있다면 지금 뽑아 보세요.",
+        fields: [f("추첨 마감", "{until}")],
+        footerText: FOOTER_LEVEL,
+        timestamp: true,
+      }),
+    },
+  },
   // 📌 2026-10-28 운영자 "모든 유저한테 추첨권 30장 · 그에 맞는 봇 메시지 · 전체 지급은 있는데 봇 메시지가 안 가니까" — 봇 features/grantDm.js.
   //    관리 아이템 지급 창 「DM 알림」을 켠 지급만(한 사람분 주문에 한 통). qty — 「30장」 · 「3개」(1개면 「1개」), reason — 지급 사유(비면 「관리자 지급」).
   //    괴담회 추첨권이면 봇이 아래에 뽑는 법 그림 임베드와 「뽑기 하러 가기」 단추를 붙인다(이 틀은 첫 임베드만)

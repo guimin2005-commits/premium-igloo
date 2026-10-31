@@ -7,6 +7,7 @@ import ItemIcon from "../../components/ItemIcon";
 import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { RARITIES, rarityOf } from "@/lib/rarity";
 import GoedamModal from "../../level/GoedamModal";
+import PromoTab from "./PromoTab";
 import {
   SCREENING_TICKETS,
   SCREENING_RATIO,
@@ -131,15 +132,16 @@ type GuildRole = { id: string; name: string; color?: string; managed?: boolean }
 type RegItem = { _id: string; name: string; type?: string; icon?: string; imageUrl?: string; color?: string; _draft?: string; stackable?: boolean };
 type RosterRow = { userId: string; userName: string; seconds: number; pct: number; earned: boolean; grantedAt: string | null; granted: number; manual: boolean };
 type DrawRow = { id: string; at: string | null; userId: string; userName: string; pid: string; prizeName: string; kind: string; amount: number; code: string; granted: boolean; error: string };
-type Tab = "config" | "watch" | "draws" | "groups";
+type Tab = "config" | "watch" | "draws" | "groups" | "promo";
 
 const TABS: { id: Tab; short: string }[] = [
   { id: "config", short: "구성" },
   { id: "watch", short: "명단" },
   { id: "draws", short: "추첨 기록" },
   { id: "groups", short: "그룹 지원" },
+  { id: "promo", short: "홍보 DM" }, // 2026-11-01 단체 홍보 DM(./PromoTab.tsx)
 ];
-const tabOf = (v: string | null): Tab => (v === "watch" || v === "draws" || v === "groups" ? v : "config");
+const tabOf = (v: string | null): Tab => (v === "watch" || v === "draws" || v === "groups" || v === "promo" ? v : "config");
 // 📌 연출 미리보기(2026-10-23 운영자 "애니메이션 보는 것 좀") — 고른 결과 등급 · 종류로 레벨 화면 추첨 창(GoedamModal demo)을 서버 없이 띄운다.
 //    추첨권 · 추첨 기록 · 지급은 그대로(읽기 · 쓰기 요청 없음). 이름 · 양은 그 종류의 첫 상품(없으면 예시 값)
 const DEMO_RARITY = [{ v: "none", l: "꽝" }, ...RARITIES.map((r) => ({ v: r.v, l: r.l }))];
@@ -2063,6 +2065,16 @@ export default function AdminGoedamPage() {
 
   // 로딩 · 권한 없음 화면은 공용 가드가 만든다
   if (gate) return gate;
+
+  // 📌 홍보 DM 탭(2026-11-01) — 제 틀(./PromoTab.tsx). 머리 · 탭 줄 · 토스트는 이 화면 것 그대로
+  if (tab === "promo") {
+    return (
+      <>
+        <PromoTab tabs={<AdminTabs tabs={TABS} current={tab} hrefOf={tabHref} />} desc={`이벤트 키 ${eventKey || "-"}`} toast={toast} />
+        {toastEl}
+      </>
+    );
+  }
 
   // 📌 그룹 지원 탭 — 제 틀(설정 저장 줄 · 상세 칸 · 확인 창)을 따로 그린다. 머리 · 탭 줄 · 토스트는 이 화면 것 그대로
   if (tab === "groups") {

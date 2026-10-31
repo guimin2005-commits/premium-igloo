@@ -716,6 +716,36 @@ const GoedamGiftCodeSchema = new mongoose.Schema({
 }, { versionKey: false, autoCreate: false, autoIndex: false, strict: false });
 export const GoedamGiftCode = mongoose.models.GoedamGiftCode || mongoose.model("GoedamGiftCode", GoedamGiftCodeSchema);
 
+// 📌 단체 DM(2026-11-01 관리 › 괴담회 「홍보 DM」) — 사이트 models/DmBlast.js 와 같은 칸 · 같은 컬렉션(dmblasts). 봇은 features/dmBlast.js 가 한 통씩 보낸다.
+//    DmBlastSend — 보낸 한 줄(blastId + userId 유니크 — 겹친 봇 · 재시작에도 한 사람 한 통). 인덱스는 봇이 첫 보내기 전에 만든다(ensureBlastIndexes)
+//    ⚠️ autoCreate · autoIndex 를 끈다(문서는 관리자가 보내기를 누를 때만 생긴다)
+const DmBlastSchema = new mongoose.Schema({
+  key: { type: String, default: "" },
+  vars: { type: mongoose.Schema.Types.Mixed, default: {} },
+  target: { type: String, default: "active" },
+  recipients: { type: [String], default: [] },
+  total: { type: Number, default: 0 },
+  cursor: { type: Number, default: 0 },
+  sent: { type: Number, default: 0 },
+  failed: { type: Number, default: 0 },
+  status: { type: String, default: "queued" },
+  createdBy: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+  startedAt: { type: Date, default: null },
+  finishedAt: { type: Date, default: null },
+  stoppedBy: { type: String, default: "" },
+}, { versionKey: false, autoCreate: false, autoIndex: false });
+export const DmBlast = mongoose.models.DmBlast || mongoose.model("DmBlast", DmBlastSchema);
+const DmBlastSendSchema = new mongoose.Schema({
+  blastId: { type: String, required: true },
+  userId: { type: String, required: true },
+  ok: { type: Boolean, default: false },
+  error: { type: String, default: "" },
+  at: { type: Date, default: Date.now },
+}, { versionKey: false, autoCreate: false, autoIndex: false });
+DmBlastSendSchema.index({ blastId: 1, userId: 1 }, { unique: true });
+export const DmBlastSend = mongoose.models.DmBlastSend || mongoose.model("DmBlastSend", DmBlastSendSchema);
+
 // 📌 최초 부스팅 보상 — 한 사람 한 줄(userId 유니크 · 2026-10-25, features/boosterBonus.js). 퇴장 초기화(leaveReset.js)가 지우지 않는다 — 다시 들어와 부스트해도 한 번뿐
 //    status: "granted"(보상 줌) · "baseline"(기능이 켜지기 전부터 부스팅 중이던 사람 — 안 줌) · "start"(userId "#start" 한 줄 — 기능이 처음 켜진 시각 at)
 //    ⚠️ autoCreate · autoIndex 를 끈다(사이트 · 테스트 사이트가 같은 DB) — 첫 쓰기 직전에 createIndexes() 를 한 번
