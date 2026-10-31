@@ -84,6 +84,9 @@ const DRESS_KEYS = new Set<string>(SKIN_CARD_KINDS as string[]);
 const BOT_EXTRAS: Record<string, { images?: string[]; buttons?: string[]; with?: string }> = {
   itemGrantNotice: GRANT_TICKET_EXTRAS,
   goedamGroupApprove: { with: "goedamGiftNotice", buttons: ["번호 확인하러 가기"] },
+  // 괴담회 음성 추첨권 · 홍보 DM — 봇이 「뽑기 하러 가기」 단추를 붙인다(features/goedamWatch.js · dmBlast.js — 2026-11-01 운영자 "바로가기 버튼도 필요" · 미리보기에 안 보였다)
+  goedamVoiceTicket: { buttons: ["뽑기 하러 가기"] },
+  goedamPromo: { buttons: ["뽑기 하러 가기"] },
 };
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
