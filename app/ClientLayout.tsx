@@ -11,7 +11,9 @@ import ScrollLock from "./components/ScrollLock";
 import { LoginSheet, GuestInquirySheet, onLoginRequest, type LoginContext } from "./components/LoginPrompt";
 import { useArcticFromLevel, ARCTIC_FROM_KEY, ARCTIC_ORIGIN_KEY } from "./arctic/fromLevel";
 import { agoLabel } from "@/lib/ago";
+import { INBOX_CATS, inboxRowOf, answerRowOf } from "@/lib/inboxKinds";
 import { isConsolePath } from "@/lib/adminView";
+import { nickOf } from "@/lib/nick";
 import { AdminViewProvider, useAdminView, useAdminToolList, AdminToolRow, UserViewSwitchRow } from "./components/AdminView";
 
 // 서버에서는 layout effect 가 돌지 않으므로 경고 없이 effect 로 대신한다
@@ -481,6 +483,7 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
   const [adminNotifs, setAdminNotifs] = useState<any[]>([]);
   const [seenNotifIds, setSeenNotifIds] = useState<Set<string>>(new Set());
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [bellCat, setBellCat] = useState("전체"); // 종 알림 창 칩(lib/inboxKinds.js INBOX_CATS)
   const notifRef = useRef<HTMLDivElement>(null);
   const notifPanelRef = useRef<HTMLDivElement>(null);
 
@@ -489,6 +492,21 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
       const stored = JSON.parse(localStorage.getItem("seenAnswerIds") || "[]");
       if (Array.isArray(stored)) setSeenNotifIds(new Set(stored));
     } catch {}
+  }, []);
+  // 📌 알림함 화면(app/profile/notice)이 읽음 · 본 것 · 전체 삭제를 하면 "igloo:inbox" — 종이 이 기기 기록을 다시 읽고 목록도 다시 받는다(새로 고침 없이)
+  const [inboxTick, setInboxTick] = useState(0);
+  useEffect(() => {
+    const on = () => {
+      try {
+        const seen = JSON.parse(localStorage.getItem("seenAnswerIds") || "[]");
+        if (Array.isArray(seen)) setSeenNotifIds(new Set(seen));
+        const cleared = JSON.parse(localStorage.getItem("clearedAnswerIds") || "[]");
+        if (Array.isArray(cleared)) setClearedAnswerIds(new Set(cleared));
+      } catch {}
+      setInboxTick((n) => n + 1);
+    };
+    window.addEventListener("igloo:inbox", on);
+    return () => window.removeEventListener("igloo:inbox", on);
   }, []);
 
   useEffect(() => {
@@ -511,7 +529,7 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
       .then((res) => res.json())
       .then((data) => { if (Array.isArray(data?.data)) setAdminNotifs(data.data); })
       .catch(() => {});
-  }, [status, session?.user?.name, pathname]);
+  }, [status, session?.user?.name, pathname, inboxTick]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -540,15 +558,13 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
     setClearedAnswerIds(next);
     try { localStorage.setItem("clearedAnswerIds", JSON.stringify(Array.from(next).slice(-300))); } catch {}
   };
-  // 종 목록 — 운영팀 알림 · 문의 답변을 받은 시각 순으로 한 줄에
-  const bellItems = [
-    ...adminNotifs.map((n) => ({ key: n._id, kind: "admin", href: `/profile/notice/${n._id}`, chip: n.type || "안내", warn: n.type === "경고" || n.type === "제재", unread: !n.read, title: n.title, at: n.createdAt })),
-    ...visibleAnswers.map((n) => ({ key: n._id, kind: "answer", href: "/profile/inquiry", chip: "답변 완료", warn: false, unread: !seenNotifIds.has(n._id), title: n.title || n.content?.slice(0, 40) || "문의 내역", at: n.answeredAt || n.updatedAt || n.createdAt })),
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 8);
-  const bellChip = (it: { kind: string; warn: boolean }) =>
-    it.kind === "answer" ? (isLightPage ? "bg-emerald-500/10 text-emerald-700" : "bg-emerald-500/10 text-emerald-400")
-    : it.warn ? (isLightPage ? "bg-[#e91e3f]/10 text-[#d01634]" : "bg-[#e91e3f]/15 text-[#ff5c77]")
-    : (isLightPage ? "bg-[#131313]/[0.06] text-[#5a5a5a]" : "bg-white/[0.08] text-gray-300");
+  // 종 목록 — 운영팀 알림 · 봇 DM 기록 · 문의 답변을 받은 시각 순으로 한 줄에(알림함과 같은 줄 — lib/inboxKinds.js · 2026-10-31 개편)
+  const bellAll = [
+    ...adminNotifs.map((n) => inboxRowOf(n)),
+    ...visibleAnswers.map((n) => answerRowOf(n, seenNotifIds)),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  const bellUnreadCats = new Set(bellAll.filter((r) => r.unread).map((r) => r.cat));
+  const bellItems = (bellCat === "전체" ? bellAll : bellAll.filter((r) => r.cat === bellCat)).slice(0, 8);
 
   const unreadAdminCount = adminNotifs.filter((n) => !n.read).length;
   const unseenCount = visibleAnswers.filter((n) => !seenNotifIds.has(n._id)).length + unreadAdminCount;
@@ -735,21 +751,37 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
                       <span className={`text-[14px] font-black ${isLightPage ? "text-[#131313]" : "text-white"}`}>
                         알림{unseenCount > 0 && <span className="ml-1.5 text-[#e91e3f] tabular-nums">{unseenCount}</span>}
                       </span>
-                      {bellItems.length > 0 && (
+                      {bellAll.length > 0 && (
                         <button type="button" onClick={clearAllNotifs} className={`text-[11px] font-bold transition-colors outline-none focus-visible:underline ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>
                           전체 삭제
                         </button>
                       )}
+                    </div>
+                    {/* 종류 칩 — 폭 고정(눌러도 줄이 밀리지 않는다) · 안 읽은 칸에 점 */}
+                    <div role="tablist" aria-label="알림 종류" className="flex gap-1 px-3.5 pt-2.5 pb-1">
+                      {INBOX_CATS.map((c) => {
+                        const on = bellCat === c;
+                        return (
+                          <button key={c} type="button" role="tab" aria-selected={on} onClick={() => setBellCat(c)}
+                            className={`relative shrink-0 w-[52px] h-[26px] rounded-full border text-center text-[11px] font-bold leading-[24px] transition-colors outline-none ${on ? (isLightPage ? "bg-[#131313] border-[#131313] text-white" : "bg-white border-white text-[#131313]") : (isLightPage ? "bg-white border-[#a3a3a3] text-[#5a5a5a] hover:text-[#131313]" : "border-white/20 text-gray-400 hover:text-white")}`}>
+                            {c}
+                            {c !== "전체" && bellUnreadCats.has(c) && <span aria-hidden className="absolute top-[3px] right-[7px] w-1 h-1 rounded-full bg-[#e91e3f]"></span>}
+                          </button>
+                        );
+                      })}
                     </div>
                     {bellItems.length === 0 ? (
                       <div className={`px-5 py-10 text-center text-[12px] ${isLightPage ? "text-[#8a8a8a]" : "text-gray-500"}`}>알림이 없습니다.</div>
                     ) : (
                       <div className={`max-h-80 overflow-y-auto [&::-webkit-scrollbar]:hidden divide-y ${isLightPage ? "divide-[#f0f0f0]" : "divide-white/[0.05]"}`}>
                         {bellItems.map((it) => (
-                          <Link key={it.key} href={it.href} onClick={() => setIsNotifOpen(false)} className={`flex items-start gap-3 px-5 py-3.5 transition-colors ${isLightPage ? "hover:bg-[#f7f7f7]" : "hover:bg-white/[0.04]"}`}>
+                          <Link key={it.key} href={it.href} onClick={() => setIsNotifOpen(false)} className={`flex items-center gap-3 px-4 py-3 transition-colors ${isLightPage ? "hover:bg-[#f7f7f7]" : "hover:bg-white/[0.04]"}`}>
+                            <span aria-hidden className={`shrink-0 w-[38px] h-[38px] flex items-center justify-center ${isLightPage ? "bg-[#f2f2f2]" : "bg-white/[0.06]"}`}>
+                              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke={it.warn ? "#d01634" : isLightPage ? "#131313" : "rgba(255,255,255,0.85)"} strokeWidth={1.6}><path strokeLinecap="round" strokeLinejoin="round" d={(ICON_PATHS as Record<string, string>)[it.icon] || ICON_PATHS.bell} /></svg>
+                            </span>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${bellChip(it)}`}>{it.chip}</span>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className={`text-[11px] font-black ${it.warn ? "text-[#d01634]" : isLightPage ? "text-[#5a5a5a]" : "text-gray-400"}`}>{it.label}</span>
                                 {it.unread && <span className="w-1.5 h-1.5 rounded-full bg-[#e91e3f]" />}
                               </div>
                               <p className={`text-[13px] font-bold line-clamp-1 ${isLightPage ? "text-[#131313]" : "text-gray-100"}`}>{it.title}</p>
@@ -772,7 +804,7 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`hidden md:flex items-center gap-2 rounded-full hover:bg-white/5 transition-all duration-500 outline-none focus:outline-none ${scrolled ? "p-1" : "p-1.5"}`}>
                   <img src={session.user?.image || ""} alt="Profile" className={`rounded-full bg-gray-700 transition-all duration-500 ${scrolled ? "w-7 h-7" : "w-8 h-8"}`} />
                   <div className="flex items-center gap-2 ml-1">
-                    <span className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[13px]" : "text-sm"}`}>{session.user?.name}</span>
+                    <span className={`font-bold transition-[font-size,letter-spacing] duration-500 ease-out ${isLightPage ? "text-[#131313]" : "text-white"} ${scrolled ? "text-[13px]" : "text-sm"}`}>{nickOf(session.user)}</span>{/* 📌 2026-11-01 서버 별명(조회 · 관리자 판정은 session.user.name 그대로) */}
                     <VerifyIcon isVerified={isVerified} hasScrimRole={hasScrimRole} dark={!isLightPage} />
                   </div>
                 </button>
@@ -784,7 +816,7 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={session.user?.image || ""} alt="" className="w-11 h-11 rounded-full bg-gray-700 shrink-0" />
                       <div className="min-w-0">
-                        <p className={`text-[15px] font-black truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
+                        <p className={`text-[15px] font-black truncate ${isLightPage ? "text-[#131313]" : "text-white"}`}>{nickOf(session.user)}</p>
                         <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                           <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} dark={!isLightPage} />
                           {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${isLightPage ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}
@@ -948,19 +980,31 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
               <div className="text-[9px] font-bold tracking-[0.35em] text-gray-600 uppercase mb-1.5">Premium Igloo Community</div>
               <div className="text-[11px] font-bold text-gray-500">활동이 곧 자산이 되는 곳.</div>
             </div>
-            <div className="flex items-center gap-6">
-              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Discord</a>
-              <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>Kakao Talk</a>
-              <Link href="/faq" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>FAQ</Link>
-              <Link href="/support" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>1:1 문의</Link>
-              <Link href="/policy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>이용약관</Link>
-              <Link href="/policy?tab=privacy" className={`text-xs transition-colors font-medium ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>개인정보처리방침</Link>
+            {/* 📌 2026-10-31 운영자 "하단 탭 우측이 좀 복잡" → A안: 오른쪽엔 FAQ · 1:1 문의 + 디스코드 · 카카오톡 동그란 아이콘만, 약관 둘은 아래 저작권 줄 오른쪽으로 */}
+            <div className="flex items-center">
+              <Link href="/faq" className={`text-xs font-bold transition-colors ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>FAQ</Link>
+              <Link href="/support" className={`ml-6 text-xs font-bold transition-colors ${isLightPage ? "text-[#5a5a5a] hover:text-[#131313]" : "text-gray-500 hover:text-white"}`}>1:1 문의</Link>
+              <span aria-hidden className={`mx-5 w-px h-4 ${isLightPage ? "bg-black/15" : "bg-white/15"}`} />
+              <a href="https://discord.gg/V2uW2nUczU" target="_blank" rel="noopener noreferrer" aria-label="Discord" title="Discord"
+                className={`flex items-center justify-center w-[34px] h-[34px] rounded-full border transition-colors ${isLightPage ? "border-[#a3a3a3] text-[#131313] hover:border-[#131313]" : "border-white/25 text-white/80 hover:border-white hover:text-white"}`}>
+                <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M19.6 5.3A17 17 0 0 0 15.4 4l-.5 1a15.6 15.6 0 0 0-5.8 0L8.6 4a17 17 0 0 0-4.2 1.3C1.7 9.3 1 13.2 1.3 17a17 17 0 0 0 5.2 2.6l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.2 12.2 0 0 0 11.4 0l.4.3-1.7.8 1.1 1.8a17 17 0 0 0 5.2-2.6c.4-4.4-.7-8.3-3.1-11.7zM8.7 14.7c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z" /></svg>
+              </a>
+              <a href="https://open.kakao.com/o/gJDUnf0e" target="_blank" rel="noopener noreferrer" aria-label="Kakao Talk" title="Kakao Talk"
+                className={`ml-2 flex items-center justify-center w-[34px] h-[34px] rounded-full border transition-colors ${isLightPage ? "border-[#a3a3a3] text-[#131313] hover:border-[#131313]" : "border-white/25 text-white/80 hover:border-white hover:text-white"}`}>
+                <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M12 4C6.9 4 2.8 7.2 2.8 11.2c0 2.6 1.7 4.8 4.3 6.1l-.9 3.3c-.1.3.2.5.5.4l3.9-2.6c.5.1.9.1 1.4.1 5.1 0 9.2-3.2 9.2-7.2S17.1 4 12 4z" /></svg>
+              </a>
             </div>
           </div>
           <div className={`h-px w-full mb-6 ${isLightPage ? "bg-gradient-to-r from-black/10 via-black/5 to-transparent" : "bg-gradient-to-r from-white/10 via-white/5 to-transparent"}`}></div>
-          <p className={`text-[11px] font-medium tracking-wide leading-relaxed ${isLightPage ? "text-[#a3a3a3]" : "text-gray-700"}`}>
-            © 2026 Premium Igloo. All rights reserved. Unauthorized reproduction or redistribution is strictly prohibited.
-          </p>
+          <div className="flex items-center justify-between gap-6">
+            <p className={`text-[11px] font-medium tracking-wide leading-relaxed ${isLightPage ? "text-[#a3a3a3]" : "text-gray-700"}`}>
+              © 2026 Premium Igloo. All rights reserved. Unauthorized reproduction or redistribution is strictly prohibited.
+            </p>
+            <div className="flex items-center gap-4 shrink-0">
+              <Link href="/policy" className={`text-[11px] font-bold transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-600 hover:text-white"}`}>이용약관</Link>
+              <Link href="/policy?tab=privacy" className={`text-[11px] font-bold transition-colors ${isLightPage ? "text-[#8a8a8a] hover:text-[#131313]" : "text-gray-600 hover:text-white"}`}>개인정보처리방침</Link>
+            </div>
+          </div>
         </div>
       </footer>
 
@@ -1072,7 +1116,7 @@ function SiteChrome({ children }: { children: React.ReactNode }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={session.user?.image || ""} alt="" className={`w-11 h-11 rounded-full shrink-0 ${L ? "bg-[#e0e0e0]" : "bg-gray-700"}`} />
                   <div className="min-w-0 flex-1">
-                    <p className={`text-[15px] font-black truncate ${L ? "text-[#131313]" : "text-white"}`}>{session.user?.name}</p>
+                    <p className={`text-[15px] font-black truncate ${L ? "text-[#131313]" : "text-white"}`}>{nickOf(session.user)}</p>
                     <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                       <VerifyBadge isVerified={isVerified} hasScrimRole={hasScrimRole} dark={!isLightPage} />
                       {isBooster && <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold bg-[#ff41cf]/10 border border-[#ff41cf]/25 ${L ? "text-[#c2189b]" : "text-[#ff6fdc]"}`}>SERVER BOOSTER</span>}

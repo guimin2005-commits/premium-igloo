@@ -30,6 +30,7 @@ import {
   getGoedamAdmin,
   goedamRoster,
   goedamDraws,
+  goedamWatchCounts,
   addGoedamCodes,
   listGoedamCodes,
   writeGoedamConfig,
@@ -74,6 +75,8 @@ export async function GET(request) {
       return NextResponse.json({ success: true, data: rows });
     }
     if (sp.get("draws") === "1") return NextResponse.json({ success: true, data: await goedamDraws() });
+    // 📌 완청 횟수(명단 탭 맨 위 「완청 횟수」 — 녹화 중 테두리 줄 사람 고르기 · 2026-11-01)
+    if (sp.get("watchCount") === "1") return NextResponse.json({ success: true, data: await goedamWatchCounts() });
     // 📌 code 상품의 등록된 코드 목록(상품 편집 창) — ?codes=<pid>
     if (sp.has("codes")) return NextResponse.json({ success: true, data: await listGoedamCodes(String(sp.get("codes") || "").slice(0, 40)) });
     return NextResponse.json({ success: true, data: await getGoedamAdmin() });

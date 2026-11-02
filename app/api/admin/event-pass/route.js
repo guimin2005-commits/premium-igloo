@@ -41,13 +41,13 @@ async function relay(res) {
   return fail(res.status, j?.error || j?.message || "권한이 없습니다.");
 }
 
-// 없으면 기본값으로 만든다(시즌 패스 설정과 같은 방식) — 꺼짐 · 기본 제목 · 기본 기간
-const ensureDoc = () =>
+// 없으면 기본값으로 만든다(시즌 패스 설정과 같은 방식) — 꺼짐 · 기본 제목 · 기본 기간. key — 이벤트 이름표(2026-11-01 재사용 1단계 · 안 주면 지금 이벤트)
+const ensureDoc = (key = EVENT_PASS_KEY) =>
   EventPass.findOneAndUpdate(
-    { key: EVENT_PASS_KEY },
+    { key },
     {
       $setOnInsert: {
-        key: EVENT_PASS_KEY,
+        key,
         title: EVENT_PASS_DEFAULTS.title,
         startsAt: new Date(EVENT_PASS_DEFAULTS.startsAt),
         endsAt: new Date(EVENT_PASS_DEFAULTS.endsAt),

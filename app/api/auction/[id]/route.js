@@ -11,6 +11,7 @@ import { isAdminName } from "@/lib/admins";
 // 📌 진행자 시야(숨은 포지션 · 모스트 · 공개 전 discordId) · 리더 대신 조작은 「유저 화면으로 보기」를 따른다. host:* 권한은 isAdminName 그대로
 import { isAdminViewer } from "@/lib/adminViewServer";
 import { denyIfMaintenance } from "@/lib/apiAuth";
+import { nickOf } from "@/lib/nick";
 
 const slotCount = (leader, slot) => leader.roster.filter((r) => r.slot === slot).length;
 
@@ -109,8 +110,9 @@ export async function POST(request, { params }) {
     if (maint) return maint;
 
     // ── 입장 알림 (최소화 표시용) — 이름은 세션 기준 ──
+    //    📌 2026-11-01 서버 별명(nickOf). 계정 이름(session.user.name)은 위 관리자 판정에만
     if (action === "enter") {
-      const userName = session?.user?.name?.trim();
+      const userName = nickOf(session?.user);
       if (!userName) return NextResponse.json({ success: true });
       await AuctionChat.create({
         auctionId: id,
@@ -128,7 +130,7 @@ export async function POST(request, { params }) {
       // 📌 생성된 메시지를 즉시 돌려줘 보낸 사람 화면에 바로 표시 (폴링 대기 없음)
       const created = await AuctionChat.create({
         auctionId: id,
-        userName: session.user.name,
+        userName: nickOf(session.user), // 📌 2026-11-01 서버 별명(채팅 기록엔 userId 가 없어 쓸 때 정한다)
         avatar: session.user.image || "",
         message: body.message.trim().slice(0, 200),
       });

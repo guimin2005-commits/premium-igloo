@@ -20,6 +20,7 @@ import { config } from "../config.js";
 import { logWallet } from "../wallet.js";
 import { getSettings, settingsLoaded } from "../botSettings.js";
 import { buildMessage, commonVars } from "../botMessages.js";
+import { dmAndLog } from "../inbox.js";
 import { recordBotError } from "./heartbeat.js";
 import {
   BOOSTER_BONUS_SOURCE,
@@ -158,7 +159,7 @@ async function grantStart(member, since, { xp, point }) {
   if (queued) await BoosterBonus.updateOne({ _id: row._id }, { $set: { payoutId: String(queued._id) } }).catch(() => {});
   console.log(`💎 최초 부스팅 보상: ${member.displayName || userName} +${fmt(xp)} XP · 빙옥 ${fmt(point)}`);
   const msg = buildMessage("boosterBonus", { ...commonVars(member, member.guild), xp: fmt(xp), point: fmt(point) });
-  if (msg) member.send(msg).catch(() => {});
+  if (msg) dmAndLog(member, msg, "boosterBonus", { xp: fmt(xp), point: fmt(point) }).catch(() => {}); // 알림함에도 한 줄(inbox.js)
   return true;
 }
 
@@ -229,7 +230,7 @@ async function checkLadder(member, since) {
   // 이번에 준 것만 한 통 — 중간에 실패해도 앞서 준 단계는 알린다
   if (top) {
     const msg = buildMessage("boosterStep", { ...commonVars(member, member.guild), months: top, xp: fmt(xp), point: fmt(point) });
-    if (msg) member.send(msg).catch(() => {});
+    if (msg) dmAndLog(member, msg, "boosterStep", { months: top, xp: fmt(xp), point: fmt(point) }).catch(() => {}); // 알림함에도 한 줄(inbox.js)
   }
   if (err) throw err;
 }

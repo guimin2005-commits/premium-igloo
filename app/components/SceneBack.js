@@ -2,6 +2,7 @@
 
 // 📌 카드 배경 겹 · 배경이 정한 레벨 막대 — 레벨 카드 · 인벤토리 장착 판이 같이 쓴다(SkinFrame 과 따로 — 테두리 그림 코드를 같이 싣지 않게)
 import { sceneMetaOf } from "@/lib/cardScenes";
+import { barStyleOf } from "@/lib/itemEffects";
 
 // 📌 카드 배경(2026-10-15) — 카드 바탕 장면을 통째로 바꾼다. 부르는 쪽(레벨 카드 · 인벤토리 장착 판)이 카드 맨 아래 겹에 깐다.
 //    그림은 도트(가로 폭에 맞춰 위에서부터 · 확대는 칸 그대로). glow — 등급 빛(부르는 쪽 색)을 장면 위에 옅게 다시 얹는다
@@ -32,8 +33,10 @@ export function SceneBack({ scene, glow = "" }) {
     </>
   );
 }
-// 카드 배경이 정한 레벨 막대 모양("" 이면 기본 막대)
+// 카드 배경의 짝 레벨바 모양("" 이면 기본 막대) — 2026-10-31 부터 막대는 따로 끼운다(아래 LevelBar · lib/itemEffects shownBarOf). 배경 그림은 막대를 바꾸지 않는다
 export const sceneBarOf = (scene) => sceneMetaOf(scene)?.bar || "";
+// 📌 레벨 막대(2026-10-31 — 카드 배경에서 떼어 따로 끼운다) — 막대 키(bar_*) 또는 모양(ghostTrail · cloverVine) → 그리는 모양("" = 기본 막대 — 부르는 쪽이 그린다)
+export const barStyleOfKey = (bar) => barStyleOf(bar) || (bar === "ghostTrail" || bar === "cloverVine" ? bar : "");
 // 📌 「유령 꼬리」 막대(sc_ghost) — 짙은 테 상자 안에 유령 꼬리 빛이 차오르고 왼쪽 끝엔 랜턴, 빛 끝은 흰 두 칸. 칸 2px 도트
 //    (시안 .claude/mockups/ghost-event/cos/card.mjs BARS.mix(f, false) — 운영자 "2번 효과에 3번 틀" · "앞에 유령 모양 없애" · 구분선 없음)
 //    빛 맨 위 줄에 #72c3e6 반짝 칸(빛 처음부터 2 · 18px, 22px 마다 — 빛 끝 8px 앞까지). 랜턴은 상자 왼쪽 18px 바깥 —

@@ -9,6 +9,8 @@ import { authOptions } from "@/lib/authOptions";
 import { isSupporterViewer } from "@/lib/adminViewServer";
 import { isAdminViewer } from "@/lib/adminViewServer";
 import { kstDayStart } from "@/lib/kst";
+import { nickOf } from "@/lib/nick";
+import { serverNamesOf } from "@/lib/serverNames";
 import SupporterComment from "@/models/SupporterComment";
 import Post from "@/models/Post";
 
@@ -85,7 +87,9 @@ export async function GET(request) {
     if (!(await Post.exists(postFilter(g.admin, { _id: postId })))) return notFound();
 
     const rows = await SupporterComment.find({ postId }).sort({ createdAt: 1 }).limit(PAGE).lean();
-    return NextResponse.json({ success: true, comments: rows.map((c) => pick(c, meId)) });
+    // 📌 2026-11-01 작성자 이름은 지금 서버 별명(UserXp.displayName) — 없으면 저장된 이름 그대로(예전 댓글은 계정 이름이 박혀 있다)
+    const names = await serverNamesOf(rows.map((c) => c.userId));
+    return NextResponse.json({ success: true, comments: rows.map((c) => pick({ ...c, userName: names.get(String(c.userId)) || c.userName }, meId)) });
   } catch (e) {
     console.error("서포터즈 공지 댓글 조회 오류:", e);
     return NextResponse.json({ success: false, error: "조회 중 오류가 발생했습니다." }, { status: 500 });
@@ -125,7 +129,7 @@ export async function POST(request) {
     const doc = await SupporterComment.create({
       postId,
       userId,
-      userName: g.session.user.name || "",
+      userName: nickOf(g.session.user), // 📌 2026-11-01 서버 별명(보이기만 하는 칸 — 조회 · 판정은 userId)
       userImage: g.session.user.image || "",
       content,
     });

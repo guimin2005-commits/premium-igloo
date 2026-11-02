@@ -18,7 +18,7 @@ import { playTone } from "@/lib/sfx";
 const DISCORD_BG = "#313338"; // 디스코드 채팅 바탕 — 봇 카드가 실제로 놓이는 자리
 
 //    📌 2026-10-15 카드 배경(scene) — 카드 테두리(skin)와 따로 고르고 함께 입는다. 프로필 카드엔 둘 다(배경 위에 테두리), 디스코드 카드엔 &scene= 도 실어 보낸다
-type Cos = { skin?: string; scene?: string; frame?: string; frames?: string[]; badge?: boolean; botCard?: boolean };
+type Cos = { skin?: string; scene?: string; bar?: string; frame?: string; frames?: string[]; badge?: boolean; botCard?: boolean };
 // 세트 구성 한 칸(상세 API bundleItems — 구성 아이템의 이름 · 아이콘 · 꾸미기)
 type Part = { itemId?: string; name?: string; shortName?: string; icon?: string; imageUrl?: string; color?: string; type?: string; cosmetic?: Cos | null };
 type Item = ShopItemLike & { shortName?: string; cosmetic?: Cos | null; bundleItems?: Part[] };
@@ -167,6 +167,7 @@ export default function AppliedPreview({ item, user, me, bare = false }: {
     : own ? { ...own, frame: frameOpts[fAt]?.key || own.frame } : null;
   const skin = typeof cos?.skin === "string" ? cos.skin : "";
   const scene = typeof cos?.scene === "string" ? cos.scene : "";
+  const bar = typeof cos?.bar === "string" ? cos.bar : ""; // 레벨바(2026-10-31) — 레벨바 아이템이면 그 막대(없으면 기본 막대 — 배경은 막대를 바꾸지 않는다)
   const frame = typeof cos?.frame === "string" ? cos.frame : "";
   const [discordFail, setDiscordFail] = useState(false);
   // 자동 넘김 — 테두리가 둘 이상이고 아직 안 골랐을 때 한 바퀴만(다 돌면 처음 칸). 움직임 줄이기 설정이면 넘기지 않는다
@@ -183,17 +184,17 @@ export default function AppliedPreview({ item, user, me, bare = false }: {
     return () => window.clearInterval(t);
   }, [turnN, startAt]);
   // 오늘 획득 XP 는 프로필 카드에만 — 카드를 그릴 때(카드 배경 · 카드 테두리 · 프로필 테두리)만 받는다(배지만 있는 상품은 부르지 않는다)
-  const card = !!skin || !!scene || !!frame;
+  const card = !!skin || !!scene || !!bar || !!frame;
   const today = useTodayXp(!!user && !!me && card);
   if (!cos || (!card && !cos.badge)) return null;
   const badges = shownBadges.map((i) => badgeOpts[i].badge);
   const chips = skinParts.length > 1; // 테두리 · 배지는 아래 줄(FrameStrip · BadgeStrip)이 맡는다
   const sceneChips = sceneParts.length > 1;
   const who = whoOf(user, me, today);
-  const wantDiscord = (!!skin || !!scene) && !!cos.botCard;
+  const wantDiscord = (!!skin || !!scene || !!bar) && !!cos.botCard;
   const showDiscord = wantDiscord && !discordFail;
   // 로그인했으면 본인 카드(me=1 — 세션으로만 판단, 남의 값을 그릴 길은 없다), 아니면 예시 카드(공개 캐시). 카드 배경 · 프로필 테두리가 있으면 같이 낀다(서버가 아는 키만 받는다)
-  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`;
+  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${bar ? `&bar=${encodeURIComponent(bar)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`;
 
   return (
     <div className={bare ? "" : "mt-14 pt-10 border-t border-[#ededed]"}>
@@ -222,7 +223,7 @@ export default function AppliedPreview({ item, user, me, bare = false }: {
             {/* 레벨 페이지 카드(360 폭)를 제 크기 이하로 — 폰은 칸 폭에 맞춰 줄인다 */}
             <div className="relative w-full aspect-[4/5] md:aspect-auto md:h-[600px] rounded-2xl bg-[#f2f2f2] overflow-hidden">
               <FitBox pad={0.92} max={1}>
-                <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
+                <ProfileCardPreview who={who} skin={skin} scene={scene} bar={bar || undefined} frame={frame} />
               </FitBox>
             </div>
           </div>

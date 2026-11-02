@@ -17,6 +17,7 @@ import { noteXpStop, stopUntilOf } from "../xpStop.js";
 import { config } from "../config.js";
 import { buildMessage, commonVars, formatUntil } from "../botMessages.js";
 import { goedamTicketInfo, isTicketPurchase } from "../goedamTicket.js";
+import { dmAndLog } from "../inbox.js";
 
 const TICK_MS = 30 * 1000;
 const DAY_MS = 86400000;
@@ -26,10 +27,10 @@ async function fetchMember(guild, userId) {
   return guild.members.cache.get(userId) || (await guild.members.fetch(userId).catch(() => null));
 }
 
-// DM 한 통 — 관리자가 끈 메시지(null)는 보내지 않고, DM 이 막혀 있으면 조용히 넘어간다
+// DM 한 통 — 관리자가 끈 메시지(null)는 보내지 않고, DM 이 막혀 있으면 조용히 넘어간다. 보낸 DM 은 사이트 알림함에도 한 줄(inbox.js — 막혀도 남는다)
 function sendDm(member, key, vars) {
   const msg = buildMessage(key, { ...commonVars(member, member.guild), ...vars });
-  if (msg) member.send(msg).catch(() => {});
+  if (msg) dmAndLog(member, msg, key, vars).catch(() => {});
 }
 
 // ── 살아 있는 다른 구매 ─────────────────────────

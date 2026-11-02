@@ -11,11 +11,12 @@ import { denyIfMaintenance } from "@/lib/apiAuth";
 import { denyIfXpStopped } from "@/lib/xpStop";
 import { logWallet } from "@/lib/wallet";
 import UserXp from "@/models/UserXp";
+import { nickOf } from "@/lib/nick";
 
 // 📌 한 칸(티어 · 트랙) 수령 — 한 칸 받기({ tid, track })와 모두 받기({ all: true })가 같은 함수를 칸마다 부른다.
 //    state 는 호출부가 getPassState 로 다시 계산한 것(클라이언트 값은 쓰지 않는다).
 //    반환 { ok: true, row, track, todo, granted, failed } 또는 { ok: false, status, message }
-async function claimCell({ userId, userName, state, row, track }) {
+async function claimCell({ userId, userName, userNick, state, row, track }) {
   // 거절 사유를 하나씩 갈라 준다 — 화면이 "왜 못 받는지"를 그대로 띄울 수 있게
   const cell = row[track];
   if (cell.claimed) return { ok: false, status: 409, message: "이미 수령했습니다." };
@@ -48,7 +49,7 @@ async function claimCell({ userId, userName, state, row, track }) {
       {
         $setOnInsert: {
           userId,
-          displayName: userName,
+          displayName: userNick || userName, // 📌 2026-11-01 표시 이름은 서버 별명(nickOf) — 계정 이름은 지급 기록(userName)에만
           passSeason: seasonNo,
           passBaseXp: 0,
         },
@@ -176,6 +177,7 @@ export async function POST(request) {
     if (closed) return closed;
     const userId = session.user.id;
     const userName = session.user.name || "";
+    const userNick = nickOf(session.user); // 첫 문서의 displayName 씨앗(서버 별명)
     // 📌 XP 획득 중단(관리자 — lib/xpStop.js) 중이면 패스 보상을 받지 않는다(XP · 빙옥 · 아이템 전부). 403 + "…까지 XP 획득이 중단된 상태입니다."
     const stopped = await denyIfXpStopped(userId);
     if (stopped) return stopped;
@@ -203,7 +205,7 @@ export async function POST(request) {
       const failedCells = [];
       for (const c of cells) {
         try {
-          const r = await claimCell({ userId, userName, state, row: c.row, track: c.track });
+          const r = await claimCell({ userId, userName, userNick, state, row: c.row, track: c.track });
           if (r.ok) done.push(r);
           else failedCells.push({ tid: c.row.tid, level: c.row.level, track: c.track, message: r.message, status: r.status });
         } catch (e) {
@@ -242,7 +244,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "존재하지 않는 티어입니다." }, { status: 404 });
     }
 
-    const r = await claimCell({ userId, userName, state, row, track });
+    const r = await claimCell({ userId, userName, userNick, state, row, track });
     if (!r.ok) return NextResponse.json({ success: false, message: r.message }, { status: r.status });
 
     const { todo, granted, failed, trackName } = r;

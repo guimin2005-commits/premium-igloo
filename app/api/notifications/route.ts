@@ -128,6 +128,27 @@ async function recipientFromDb(input: string): Promise<{ id: string; name: strin
   }
 }
 
+// 📌 2026-11-01 발신 관리자 이름은 서버 별명으로 — 유저 알림함 목록 · 상세 응답에서만 바꾼다.
+//    저장된 sentBy(관리자 계정 이름)와 관리자 발송 이력은 그대로. UserXp.username 으로 찾아 displayName || username,
+//    같은 이름이 둘 이상(이름을 바꾼 사람의 옛 기록)이거나 없으면 저장된 글자. 봇 DM 기록(sentBy "봇")은 건너뛴다
+async function withSenderNick(docs: any[]): Promise<any[]> {
+  try {
+    const names = [...new Set(docs.filter((d) => d?.sentBy && d.source !== "bot").map((d) => String(d.sentBy)))];
+    if (!names.length) return docs;
+    const keys = [...new Set(names.flatMap((n) => [n, n.toLowerCase()]))];
+    const rows: any[] = await UserXp.find({ username: { $in: keys } }, { username: 1, displayName: 1 }).lean();
+    const nick = new Map<string, string>();
+    for (const n of names) {
+      const hit = rows.filter((r) => r.username === n || r.username === n.toLowerCase());
+      const v = hit.length === 1 ? String(hit[0].displayName || hit[0].username || "").trim() : "";
+      if (v) nick.set(n, v);
+    }
+    return docs.map((d) => (d?.source !== "bot" && nick.has(String(d?.sentBy || "")) ? { ...d, sentBy: nick.get(String(d.sentBy)) } : d));
+  } catch {
+    return docs;
+  }
+}
+
 // ── [조회] 내 알림 목록 (또는 관리자 발송 이력) ──────────────
 export async function GET(request: Request) {
   try {
@@ -141,7 +162,8 @@ export async function GET(request: Request) {
     if (sent) {
       const deny = await denyIfNotAdmin();
       if (deny) return deny;
-      const list = await Notification.find().sort({ createdAt: -1 }).limit(100);
+      // 봇 DM 기록(source bot — bot/src/inbox.js)은 발송 이력이 아니다 — 운영팀 · 사이트 안내만
+      const list = await Notification.find({ source: { $ne: "bot" } }).sort({ createdAt: -1 }).limit(100);
       return NextResponse.json({ success: true, data: list });
     }
 
@@ -152,9 +174,16 @@ export async function GET(request: Request) {
     if (!mine) {
       return NextResponse.json({ success: false, error: "로그인이 필요합니다.", data: [] }, { status: 401 });
     }
-    // 유저가 전체 삭제로 숨긴 것은 빼고 (hiddenAt 이 없거나 null)
-    const list = await Notification.find({ ...mine, hiddenAt: null }).sort({ createdAt: -1 });
-    return NextResponse.json({ success: true, data: list });
+    // 📌 한 건(?one=<id> — 알림 상세). 전체 삭제로 숨긴 것도 연다(주소로 들어온 경우)
+    const one = searchParams.get("one");
+    if (one) {
+      if (!/^[0-9a-f]{24}$/i.test(one)) return NextResponse.json({ success: true, data: null });
+      const doc = await Notification.findOne({ _id: one, ...mine }).lean();
+      return NextResponse.json({ success: true, data: doc ? (await withSenderNick([doc]))[0] : null });
+    }
+    // 유저가 전체 삭제로 숨긴 것은 빼고 (hiddenAt 이 없거나 null). 📌 2026-10-31 봇 DM 도 쌓이므로(90일) 최근 200건까지
+    const list = await Notification.find({ ...mine, hiddenAt: null }).sort({ createdAt: -1 }).limit(200).lean();
+    return NextResponse.json({ success: true, data: await withSenderNick(list) });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

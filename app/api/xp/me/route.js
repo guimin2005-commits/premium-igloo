@@ -13,13 +13,15 @@ import Item from "@/models/Item";
 import ShopItem from "@/models/ShopItem";
 import BotSetting from "@/models/BotSetting";
 import { hotTimeState } from "@/lib/hotTime";
+import { kstToday } from "@/lib/kst";
 import { fetchMemberRoleInfo } from "@/lib/discordMember";
 import { serverMemberCount } from "@/lib/serverMembers";
 import { rankTotalOf } from "@/lib/rankBoards";
 import { ownedItems } from "@/lib/ownedItems";
 import { OWN_PURCHASE_QUERY, OWN_PURCHASE_FIELDS, PERK_ITEM_FIELDS } from "@/lib/itemPerks";
-import { perksOfItems, discountedCost, pickCardSkin, pickCardScene, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin, normalizeEffects } from "@/lib/itemEffects";
+import { perksOfItems, discountedCost, pickCardSkin, pickCardScene, pickCardBar, pickAvatarFrame, pickBadges, PERK_KEYS, cashbackRuleOf, withSeasonFrame, withSeasonSkin, normalizeEffects } from "@/lib/itemEffects";
 import { buildEnhanceView } from "@/lib/enhance";
+import { normPick } from "@/lib/relic/meta";
 import { VOICE_TIERS, getTier } from "@/lib/voiceTiers";
 
 // 📌 지난 시즌 기록(UserXp.seasonHistory — 봇 시즌 결산이 붙인다) — 최근 시즌부터, 시즌마다 한 줄. 등급 키가 낯설면 그때 레벨로 다시 고른다
@@ -39,6 +41,12 @@ const seasonHistoryOf = (doc) => {
         rank: toInt(h?.rank),
         total: toInt(h?.total),
         at: at && !Number.isNaN(at.getTime()) ? at.toISOString() : null,
+        // 📌 2026-11-02 시즌 탭 「내 시즌 기록」과 같은 값(봇 seasonSettle 이 적는다 — 이 칸이 생기기 전 줄은 0)
+        seasonXp: toInt(h?.seasonXp),
+        seasonRank: toInt(h?.seasonRank),
+        maxLevel: toInt(h?.maxLevel),
+        passTier: toInt(h?.passTier),
+        passMax: toInt(h?.passMax),
       };
     })
     .filter((h) => h.season > 0 && !seen.has(h.season) && seen.add(h.season))
@@ -145,10 +153,29 @@ export async function GET() {
     const cardSkin = pickCardSkin(withSeasonSkin(cardSkins, doc), doc?.cardSkinPick || ""); // 시즌 등급 카드 스킨(seasonFrame 등급)도 가진 것
     // 📌 카드 배경 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 ""). 카드 테두리와 따로 고르고 함께 입는다
     const cardScene = pickCardScene(perks.cardScenes, doc?.cardScenePick || "");
+    // 📌 레벨 막대(2026-10-31) — 고른 막대 · 안 골랐으면 입은 배경의 짝 막대 · "none" 이면 기본(""). cardBarPick 은 고른 값 그대로(인벤토리 착용 표시)
+    const cardBar = pickCardBar(perks.cardBars, doc?.cardBarPick || "");
+    const cardBarPick = String(doc?.cardBarPick || "");
+    // 📌 2026-11-02 연속 출석 · 보호막 · 최고 레벨 · 오늘 음성 — 카드 「연속 출석」 칸 · 기록 화면(app/level/RecordView.js)
+    //    연속은 마지막 출석이 오늘 · 어제일 때만 이어진 것으로 본다(봇 attend.js 와 같은 판정 — 그 전이면 다음 출석이 1일부터라 0).
+    //    기록이 0 인 옛 문서는 봇처럼 1일로 본다. 보호막 = 아직 안 쓴 streakShield 구매 건 수(봇이 하나씩 consumedAt 으로 소모)
+    const today = kstToday();
+    const dayBefore = (d) => new Date(Date.parse(`${d}T00:00:00Z`) - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const yesterday = dayBefore(today);
+    const shieldItemIds = new Set(itemsAll.filter((it) => normalizeEffects(it.effects).some((e) => e.on === "streakShield")).map((it) => String(it._id)));
+    const shopItemOf = new Map(shopItems.map((s) => [String(s._id), String(s.itemId || "")]));
+    const streakShields = shieldItemIds.size
+      ? myPurchases.filter((p) => !p.consumedAt && shieldItemIds.has(String(p.itemRef || "") || shopItemOf.get(String(p.itemId)) || "")).length
+      : 0;
+    // 보호막이 있으면 그제까지 출석한 사람도 이어진 것으로 본다 — 오늘 출석할 때 봇이 보호막 하나를 써서 잇는다(attend.js)
+    const alive = doc?.lastAttendDate === today || doc?.lastAttendDate === yesterday || (streakShields > 0 && doc?.lastAttendDate === dayBefore(yesterday));
+    const attendStreak = alive ? Math.max(1, toInt(doc?.attendStreak)) : 0;
     // 📌 프로필 배지 — 유저가 인벤토리에서 단 것(badgePick) 중 지금 가진 것만(최대 3). 안 골랐거나 전부 뗐으면 [] (2026-10-04 자동으로 달지 않음)
     const badges = pickBadges(allBadges, doc?.badgePick);
     // 📌 아바타 테두리 — 카드 스킨과 같은 규칙(고른 것만, 더 이상 없으면 "")
     const avatarFrame = pickAvatarFrame(withSeasonFrame(perks.avatarFrames, doc), doc?.avatarFramePick || ""); // 시즌 티어 테두리(seasonFrame)도 가진 것
+    // 📌 유물(2026-11-02) — 고른 값(relicPick) 중 지금 가진 유물만. 없거나 더 이상 없으면 null(카드는 다른 꾸미기 그대로)
+    const relic = doc?.relicPick?.key && (perks.relics || []).includes(doc.relicPick.key) ? normPick(doc.relicPick) : null;
 
     return NextResponse.json({
       success: true,
@@ -189,8 +216,19 @@ export async function GET() {
         cardSkin,
         // 지금 쓰는 카드 배경 키("" 이면 없음 — 카드 테두리 cardSkin 과 함께 입는다)
         cardScene,
+        // 지금 보이는 레벨 막대 키("" 이면 기본 막대) · 고른 값("" 안 고름 · "none" 기본 · 키)
+        cardBar,
+        cardBarPick,
+        // 연속 출석(지금 이어진 일수 — 끊겼으면 0) · 최고 연속 · 남은 연속 보호막 · 최고 도달 레벨 · 오늘 음성 분(봇 voiceTodayMin, 날이 바뀌었으면 0)
+        attendStreak,
+        attendBestStreak: Math.max(attendStreak, toInt(doc?.attendBestStreak)),
+        streakShields,
+        maxLevel: Math.max(level, toInt(doc?.maxLevel)),
+        voiceTodayMin: doc?.voiceTodayDate === today ? toInt(doc?.voiceTodayMin) : 0,
         // 지금 쓰는 아바타 테두리 키("" 이면 없음) — public/avatar-borders/<키>.svg
         avatarFrame,
+        // 입은 유물 { key, core, frame, border, bg, bar } · 안 입었으면 null — 카드를 통째로 그린다(app/components/RelicLayers)
+        relic,
         // 승급 화면을 마지막으로 본 등급 인덱스(null = 아직 안 적음) — app/level/PromoOverlay
         promoSeen: Number.isInteger(doc?.promoSeen) ? doc.promoSeen : null,
         // 지난 시즌 기록 — 최근 시즌부터 [{ season, name, level, tier, rank, total, at }] (등급 창 「지난 시즌」 탭)

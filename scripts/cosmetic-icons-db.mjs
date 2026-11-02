@@ -26,7 +26,7 @@ const TIERS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "gra
 const DECO = {
   hwf_pumpkin: "deco-pumpkin-mouth", hwf_crystal: "deco-crystal-ball", hwf_ghost: "deco-ghost-sheet", hwf_candy: "deco-wrapped-candy",
   hwf_mummy: "deco-mummy", hwf_window: "deco-haunted-window", hwf_blackcat: "deco-black-cat", hwf_patch: "deco-pumpkin-patch", hwf_party: "deco-ghost-party", hwf_witch: "deco-witch-night", hwf_shop: "deco-candy-shop", hwf_grave: "deco-moon-grave", nwf_world: "deco-new-world", nwf_chart: "deco-sea-chart", nwf_airship: "deco-airship",
-  evf_ghost: "deco-ghost-tail", evf_clover: "deco-clover", bsf_aura: "deco-booster-aura",
+  evf_ghost: "deco-ghost-tail", evf_clover: "deco-clover", bsf_aura: "deco-booster-aura", evf_rec: "deco-rec",
 };
 // 카드 배경(2026-10-15 — lib/cosmeticArt.js SCENE_ART 와 같은 값)
 const SCENE = { sc_ghost: "scene-ghost-night", sc_clover: "scene-clover-hill" };

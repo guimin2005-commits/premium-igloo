@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import SkinFrame from "../components/SkinFrame";
-import { SceneBack, sceneBarOf, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
+import { SceneBack, barStyleOfKey, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
 import { sceneMetaOf } from "@/lib/cardScenes";
 import TierEmblem from "../components/TierEmblem";
 import AvatarFrame, { frameRoom } from "../components/AvatarFrame";
@@ -13,6 +13,7 @@ import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { itemTypeColor } from "@/lib/items";
 import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
 import { MAX_BADGES } from "@/lib/itemEffects";
+import { nickOf } from "@/lib/nick";
 
 // 📌 꾸미기 상품의 '적용 모습' 부품 — 상품 상세 '적용 미리보기'(AppliedPreview, 효과 아래)가 쓴다.
 //    레벨 페이지 프로필 카드 · 프로필 헤더 · 랭킹 줄과 같은 모양을 가볍게 다시 그린 것(그 화면들을 통째로 옮기지 않는다 — 고칠 때 모양만 맞춘다).
@@ -29,6 +30,7 @@ export type Who = {
 
 // /api/xp/me 의 data 중 미리보기가 쓰는 칸
 type MeData = {
+  displayName?: string;
   level?: number; rank?: number; total?: number; xp?: number; attendCount?: number; voiceSeconds?: number;
   levelProgress?: { current?: number; required?: number; needToNext?: number }; badges?: Badge[];
 };
@@ -54,7 +56,8 @@ export function whoOf(user: { name?: string | null; image?: string | null } | nu
   if (user && me) {
     const lp = me.levelProgress || {};
     return {
-      name: String(user.name || ""), image: String(user.image || ""),
+      // 📌 2026-11-01 이름은 서버 별명 — /api/xp/me displayName → 세션 별명(nickOf). 계정 이름(.hu_na 같은)은 안 보인다
+      name: String(me.displayName || nickOf(user)), image: String(user.image || ""),
       // 레벨은 0 부터(새 유저) — 레벨 페이지 카드처럼 받은 값 그대로
       level: Math.max(0, Math.floor(Number(me.level) || 0)), rank: Number(me.rank) || 0, total: Number(me.total) || 0, xp: Number(me.xp) || 0,
       cur: Number(lp.current) || 0, req: Math.max(1, Number(lp.required) || 1), need: Number(lp.needToNext) || 0,
@@ -68,7 +71,8 @@ export function whoOf(user: { name?: string | null; image?: string | null } | nu
   const req = getCumulativeXpByLevel(s.level + 1) - base;
   const cur = Math.floor(req * s.progress);
   return {
-    name: s.name, image: "/logo.png", level: s.level, rank: s.rank, total: s.total, xp: base + cur,
+    // 📌 사진은 사람 모양 기본 프로필(public/avatar-default.png) — 2026-10-31 운영자 "미리보기 펭귄 좀 없애 · 사람 모양 프로필"(예전엔 로고 펭귄)
+    name: s.name, image: "/avatar-default.png", level: s.level, rank: s.rank, total: s.total, xp: base + cur,
     cur, req, need: req - cur, attendCount: s.attendCount, voiceSeconds: s.voiceSeconds, badges: [], today: s.today,
   };
 }
@@ -151,8 +155,9 @@ export function Avatar({ who, px, text }: { who: Who; px: number; text: string }
 
 // ── 카드 테두리 · 카드 배경 — 레벨 페이지 프로필 카드(PC 모양)와 같은 잉크 판에 SkinFrame 으로 입힌다(배경 위에 테두리) ──
 //    프로필 테두리(frame)는 사진(68px) 가운데에 겹친다 — 이름 칸은 relative 라 테두리 위에 그려진다
-//    📌 카드 배경(scene) — 레벨 페이지 카드와 같은 겹: 맨 아래 장면(SceneBack) + 그 위 등급 빛(옅게) · 바둑판 무늬는 뺀다 · 레벨 막대도 배경 몫(sceneBarOf — 유령 꼬리)
-export function ProfileCardPreview({ who, skin, scene = "", frame }: { who: Who; skin: string; scene?: string; frame?: string }) {
+//    📌 카드 배경(scene) — 레벨 페이지 카드와 같은 겹: 맨 아래 장면(SceneBack) + 그 위 등급 빛(옅게) · 바둑판 무늬는 뺀다 · 📌 레벨 막대(2026-10-31 따로 끼운다) — bar 를 주면 그 막대("" 기본), 없으면 배경의 짝 막대(배경 상품 미리보기는 분리 전 모습 그대로)
+export function ProfileCardPreview({ who, skin, scene = "", bar, frame }: { who: Who; skin: string; scene?: string; bar?: string; frame?: string }) {
+  const barStyle = barStyleOfKey(bar || ""); // 배경은 막대를 바꾸지 않는다(2026-10-31 레벨바 분리)
   const tIdx = getTierIndex(who.level);
   const tier = VOICE_TIERS[tIdx];
   const next = VOICE_TIERS[tIdx + 1] || null;
@@ -226,9 +231,9 @@ export function ProfileCardPreview({ who, skin, scene = "", frame }: { who: Who;
 
         {/* 경험치 */}
         <div className="mt-6">
-          {sceneBarOf(scene) === "ghostTrail" ? (
+          {barStyle === "ghostTrail" ? (
             <div data-skin-bar className="ml-[12px]"><GhostTrailBar pct={max ? 100 : pct} /></div>
-          ) : sceneBarOf(scene) === "cloverVine" ? (
+          ) : barStyle === "cloverVine" ? (
             <div data-skin-bar><CloverVineBar pct={max ? 100 : pct} /></div>
           ) : (
             <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">

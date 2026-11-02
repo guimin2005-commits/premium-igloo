@@ -4,7 +4,7 @@
 //    lib/avatarFrameArt.js 가 FRAME_ART · FRAME_REACH 에 합쳐 내보낸다).
 //
 //    그림 원본: scripts/deco-frames-art.mjs(합격 시안에서 뽑은 칸 지도 — 운영자 10/9 ~ 10/10). 정지 그림(시안 그대로, 움직임 없음).
-//      📌 anim 이 있는 키(evf_clover · bsf_aura — 2026-10-25)만 사이트 SVG 에 CSS 움직임을 넣는다(animBody). 봇 정지 그림(avatarDecoArt)은 front 그대로
+//      📌 anim 이 있는 키(evf_clover · bsf_aura — 2026-10-25, evf_rec 「녹화 중」 — 2026-10-31)만 사이트 SVG 에 CSS 움직임을 넣는다(animBody). 봇 정지 그림(avatarDecoArt)은 front 그대로
 //    판 맞추기: 등급 테두리와 같은 자리 규칙을 쓴다 — 그림 상자 = 사진 지름 × 0.92 × 128/48(AvatarFrame frameSizeOf · botCards ringAvatar), 사진 가운데에 둔다.
 //      등급 테두리는 128칸 판에 사진 반지름 24/0.92 칸이지만, 꾸미기는 시안 칸(사진 반지름 r 칸 — 112px 사진에서 2px)을 그대로 쓰고
 //      viewBox 를 128 × r / (24/0.92) 칸으로 잡아 사진 반지름이 정확히 r 칸에 오게 한다(칸을 늘리거나 줄이지 않아 도트가 뭉개지지 않는다).
@@ -77,7 +77,8 @@ function animBody(d) {
   };
   const comp = (on) => { const out = []; for (let f = 0; f < n; f++) if (!on.some(([a, l]) => f >= a && f < a + l)) { const r = out[out.length - 1]; if (r && r[0] + r[1] === f) r[1]++; else out.push([f, 1]); } return out; };
   let body = paths(d, front);
-  for (const p of parts) p.states.forEach((s, i) => { body += `<g class="${cls(s.on)}"${i ? ' opacity="0"' : ""}>${paths({ ...d, x0: p.x0, y0: p.y0 }, s.rows)}</g>`; });
+  // 상태는 자기 칸 상자(x0 · y0)를 가질 수 있다(2026-10-31 evf_rec 「녹화 중」 — 층마다 장 상태가 많아 상자만 적는다). 없으면 부분의 x0 · y0
+  for (const p of parts) p.states.forEach((s, i) => { body += `<g class="${cls(s.on)}"${i ? ' opacity="0"' : ""}>${paths({ ...d, x0: s.x0 ?? p.x0, y0: s.y0 ?? p.y0 }, s.rows)}</g>`; });
   let flyCss = "";
   if (fly) {
     const sp = (g) => paths({ ...d, x0: g.x0, y0: g.y0 }, g.rows);

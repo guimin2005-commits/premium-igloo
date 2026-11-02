@@ -11,6 +11,7 @@ import { groupOrders, orderSummary } from "@/lib/orderGroups";
 import { splitItemName } from "@/lib/itemName";
 import { useGuestShopLogin } from "../useGuestShopLogin";
 import { BUNDLE_LABEL } from "../ProductCard";
+import { OrdersSkeleton } from "../skeletons/Orders";
 
 // 📌 세트 구성 건(bundleName — lib/bundle.js)은 한 결제가 같은 orderId + 같은 itemId(세트 상품 id)라 주문 묶음(lib/orderGroups.js)이 이미 한 줄로 모은다.
 //    그 줄은 세트 이름을 제목으로, 아래에 구성 아이템 이름(같은 아이템 여러 개는 ×N)을 적는다. 순서는 건 id 순(결제 API 가 구성 순서대로 만든다)
@@ -87,10 +88,14 @@ export default function OrdersPage() {
       active ? "bg-[#e91e3f] text-white border-[#e91e3f]" : "bg-white text-[#5a5a5a] border-[#ededed] hover:border-[#a3a3a3]"
     }`;
 
+  // 📌 2026-11-01 로딩 뼈대 — 경로 줄 · 푸터 · 하단바는 다 불러온 화면과 같은 자리에 진짜로, 본문만 뼈대(./skeletons/Orders.tsx)
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+      <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+        <ArcticStoreBar crumbs={[{ label: "구매 내역" }]} width="max-w-4xl" />
+        <OrdersSkeleton />
+        <ArcticFooter />
+        <ArcticDock />
       </div>
     );
   }

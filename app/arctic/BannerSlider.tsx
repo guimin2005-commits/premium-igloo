@@ -143,7 +143,7 @@ export default function BannerSlider({ banners, bannerIdx, setBannerIdx, bannerR
   if (!loaded) {
     return (
       <section aria-hidden className={BOX}>
-        <div className={FRAME}>
+        <div className={`${FRAME} animate-pulse`}>
           <div className="md:hidden" style={{ aspectRatio: String(M_RATIO_DEFAULT) }}></div>
           <div className="hidden md:block" style={{ aspectRatio: String(PC_RATIO) }}></div>
         </div>

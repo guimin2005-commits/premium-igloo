@@ -83,7 +83,8 @@ async function detail(userId) {
 
   const [payouts, notifications, inquiries, applies, coupons, booster] = await Promise.all([
     Payout.find(byIdOrName("userId", "userName", userId, names)).sort({ createdAt: -1 }).limit(LIMIT).lean(),
-    Notification.find(byIdOrName("recipientId", "recipientName", userId, names), { content: 0 }).sort({ createdAt: -1 }).limit(LIMIT).lean(),
+    // 봇 DM 기록(source bot — bot/src/inbox.js · 2026-10-31)은 빼고 운영팀 · 사이트 안내만(많아지면 경고 · 제재가 50줄 밖으로 밀린다)
+    Notification.find({ ...byIdOrName("recipientId", "recipientName", userId, names), source: { $ne: "bot" } }, { content: 0 }).sort({ createdAt: -1 }).limit(LIMIT).lean(),
     Inquiry.find(byIdOrName("userId", "user", userId, names), { mainType: 1, subType: 1, title: 1, status: 1, createdAt: 1, answeredAt: 1 })
       .sort({ createdAt: -1 }).limit(LIMIT).lean(),
     applyQuery ? Apply.find(applyQuery, { position: 1, status: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(LIMIT).lean() : [],

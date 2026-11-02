@@ -84,6 +84,8 @@ const UserXpSchema = new mongoose.Schema({
   cardSkinPick: { type: String, default: "" },
   // 고른 카드 배경 — "" 안 고름 · "none" 끔 · 배경 키 sc_* (models/UserXp.js 와 같은 칸). 카드 스킨과 따로 고르고 함께 입는다 — 이미지 카드 그릴 때 읽는다(botMessages withSkin)
   cardScenePick: { type: String, default: "" },
+  // 고른 레벨 막대(2026-10-31) — "" 안 고름(입은 배경의 짝 막대) · "none" 기본 막대 · 막대 키 bar_* (models/UserXp.js 와 같은 칸). 이미지 카드 그릴 때 읽는다(botMessages withSkin)
+  cardBarPick: { type: String, default: "" },
   // 고른 아바타 테두리 — "" 안 고름 · "none" 끔 · 테두리 키(등급 키) (models/UserXp.js 와 같은 칸). /인벤토리 '착용' 표시에 읽는다
   avatarFramePick: { type: String, default: "" },
   // 시즌 티어 테두리 — 시즌 결산(features/seasonSettle.js settleFrames)이 「시즌 끝 순간 등급」을 적는다(아이언은 ""). 다음 결산이 덮어쓴다 (models/UserXp.js 와 같은 칸)
@@ -93,7 +95,7 @@ const UserXpSchema = new mongoose.Schema({
   //    { season, name, level, tier(등급 키 — 아이언은 "iron"), rank, total, at } (models/UserXp.js 와 같은 칸)
   //    default: undefined — upsert 가 빈 배열을 만들지 않게
   seasonHistory: {
-    type: [new mongoose.Schema({ season: Number, name: String, level: Number, tier: String, rank: Number, total: Number, at: Date }, { _id: false })],
+    type: [new mongoose.Schema({ season: Number, name: String, level: Number, tier: String, rank: Number, total: Number, at: Date, seasonXp: Number, seasonRank: Number, maxLevel: Number, passTier: Number, passMax: Number }, { _id: false })],
     default: undefined,
   },
   // 승급 화면을 본 가장 높은 등급 인덱스 (models/UserXp.js 와 같은 칸 — 사이트만 쓴다, 봇은 읽지도 쓰지도 않는다)
@@ -715,6 +717,31 @@ const GoedamGiftCodeSchema = new mongoose.Schema({
   noticeError: { type: String, default: "" },
 }, { versionKey: false, autoCreate: false, autoIndex: false, strict: false });
 export const GoedamGiftCode = mongoose.models.GoedamGiftCode || mongoose.model("GoedamGiftCode", GoedamGiftCodeSchema);
+
+// 📌 사이트 알림함 — 사이트 models/Notification.js 와 같은 모델 이름 · 컬렉션(notifications). 봇은 DM 을 보낼 때마다 한 줄 넣는다(inbox.js — 2026-10-31
+//    운영자 "알림함 개선 · 디스코드 봇 메시지랑 연계"). 봇 줄은 source "bot" · expireAt 90일 뒤 — 아래 TTL 인덱스가 지운다.
+//    ⚠️ 컬렉션은 사이트 몫(autoCreate 끔). 인덱스는 TTL 하나만 봇이 만든다 — 테스트 사이트가 같은 DB 를 읽어 사이트 모델엔 두지 않았다.
+//       운영팀 알림(사이트 발송)은 expireAt 이 없어 지워지지 않는다
+const NotificationSchema = new mongoose.Schema({
+  recipientName: { type: String, default: "" },
+  recipientId: { type: String, default: "" },
+  type: { type: String, default: "안내" },
+  title: { type: String, default: "" },
+  content: { type: String, default: "" },
+  summary: { type: String, default: "" },
+  source: { type: String, default: "bot" },
+  kind: { type: String, default: "" },
+  link: { label: { type: String }, url: { type: String } },
+  detail: [{ _id: false, name: String, value: String }],
+  read: { type: Boolean, default: false },
+  dmSent: { type: Boolean, default: false },
+  sentBy: { type: String, default: "" },
+  hiddenAt: { type: Date, default: null },
+  expireAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+}, { versionKey: false, autoCreate: false });
+NotificationSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+export const Notification = mongoose.models.Notification || mongoose.model("Notification", NotificationSchema);
 
 // 📌 단체 DM(2026-11-01 관리 › 괴담회 「홍보 DM」) — 사이트 models/DmBlast.js 와 같은 칸 · 같은 컬렉션(dmblasts). 봇은 features/dmBlast.js 가 한 통씩 보낸다.
 //    DmBlastSend — 보낸 한 줄(blastId + userId 유니크 — 겹친 봇 · 재시작에도 한 사람 한 통). 인덱스는 봇이 첫 보내기 전에 만든다(ensureBlastIndexes)

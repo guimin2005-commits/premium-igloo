@@ -8,6 +8,7 @@ import { priceText } from "@/lib/shopPricing";
 import { ITEM_TYPE_LABEL } from "@/lib/items";
 import { ICON_PATHS } from "../components/Icons";
 import { openLogin } from "../components/LoginPrompt";
+import { nickOf } from "@/lib/nick";
 
 // 📌 1:1 문의 — 화이트 & 블랙.
 //    유저: 예전 서식의 흐름 — 왼쪽 문의 입력(라벨 좌측 줄 · 알약) + 오른쪽 답변 알림 · 문의하기.
@@ -487,8 +488,9 @@ export default function SupportPage() {
               <span className="text-[11px] font-bold text-[#d01634]">* 필수 입력</span>
             </div>
 
+            {/* 📌 2026-11-01 보이는 이름만 서버 별명 — 문의에 저장하는 user 는 계정 이름 그대로(관리 화면 · 조회 키) */}
             <FormRow label="작성자">
-              <p className="text-[14px] font-bold text-[#131313] py-2">{session.user?.name}</p>
+              <p className="text-[14px] font-bold text-[#131313] py-2">{nickOf(session.user)}</p>
             </FormRow>
 
             <FormRow label="문의 유형" required>

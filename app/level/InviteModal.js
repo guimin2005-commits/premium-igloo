@@ -66,7 +66,7 @@ const linesOf = (r) => (Array.isArray(r?.effectLines) ? r.effectLines.filter(Boo
 // 꾸미기 미리보기 재료 — 이벤트 패스 cosOf 와 같은 기준(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지)
 const cosOf = (r) => {
   const c = r?.cosmetic;
-  return c && typeof c === "object" && (c.skin || c.scene || c.frame || c.badge) ? c : null;
+  return c && typeof c === "object" && (c.skin || c.scene || c.bar || c.frame || c.badge) ? c : null;
 };
 // 📌 받은 것 이름 — 서버 labels(rewardLabel 「아이템 · 이름 · 7일」 — 이번에 실제로 준 것만. 부분 수령이면 준 것만 온다)를 그 단계 보상(RewardView.label)과
 //    짝지어 이름만(이벤트 패스 gotNames 와 같은 짝짓기). 짝이 없는 label(옛 응답 · 연 뒤 관리자가 보상을 바꿈)은 머리말 · 기간 꼬리 · 이름 안 분류 머리말만 떼서 붙인다
@@ -593,9 +593,10 @@ function IvPreview({ r, onClose }) {
   const fAt = frames.length ? Math.min(fi < 0 ? fStart : fi, frames.length - 1) : -1;
   const skin = typeof cos.skin === "string" ? cos.skin : "";
   const scene = typeof cos.scene === "string" ? cos.scene : "";
+  const bar = typeof cos.bar === "string" ? cos.bar : ""; // 레벨바(2026-10-31) — 레벨바 아이템이면 그 막대(없으면 기본 막대 — 배경은 막대를 바꾸지 않는다)
   const frame = fAt >= 0 ? frames[fAt] : typeof cos.frame === "string" ? cos.frame : "";
-  const card = !!skin || !!scene || !!frame;
-  const wantDiscord = (!!skin || !!scene) && !!cos.botCard;
+  const card = !!skin || !!scene || !!bar || !!frame;
+  const wantDiscord = (!!skin || !!scene || !!bar) && !!cos.botCard;
   const showDiscord = wantDiscord && !discordFail;
   // 폭은 '받을 칸이 있는지'로 — 디스코드 그림이 실패해도 판 폭은 처음 그대로
   const side = wantDiscord || !!cos.badge;
@@ -603,7 +604,7 @@ function IvPreview({ r, onClose }) {
   // 칸 이름은 그려지는 칸이 둘 이상일 때만(한 칸이면 머리 분류 칩이 곧 그 이름)
   const label = (t) => (card && (showDiscord || !!cos.badge) ? <p className="iv-pvlb">{t}</p> : null);
   const who = whoOf(authed ? user : null, authed ? me : null, today);
-  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${authed ? "&me=1" : ""}`;
+  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${bar ? `&bar=${encodeURIComponent(bar)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${authed ? "&me=1" : ""}`;
   const badge = badgeOfItem({ itemId: r.itemId, name: r.name, icon: r.icon, itemImageUrl: r.imageUrl, color: r.color, type: r.itemType || "cosmetic" });
   const d = daysOf(r);
 
@@ -650,7 +651,7 @@ function IvPreview({ r, onClose }) {
                 {label("프로필 카드")}
                 <div className="iv-pvc">
                   <FitBox pad={0.92} max={1}>
-                    <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
+                    <ProfileCardPreview who={who} skin={skin} scene={scene} bar={bar || undefined} frame={frame} />
                   </FitBox>
                 </div>
               </div>

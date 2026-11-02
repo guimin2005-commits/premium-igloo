@@ -170,7 +170,7 @@ const tierRankOf = (doc) => {
   let cosmetic = false;
   for (const e of Array.isArray(doc?.effects) ? doc.effects : []) {
     const skin = String(e?.skin || "");
-    const v = e?.on === "avatarFrame" ? String(e.frame || "") : e?.on === "cardSkin" ? (skin.startsWith("rank_") ? skin.slice(5) : "") : e?.on === "cardScene" ? "" : null; // 카드 배경은 등급 아이템이 아니다
+    const v = e?.on === "avatarFrame" ? String(e.frame || "") : e?.on === "cardSkin" ? (skin.startsWith("rank_") ? skin.slice(5) : "") : e?.on === "cardScene" || e?.on === "cardBar" ? "" : null; // 카드 배경 · 레벨 막대는 등급 아이템이 아니다
     if (v === null) continue;
     cosmetic = true;
     const i = v ? VOICE_TIERS.findIndex((t) => t.key === v) : -1;

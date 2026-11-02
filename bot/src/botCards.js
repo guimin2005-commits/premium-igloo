@@ -59,12 +59,12 @@ export const isCardKind = (k) => Object.prototype.hasOwnProperty.call(CARD_SIZE,
 //    scene: 카드 배경 키(CARD_SCENES) — 아이템 효과 cardScene. 카드 테두리와 따로, 함께 입는다(배경 위에 테두리). 없거나 모르는 키면 기본 바탕
 export const CARD_FIELDS = {
   //  frame: 아바타 테두리 키(등급 키 — FRAME_ART) — 끼면 등급 색 링 · 엠블럼 배지 대신 테두리(사진을 줄여 테두리 자리를 낸다)
-  levelUp: ["avatar", "name", "level", "prevLevel", "xp", "need", "progress", "skin?", "scene?", "frame?"],
+  levelUp: ["avatar", "name", "level", "prevLevel", "xp", "need", "progress", "skin?", "scene?", "bar?", "frame?"],
   //  roleColor: 디스코드 역할 색 "#rrggbb"(role.hexColor — "#000000" 은 색 없음 = 흰색) · level: 그 역할의 지급 레벨
   //  tier: 등급 키 · 번호(CARD_TIERS) — 없으면 역할 이름이 등급 이름일 때 그 등급. 등급 역할이면 역할 색 대신 등급 색 · 엠블럼
   roleGrant: ["avatar", "name", "role", "roleColor?", "level?", "tier?", "skin?", "scene?"],
   //  frame: 아바타 테두리 키(등급 키 — FRAME_ART) — 끼면 진행 링 · 엠블럼 배지 대신 테두리(진행도는 아래 막대)
-  cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?", "scene?", "frame?"],
+  cmdLevel: ["avatar", "name", "level", "xp", "need", "progress", "rank?", "total?", "skin?", "scene?", "bar?", "frame?"],
   //  top · me 의 frame: 아바타 테두리 키 — 낀 사람 줄만 사진에 테두리(테두리가 줄 밖으로 나가는 만큼 그 줄 위 · 아래를 띄우고 카드가 그만큼 길어진다 — cardSizeOf)
   //  period: 순위 기준(rankBoards RANK_PERIODS — all 현재 · total 누적 · month 이번 달 · voice 음성 시간, 없으면 현재) — 큰 제목 · 값 칸이 바뀐다.
   //  xp 는 그 기준의 XP(현재 · 누적 · 이번 달), 음성 시간 기준은 voiceSeconds(초)를 「12시간 30분」으로. level 은 늘 지금 레벨 · total 은 그 기준에 오른 인원
@@ -113,7 +113,7 @@ export function cardSkinOf(key) {
   const k = String(key ?? "").trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(CARD_SKINS, k) ? { key: k, ...CARD_SKINS[k] } : null;
 }
-// 📌 카드 배경(2026-10-15) — 아이템 효과 cardScene 의 scene 키. 카드 바탕 장면을 통째로 바꾼다(레벨 막대 모양도 배경 몫 — meta.bar).
+// 📌 카드 배경(2026-10-15) — 아이템 효과 cardScene 의 scene 키. 카드 바탕 장면을 통째로 바꾼다(meta.bar = 그 배경의 짝 레벨 막대 — 2026-10-31 막대는 따로 끼운다, 아래 CARD_BARS).
 //    카드 테두리(CARD_SKINS)와 따로 고르고 함께 입는다 — 겹: 배경 → 등급 빛(meta.glow 배) → 테두리(바탕 결 rect 는 빼고) → 글자. SKIN_CARD_KINDS 에만.
 //    목록은 배경 모듈 meta(cardScenes/index.js). 그림은 buildCard opts.scene(key, w, h) → { src, x, y, width, height } 가 준다(없으면 배경 바탕색 · 등급 빛만).
 //    v1 은 어두운 배경만(글자는 흰색 그대로)
@@ -122,6 +122,17 @@ export const CARD_SCENE_KEYS = Object.keys(CARD_SCENES);
 export function cardSceneOf(key) {
   const k = String(key ?? "").trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(CARD_SCENES, k) ? { ...CARD_SCENES[k], key: k } : null;
+}
+// 📌 레벨 막대(2026-10-31 운영자 "카드 배경과 레벨바 디자인을 분리 · 따로 착용") — 아이템 효과 cardBar 의 bar 키 → 그리는 모양(ghostBar · cloverBar).
+//    data.bar: 막대 키(bar_*) · 모양 이름(ghostTrail · cloverVine) · "" / "none" / 없음 = 기본 막대. 배경(meta.bar)은 막대를 바꾸지 않는다(2026-10-31 "분리 안 됐잖아").
+//    사이트 lib/itemEffects.js BARS · 봇 bot/src/itemEffects.js BAR_STYLE 과 같은 키여야 한다
+export const CARD_BARS = { bar_ghost: "ghostTrail", bar_clover: "cloverVine" };
+export const CARD_BAR_KEYS = Object.keys(CARD_BARS);
+const BAR_STYLES = new Set(Object.values(CARD_BARS));
+export function cardBarStyleOf(bar) {
+  const b = String(bar ?? "").trim();
+  if (BAR_STYLES.has(b)) return b;
+  return CARD_BARS[b.toLowerCase()] || "";
 }
 
 // 📌 등급 — lib/voiceTiers.js 의 VOICE_TIERS 사본(이름 · 영문 · 하한 레벨 · 색). 거기를 고치면 여기도 고칠 것.
@@ -657,7 +668,7 @@ function ghostBar(k, pct, width) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W0}" height="${GHOST_H}" viewBox="0 0 ${W0} ${GHOST_H}" shape-rendering="crispEdges">${s}</svg>`;
   return k.img(svgUri(svg), W0, GHOST_H, { flexShrink: 0, marginLeft: -GHOST_OUT });
 }
-const ghostBarOn = (k) => k.scene?.bar === "ghostTrail";
+const ghostBarOn = (k) => k.bar === "ghostTrail";
 // 📌 「덩굴 줄기」 막대(카드 배경 sc_clover — meta.bar "cloverVine") — 사이트 app/components/SceneBack CloverVineBar 와 같은 그림을 칸 VINE_C px 로(6칸 높이).
 //    0줄 위 잎 · 1줄 테 · 2 · 3줄 빈 관(두 톤) / 채운 곳은 줄기 밝음 · 몸 · 4줄 테 자리에 줄기 밑 · 5줄 아래 잎. 잎은 9칸마다 위아래 번갈아(줄기 끝 7칸 앞까지), 줄기 끝 다음 칸에 세잎 봉오리(6 × 6 — 끝까지 차면 n−7 ~ n−2칸)
 const VINE_C = 4;
@@ -686,7 +697,7 @@ function cloverBar(k, pct, width) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${VINE_H}" viewBox="0 0 ${width} ${VINE_H}" shape-rendering="crispEdges">${s}</svg>`;
   return k.img(svgUri(svg), width, VINE_H, { flexShrink: 0 });
 }
-const cloverBarOn = (k) => k.scene?.bar === "cloverVine";
+const cloverBarOn = (k) => k.bar === "cloverVine";
 
 // 글자 폭(em) — Pretendard Black 실측(숫자 0.64 · 쉼표 0.31 · 한글 0.86 · W 1.06)을 조금 넉넉히
 const emOf = (ch) =>
@@ -1932,6 +1943,8 @@ export function buildCard(kind, data, h, opts = {}) {
   // 스킨은 SKIN_CARD_KINDS 에만 (RANKER 발표는 기본)
   k.skin = SKIN_CARD_KINDS.includes(kind) ? cardSkinOf(d.skin) : null;
   k.scene = SKIN_CARD_KINDS.includes(kind) ? cardSceneOf(d.scene) : null;
+  // 레벨 막대 모양 — data.bar 가 없으면 입은 배경의 짝 막대, 있으면 그 막대("" · "none" 기본 — 위 cardBarStyleOf)
+  k.bar = SKIN_CARD_KINDS.includes(kind) ? cardBarStyleOf(d.bar) : "";
   k.sceneArt = typeof opts.scene === "function" ? opts.scene : null;
   k.size = cardSizeOf(kind, d);
   const text = (s) => cardText(s, opts.has);
@@ -1947,11 +1960,11 @@ export function buildCard(kind, data, h, opts = {}) {
   return rankerCard(k, kind, d, text);
 }
 
-// ── 샘플 — 관리자 미리보기 · 확인용. tierIndex(0~9) 등급 한가운데 레벨로 만든다. skin · scene 을 주면 그 카드 테두리 · 카드 배경(RANKER 제외) ──
+// ── 샘플 — 관리자 미리보기 · 확인용. tierIndex(0~9) 등급 한가운데 레벨로 만든다. skin · scene · bar 를 주면 그 카드 테두리 · 카드 배경 · 레벨 막대(RANKER 제외) ──
 //    누적 XP 는 lib/leveling.js 공식(0.075L³ + 55L² + 145L)을 샘플에만 옮겨 쓴다
 const sampleXp = (lv) => (lv <= 0 ? 0 : Math.floor((3 * lv ** 3 + 2200 * lv ** 2 + 5800 * lv) / 40) - 200);
-export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "", scene = "") {
-  if ((skin || scene) && SKIN_CARD_KINDS.includes(kind)) return { ...sampleCardData(kind, tierIndex, avatar), ...(skin ? { skin } : {}), ...(scene ? { scene } : {}) };
+export function sampleCardData(kind, tierIndex = 1, avatar = null, skin = "", scene = "", bar = undefined) {
+  if ((skin || scene || bar !== undefined) && SKIN_CARD_KINDS.includes(kind)) return { ...sampleCardData(kind, tierIndex, avatar), ...(skin ? { skin } : {}), ...(scene ? { scene } : {}), ...(bar !== undefined ? { bar } : {}) };
   const ti = Number.isInteger(tierIndex) && tierIndex >= 0 && tierIndex < CARD_TIERS.length ? tierIndex : 1;
   const t = CARD_TIERS[ti];
   const next = CARD_TIERS[ti + 1];

@@ -14,6 +14,7 @@ import { Purchase } from "../db.js";
 import { config } from "../config.js";
 import { buildMessage, buildMessageFrom, currentTemplate, commonVars, SITE_URL } from "../botMessages.js";
 import { goedamTicketInfo, isTicketPurchase } from "../goedamTicket.js";
+import { dmAndLog } from "../inbox.js";
 
 const TICK_MS = 20 * 1000;
 const GAP_MS = 1500;
@@ -104,7 +105,7 @@ async function run(client) {
     const payload = ticket
       ? { ...msg, embeds: [...(msg.embeds || []), { color: msg.embeds?.[0]?.data?.color, image: { url: GUIDE_URL } }], components: [drawButton()] }
       : msg;
-    const ok = await member.send(payload).then(() => true).catch(() => false);
+    const ok = await dmAndLog(member, payload, KEY, { ...vars, ticket }); // 알림함에도 한 줄(inbox.js — 목록 줄은 사유 글만)
     if (ok) console.log(`📨 운영진 지급 DM: ${r.userName || r.userId} ← ${r.itemName} ×${n}`);
     else await fail("dm");
     await wait(GAP_MS);

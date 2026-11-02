@@ -16,6 +16,16 @@ const NotificationSchema = new mongoose.Schema({
   // 📌 유저가 알림함에서 '전체 삭제'한 시각 — 기록은 지우지 않고 유저 화면에서만 뺀다.
   //    경고 · 제재 발송 기록이 유저 손으로 사라지면 안 된다. 관리자 발송 이력(?sent=1)에는 그대로 남는다.
   hiddenAt: { type: Date, default: null },
+  // 📌 2026-10-31 알림함 개선 — 봇 DM 도 알림함에 한 줄(bot/src/inbox.js). 종류 칩 · 작은 글자 · 아이콘은 lib/inboxKinds.js
+  //    source: "bot"(봇 DM 기록) · "site"(사이트가 넣은 안내 — 괴담회 그룹 승인 등) · ""(운영팀 발송)
+  //    kind: 봇 메시지 키(purchaseGranted …) · summary: 목록 한 줄(없으면 content) · link: DM 단추와 같은 단추(사이트 경로)
+  //    detail: DM 칸(수량 · 사유 …) — 상세에서 표로 · expireAt: 봇 기록은 90일(지우는 TTL 인덱스는 봇 모델이 만든다 — 테스트 사이트가 같은 DB 를 읽어 여기엔 두지 않는다)
+  source: { type: String, default: "" },
+  kind: { type: String, default: "" },
+  summary: { type: String, default: "" },
+  link: { label: { type: String }, url: { type: String } },
+  detail: [{ _id: false, name: String, value: String }],
+  expireAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

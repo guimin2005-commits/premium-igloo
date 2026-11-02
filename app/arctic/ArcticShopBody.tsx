@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { poppedRecently } from "./ScrollTop";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ICON_PATHS } from "../components/Icons";
@@ -18,6 +19,7 @@ import CardArt from "./CardArt";
 import ProductCard, { typeLabelOf, categoryLabelOf, itemShortName } from "./ProductCard";
 import { isBundle } from "@/lib/bundle";
 import ShopFilterBar from "./ShopFilterBar";
+import { ShopPageSk, ShopGridSk, SeasonPicksSk } from "./skeletons/Shop";
 import { priceBuckets, inBucket } from "./priceBuckets";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useArcticOrigin } from "./fromLevel";
@@ -290,6 +292,8 @@ export default function ArcticShopBody({
   // 하위 페이지 하단바에서 찜·검색을 누르면 ?panel= 로 넘어온다
   const searchParams = useSearchParams();
   const router = useRouter();
+  // 목록 상태를 마지막으로 적은 주소 글자(아래 listQs effect) — 같은 글자가 돌아오면 다시 읽지 않는다. null = 아직 안 적음
+  const writtenQsRef = useRef<string | null>(null);
   const origin = useArcticOrigin(); // 들어온 곳 — 모바일 유형 줄 맨 앞 "‹ 메인 · ‹ 레벨 …"
   useEffect(() => {
     const panel = searchParams.get("panel");
@@ -304,13 +308,66 @@ export default function ArcticShopBody({
       u.searchParams.delete("panel");
       window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     }
-    // 상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)에서 유형 · 검색어를 들고 온다
+    // 📌 2026-10-31 운영자 "상품 들어가고 뒤로가기를 하면 ARCTIC 메인으로 가지는데 · 전 화면으로 가야지" — 목록 상태(화면 · 유형 · 검색어 · 정렬 · 가격 · 재고 ·
+    //    살 수 있는 것)는 주소에 적어 두고(아래 listQs effect) 여기서 되살린다. 이 화면이 방금 적은 주소면(같은 글자) 다시 읽지 않는다.
+    //    상품 상세 · 장바구니 위 상점 줄(ArcticStoreBar)의 「ARCTIC › 유형」도 같은 주소(?type=)로 온다.
     //    테마 탭(?type=<테마 키>)은 모양만 보고 연다 — 테마 목록 · 상품을 받은 뒤 없는 탭이면 전체로(아래 themeTabs)
+    if (writtenQsRef.current !== null && searchParams.toString() === writtenQsRef.current) return;
     const type = searchParams.get("type");
-    if (type && (TYPE_VALUES.has(type) || isThemeKey(type))) goProducts(type);
+    if (type && (TYPE_VALUES.has(type) || isThemeKey(type))) { setView("products"); setTypeFilter(type); setWishOnly(false); }
+    else if (searchParams.get("view") === "products") setView("products");
+    const s = searchParams.get("sort");
+    if (s && SORTS.some((x) => x.v === s)) setSort(s);
+    const p = searchParams.get("price");
+    if (p) setPriceFilter(p);
+    if (searchParams.get("stock") === "1") setInStockOnly(true);
+    if (searchParams.get("afford") === "1") setAffordableOnly(true);
+    // 검색어는 결과만 되살린다(최근 검색어에 다시 넣지 않고 · 맨 위로 올리지 않는다)
     const q = searchParams.get("q");
-    if (q) submitSearch(q);
+    if (q) { setQuery(q); setSubmitted(q); setView("products"); }
   }, [searchParams, status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 📌 목록 상태 → 주소(history.replaceState — 화면을 옮기지 않는다). 상품을 받기 전에는 건드리지 않는다(주소에서 되살릴 값을 덮지 않게).
+  //    상품 화면일 때만 적고, 홈이면 모두 지운다. 다른 주소 값(from · via …)은 그대로 둔다
+  useEffect(() => {
+    if (isLoading) return;
+    const u = new URL(window.location.href);
+    const put = (k: string, v: string) => (v ? u.searchParams.set(k, v) : u.searchParams.delete(k));
+    const prod = showing === "products";
+    const q = submitted.trim();
+    put("view", prod && !q && typeFilter === "all" ? "products" : "");
+    put("type", prod && typeFilter !== "all" ? typeFilter : "");
+    put("q", q);
+    put("sort", prod && sort !== "recommended" ? sort : "");
+    put("price", prod && priceFilter !== "all" ? priceFilter : "");
+    put("stock", prod && inStockOnly ? "1" : "");
+    put("afford", prod && affordableOnly ? "1" : "");
+    const qs = u.searchParams.toString();
+    writtenQsRef.current = qs;
+    if (qs === new URLSearchParams(window.location.search).toString()) return;
+    window.history.replaceState(null, "", u.pathname + (qs ? `?${qs}` : "") + u.hash);
+  }, [isLoading, showing, typeFilter, submitted, sort, priceFilter, inStockOnly, affordableOnly]);
+
+  // 📌 뒤로 왔을 때 보던 자리 — 상품을 다 받기 전엔 쪽이 짧아 브라우저가 자리를 못 돌려 놓는다. 목록 주소마다 마지막 스크롤을 적어 두고(sessionStorage),
+  //    뒤로(popstate) 들어와 상품을 다 받은 뒤 그 자리로 옮긴다
+  const lastYRef = useRef(0);
+  useEffect(() => {
+    const onScroll = () => { lastYRef.current = window.scrollY; };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  useLayoutEffect(() => () => {
+    try { sessionStorage.setItem(`arcticListY:${writtenQsRef.current ?? ""}`, String(lastYRef.current)); } catch {}
+  }, []);
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (isLoading || restoredRef.current) return;
+    restoredRef.current = true;
+    if (!poppedRecently(15000)) return;
+    let y = 0;
+    try { y = Number(sessionStorage.getItem(`arcticListY:${new URLSearchParams(window.location.search).toString()}`)) || 0; } catch {}
+    if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+  }, [isLoading]);
 
   // 찜도 장바구니와 같이 계정마다 — 읽기는 위 장바구니 effect 가 함께 한다
   useEffect(() => {
@@ -474,7 +531,8 @@ export default function ArcticShopBody({
   //    effect 를 기다리지 않고 그리는 중에 바로 '전체'로 되돌린다(React 의 '이전 값에 맞춰 상태 고치기' 방식) —
   //    한 번이라도 맞지 않는 구간이 걸린 채 그려지지 않고, 다른 탭에 갔다 돌아와도 옛 구간이 되살아나지 않는다
   const priceBucket = buckets.find((b) => b.v === priceFilter) || null;
-  if (priceFilter !== "all" && !priceBucket) setPriceFilter("all");
+  // 📌 상품을 받기 전(isLoading)에는 풀지 않는다 — 주소에서 되살린 구간(뒤로 왔을 때)이 빈 목록에 걸려 먼저 풀리지 않게(2026-10-31)
+  if (!isLoading && priceFilter !== "all" && !priceBucket) setPriceFilter("all");
 
   const visible = useMemo(() => {
     // 📌 카드 가격은 기본 무제한. 가격 필터 · "살 수 있는 것만" 을 켜면 그 조건을 통과하는 기간(무제한 > 가장 긴 기간)의 값을 건다 —
@@ -647,7 +705,13 @@ export default function ArcticShopBody({
 
   // 공개 전 · 비관리자 → 준비 중 안내
   if (status === "loading" || shopPublic === null) {
-    return <div className={`w-full flex-1 bg-white ${embedded ? "py-24" : "min-h-screen"} flex items-center justify-center text-sm text-[#8a8a8a]`}>불러오는 중...</div>;
+    // 📌 로딩 뼈대(2026-11-01 운영자 "그 로딩 뼈대 ARCTIC도 해") — 다 불러온 화면과 같은 바탕 · 스토어 줄 · (상품 목록이면) 필터 줄 · 격자(./skeletons/Shop).
+    //    열릴 화면은 주소로 먼저 본다(위 주소 effect 가 돌기 전 첫 그림부터) — 배너가 맨 위인 홈 · 시즌 · 테마 탭은 스토어 줄만
+    const qType = searchParams.get("type") || "";
+    const openType = qType && (TYPE_VALUES.has(qType) || isThemeKey(qType)) ? qType : showing === "products" ? typeFilter : "";
+    const openSearch = !!(searchParams.get("q") || submitted.trim());
+    const openList = openSearch || (!!openType && openType !== "season" && TYPE_VALUES.has(openType)) || (!openType && (searchParams.get("view") === "products" || showing === "products"));
+    return <ShopPageSk className={`w-full flex-1 bg-white ${embedded ? "" : "min-h-screen"}`} body={openList ? "list" : openType === "season" ? "season" : openType && isThemeKey(openType) ? "theme" : "home"} search={openSearch} back={!!origin} slot={topSlot} />;
   }
   // 📌 공개 전 상점은 관리자로 보는 중일 때만 연다 — 유저 화면이면 유저처럼 준비 중 화면(서버 getShopAccess 도 같은 판정)
   if (!shopPublic && !isAdmin) {
@@ -940,7 +1004,11 @@ export default function ArcticShopBody({
         {/* 찜만 보기 — 해제 버튼을 눈에 띄게 */}
 
         {isLoading ? (
-          <div className="py-24 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+          // 📌 로딩 뼈대 — 아래 격자와 같은 칸 수 · 간격의 상품 카드(./skeletons/Shop). 시즌 탭 기본 상태면 위에 두 갈래 자리부터(SeasonPicks 가 설 자리)
+          <>
+            {seasonPlain && <SeasonPicksSk />}
+            <ShopGridSk />
+          </>
         ) : visible.length === 0 ? (
           <div className="py-24 text-center break-keep">
             <p className="text-sm font-bold text-[#5a5a5a]">{typeFilter === "season" && !items.some((it) => isPointOnly(it)) ? "시즌 상품 준비 중입니다." : "조건에 맞는 상품이 없습니다."}</p>

@@ -15,6 +15,7 @@ import { currentSeason, seasonEndMs } from "../leveling.js";
 import { isLevelOpen } from "../botSettings.js";
 import { buildMessage, commonVars, formatUntil, SITE_URL } from "../botMessages.js";
 import { passView, normalizeTiers, SeasonPass } from "../views/pass.js";
+import { dmAndLog } from "../inbox.js";
 
 const TICK_MS = 10 * 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
@@ -122,14 +123,14 @@ async function sweep(guild, season, { stage, closeAt }) {
       if (!v.enabled) return "off";
       if (!(v.claimable > 0)) continue;
 
-      const msg = buildMessage("passUnclaimed", {
-        ...commonVars(member, guild),
+      const vars = {
         season: v.season,
         seasonName: v.seasonName,
         claimable: v.claimable,
         daysLeft: Math.max(1, ddayOf(season, Date.now())),
         until,
-      });
+      };
+      const msg = buildMessage("passUnclaimed", { ...commonVars(member, guild), ...vars });
       if (!msg) return "off"; // 관리자가 끈 키 — 다시 켜면 다음 주기부터 이어서(표시가 없는 유저만)
 
       // 📌 표시 먼저 — 넣은 쪽만 보낸다(중복 키면 다른 쪽이 이미 보냈다)
@@ -139,10 +140,7 @@ async function sweep(guild, season, { stage, closeAt }) {
         if (isDuplicateKeyError(e)) continue;
         throw e;
       }
-      const ok = await member
-        .send({ ...msg, components: [passButton()] })
-        .then(() => true)
-        .catch(() => false); // DM 이 막혀 있으면 조용히 넘어간다
+      const ok = await dmAndLog(member, { ...msg, components: [passButton()] }, "passUnclaimed", vars); // DM 이 막혀 있으면 조용히 넘어간다(알림함엔 남는다 — inbox.js)
       if (ok) sent += 1;
       else failed += 1;
       await sleep(GAP_MS);

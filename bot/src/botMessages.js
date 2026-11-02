@@ -9,7 +9,7 @@
 import mongoose from "mongoose";
 import { EmbedBuilder } from "discord.js";
 import { getSettings } from "./botSettings.js";
-import { perksOf, pickCardSkin, pickCardScene, pickAvatarFrame, withSeasonFrame, withSeasonSkin } from "./itemEffects.js";
+import { perksOf, pickCardSkin, pickCardScene, pickCardBar, pickAvatarFrame, withSeasonFrame, withSeasonSkin } from "./itemEffects.js";
 import { UserXp } from "./db.js";
 import { config } from "./config.js";
 
@@ -1405,6 +1405,9 @@ const VARS_MEMBER = Symbol("member");
 const SKIN_KEYS = new Set(["levelUp", "roleGrant", "cmdLevel", "cmdRank", "cmdAttend", "autoAttend", "cmdQuest", "cmdInventory", "cmdPass"]);
 // 📌 아바타 테두리 — /레벨 · 레벨업 카드만(botCards profileCard · levelUpCard — 끼면 링 · 배지 대신 테두리). 유저가 인벤토리에서 고른 것(UserXp.avatarFramePick — pickAvatarFrame)만
 const FRAME_KEYS = new Set(["cmdLevel", "levelUp"]);
+// 📌 레벨 막대(2026-10-31 — 카드 배경에서 떼어 따로 끼운다) — 막대를 그리는 /레벨 · 레벨업 카드만. 고른 막대(UserXp.cardBarPick — pickCardBar),
+//    안 골랐으면 입은 배경의 짝 막대 · "none" 이면 기본. data.bar 에 막대 키("" = 기본)를 넣는다(botCards cardBarStyleOf 가 모양으로)
+const BAR_KEYS = new Set(["cmdLevel", "levelUp"]);
 function withSkin(key, vars, cardData) {
   const member = vars?.[VARS_MEMBER];
   if (!SKIN_KEYS.has(key) || !member) return cardData;
@@ -1413,21 +1416,24 @@ function withSkin(key, vars, cardData) {
     if (!data) return data;
     // 📌 카드 배경(data.scene — 2026-10-15)은 카드 스킨과 같은 카드 종류(SKIN_KEYS)에 따로 고른 값으로. 배경 위에 스킨(테두리)이 그려진다
     const wantSkin = data.skin === undefined, wantScene = data.scene === undefined, wantFrame = FRAME_KEYS.has(key) && data.frame === undefined;
-    if (!wantSkin && !wantScene && !wantFrame) return data;
-    const { cardSkins, cardScenes = [], avatarFrames = [] } = perksOf(member);
+    const wantBar = BAR_KEYS.has(key) && data.bar === undefined;
+    if (!wantSkin && !wantScene && !wantFrame && !wantBar) return data;
+    const { cardSkins, cardScenes = [], cardBars = [], avatarFrames = [] } = perksOf(member);
     // 📌 스킨 · 테두리는 아이템이 없어도 시즌 보상(UserXp.seasonFrame — 등급 카드 스킨 · 티어 테두리)이 있을 수 있어 고른 값과 함께 읽는다.
     //    카드 배경은 시즌 보상이 없어 가진 배경이 없으면 읽지 않는다
-    const needSkin = wantSkin, needScene = wantScene && cardScenes.length > 0, needFrame = wantFrame;
-    if (!needSkin && !needScene && !needFrame) return data;
+    const needSkin = wantSkin, needScene = wantScene && cardScenes.length > 0, needFrame = wantFrame, needBar = wantBar && cardBars.length > 0;
+    if (!needSkin && !needScene && !needFrame && !needBar) return data;
     let picks = null;
     try {
       const uid = member.id || member.user?.id;
-      if (uid) picks = await UserXp.findOne({ userId: uid }, { cardSkinPick: 1, cardScenePick: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
+      if (uid) picks = await UserXp.findOne({ userId: uid }, { cardSkinPick: 1, cardScenePick: 1, cardBarPick: 1, avatarFramePick: 1, seasonFrame: 1 }).lean();
     } catch {}
     const out = { ...data };
     if (needSkin) { const skin = pickCardSkin(withSeasonSkin(cardSkins, picks), picks?.cardSkinPick || ""); if (skin) out.skin = skin; }
     if (needScene) { const scene = pickCardScene(cardScenes, picks?.cardScenePick || ""); if (scene) out.scene = scene; }
     if (needFrame) { const frame = pickAvatarFrame(withSeasonFrame(avatarFrames, picks), picks?.avatarFramePick || ""); if (frame) out.frame = frame; }
+    // 막대는 ""(기본)도 넣는다 — 안 넣으면 카드가 입은 배경의 짝 막대를 그린다(일부러 기본 막대를 고른 사람)
+    if (needBar) out.bar = pickCardBar(cardBars, picks?.cardBarPick || ""); // 배경과 따로(안 골랐으면 기본 막대)
     return out;
   };
 }

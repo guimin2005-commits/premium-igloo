@@ -72,17 +72,26 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 고른 카드 배경(2026-10-15) — 카드 스킨과 같은 규칙("" 안 고름 · "none" 끔 · 배경 키 sc_*). 카드 테두리(cardSkinPick)와 따로 고르고 함께 입는다.
   //    인벤토리에서 착용 · 해제 (app/api/xp/card-scene). 봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
   cardScenePick: { type: String, default: "" },
+  // 📌 고른 레벨 막대(2026-10-31) — "" 한 번도 안 고름(입은 배경의 짝 막대 — 분리 전 모습 그대로) · "none" 기본 막대 · 막대 키 bar_*(lib/itemEffects.js pickCardBar).
+  //    인벤토리에서 착용 · 해제 (app/api/xp/card-bar). 봇(bot/src/db.js)도 같은 칸 — 이미지 카드를 그릴 때 읽는다
+  cardBarPick: { type: String, default: "" },
   // 📌 고른 아바타 테두리 — 카드 스킨과 같은 규칙("" 안 고름 · "none" 끔 · 테두리 키 = 등급 키). 인벤토리에서 착용 · 해제 (app/api/xp/avatar-frame)
   //    봇(bot/src/db.js)도 같은 칸
   avatarFramePick: { type: String, default: "" },
+  // 📌 고른 유물(2026-11-02 「사건의 지평선」) — 없으면 안 입음. { key: 유물 키, core: 코어 색, frame · border · bg · bar: 조각 번호 1~3 }(lib/relic/meta normPick).
+  //    입으면 카드 배경 · 테두리 · 레벨바 · 프로필 테두리를 통째로 그린다(다른 꾸미기 고른 값은 그대로 두고 가린다). 인벤토리 [착용] · 꾸미기 창(app/api/xp/relic)
+  //    default: undefined — 다른 쓰기가 빈 값을 만들지 않게
+  relicPick: { type: new mongoose.Schema({ key: String, core: String, frame: Number, border: Number, bg: Number, bar: Number }, { _id: false }), default: undefined },
   // 📌 시즌 티어 테두리 — 시즌이 끝나면 봇(seasonSettle settleFrames)이 「시즌 끝 순간 등급」을 적는다(아이언은 ""). 다음 결산이 덮어쓴다 = 회수.
   //    가진 테두리로 친다(lib/itemEffects withSeasonFrame). 봇(bot/src/db.js)도 같은 칸 · default: undefined — 봇 upsert 가 빈 값을 만들지 않게
   seasonFrame: { type: new mongoose.Schema({ season: Number, frame: String, at: Date }, { _id: false }), default: undefined },
   // 📌 지난 시즌 기록 — 시즌 결산(봇 seasonSettle settleFrames)이 seasonFrame 과 같은 차례에 한 줄씩 붙인다(같은 시즌은 한 번 · 최근 20개).
   //    { season, name, level(그 순간 레벨), tier(등급 키 — 아이언은 "iron"), rank(xp 내림차순 · userId 오름차순, 1부터), total(전체 문서 수), at }.
-  //    레벨 페이지 등급 창 「지난 시즌」 탭이 읽는다(app/api/xp/me). 봇(bot/src/db.js)도 같은 칸 · default: undefined — 봇 upsert 가 빈 배열을 만들지 않게
+  //    📌 2026-11-02 시즌 탭 「내 시즌 기록」과 같은 값도 — seasonXp(누적 XP) · seasonRank(누적 순위, 0 = 순위 없음) · maxLevel(그 시즌 최고 레벨) · passTier / passMax(시즌 패스 단계, passMax 0 = 패스 꺼짐).
+  //       이 칸들이 생기기 전 줄에는 없다(0 → 화면 「—」).
+  //    레벨 페이지 「기록」 지난 시즌이 읽는다(app/api/xp/me). 봇(bot/src/db.js)도 같은 칸 · default: undefined — 봇 upsert 가 빈 배열을 만들지 않게
   seasonHistory: {
-    type: [new mongoose.Schema({ season: Number, name: String, level: Number, tier: String, rank: Number, total: Number, at: Date }, { _id: false })],
+    type: [new mongoose.Schema({ season: Number, name: String, level: Number, tier: String, rank: Number, total: Number, at: Date, seasonXp: Number, seasonRank: Number, maxLevel: Number, passTier: Number, passMax: Number }, { _id: false })],
     default: undefined,
   },
   // 📌 승급 화면을 마지막으로 본 등급(lib/voiceTiers 인덱스) — LEVEL 에 들어왔을 때 지금 등급이 이보다 높으면 승급 화면을 한 번 띄운다(app/level/PromoOverlay). 등급이 내려가면 같이 내려 적어 다시 올라갈 때 또 뜬다.

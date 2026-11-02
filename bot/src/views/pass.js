@@ -126,7 +126,7 @@ export function normalizeTiers(tiers, startTid = 1) {
 // 📌 시즌 시작 시점 기준선 — lib/seasonPass.js 의 seasonStartBaseXp 와 같은 식(시즌 시작 뒤 봇 지급 로그 + 패스 보상 뺀 지급 대기열, 둘 다 가속분 포함).
 //    사이트 쪽 집계 식은 lib/season.js passEarnedPipelines 하나 — 바꾸면 같이
 //    세는 구간은 시즌 시작과 지금 문서가 생긴 시각(_id) 중 늦은 쪽부터 — 퇴장 초기화로 지운 문서 시절 로그는 넣지 않는다
-async function seasonStartBaseXp(userId, xp, season, docId) {
+export async function seasonStartBaseXp(userId, xp, season, docId) {
   const seasonStart = new Date(`${season.start}T00:00:00+09:00`).getTime();
   const born = docId?.getTimestamp?.()?.getTime?.() || 0;
   const since = new Date(Math.max(seasonStart, born));

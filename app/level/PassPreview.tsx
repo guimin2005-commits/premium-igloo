@@ -18,7 +18,7 @@ const DISCORD_BG = "#313338"; // 디스코드 채팅 바탕 — 봇 카드가 �
 const BOX_BG = "rgba(255,255,255,0.05)";
 
 // 📌 2026-10-15 카드 배경(scene) — 카드 테두리(skin)와 따로 입는 카드 바탕 그림. 프로필 카드엔 함께(배경 위에 테두리), 디스코드 카드엔 &scene=
-type Cosmetic = { skin?: string; scene?: string; frame?: string; badge?: boolean; botCard?: boolean };
+type Cosmetic = { skin?: string; scene?: string; bar?: string; frame?: string; badge?: boolean; botCard?: boolean };
 export type PassReward = {
   key?: string; kind?: string; itemId?: string; itemName?: string; roleName?: string; days?: number; icon?: string; imageUrl?: string; color?: string; itemType?: string;
   short?: string; label?: string; cosmetic?: Cosmetic | null;
@@ -28,7 +28,7 @@ export type PassReward = {
 // 미리보기를 띄울 보상인가 — 꾸미기 효과(카드 배경 · 카드 테두리 · 프로필 테두리 · 프로필 배지)가 실린 아이템 보상만
 export const passCosmeticOf = (r: PassReward | null | undefined): Cosmetic | null => {
   const c = r?.cosmetic;
-  return c && typeof c === "object" && (c.skin || c.scene || c.frame || c.badge) ? c : null;
+  return c && typeof c === "object" && (c.skin || c.scene || c.bar || c.frame || c.badge) ? c : null;
 };
 
 // 📌 보상 분류 · 짧은 이름 · 기간 — 패스 창(트랙 칸 · 대표 보상 칸 · app/level/page.js)과 이 미리보기 머리가 같이 쓴다.
@@ -70,18 +70,19 @@ export default function PassPreview({ r, user, me, onClose }: {
 
   const skin = typeof cos.skin === "string" ? cos.skin : "";
   const scene = typeof cos.scene === "string" ? cos.scene : "";
+  const bar = typeof cos.bar === "string" ? cos.bar : ""; // 레벨바(2026-10-31) — 레벨바 아이템이면 그 막대(없으면 기본 막대 — 배경은 막대를 바꾸지 않는다)
   const frame = typeof cos.frame === "string" ? cos.frame : "";
   // 프로필 카드는 카드 배경 · 카드 테두리 · 프로필 테두리 중 하나라도 있으면 — 프로필 테두리만이면 디스코드 카드 칸은 없다(옆 칸을 만들지 않는다)
-  const card = !!skin || !!scene || !!frame;
+  const card = !!skin || !!scene || !!bar || !!frame;
   const who = whoOf(user, me, today);
-  const wantDiscord = (!!skin || !!scene) && !!cos.botCard;
+  const wantDiscord = (!!skin || !!scene || !!bar) && !!cos.botCard;
   const showDiscord = wantDiscord && !discordFail;
   // PC 는 프로필 카드 | (디스코드 · 배지) 두 칸 — 한 칸뿐이면 판을 좁게
   // 📌 폭은 '받을 칸이 있는지'로 정한다 — 디스코드 그림이 실패해도 판 · 프로필 카드 폭은 처음 그대로, 오른쪽 내용만 빠진다(상점 AppliedPreview 와 같다)
   const side = wantDiscord || !!cos.badge;
   const two = card && side;
   // 로그인했으면 본인 카드(me=1 — 세션으로만 판단), 아니면 예시 카드(공개 캐시)
-  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${user ? "&me=1" : ""}`;
+  const discordSrc = `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${bar ? `&bar=${encodeURIComponent(bar)}` : ""}${user ? "&me=1" : ""}`;
   const name = r.short || r.label || r.itemName || "";
   const days = passDays(r);
   // 배지 그림 — 보상 칸에 실린 등록 아이템 스냅샷(상점 상세의 badgeOfItem 과 같은 칸 이름으로 옮겨 담는다)
@@ -140,7 +141,7 @@ export default function PassPreview({ r, user, me, onClose }: {
                 {/* 레벨 페이지 카드(360 폭)를 칸에 맞춰 줄인다 — 폰은 칸 비율(4:5), PC 는 고정 높이 */}
                 <div className="relative w-full aspect-[4/5] sm:aspect-auto sm:h-[440px] rounded-2xl overflow-hidden" style={{ background: BOX_BG }}>
                   <FitBox pad={0.92} max={1}>
-                    <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
+                    <ProfileCardPreview who={who} skin={skin} scene={scene} bar={bar || undefined} frame={frame} />
                   </FitBox>
                 </div>
               </div>

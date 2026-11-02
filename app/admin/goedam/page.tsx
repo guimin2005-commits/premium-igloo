@@ -8,6 +8,7 @@ import { itemTypeLabel, itemTypeColor } from "@/lib/items";
 import { RARITIES, rarityOf } from "@/lib/rarity";
 import GoedamModal from "../../level/GoedamModal";
 import PromoTab from "./PromoTab";
+import WatchCountPanel from "./WatchCountPanel";
 import {
   SCREENING_TICKETS,
   SCREENING_RATIO,
@@ -2691,6 +2692,8 @@ export default function AdminGoedamPage() {
 
         {tab === "watch" && (
           <>
+            {/* 📌 완청 횟수 — 사람마다 완청한 회차 수 · N편 이상만(녹화 중 테두리 줄 사람 고르기 · 2026-11-01) */}
+            <WatchCountPanel toast={toast} />
             <Toolbar
               right={
                 <>

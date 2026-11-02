@@ -8,6 +8,7 @@ import { Purchase, BotSetting, ShopItem } from "../db.js";
 import { config } from "../config.js";
 import { buildMessageFrom, commonVars, formatUntil, loadTemplate, sampleVars, SITE_URL } from "../botMessages.js";
 import { findContinuation } from "./grantQueue.js";
+import { dmAndLog } from "../inbox.js";
 
 const TICK_MS = 10 * 60 * 1000;
 const BATCH = 50; // 한 틱에 보내는 DM 수
@@ -106,14 +107,10 @@ async function tick(client) {
       const hoursLeft = Math.max(1, Math.round((new Date(p.expiresAt).getTime() - Date.now()) / 3600e3));
       // 📌 DM 은 선점 전에 만든다 — 만들 게 없으면(글을 다 비운 디자인 등) 선점하지 않는다(선점만 남으면 그 건은 영영 안 간다)
       let msg = null;
+      let vars = null;
       if (member) {
-        msg = buildMessageFrom("expiryReminder", tpl, {
-          ...commonVars(member, guild),
-          item: p.itemName,
-          until: formatUntil(p.expiresAt),
-          hoursLeft,
-          renewUrl: await renewUrlOf(p),
-        }, { fallback: true });
+        vars = { item: p.itemName, until: formatUntil(p.expiresAt), hoursLeft, renewUrl: await renewUrlOf(p) };
+        msg = buildMessageFrom("expiryReminder", tpl, { ...commonVars(member, guild), ...vars }, { fallback: true });
         if (!msg) continue;
       }
 
@@ -127,7 +124,7 @@ async function tick(client) {
       sent += 1;
       if (!member) continue;
 
-      await member.send(msg).catch(() => {}); // DM 이 막혀 있으면 조용히 넘어간다
+      await dmAndLog(member, msg, "expiryReminder", vars); // DM 이 막혀 있으면 조용히 넘어간다(알림함엔 남는다 — inbox.js)
       console.log(`⏰ 만료 임박 DM: ${p.userName} / ${p.itemName} (약 ${hoursLeft}시간)`);
     } catch (e) {
       console.error(`⏰ 만료 임박 DM 실패 (${p.userName} / ${p.itemName}):`, e.message);

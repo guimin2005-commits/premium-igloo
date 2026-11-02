@@ -19,6 +19,7 @@ import { CART_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopUid } from 
 import { useGuestShopLogin } from "../useGuestShopLogin";
 import { saleEnded } from "@/lib/saleWindow";
 import { useAdminView } from "../../components/AdminView";
+import { CartSkeleton } from "../skeletons/Cart";
 
 // 📌 장바구니 페이지 — 담은 상품 확인·삭제 후 주문서로 이동
 export default function CartPage() {
@@ -160,10 +161,15 @@ export default function CartPage() {
   const removeItem = (itemId: string) => setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   const clearCart = () => setCart([]);
 
+  // 📌 로딩 뼈대(2026-11-01) — 다 불러온 화면과 같은 틀(../skeletons/Cart.tsx). 경로 줄 · 푸터 · 독도 같은 자리에 세워 다 불러와도 안 튄다.
+  //    줄 수는 저장된 장바구니 수(읽기 전이면 3줄 · 비었으면 빈 장바구니 판). 경로 줄 개수는 저장소 값(cartCount 없이)
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+      <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+        <ArcticStoreBar crumbs={[{ label: "장바구니" }]} active="cart" />
+        <CartSkeleton rows={cartLoaded ? cart.length : undefined} />
+        <ArcticFooter />
+        <ArcticDock />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import React, { Fragment, startTransition, useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -17,17 +17,20 @@ import { buildEnhanceView, chatRange, enhanceCost } from "@/lib/enhance";
 import { ENH_PIXEL } from "@/lib/enhanceIcons";
 // 빙옥 가격 = XP 가격 ÷ 10,000 올림 — 서버와 같은 식 (lib/pointRate)
 import { xpToPoint } from "@/lib/pointRate";
-import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS, SCENES, FRAMES } from "@/lib/itemEffects";
+import { discountedCost, effectParts, describeEffect, PERK_KEYS, SKINS, SCENES, FRAMES, shownBarOf } from "@/lib/itemEffects";
 import TierEmblem from "../components/TierEmblem";
 import SystemGuide from "./SystemGuide";
+import SeasonView from "./SeasonView";
 import ItemIcon from "../components/ItemIcon";
 import { ICON_PATHS } from "../components/Icons";
 // 팝업 틀 · 인벤토리 팝업 · 효과음은 내 정보 · ARCTIC 도 같이 쓴다 (app/components/PopShell · Inventory, lib/sfx)
 import { PopShell, POP_THEME } from "../components/PopShell";
-import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedScene, keepSavedBadges, keepSavedFrame, applyTrial, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
-import WalletHistory from "../components/WalletHistory";
+import { BagOverlay, buildInvGroups, mergeMyItems, keepSavedSkin, keepSavedScene, keepSavedBar, keepSavedBadges, keepSavedFrame, applyTrial, invTierOf, invIconType, invAccentOf } from "../components/Inventory";
 import SkinFrame from "../components/SkinFrame";
-import { SceneBack, sceneBarOf, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
+import dynamic from "next/dynamic";
+// 📌 유물 「사건의 지평선」 카드 겹(2026-11-02) — 그림 코드가 커서 따로 실어 온다
+const RelicLayers = dynamic(() => import("../components/RelicLayers"), { ssr: false });
+import { SceneBack, barStyleOfKey, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
 import AvatarFrame, { frameRoom, frameSizeOf, FRAME_GRID, FRAME_REACH } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
 import PassPreview, { passCosmeticOf, passKindOf, passShortName, passDays, PassClock } from "./PassPreview";
@@ -41,7 +44,10 @@ import GoedamGroupModal from "./GoedamGroupModal";
 import EventHub from "./EventTabs";
 import { HotTimeStrip, HotTimeModal } from "./HotTime";
 import { ACHIEVEMENTS_ON } from "@/lib/achievements";
+import { nickOf } from "@/lib/nick";
 import { openLogin } from "../components/LoginPrompt";
+import { DashSkeleton, RankListSkeleton, TopListSkeleton, PanelSkeleton } from "./LevelSkeletons";
+import RecordView, { GoalReach } from "./RecordView";
 
 const DISCORD_URL = "https://discord.gg/V2uW2nUczU";
 
@@ -53,21 +59,21 @@ const ICE = "#3f83b8"; // ARCTIC 동선 전용 아이스 틴트
 // 📌 XP 테이블 · 시뮬레이터는 탭이 아니라 대시보드 안의 카테고리다 (옛 ?tab=table · sim 은 그리로 보낸다)
 const MAIN_TABS = [
   { id: "my", name: "내 대시보드", short: "대시보드" },
+  { id: "season", name: "시즌" },
   { id: "rank", name: "랭킹" },
   // 레벨에서 왔다는 표시를 달아 ARCTIC 이 돌아갈 길("LEVEL ›")을 보이게 한다 (app/arctic/fromLevel.ts)
   { id: "arctic", name: "ARCTIC", shopOnly: true, href: "/arctic?from=level" },
   { id: "intro", name: "시스템 안내", short: "안내" },
 ];
-
 // 📌 랭킹 기준 — 현재(보유 XP) / 누적(이번 시즌 얻은 XP 전부 = 보유 + 쓴 XP) / 이번 달 획득 / 누적 음성 시간
-//    대시보드 서버 랭킹 TOP 10 은 음성 시간을 뺀 셋(LB_MODES)
+//    대시보드 서버 랭킹 TOP 10 도 넷(2026-11-02 — 음성 시간은 칸이 좁아 「음성」)
 const RANK_MODES = [
   { id: "all", label: "현재" },
   { id: "total", label: "누적" },
   { id: "month", label: "이번 달" },
   { id: "voice", label: "음성 시간" },
 ];
-const LB_MODES = RANK_MODES.filter((m) => m.id !== "voice");
+const LB_MODES = RANK_MODES.map((m) => (m.id === "voice" ? { ...m, label: "음성" } : m));
 const RANK_PAGE_SIZE = 20;
 
 // 레벨 공식은 lib/leveling.js 단일 소스 (봇 지급 로직과 1:1)
@@ -330,7 +336,7 @@ const XptFit = ({ k, className = "", children }) => {
 };
 // 막대 위 자리 — 손잡이(18px) 가운데가 닿는 곳과 같게(양끝 9px 안쪽)
 const xptPos = (l) => `calc(9px + (100% - 18px) * ${(clampLv(l) - 1) / 999})`;
-const XpTableView = ({ myLevel = 0, myXp = null, perMin = 0, onTone }) => {
+const XpTableView = ({ myLevel = 0, myXp = null, perMin = 0, onTone, middle = null }) => {
   const mine = myLevel > 0;
   const [lv, setLv] = useState(xptDefaultTarget(myLevel));
   // 표는 처음에 내 등급(로그인 전에는 목표 레벨의 등급)으로 연다
@@ -526,6 +532,9 @@ const XpTableView = ({ myLevel = 0, myXp = null, perMin = 0, onTone }) => {
         </div>
       </div>
 
+      {/* 계산기와 레벨 표 사이 — 부모가 넣는 칸(2026-11-02 「Lv N 까지」 — 고른 목표 레벨 · 남은 XP 를 넘긴다) */}
+      {typeof middle === "function" ? middle({ lv, left, mine }) : middle}
+
       {/* ── 레벨 표 — 등급 막대 한 줄 + 고른 등급 줄 ── */}
       <section className="mt-9">
         <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">레벨 표</h3>
@@ -562,7 +571,9 @@ const XpTableView = ({ myLevel = 0, myXp = null, perMin = 0, onTone }) => {
             <span className={`text-right ${mine ? "xpt-cum" : ""}`}>누적 XP</span>
             {mine && <span className="text-right">남은 XP</span>}
           </div>
-          <div ref={listRef} className="max-h-[440px] overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+          {/* 📌 relative — 내 줄의 sr-only(「내 레벨」 · absolute)가 이 스크롤 칸을 기준으로 잡히게. 없으면 칸 밖 조상을 기준으로 잡혀
+                 표 안 내 줄 위치만큼 페이지가 길어져 푸터 아래가 검게 남았다(2026-11-02 운영자 "이거 뭐냐") */}
+          <div ref={listRef} className="relative max-h-[440px] overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
             {rows.map((r) => {
               const me = mine && r.l === myLevel;
               const on = r.l === lv && !me;
@@ -1101,8 +1112,9 @@ const FxRow = ({ l, v, dim }) => {
     </div>
   );
 };
-const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks, policy }) => {
-  if (!open) return null;
+// 📌 획득 효과 — 1회 획득(채팅 · 음성 · 출석) · 적용 중인 아이템 · 상시 효과. 먹 판 위에 그린다.
+//    2026-11-02 A안 — 예전 「효과」 창(카드 [효과] 알약)을 없애고 XP 테이블 계산기 아래 칸으로(top = 위 여백)
+const GainFxBody = ({ gain, voiceMin = 5, items, loading, perks, policy, top = "pt-[22px]" }) => {
   const blocks = [
     { k: "chat", icon: "chat", l: "채팅 1회", v: `+${fxFmt(gain.chatLo)}~${fxFmt(gain.chatHi)}`, parts: gain.chatParts },
     { k: "voice", icon: "mic", l: `음성 ${voiceMin}분`, v: `+${fxFmt(gain.voice)}`, parts: gain.voiceParts },
@@ -1131,17 +1143,7 @@ const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks,
   const empty = !fxItems.length && !perkRows.length;
 
   return (
-    <PopShell
-      open={open}
-      onClose={onClose}
-      title="세부 효과"
-      icon="sparkles"
-      theme="plain"
-      size="fit"
-      grab={false}
-      body={
-        // 📌 2026-10-24 시안 그대로 — 폭 860 · 높이는 내용만큼(공용 틀 기본 768 × 620 은 아래가 비었다) · 번짐 · 격자 없는 평평한 잉크(운영자 "시안이랑 다르잖아")
-        <div className="px-5 sm:px-[26px] pt-[22px] pb-[26px]">
+        <div className={`px-5 sm:px-[26px] ${top} pb-[26px]`}>
           {/* 📌 2026-10-24 1회 획득 — 채팅 · 음성 · 출석을 한 줄 세 칸으로(왼쪽 좁은 칸에 몰려 창 절반이 비던 것). 상자 없이 칸 사이 세로줄만
                  (운영자 "윗 부분 애들은 굳이 박스일 필요는 없을 듯"). 폰은 위아래로 쌓고 가로줄로 가른다 */}
           <div className="grid grid-cols-1 sm:grid-cols-3">
@@ -1214,8 +1216,6 @@ const GainFxModal = ({ open, onClose, gain, voiceMin = 5, items, loading, perks,
           )}
           {empty && <p className="mt-7 text-[12px] font-bold text-white/35">{loading ? "불러오는 중…" : "보유 효과 없음"}</p>}
         </div>
-      }
-    />
   );
 };
 
@@ -2171,23 +2171,12 @@ const GainLine = ({ label, value, parts, padClass = "" }) => (
   </div>
 );
 
-// 📌 등급 창 탭 — 「등급 안내」(등급 사다리) | 「지난 시즌」(UserXp.seasonHistory — 봇 시즌 결산이 시즌마다 한 줄). 두 칸 같은 폭 · 같은 굵기라 탭 줄이 안 움직인다
-const TIER_TABS = [{ k: "guide", l: "등급 안내" }, { k: "past", l: "지난 시즌" }];
-// 시즌 기간 "2026.10.01 – 12.31" (해가 같으면 끝은 월.일만)
-const seasonPeriod = (s) => {
-  if (!s?.start || !s?.end) return "";
-  const a = s.start.replaceAll("-", "."), b = s.end.replaceAll("-", ".");
-  return `${a} – ${a.slice(0, 4) === b.slice(0, 4) ? b.slice(5) : b}`;
-};
-
-const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus = 0, history }) => {
-  const [tab, setTab] = useState("guide");
-  // 열 때마다 「등급 안내」부터 — 닫혀 있을 때는 그리지 않으므로 열리는 순간에 되돌린다
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setTab("guide");
-  }
+// 📌 등급 안내 창 — 2026-10-31 확정 A안(.claude/mockups/tier-modal/시안-등급창-A.png)을 2026-11-02 반영(운영자 "등급 안내 표기도 바꾸랬잖어").
+//    탭 없이 한 화면: 내 등급 머리(엠블럼 · 이름 · 레벨 · 막대 · 「다음 등급까지 N레벨」) → 「등급 | 음성 5분 보너스」 머리 줄 한 번 → 등급 줄.
+//    엠블럼 받침(둥근 상자) 없음 · 줄마다 「추가 XP」 · 영문 이름 · 가운데 점 없음 · 맨 아래 「기본 + 강화 + 등급」 계산 줄 없음.
+//    지금 등급 줄은 등급색 옅은 바탕 + 왼쪽 등급색 줄, 지나온 등급은 흐리게.
+//    「지난 시즌」 탭은 뺐다 — 지난 시즌은 대시보드 「기록」 판으로 옮겼다(같은 값은 한 곳에, 2026-11-02 운영자 "ㄱㄱ")
+const TierModal = ({ open, onClose, level, intervalMin = 5 }) => {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -2198,12 +2187,12 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
   }, [open, onClose]);
 
   if (!open) return null;
-  const curIdx = getTierIndex(level || 0);
-  const past = Array.isArray(history) ? history : [];
-  const pickTab = (k) => {
-    setTab(k);
-    playTone(620, 0.04, "sine", 0.025);
-  };
+  const lv = level || 0;
+  const curIdx = getTierIndex(lv);
+  const cur = VOICE_TIERS[curIdx];
+  const next = VOICE_TIERS[curIdx + 1] || null;
+  // 막대 — 지금 등급 시작부터 다음 등급 시작까지 어디쯤(마지막 등급이면 가득)
+  const pct = next ? Math.max(2, Math.min(100, Math.round(((lv - cur.min) / Math.max(1, next.min - cur.min)) * 100))) : 100;
 
   return (
     <div
@@ -2213,171 +2202,83 @@ const TierModal = ({ open, onClose, level, baseXp, intervalMin = 5, enhanceBonus
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        // 📌 높이 고정(폰 92dvh · PC 1000px, 화면이 낮으면 86vh) — 탭마다 내용 길이가 달라도 창이 줄었다 늘었다 하지 않게(폰은 아래 붙은 창이라 줄면 탭 줄이 내려간다)
-        className="relative w-full sm:max-w-lg h-[92dvh] sm:h-[1000px] max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-label="등급 안내"
+        className="relative w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[86vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-[#131313] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.7)] flex flex-col"
         style={{ animation: "tierIn .32s cubic-bezier(0.16,1,0.3,1)" }}
       >
         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-60 pointer-events-none"></div>
-        <div
-          aria-hidden
-          className="absolute -top-24 -right-16 w-72 h-72 blur-[100px] rounded-full pointer-events-none"
-          style={{ background: `${VOICE_TIERS[curIdx].c}30` }}
-        ></div>
 
-        {/* 헤더 — 탭 두 칸(같은 폭 · 같은 높이) + 닫기. 탭마다 바뀌는 것은 아래 본문뿐 */}
-        <div className="relative z-10 shrink-0 px-6 sm:px-8 pt-6 sm:pt-7 pb-5 border-b border-white/[0.08]">
-          <div className="flex items-center justify-between gap-4">
-            <div
-              role="tablist"
-              aria-label="등급"
-              className="flex-1 min-w-0 max-w-[300px] h-10 p-1 rounded-full bg-white/[0.06]"
-              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
-            >
-              {TIER_TABS.map((t) => {
-                const on = tab === t.k;
-                return (
-                  <button
-                    key={t.k}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    onClick={() => pickTab(t.k)}
-                    className={`h-8 min-w-0 rounded-full text-[13px] font-black whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
-                      on ? "bg-white text-[#131313]" : "text-white/55 hover:text-white"
-                    }`}
-                  >
-                    {t.l}
-                  </button>
-                );
-              })}
+        {/* 머리 — 제목 · 닫기 */}
+        <div className="relative z-10 shrink-0 flex items-center justify-between gap-4 px-[22px] sm:px-8 pt-6 pb-[18px] border-b border-white/[0.08]">
+          <h2 className="text-[17px] font-black text-white leading-6">등급 안내</h2>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        {/* 내 등급 — 엠블럼 · 이름 · 레벨 · 막대 · 다음 등급까지 */}
+        <div className="relative z-10 shrink-0 flex items-center gap-4 px-[22px] sm:px-8 pt-5 pb-[18px] border-b border-white/[0.08]">
+          <span aria-hidden className="shrink-0 w-14 h-14 flex items-center justify-center"><TierEmblem tier={cur} size={32} shine /></span>
+          <div className="min-w-0 flex-1">
+            <p className="flex items-baseline gap-2">
+              <span className="text-[20px] font-black tracking-tight leading-6" style={tierText(cur)}>{cur.name}</span>
+              <span className="text-[14px] font-black text-white/60 tabular-nums">Lv.{lv.toLocaleString()}</span>
+            </p>
+            <div aria-hidden className="mt-2.5 h-1.5 bg-white/[0.08]">
+              <i className="block h-full" style={{ width: `${pct}%`, background: tierPaint(cur) }}></i>
             </div>
-            <button
-              onClick={onClose}
-              aria-label="닫기"
-              className="shrink-0 w-9 h-9 rounded-full border border-white/12 text-white/50 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center outline-none focus:outline-none"
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2"><path d={ICON_PATHS.close} strokeLinecap="round" /></svg>
-            </button>
+            <p className="mt-2 flex justify-between gap-3 text-[12px] font-bold text-white/50 tabular-nums">
+              {next ? (
+                <>
+                  <span><span style={tierText(next)}>{next.name}</span>까지 <b className="font-black text-white">{Math.max(0, next.min - lv).toLocaleString()}레벨</b></span>
+                  <span className="font-black" style={tierText(next)}>Lv.{next.min.toLocaleString()}</span>
+                </>
+              ) : (
+                <span className="font-black text-white">최고 등급</span>
+              )}
+            </p>
           </div>
         </div>
 
-        {tab === "past" ? (
-          // 지난 시즌 — 최근 시즌부터 한 줄씩: 엠블럼 · 등급 · 레벨 · 시즌 이름 · 기간 | 순위 / 전체
-          <div key="past" className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5">
-            {past.length ? (
-              past.map((h) => {
-                const t = VOICE_TIERS.find((x) => x.key === h.tier) || VOICE_TIERS[getTierIndex(h.level || 0)];
-                const s = SEASONS.find((x) => x.number === h.season);
-                const period = seasonPeriod(s);
-                return (
-                  <div key={h.season} className="flex items-center gap-4 py-3.5 border-b border-white/[0.06] last:border-0">
-                    <span
-                      aria-hidden
-                      className="shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center"
-                      style={{ backgroundColor: `${t.c}1a`, border: `1px solid ${t.c}55` }}
-                    >
-                      <TierEmblem tier={t} size={24} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-baseline gap-2 min-w-0">
-                        <span className="min-w-0 truncate text-[15px] font-black tracking-tight" style={tierText(t)}>{t.name}</span>
-                        <span className="shrink-0 text-[12px] font-black text-white/60 tabular-nums">Lv.{Number(h.level || 0).toLocaleString()}</span>
-                      </p>
-                      <p className="text-[10px] font-bold tracking-[0.04em] text-white/35 tabular-nums mt-1 truncate">
-                        S{h.season} · {s?.name || h.name || "—"}{period ? ` · ${period}` : ""}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-[15px] font-black tabular-nums leading-none text-white">{h.rank > 0 ? `#${h.rank.toLocaleString()}` : "—"}</p>
-                      <p className="text-[10px] font-bold text-white/35 tabular-nums mt-1">/ {h.total > 0 ? h.total.toLocaleString() : "—"}</p>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="h-full flex items-center justify-center pb-10">
-                <p className="text-[13px] font-bold text-white/35">기록 없음</p>
-              </div>
-            )}
-          </div>
-        ) : (
-        <>
-        {/* 등급 사다리 */}
-        <div key="guide" className="relative z-10 flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5">
-          <p className="text-[12px] text-white/45 leading-relaxed break-keep mb-2">
-            <b className="text-white/75">음성 채널에서 받는 XP에 아래 금액이 더해집니다.</b>
-          </p>
+        {/* 머리 줄 한 번 — 등급 | 음성 N분 보너스 */}
+        <div className="relative z-10 shrink-0 flex justify-between px-[22px] sm:px-8 pt-3.5 pb-1 text-[11px] font-extrabold text-white/35">
+          <span>등급</span>
+          <span>음성 {intervalMin}분 보너스</span>
+        </div>
+
+        {/* 등급 줄 — 받침 없는 엠블럼 · 이름(지금이면 「현재」) · 레벨 구간 | 보너스 */}
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto">
           {VOICE_TIERS.map((t, i) => {
-            const cur = i === curIdx;
+            const on = i === curIdx;
             const passed = i < curIdx;
             return (
               <div
                 key={t.key}
-                className={`relative flex items-center gap-4 py-3.5 border-b border-white/[0.06] last:border-0 transition-opacity ${passed ? "opacity-45" : ""}`}
+                className={`relative flex items-center gap-4 px-[22px] sm:px-8 py-3 border-b border-white/[0.06] last:border-0 ${passed ? "opacity-45" : ""}`}
+                style={on ? { background: `${t.c}14` } : undefined}
               >
-                {cur && (
-                  <span
-                    aria-hidden
-                    className="absolute -left-6 sm:-left-8 top-0 bottom-0 w-[3px]"
-                    style={{ background: tierPaint(t, 180) }}
-                  ></span>
-                )}
-                <span
-                  aria-hidden
-                  className="shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-transform"
-                  style={{
-                    backgroundColor: cur ? `${t.c}22` : "rgba(255,255,255,0.04)",
-                    border: `1px solid ${cur ? t.c + "88" : "rgba(255,255,255,0.08)"}`,
-                    boxShadow: cur ? `0 0 22px -6px ${t.c}` : "none",
-                  }}
-                >
-                  <TierEmblem tier={t} size={24} />
-                </span>
-
+                {on && <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: tierPaint(t, 180) }}></span>}
+                <span aria-hidden className="shrink-0 w-11 h-11 flex items-center justify-center"><TierEmblem tier={t} size={24} /></span>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2">
                     <span className="text-[15px] font-black tracking-tight" style={tierText(t)}>{t.name}</span>
-                    {cur && (
-                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[9px] font-black tracking-[0.12em] uppercase text-white" style={{ background: tierPaint(t) }}>
-                        현재
-                      </span>
+                    {on && (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-black leading-5 text-white" style={{ background: tierPaint(t) }}>현재</span>
                     )}
                   </p>
-                  <p className="text-[10px] font-black tracking-[0.16em] text-white/35 uppercase tabular-nums mt-1">
-                    {t.en} · {tierRangeLabel(i)}
-                  </p>
+                  <p className="mt-1 text-[11px] font-bold text-white/40 tabular-nums">{tierRangeLabel(i)}</p>
                 </div>
-
-                <div className="shrink-0 text-right">
-                  <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: t.bonus > 0 ? "#ffffff" : "rgba(255,255,255,0.3)" }}>
-                    {t.bonus > 0 ? `+${t.bonus.toLocaleString()}` : "—"}
-                  </p>
-                  <p className="text-[10px] font-bold text-white/35 mt-1">추가 XP</p>
-                </div>
+                <p className={`shrink-0 text-[16px] font-black tabular-nums ${t.bonus > 0 ? "text-white" : "text-white/30"}`}>+{t.bonus.toLocaleString()}</p>
               </div>
             );
           })}
         </div>
-
-        {/* 푸터 */}
-        <div className="relative z-10 shrink-0 px-6 sm:px-8 py-4 border-t border-white/[0.08] bg-white/[0.02]">
-          {/* 내 음성 강화가 있으면 기본 칩 옆에 강화 칩 하나 — 등급은 그 위에 더해진다 */}
-          {enhanceBonus > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">기본 {baseXp.toLocaleString()}</span>
-              <span className="text-[#ff5c77] font-black text-sm">+</span>
-              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white text-[12px] font-bold whitespace-nowrap">강화 {enhanceBonus.toLocaleString()}</span>
-              <span className="text-[#ff5c77] font-black text-sm">+</span>
-              <span className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/60 text-[12px] font-bold whitespace-nowrap">등급</span>
-            </div>
-          )}
-          <p className="text-[11px] text-white/35 leading-relaxed break-keep">
-            음성 {intervalMin}분당 기본 {baseXp.toLocaleString()} XP 위에 더해지는 금액입니다 — 채팅 XP에는 적용되지 않습니다.
-            역할·채널 부스트가 있으면 여기에 더 붙습니다.
-          </p>
-        </div>
-        </>
-        )}
       </div>
     </div>
   );
@@ -2473,7 +2374,7 @@ const RankBadges = ({ badges }) =>
 
 // 조회 결과에 방금 저장한 카드 테두리 · 배지 · 프로필 테두리 · 카드 배경을 지킨다 — 저장보다 먼저 떠난 조회가 옛 값으로 되돌리지 않게(keepSavedSkin · keepSavedBadges · keepSavedFrame · keepSavedScene)
 // 📌 관리자 체험(테스트 사이트에서만 — Inventory applyTrial) 값이 있으면 그걸 얹는다 — trial = 관리자로 보는 중(유저 화면 · 다른 계정은 서버 값 그대로)
-const keepSaved = (data, t0, skin, badge, frame, scene, trial) => applyTrial(keepSavedScene(keepSavedFrame(keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge), t0, frame), t0, scene), trial);
+const keepSaved = (data, t0, skin, badge, frame, scene, trial, bar = null) => applyTrial(keepSavedBar(keepSavedScene(keepSavedFrame(keepSavedBadges(keepSavedSkin(data, t0, skin), t0, badge), t0, frame), t0, scene), t0, bar), trial);
 
 // ══ 진행 중 이벤트 판 — 대시보드 맨 아래 전체 폭(2026-10-03 "따로 새로 디자인해서 내 대시보드 아래에다가") ══
 //    이벤트 글(/api/posts?category=이벤트)의 그림 · 제목 · 기간 · 남은 날. 본문 미리보기는 두지 않는다(/event 목록과 같다).
@@ -2611,6 +2512,59 @@ const LockedSlot = () => (
   </EmptySlot>
 );
 
+// 📌 2026-11-02 퀘스트 머리 「남은 시간」 — 고른 주기가 바뀌는 KST 시각(일일 자정 · 주간 월요일 0시 · 월간 1일 0시)까지.
+//    30초마다 다시 센다(이 부품만 다시 그린다). 서버 그림과 어긋나지 않게 붙은 뒤부터 센다
+const QuestLeft = ({ period }) => {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  let txt = "";
+  if (now) {
+    const KST = 9 * 60 * 60 * 1000;
+    const k = new Date(now + KST);
+    const y = k.getUTCFullYear(), m = k.getUTCMonth(), d = k.getUTCDate();
+    const end =
+      period === "monthly" ? Date.UTC(y, m + 1, 1)
+      : period === "weekly" ? Date.UTC(y, m, d + ((8 - k.getUTCDay()) % 7 || 7))
+      : Date.UTC(y, m, d + 1);
+    const left = Math.max(0, end - KST - now);
+    const dd = Math.floor(left / 86400000), hh = Math.floor((left % 86400000) / 3600000), mm = Math.floor((left % 3600000) / 60000);
+    txt = dd > 0 ? `${dd}일 ${hh}시간` : hh > 0 ? `${hh}시간 ${mm}분` : `${mm}분`;
+  }
+  return (
+    <span title="다음 퀘스트까지" className="shrink-0 min-w-[78px] inline-flex items-center justify-end gap-1 text-[12px] font-extrabold text-[#8a8a8a] tabular-nums whitespace-nowrap">
+      <svg aria-hidden viewBox="0 0 24 24" className="w-[13px] h-[13px]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
+      {txt}
+    </span>
+  );
+};
+
+// 📌 2026-11-02 퀘스트 진행 고리 — 막대 대신(긴 수 「240,853/5,000,000 XP」가 막대 자리를 먹어 막대가 짧아졌다).
+//    가운데 = 내림 % (다 하면 체크), 색 = 진행 검정 · 다 함 빨강 · 받음 회색. 폰 42 · PC 46
+const QuestRing = ({ pct, done, dim }) => {
+  const r = 19;
+  const c = 2 * Math.PI * r;
+  const col = dim ? "#d6d6d6" : done ? "#e91e3f" : "#131313";
+  return (
+    <span aria-hidden className="relative shrink-0 w-[42px] h-[42px] md:w-[46px] md:h-[46px] flex items-center justify-center">
+      <svg viewBox="0 0 46 46" className="absolute inset-0 w-full h-full -rotate-90">
+        <circle cx="23" cy="23" r={r} fill="none" stroke="rgba(0,0,0,0.07)" strokeWidth="4.5" />
+        {pct > 0 && (
+          <circle cx="23" cy="23" r={r} fill="none" stroke={col} strokeWidth="4.5" strokeLinecap="round" strokeDasharray={`${((c * pct) / 100).toFixed(1)} ${c.toFixed(1)}`} className="transition-[stroke-dasharray] duration-700" />
+        )}
+      </svg>
+      {done ? (
+        <svg viewBox="0 0 24 24" className="relative w-4 h-4" fill="none" stroke={dim ? "#a3a3a3" : "#e91e3f"} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+      ) : (
+        <span className="relative text-[11px] font-black text-[#131313] tabular-nums leading-none">{pct}%</span>
+      )}
+    </span>
+  );
+};
+
 export default function LevelPage() {
   // 리뉴얼: 정적 안내 대신 '내 대시보드'가 첫 화면
   // 탭은 URL 이 기준 — 외부에서 /level?tab=pass 처럼 바로 들어올 수 있어야 한다.
@@ -2684,9 +2638,12 @@ export default function LevelPage() {
 
   // ── 내 대시보드: 실시간 데이터 (30초 폴링 + 창 포커스 시 갱신) ──
   const [me, setMe] = useState(null);          // /api/xp/me
+  const [relicLvAt, setRelicLvAt] = useState(0); // 📌 유물 레벨업 효과 — 레벨이 오르면 지금 시각(RelicLayers 가 한 번 돌린다)
+  const [relicXpAt, setRelicXpAt] = useState(0); // 📌 유물 「조각끼리 이어지는 연출」 — XP 를 얻으면 지금 시각(한 번 · 운영자 "XP 얻을 때의 효과")
+  // 테스트 사이트(localhost)에서만 — 콘솔 __relicLevelUp() · __relicXp() 로 레벨업 효과 · XP 연출을 미리 본다
+  useEffect(() => { if (["localhost", "127.0.0.1"].includes(window.location.hostname)) { window.__relicLevelUp = () => setRelicLvAt(Date.now()); window.__relicXp = () => setRelicXpAt(Date.now()); } }, []);
   const [myLogs, setMyLogs] = useState(null);  // /api/xp/my-logs
   const [meLoaded, setMeLoaded] = useState(false);
-  const [lastSync, setLastSync] = useState(null);
   const prevXpRef = useRef(null);              // XP 증가·레벨업 감지용
   // 📌 레벨업 효과음은 내 대시보드 탭에서만 — 폴링은 랭킹 · 안내 탭에서도 돌지만 거기서는 토스트만 띄운다.
   //    prevXpRef 는 탭과 상관없이 갱신되므로 다른 탭에서 지나간 레벨업이 대시보드로 돌아왔을 때 뒤늦게 울리지 않는다
@@ -2714,7 +2671,7 @@ export default function LevelPage() {
         const start = Date.parse(j?.startsAt || ""), end = Date.parse(j?.endsAt || "");
         if (!alive || !j?.ok || !Number.isFinite(start) || !Number.isFinite(end)) return;
         const d = new Date(start + 9 * 60 * 60 * 1000);
-        setEventPassMeta({ enabled: !!j.enabled, start, end, day: `${d.getUTCMonth() + 1}. ${d.getUTCDate()}.`, at: Date.now() });
+        setEventPassMeta({ enabled: !!j.enabled, start, end, day: `${d.getUTCMonth() + 1}. ${d.getUTCDate()}.`, at: Date.now(), title: String(j.title || "") });
       })
       .catch(() => {});
     return () => { alive = false; };
@@ -2752,7 +2709,7 @@ export default function LevelPage() {
       .then((j) => {
         const d = j?.success ? j.data : null;
         if (!d) return;
-        setGoedamMeta({ visible: !!d.visible, end: Number(d.end) || 0 });
+        setGoedamMeta({ visible: !!d.visible, end: Number(d.end) || 0, title: String(d.title || "") });
         setGoedamCount(Math.max(0, Math.floor(Number(d.tickets) || 0)));
       })
       .catch(() => {});
@@ -2821,12 +2778,13 @@ export default function LevelPage() {
     const list = [];
     // 친구 초대 — 상시라 끝 시각 없음(end 0 — 탭에 마감 줄 없음) · 탭 줄 맨 앞(아래 openEvents)
     if (inviteOn) list.push({ key: "invite", src: "/banners/invite-strip.png", label: "친구 초대", n: inviteCount, end: 0 });
-    if (eventPassOn) list.push({ key: "pass", src: "/banners/event-pass-strip.png", label: "유령 펭귄의 초대", n: eventPassCount, end: eventPassMeta?.end || 0 });
-    if (goedamOn) list.push({ key: "goedam", src: "/banners/goedam-strip.png", label: "방구석 심야 괴담회", n: goedamCount, end: goedamMeta?.end || 0 });
+    // 📌 2026-11-01 탭 이름은 설정 제목(관리 화면에서 바꾸면 탭도 같이 — 이벤트 재사용 1단계). 못 읽으면 예전 글자
+    if (eventPassOn) list.push({ key: "pass", src: "/banners/event-pass-strip.png", label: eventPassMeta?.title || "유령 펭귄의 초대", n: eventPassCount, end: eventPassMeta?.end || 0 });
+    if (goedamOn) list.push({ key: "goedam", src: "/banners/goedam-strip.png", label: goedamMeta?.title || "방구석 심야 괴담회", n: goedamCount, end: goedamMeta?.end || 0 });
     // 게임 그룹 지원 — 괴담회 띠 그림 그대로
     if (groupOn) list.push({ key: "group", src: "/banners/goedam-strip.png", label: "게임 그룹 지원", n: groupCount, end: groupMeta?.end || 0 });
     return list;
-  }, [inviteOn, inviteCount, eventPassOn, eventPassCount, eventPassMeta?.end, goedamOn, goedamCount, goedamMeta?.end, groupOn, groupCount, groupMeta?.end]);
+  }, [inviteOn, inviteCount, eventPassOn, eventPassCount, eventPassMeta?.end, eventPassMeta?.title, goedamOn, goedamCount, goedamMeta?.end, goedamMeta?.title, groupOn, groupCount, groupMeta?.end]);
   const evTotal = evItems.reduce((a, e) => a + (e.n > 0 ? e.n : 0), 0);
   const [evTab, setEvTab] = useState(null); // 열린 이벤트 key — null 이면 닫힘
   const [evOrder, setEvOrder] = useState([]); // 연 순간의 탭 순서(key)
@@ -2963,8 +2921,6 @@ export default function LevelPage() {
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
   const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
-  const [walletOpen, setWalletOpen] = useState(false); // XP · 빙옥 내역 팝업
-  const [fxOpen, setFxOpen] = useState(false);         // 세부 효과 팝업 (1회 획득 줄)
   const [myItems, setMyItems] = useState(null);      // 보유 아이템 (디스코드 역할 대조)
   const [claiming, setClaiming] = useState("");
   const [pass, setPass] = useState(null);            // /api/pass — 시즌 패스 상태 (비활성/비로그인이면 null)
@@ -2972,6 +2928,7 @@ export default function LevelPage() {
   const skinSavedRef = useRef({ at: 0, v: "" });      // 마지막 카드 스킨 저장 — 그 전에 떠난 조회가 옛 스킨으로 되돌리지 않게(keepSavedSkin)
   const badgeSavedRef = useRef({ at: 0, v: [] });     // 마지막 배지 저장 — 같은 이유(keepSavedBadges)
   const frameSavedRef = useRef({ at: 0, v: "" });     // 마지막 아바타 테두리 저장 — 같은 이유(keepSavedFrame)
+  const barSavedRef = useRef({ at: 0, v: null });    // 마지막 레벨 막대 저장 — 같은 이유(keepSavedBar · 2026-10-31)
   const sceneSavedRef = useRef({ at: 0, v: "" });     // 마지막 카드 배경 저장 — 같은 이유(keepSavedScene)
   const questSavedRef = useRef(0);                    // 마지막 퀘스트 받기 · 바꾸기 응답을 그린 시각 — 그 전에 떠난 조회가 옛 목록 · 옛 바꾸기 횟수로 되돌리지 않게(applyQuests)
 
@@ -3001,17 +2958,16 @@ export default function LevelPage() {
       if (passRes?.body?.success) setPass(passRes.body);
       else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
       if (meRes?.success) {
-        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current);
+        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current, barSavedRef.current);
         const prev = prevXpRef.current;
-        if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); }
-        if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); }
+        if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); if (d.relic && d.level === prev.level) setRelicXpAt(Date.now()); }
+        if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); if (d.relic) setRelicLvAt(Date.now()); }
         prevXpRef.current = d;
         setMe(d);
-        setLastSync(new Date());
       }
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success && t0 >= questSavedRef.current) setQuests(qRes.data);
-      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current)));
+      if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current, barSavedRef.current)));
     } catch {}
     setMeLoaded(true);
   }, [pushToast]);
@@ -3022,7 +2978,7 @@ export default function LevelPage() {
     const t0 = Date.now();
     fetch("/api/shop/my-items", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current))); })
+      .then((d) => { if (d?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(d.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current, barSavedRef.current))); })
       .catch(() => {});
   }, []);
 
@@ -3323,7 +3279,7 @@ export default function LevelPage() {
   }, [session?.user?.id, authStatus, loadMe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 리더보드 (공개 데이터, 60초 갱신) ──
-  const [lb, setLb] = useState({ all: null, total: null, month: null });
+  const [lb, setLb] = useState({ all: null, total: null, month: null, voice: null });
   const [lbTab, setLbTab] = useState("all");
   useEffect(() => {
     const load = () => {
@@ -3343,6 +3299,10 @@ export default function LevelPage() {
   // 대시보드 파생값
   const prog = me?.levelProgress || { current: 0, required: 1, needToNext: 0 };
   const progPct = Math.min(100, Math.floor((prog.current / Math.max(1, prog.required)) * 100));
+  // 레벨 막대 모양(2026-10-31) — 고른 막대 · 안 골랐으면 입은 배경의 짝 막대 · "none" 이면 기본("")
+  const cardBarStyle = barStyleOfKey(shownBarOf(me?.cardBarPick || "", me?.cardBar || ""));
+  // 📌 유물(2026-11-02) — 입으면 카드 배경 · 테두리 · 레벨바 · 프로필 테두리를 통째로 RelicLayers 가 그린다(다른 꾸미기 겹 · 사진 고리 · 막대는 감춘다)
+  const relicOn = !guest && !!me?.relic;
   // 📌 프로필 사진 크기 — 테두리를 끼면 링이 빠지므로 사진이 링 자리를 채운다(2026-10-10 "아이템까지 적용시키면 너무 작아짐 · 비율이 안 맞음").
   //    링 칸(모바일 86 · PC 96)은 그대로, 사진은 모바일만 62 → 78(PC 68 그대로). 테두리는 사진 크기에 맞춰 함께 커진다
   const framedAvatar = !!me?.avatarFrame && !!session?.user;
@@ -3369,7 +3329,7 @@ export default function LevelPage() {
   const invActive = invGroups.find((g) => g.id === invTab) || invGroups[0];
   const invRows = invActive?.items || [];
   // 손봐야 할 것 — 지급 대기·확인 필요는 배지로 알린다
-  const invUnread = invAll.filter((i) => i.status === "pending" || i.status === "missing").length;
+  const invUnread = invAll.filter((i) => !i.pairOf && (i.status === "pending" || i.status === "missing")).length; // pairOf — 배경의 짝 레벨바 칸(배경과 한 건)
   // 가방 여닫는 소리 — 기존 어휘(880·523·620Hz)와 겹치지 않게 낮은음 → 높은음
   const openBag = () => {
     setBagOpen(true);
@@ -3397,19 +3357,6 @@ export default function LevelPage() {
     setTierOpen(true);
     playTone(660, 0.06, "sine", 0.03);
   };
-  // XP · 빙옥 내역 — 그 자리 팝업. 닫기는 부모가 다시 그려도 같은 함수(팝업의 Esc 처리가 흔들리지 않게)
-  const openWallet = () => {
-    setWalletOpen(true);
-    playTone(660, 0.06, "sine", 0.03);
-  };
-  const closeWallet = useCallback(() => setWalletOpen(false), []);
-  // 세부 효과 — 그 자리 팝업. 아이템 효과 문장이 방금 산 것까지 보이게 보유 목록을 새로 읽는다(가방과 같게)
-  const openFx = () => {
-    setFxOpen(true);
-    refreshItems();
-    playTone(660, 0.06, "sine", 0.03);
-  };
-  const closeFx = useCallback(() => setFxOpen(false), []);
   // 시즌 패스 창 여닫는 소리 — 강화 · 가방과 겹치지 않게 한 옥타브 위에서
   const openPass = () => {
     setPassOpen(true);
@@ -3501,13 +3448,125 @@ export default function LevelPage() {
     const id = requestAnimationFrame(scrollToMine);
     return () => cancelAnimationFrame(id);
   }, [rankLoading, rankRows, scrollToMine]);
+
+  // 📌 랭킹 검색(2026-10-31 운영자 "랭킹탭에 검색 기능이랑 편의기능") — 돋보기로 여는 검색 칸 → 지금 기준의 순위로 최대 5명(/api/xp/leaderboard?q=)
+  //    → 고르면 그 사람 쪽으로 넘겨 그 줄을 가운데로 + 한 번 번쩍(내 순위로와 같은 길). 고른 줄은 붉은 왼쪽 선 · 옅은 바탕으로 남는다(기준을 바꾸면 지움)
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQ, setFindQ] = useState("");
+  const [findShow, setFindShow] = useState(false); // 후보 목록을 보일지 — 고르면 닫고, 다시 치면 연다
+  // 찾은 결과 — { q, mode, list }. 📌 지금 칸의 글자 · 기준과 같을 때만 보이고 고른다(findList) — 2026-10-31 운영자 "검색했던 거 지우고 다시 엔터 치면 검색했던 게 나오는데"
+  //    (지운 뒤 · 새 글자를 친 직후 결과가 오기 전에는 옛 결과를 보이지도 고르지도 않는다)
+  const [findHits, setFindHits] = useState(null);
+  const findList = findHits && findHits.q === findQ.trim() && findHits.mode === rankMode ? findHits.list : null;
+  const [findSel, setFindSel] = useState(0);
+  const [rankTarget, setRankTarget] = useState(""); // 고른 사람 userId
+  const [hitFlash, setHitFlash] = useState(0);
+  const hitJumpRef = useRef(false);
+  const hitTimerRef = useRef(0);
+  const findInputRef = useRef(null);
+  // 📌 결과 창 자리 — 입력칸 왼쪽 끝 ~ ✕ 오른쪽 끝(2026-11-02). 창은 가로 스크롤 줄 밖에 있어 줄 안 입력칸 · ✕ 위치를 재서 맞춘다(창 크기가 바뀌면 다시)
+  const findBoxRef = useRef(null);
+  const findBtnRef = useRef(null);
+  const [findPos, setFindPos] = useState(null);
+  useLayoutEffect(() => {
+    if (!findOpen) return;
+    const measure = () => {
+      const box = findBoxRef.current, btn = findBtnRef.current, host = box?.closest("[data-rank-find]");
+      if (!box || !btn || !host) return;
+      const a = box.getBoundingClientRect(), b = btn.getBoundingClientRect(), h = host.getBoundingClientRect();
+      setFindPos({ left: Math.round(a.left - h.left), width: Math.round(b.right - a.left) });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [findOpen]);
+  useEffect(() => {
+    const q = findQ.trim();
+    if (!findOpen || !q) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      fetch(`/api/xp/leaderboard?${new URLSearchParams({ period: rankMode, limit: String(RANK_PAGE_SIZE), q })}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => { if (alive) { setFindHits({ q, mode: rankMode, list: Array.isArray(d?.matches) ? d.matches : [] }); setFindSel(0); } })
+        .catch(() => { if (alive) setFindHits({ q, mode: rankMode, list: [] }); });
+    }, 200);
+    return () => { alive = false; clearTimeout(t); };
+  }, [findQ, findOpen, rankMode]);
+  const scrollToHit = useCallback(() => {
+    const el = document.querySelector('[data-rank-hit="1"]');
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    clearTimeout(hitTimerRef.current);
+    setHitFlash(0);
+    requestAnimationFrame(() => setHitFlash(Date.now()));
+    hitTimerRef.current = setTimeout(() => setHitFlash(0), 1500);
+  }, []);
+  useEffect(() => () => clearTimeout(hitTimerRef.current), []);
+  const pickHit = (h) => {
+    if (!h) return;
+    playTone(680, 0.05, "sine", 0.028);
+    setRankTarget(h.userId);
+    setFindQ(h.name);
+    setFindShow(false);
+    if (h.page !== rankPage) {
+      hitJumpRef.current = true;
+      setRankPage(h.page);
+    } else {
+      requestAnimationFrame(scrollToHit);
+    }
+  };
+  useEffect(() => {
+    if (rankLoading || !hitJumpRef.current) return;
+    hitJumpRef.current = false;
+    const id = requestAnimationFrame(scrollToHit);
+    return () => cancelAnimationFrame(id);
+  }, [rankLoading, rankRows, scrollToHit]);
+  const toggleFind = () => {
+    playTone(620, 0.04, "sine", 0.025);
+    if (findOpen) { setFindOpen(false); setFindQ(""); setFindHits(null); setFindShow(false); setRankTarget(""); return; }
+    setFindOpen(true);
+    requestAnimationFrame(() => findInputRef.current?.focus());
+  };
+  // 📌 빈 칸에서 Enter · ✕ — 랭킹 첫 화면으로(고른 줄 표시를 지우고 1쪽 · 맨 위) — 2026-10-31 운영자 "아무것도 없으면 다시 메인으로"
+  const backToRankTop = () => {
+    setRankTarget("");
+    setFindShow(false);
+    if (rankPage !== 0) goRankPage(0);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const onFindKey = (e) => {
+    if (e.key === "Enter" && !findQ.trim()) { e.preventDefault(); backToRankTop(); return; }
+    const list = findShow && findList ? findList : [];
+    if (e.key === "ArrowDown" && list.length) { e.preventDefault(); setFindSel((i) => (i + 1) % list.length); }
+    else if (e.key === "ArrowUp" && list.length) { e.preventDefault(); setFindSel((i) => (i - 1 + list.length) % list.length); }
+    else if (e.key === "Enter" && list.length) { e.preventDefault(); pickHit(list[Math.min(findSel, list.length - 1)]); }
+    else if (e.key === "Escape") { if (findShow) setFindShow(false); else toggleFind(); }
+  };
+  // 이름에서 찾은 글자만 빨갛게
+  const markFound = (name, q) => {
+    const s = String(name || ""), k = q.trim();
+    const i = k ? s.toLowerCase().indexOf(k.toLowerCase()) : -1;
+    if (i < 0) return s;
+    return <>{s.slice(0, i)}<span className="text-[#e91e3f]">{s.slice(i, i + k.length)}</span>{s.slice(i + k.length)}</>;
+  };
+  // 쪽 넘기기 — 처음 · 끝 · 번호 바로 입력(2026-10-31)
+  const goRankPage = (p) => {
+    const n = Math.max(0, Math.min(rankPages - 1, p));
+    if (n === rankPage) return;
+    playTone(n > rankPage ? 680 : 560, 0.04, "sine", 0.025);
+    setRankPage(n);
+  };
   // 랭킹 탭 한 줄(4위부터 · 목록 밖 내 줄) — 컴포넌트가 아니라 그리는 함수(렌더마다 새 컴포넌트가 되어 줄이 다시 붙지 않게)
-  const rankLine = (r, isMe) => (
+  //   검색으로 고른 줄(isHit)은 붉은 왼쪽 선 + 옅은 바탕 — 목록 밖 내 줄(따로 그린 줄)에는 붙이지 않는다(같은 사람이 두 번 표시되지 않게)
+  const rankLine = (r, isMe, outside = false) => {
+    const isHit = !outside && !!rankTarget && r.userId === rankTarget;
+    return (
     <div
       key={r.userId}
       data-rank-me={isMe ? "1" : undefined}
-      className={`flex items-center gap-3.5 py-3.5 transition-colors ${isMe ? "bg-[#e91e3f]/[0.05]" : ""}`}
-      style={isMe && rankFlash ? { animation: "rankMeFlash 1.4s ease-out" } : undefined}
+      data-rank-hit={isHit ? "1" : undefined}
+      className={`flex items-center gap-3.5 py-3.5 transition-colors ${isMe || isHit ? "bg-[#e91e3f]/[0.05]" : ""} ${isHit ? "shadow-[inset_3px_0_0_#e91e3f]" : ""}`}
+      style={(isMe && rankFlash) || (isHit && hitFlash) ? { animation: "rankMeFlash 1.4s ease-out" } : undefined}
     >
       {/* 순위 */}
       <span className={`shrink-0 w-9 text-center tabular-nums ${r.rank <= 3 ? "text-[15px] font-black text-[#e91e3f]" : "text-[13px] font-black text-[#a3a3a3]"}`}>
@@ -3529,7 +3588,8 @@ export default function LevelPage() {
         {rankMode === "voice" ? fmtVoiceTimeMin(r.voiceSeconds) : `${(r.xp || 0).toLocaleString()} XP`}
       </span>
     </div>
-  );
+    );
+  };
 
   const voiceTracked = isVoiceTimeTracked();
   const questPool = quests?.pool?.[questPeriod] || null;
@@ -3537,11 +3597,14 @@ export default function LevelPage() {
   const rrNow = !guest ? questPool?.reroll || null : null;
   const rrFree = Math.max(0, Number(rrNow?.left) || 0);
   const rrPrice = Math.max(0, Number(rrNow?.price) || 0);
-  const questRotates = !!(questPool && questPool.pick > 0 && questPool.total > questPool.shown);
-  const questDone = questRows.filter((q) => q.claimed || q.done).length;
-  const questTotal = questRows.length;
-  const questPct = Math.round((questDone / Math.max(1, questTotal)) * 100);
-  const questClaimable = questRows.filter((q) => q.claimable).length;
+  // 탭마다 진행 수(끝낸 것 / 전체) — 탭 옆 「2/3」
+  const questCount = { daily: [0, 0], weekly: [0, 0], monthly: [0, 0] };
+  for (const q of questAll) {
+    const c = questCount[q.period || "daily"];
+    if (!c) continue;
+    c[1] += 1;
+    if (q.claimed || q.done) c[0] += 1;
+  }
   // 탭에 붙일 '받을 수 있는 보상' 개수
   const claimableBy = { daily: 0, weekly: 0, monthly: 0 };
   for (const q of questAll) if (q.claimable) claimableBy[q.period || "daily"]++;
@@ -3550,6 +3613,7 @@ export default function LevelPage() {
 
   // 진행 중 이벤트 — 대시보드 맨 아래 판(EventBoard). null = 불러오는 중(자리를 잡는다), [] = 없음(판을 숨긴다)
   const [events, setEvents] = useState(null);
+  const [eventPosts, setEventPosts] = useState(null); // 이벤트 글 전부(끝난 것도) — 「시즌」 진행표의 이벤트 기간 띠
 
   // 모바일 대시보드 — 섹션을 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다
   const [mSec, setMSec] = useState("quest");
@@ -3567,41 +3631,148 @@ export default function LevelPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [meLoaded]);
   const dashCardRef = useRef(null);
+  // 📌 2026-11-02 랭킹 · 안내도 대시보드 판 안에서 — 운영자 "랭킹 탭을 눌러, 그러면 애니메이션으로 카드가 사라지고 왼쪽으로 선이 싹 늘어나, 그다음에 랭킹이 나오면".
+  //    deskView = 지금 그려 둔 판(my | rank | intro). 대시보드 ↔ 넓은 판(랭킹 · 안내)이 바뀌면 ① 지금 판이 빠지고(deskOut 220ms)
+  //    ② 판을 바꾼다 — 넓은 판이면 카드 묶음 · 대시보드 판을 숨기고 제목 줄 밑선이 왼쪽 끝까지 늘어난 뒤 내용이 올라온다(deskEnter — 늦춘 desk-in).
+  //    돌아올 땐 거꾸로(선이 줄고 카드가 왼쪽에서 들어온다). 탭 글자 · 시즌 줄은 늘 제자리. 랭킹 ↔ 안내는 내용만 바꿔 끼운다.
+  //    첫 화면(주소 ?tab=rank 로 바로 연 경우 등)은 움직임 없이 바로
+  const [deskView, setDeskView] = useState(activeMainTab);
+  const [deskOut, setDeskOut] = useState(false);
+  const [deskEnterN, setDeskEnterN] = useState(0); // 들어올 때마다 +1 — 같은 값이 이어져도 타이머를 새로 건다
+  const [deskEnter, setDeskEnter] = useState(false);
+  const [deskCardH, setDeskCardH] = useState(0); // 카드 묶음 높이 — 접히고 펴지는 애니메이션(max-height)이 쓴다
+  const deskMountAt = useRef(0);
+  const deskGridRef = useRef(null);
+  useEffect(() => { deskMountAt.current = performance.now(); }, []);
+  // 판 맨 위(시즌 줄 · 제목 줄 · 폰 섹션 줄) 자리 — 내려 본 채 판을 바꾸면 새 판 중간에 떨어지므로 그 아래로 올린다
+  const deskTopY = () => {
+    const g = deskGridRef.current;
+    if (!g || window.innerWidth < 1024) return null;
+    const hd = document.querySelector("header");
+    const HEAD = hd ? Math.round(hd.getBoundingClientRect().height) : 60;
+    return Math.max(0, Math.round(g.getBoundingClientRect().top + window.scrollY - HEAD - 12));
+  };
+  useEffect(() => {
+    // 빠지는 중에 원래 판으로 되돌아오면(빠지는 시간 안에 다시 누름) 옅어진 채로 남지 않게 되돌린다
+    if (activeMainTab === deskView) { setDeskOut(false); return; }
+    // 폰(lg 미만)은 카드가 그대로라 다른 섹션처럼 바로 바꾼다(빠짐 · 접힘 · 선은 PC 만)
+    if (performance.now() - deskMountAt.current < 800 || (activeMainTab === "my") === (deskView === "my") || window.innerWidth < 1024) {
+      startTransition(() => { setDeskView(activeMainTab); setDeskOut(false); });
+      return;
+    }
+    // 대시보드에서 나갈 때 — 카드 높이를 재 두고(접힘), 빠지는 동안 판 맨 위로 부드럽게 올린다(바뀐 뒤 툭 튀지 않게)
+    if (deskView === "my") { const h = dashCardRef.current?.offsetHeight; if (h) setDeskCardH(h); }
+    setDeskOut(true);
+    const top0 = deskTopY();
+    if (top0 != null && window.scrollY > top0 + 4) window.scrollTo({ top: top0, behavior: "smooth" });
+    // 📌 판 바꾸기는 나눠 그린다(startTransition) — 큰 판(대시보드 · 랭킹)을 한 번에 다시 그리면 느린 폰에서 0.1~0.2초 멈췄다(11/2 실측 · 운영자 "약간 버벅임")
+    const t = setTimeout(() => {
+      startTransition(() => {
+        setDeskView(activeMainTab);
+        setDeskOut(false);
+        setDeskEnter(true);
+        setDeskEnterN((n) => n + 1);
+      });
+      requestAnimationFrame(() => {
+        const top = deskTopY();
+        if (top != null && window.scrollY > top + 4) window.scrollTo({ top });
+      });
+    }, deskView === "my" ? 300 : 220);
+    return () => clearTimeout(t);
+  }, [activeMainTab, deskView]);
+  useEffect(() => {
+    if (!deskEnterN) return;
+    const t = setTimeout(() => setDeskEnter(false), 1100);
+    return () => clearTimeout(t);
+  }, [deskEnterN]);
+  const deskWide = deskView !== "my";
+  // 📌 랭킹을 다시 열면 첫 쪽(1위)부터 — 운영자 "내 순위로 누르고 다른 탭으로 갔다 다시 랭킹 누르면 그 자리 그대로야. 다시 1위 화면". 기준(현재 · 누적 …)은 그대로 둔다
+  const rankPrevMain = useRef(activeMainTab);
+  useEffect(() => {
+    if (activeMainTab === "rank" && rankPrevMain.current !== "rank") { setRankPage(0); setRankTarget(""); }
+    rankPrevMain.current = activeMainTab;
+  }, [activeMainTab]);
+  // 📌 2026-11-02 「나 / 시간」 — 섹션 줄 = 오른쪽 판의 시간: 오늘(지금 — 퀘스트 · 획득 피드 · 이벤트 글) · 기록(지난, 로그인했을 때만) · 목표(앞으로)
+  //    + 랭킹 · 안내(main — 따로 있던 탭 줄에서 옮겨 왔다. 폰 랭킹은 TOP 10 대신 전체 순위). 순서는 PC 제목 줄과 같다.
+  //    키 quest 가 「오늘」(옛 주소 · 퀘스트 배지를 그대로 쓴다)
   const mobSecs = [
-    { k: "quest", l: "퀘스트", icon: "flag", n: claimableAll },
-    { k: "rank", l: "랭킹", icon: "chart", n: 0 },
-    ...(events?.length > 0 ? [{ k: "event", l: "이벤트", icon: "gift", n: 0 }] : []),
-    { k: "feed", l: "획득 피드", icon: "clock", n: 0 },
-    { k: "table", l: "XP 테이블", icon: "receipt", n: 0 },
+    { k: "quest", l: "오늘", icon: "clock", n: claimableAll },
+    ...(!guest ? [{ k: "record", l: "기록", icon: "trend", n: 0 }] : []),
+    { k: "table", l: "목표", icon: "flag", n: 0 },
+    { k: "season", l: "시즌", d: "M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", n: 0, main: true },
+    { k: "rank", l: "랭킹", icon: "trophy", n: 0, main: true },
+    { k: "intro", l: "안내", d: "M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z", n: 0, main: true },
   ];
-  const mSecOn = mobSecs.some((x) => x.k === mSec) ? mSec : "quest";
-  // PC — 오른쪽 카테고리(현황 · XP 테이블). 현황이면 퀘스트 · 랭킹 · 피드를 다 펼치고, 아니면 그 카테고리 하나만
+  const mSecOn = mobSecs.some((x) => x.k === mSec && !x.main) ? mSec : "quest";
+  // PC — 오른쪽 위 단추(기록 · XP 테이블)를 켜면 그 판 하나만, 아니면 지금(퀘스트 · 랭킹 | 획득 피드). 넓은 판(랭킹 · 안내)이면 다 숨긴다
   //    📌 시뮬레이터는 2026-10-01 뺐다(나중에 다시 만들 예정 — 옛 코드는 14ae06a 이전 git 기록)
-  const deskOverview = mSecOn !== "table";
-  const secCls = (k) => `${mSecOn === k ? "block" : "hidden"} ${deskOverview ? "lg:block" : "lg:hidden"}`;
-  // 📌 옛 주소(?tab=table · ?tab=sim) — 테이블은 그 카테고리로, 시뮬레이터(없어짐)는 현황으로 연다
+  const deskOverview = mSecOn !== "table" && mSecOn !== "record";
+  // 판이 빠질 때 옅어지고(deskOut), 돌아와 들어올 때 늦춰 올라온다(deskEnter — 선이 다 줄어든 뒤)
+  // 돌아올 때 빈 화면이 길면 버벅여 보인다(운영자 "랭킹에서 오늘 기록 목표로 갈 때 약간 버벅임") — 선이 줄어드는 동안 카드 · 판이 겹쳐 들어온다. 폰은 선이 없어 더 일찍
+  const deskFx = deskOut ? "opacity-0 transition-opacity duration-200" : deskEnter ? "desk-in [--desk-d:200ms] max-lg:[--desk-d:80ms]" : "";
+  const secCls = (k) => (deskWide ? "hidden" : `${mSecOn === k ? "block" : "hidden"} ${deskOverview ? "lg:block" : "lg:hidden"} ${deskFx}`);
+  // 📌 옛 주소(?tab=table · ?tab=sim) — 테이블은 그 카테고리로, 시뮬레이터(없어짐)는 현황으로 연다. ?tab=record 는 기록
   //    주소 정리는 replaceState 로(위 ?tab=pass 와 같은 이유)
   useEffect(() => {
-    if (tabParam !== "table" && tabParam !== "sim") return;
-    setMSec(tabParam === "table" ? "table" : "quest");
+    if (tabParam !== "table" && tabParam !== "sim" && tabParam !== "record") return;
+    setMSec(tabParam === "sim" ? "quest" : tabParam);
     const u = new URL(window.location.href);
     u.searchParams.delete("tab");
     window.history.replaceState(null, "", u.pathname + u.search + u.hash);
   }, [tabParam]);
   const pickSec = (k) => {
-    setMSec(k);
+    // 랭킹 · 안내 — 폰은 카드를 그대로 두고 이 줄 바로 아래에(다른 섹션과 같다). 거기서 오늘 · 기록 · 목표를 고르면 대시보드 판으로
+    if (k === "season" || k === "rank" || k === "intro") setActiveMainTab(k);
+    else {
+      if (activeMainTab !== "my") setActiveMainTab("my");
+      setMSec(k);
+    }
     const nav = mNavRef.current, card = dashCardRef.current;
     // 아이콘 줄이 위에 붙어 있을 때만 — 새 섹션의 첫 줄이 줄 바로 아래에 오게 올린다
     if (nav && card && nav.getBoundingClientRect().top <= 64) {
       requestAnimationFrame(() => window.scrollTo({ top: card.getBoundingClientRect().bottom + window.scrollY + 20 - nav.getBoundingClientRect().top }));
     }
   };
+  // 「시즌」 판 「지난 시즌 ›」 — 「기록」으로 넘어가 지난 시즌 줄(#past-seasons)로 내린다. PC 는 카드가 다시 펼쳐진 뒤(넓은 판 → 대시보드 넘김이 끝난 다음)
+  const goPast = () => {
+    setActiveMainTab("my");
+    setMSec("record");
+    playTone(620, 0.04, "sine", 0.025);
+    const phone = window.innerWidth < 1024;
+    let n = 0;
+    const go = () => {
+      const el = document.getElementById("past-seasons");
+      if (!el) { if (++n < 30) setTimeout(go, 100); return; }
+      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - (phone ? 140 : 100)), behavior: "smooth" });
+    };
+    setTimeout(go, phone ? 80 : 900);
+  };
+  // 📌 2026-11-02 「기록」 재료(/api/xp/records — 출석 날짜 · 이번 달 출석 · 오늘 채팅 수). 「기록」을 볼 때만 읽는다.
+  //    보는 동안 1분마다 · 날이 바뀌거나(KST) 출석이 바뀌면 다시(자정을 넘겨 열어 둬도 어제를 오늘로 보지 않게)
+  const [rec, setRec] = useState(null);
+  const [recErr, setRecErr] = useState(false);
+  const recKey = session?.user?.id && me && activeMainTab === "my" && mSecOn === "record" ? `${session.user.id}|${kstTodayStr()}|${me.lastAttendDate || ""}|${me.attendCount || 0}` : "";
+  useEffect(() => {
+    if (!recKey) return;
+    let live = true;
+    const load = () =>
+      fetch("/api/xp/records", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => { if (!live) return; if (j?.success) { setRec(j.data); setRecErr(false); } else setRecErr(true); })
+        .catch(() => { if (live) setRecErr(true); });
+    load();
+    const t = setInterval(load, 60 * 1000);
+    return () => { live = false; clearInterval(t); };
+  }, [recKey]);
+
 
   // 📌 PC 대시보드 — 프로필 카드는 제자리에 서 있고 오른쪽 내용만 지나간다(2026-10-05 운영자 결정 "카드는 고정값이고 나머지가 움직이면" — 따라오기보다 "훨씬 깔끔하고 부드럽다").
   //    · 서 있는 자리 = 맨 위에서의 제자리(오른쪽 내용과 윗변이 맞는 곳). 화면이 낮아 다 안 들어가면 카드가 다 보일 만큼만 올라가 선다
   //    · 왼쪽 기둥(그리드 첫 줄) 안에서만 — 그 아래 전체 폭 섹션(획득 피드 등)을 덮지 않게, 기둥이 끝나면 같이 올라간다
   //    · 따라오기(가운데로 미끄러지기)는 "갑자기 훅 내려간다"로 반려 — 다시 만들지 말 것. 모바일(lg 미만)은 그대로
   const cardColRef = useRef(null);
+  const seasonRowRef = useRef(null);
+  const deskRowRef = useRef(null);
   const [fixTop, setFixTop] = useState(null);
   useEffect(() => {
     const col = cardColRef.current, card = dashCardRef.current;
@@ -3615,7 +3786,10 @@ export default function LevelPage() {
       const HEAD = Math.max(60, hd ? Math.round(hd.getBoundingClientRect().height) : 60);
       // 화면이 낮아 카드가 다 안 들어가면 붙이지 않는다 — 그냥 같이 스크롤(아래까지 내려 볼 수 있게)
       if (h + HEAD + 16 > H) { setFixTop(null); return; }
-      const home = Math.round(col.getBoundingClientRect().top + window.scrollY); // 맨 위에서의 자리
+      // 맨 위에서의 자리 — 기둥 맨 위 시즌 줄(2026-11-02) 아래
+      const sr = seasonRowRef.current;
+      const pre = sr && sr.offsetHeight ? sr.offsetHeight + (parseFloat(getComputedStyle(sr).marginBottom) || 0) : 0; // PC 는 시즌 줄이 없다(0)
+      const home = Math.round(col.getBoundingClientRect().top + window.scrollY + pre);
       setFixTop(Math.max(HEAD + 8, Math.min(home, H - h - 8)));
     };
     calc();
@@ -3638,7 +3812,7 @@ export default function LevelPage() {
     };
     fetch("/api/posts?category=이벤트", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setEvents((Array.isArray(d?.data) ? d.data : []).filter(ongoing).slice(0, 3)))
+      .then((d) => { const list = Array.isArray(d?.data) ? d.data : []; setEventPosts(list); setEvents(list.filter(ongoing).slice(0, 3)); })
       // 못 읽으면 없는 것으로 — 잡아 둔 자리를 거둔다
       .catch(() => setEvents([]));
   }, []);
@@ -3841,43 +4015,11 @@ export default function LevelPage() {
 
   // 시즌 D-Day (KST 기준) — 계산은 lib/season.js 단일 소스
   const seasonDday = useMemo(() => getSeasonDday(), []);
-
-  // 📌 탭 줄 — 일반 탭에서는 히어로 아래, ARCTIC 에서는 상점 헤더 바로 아래에 그린다.
-  //    ARCTIC 은 전역 헤더를 넘겨받은 화면이라 카테고리도 그 헤더에 붙어 있어야 자연스럽다.
-  // 📌 탭 줄 — 스토어의 유형 줄과 같은 문법(흰 줄 · 밑줄 탭). 화면마다 탭 모양이 달라지면 안 된다.
-  //    📌 모바일은 가로 스크롤 대신 같은 폭 칸으로 한 줄에 다 — 끝 탭이 잘려 보이면 안 된다.
-  //       ARCTIC 은 모바일 하단 독에 있으므로 모바일 탭 줄에서는 빼고, 긴 이름은 짧은 이름(short)으로.
-  const shownTabs = MAIN_TABS.filter((t) => (!t.shopOnly || canSeeShop) && (!t.passOnly || passEnabled));
-  const mobileTabCount = shownTabs.filter((t) => !t.href).length;
-  const tabBar = (
-    <div className="w-full bg-white border-b border-[#ededed]">
-      <div className="max-w-7xl mx-auto px-3 sm:px-5 md:px-6 flex items-center h-[52px] sm:h-[56px] md:h-[60px]">
-        <nav className="grid w-full sm:w-auto sm:flex items-center sm:gap-5 md:gap-7 sm:overflow-x-auto no-bar h-full min-w-0" style={{ gridTemplateColumns: `repeat(${mobileTabCount}, minmax(0, 1fr))` }}>
-          {shownTabs.map((tab) => {
-            const active = activeMainTab === tab.id;
-            const cls = `shrink-0 h-full items-center justify-center sm:justify-start text-[13px] sm:text-[14px] md:text-[15px] font-extrabold whitespace-nowrap transition-colors outline-none focus-visible:text-[#131313] ${
-              active ? "text-[#131313]" : "text-[#5a5a5a] hover:text-[#131313]"
-            }`;
-            // 밑줄은 글자 폭만큼 — 칸 폭 전체로 깔리면 모바일에서 탭이 덩어리로 보인다
-            const label = (
-              <span className="relative h-full flex items-center">
-                <span className="sm:hidden">{tab.short || tab.name}</span>
-                <span className="hidden sm:inline">{tab.name}</span>
-                {active && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-[#e91e3f]" />}
-              </span>
-            );
-            // ARCTIC 은 다른 세계(제 주소) — 탭 줄에서는 링크로 선다 (이동 규칙 2). 모바일은 독에 있으므로 숨김
-            if (tab.href) return <Link key={tab.id} href={tab.href} className={`hidden sm:flex ${cls}`}>{label}</Link>;
-            return (
-              <button key={tab.id} onClick={() => setActiveMainTab(tab.id)} className={`flex ${cls}`}>
-                {label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-    </div>
-  );
+  // 📌 2026-11-02 머리 정리 — 따로 있던 LEVEL 탭 줄(내 대시보드 · 랭킹 · ARCTIC · 시스템 안내 + 시즌 묶음 · 갱신 단추 · 폰 시즌 띠)을 없앴다.
+  //    탭은 대시보드 큰 제목 줄 「오늘 기록 목표 | 랭킹 안내」 한 벌로(운영자 "합친 거 좋은데"), 시즌은 카드 위 같은 높이 한 줄(아래 카드 칸).
+  //    갱신 단추는 뺐다 — 30초마다 · 창으로 돌아올 때 저절로 맞춘다(loadMe). ARCTIC 은 제목 줄 끝 글자(PC) · 폰은 아래 독
+  const seasonLabel = seasonDday.ended ? "시즌 종료" : `시즌 종료까지 ${seasonDday.days}일`;
+  const dLabel = seasonDday.ended ? "시즌 종료" : `D-${seasonDday.days}`;
 
   // 📌 예고 화면 — 비공개면 본문을 그리지 않는다. 세션·정책이 오기 전에는 판단을 미뤄 관리자에게 깜빡이지 않게 한다.
   //    훅은 전부 위에서 이미 호출됐으므로 여기서 갈라도 순서가 흔들리지 않는다.
@@ -3902,6 +4044,365 @@ export default function LevelPage() {
     );
   }
 
+  // 📌 2026-11-02 넓은 판(랭킹 · 안내) — 대시보드 격자 안 전체 폭 칸으로 그린다(폰 섹션 줄 sticky 가 이 판 위에서도 붙어 있게).
+  //    내 정보를 못 읽은 화면(격자 없음)에서도 같은 판을 쓴다 — 랭킹 · 안내는 내 정보와 상관없는 공개 값.
+  //    안내 = 한눈에 읽히는 안내판(app/level/SystemGuide, 숫자는 지금 설정값). 랭킹 = 기준 탭 · 검색 · 시상대 · 순위 줄 · 쪽 넘기기.
+  //    「시스템 안내」 · 「서버 랭킹」 제목 줄은 탭 이름과 겹쳐 뺐다(운영자 첫 시안 "ㅈㄴ 별론데") — 화면 읽기용 제목만 남긴다. 인원수는 기준 줄 오른쪽
+  const deskPanelFx = deskOut ? "opacity-0 transition-opacity duration-200" : deskEnter ? "desk-in [--desk-d:360ms]" : "";
+  const introPanel = () => (
+          <>
+            <h2 className="sr-only">시스템 안내</h2>
+            <SystemGuide
+              P={P}
+              chatBase={P_chatBase}
+              chatCooldownLabel={P_chatCooldownLabel}
+              voiceMin={P_voiceMin}
+              policy={policy}
+              pass={pass}
+              passEnabled={passEnabled}
+              enhOpen={enhOpen}
+              canSeeShop={canSeeShop}
+              seasonDday={seasonDday}
+              me={me}
+              tierIdx={tierIdx}
+            />
+          </>
+  );
+  // 「시즌」 — 간판 · 진행 · 내 시즌 기록 · 결산 때 받는 것 · 시즌 한정(./SeasonView)
+  const seasonPanel = () => (
+    <>
+      <h2 className="sr-only">시즌</h2>
+      <SeasonView
+        me={me}
+        guest={guest}
+        user={session?.user}
+        todayTotal={todayTotal}
+        seasonTotal={lb.total?.me?.xp ?? null}
+        seasonRank={lb.total?.me?.rank ?? 0}
+        seasonMembers={lb.total?.members ?? lb.total?.total ?? 0}
+        passEnabled={passEnabled}
+        passTiers={passTiers}
+        passTierNo={passTierNo}
+        passMaxTier={passMaxTier}
+        eventPosts={eventPosts}
+        tierCur={tierCur}
+        canSeeShop={canSeeShop}
+        onPast={guest ? undefined : goPast}
+        onPass={guest ? undefined : openPass}
+      />
+    </>
+  );
+  const rankPanel = () => (
+          <>
+          <h2 className="sr-only">서버 랭킹</h2>
+          <Reveal>
+
+            {/* 기준 — 현재 / 누적 / 이번 달 / 음성 시간
+                📌 2026-11-02 알약 → 글자 탭(퀘스트 주기 탭과 같은 결 — 색만 바뀜, 운영자 "랭킹 이 부분도 바꿔"). 굵기 · 크기가 같아 고를 때 탭 줄이 안 움직인다.
+                글자 탭 넷 + [검색] + [내 순위로]가 폰 360 한 줄에 들어간다([내 순위로]는 폰에서 화살표만 — 2026-10-31 시안대로) */}
+            {/* 📌 2026-11-02 검색은 이 줄 안에서 펼친다(운영자 「ㄱㄱ」 — 아래에 검은 상자 줄이 새로 생겨 시상대를 밀던 것 "짜치는"):
+                  PC 는 인원수 자리에 밑줄 입력칸, 폰(md 아래)은 입력칸이 탭 자리를 잠깐 덮는다(닫으면 탭 그대로). 줄 높이는 늘 32 — 아래가 안 움직인다.
+                  결과는 줄 밖(이 relative 칸 기준)에 뜬 흰 창 — 줄은 가로 스크롤 칸이라 안에 두면 잘린다. z-30: 시상대 붉은 빛무리가 창 위로 번지지 않게 */}
+            <div data-rank-find className="relative z-30 mb-6">
+            <div className="flex items-center gap-3 overflow-x-auto no-bar">
+              <div role="tablist" aria-label="랭킹 기준" className={`flex items-center gap-3.5 sm:gap-5 ${findOpen ? "max-md:hidden" : ""}`}>
+                {RANK_MODES.map((m) => {
+                  const on = rankMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      onClick={() => { setRankMode(m.id); setRankPage(0); setRankTarget(""); setFindShow(!!findQ.trim()); playTone(620, 0.04, "sine", 0.025); }}
+                      className={`shrink-0 whitespace-nowrap h-8 text-[15px] sm:text-[16px] font-black leading-8 transition-colors outline-none focus-visible:underline ${
+                        on ? "text-[#131313]" : "text-[#b5b5b5] hover:text-[#5a5a5a]"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* 📌 검색 — 누구나(랭킹은 공개). 오른쪽 끝 묶음의 첫 칸(ml-auto) — 켜면 먹 테. 검색 · 내 순위로 사이는 예전 간격(6) 그대로 */}
+              <span className={`ml-auto shrink-0 flex items-center gap-1 sm:gap-1.5 ${findOpen ? "max-md:flex-1 max-md:min-w-0 max-md:ml-0" : ""}`}>
+              {findOpen ? (
+                // 검색 칸 — 밑줄만(상자 없음). 이름 일부 → 이 기준의 순위로 최대 5명(↑↓ 고르기 · Enter 이동 · Esc 닫기). 고르면 그 쪽으로 넘겨 그 줄을 가운데 + 번쩍
+                <span ref={findBoxRef} className="rank-find-anim flex items-center gap-2 h-8 mr-1.5 sm:mr-2 border-b-2 border-[#131313] max-md:flex-1 max-md:min-w-0 md:w-[260px] lg:w-[300px]" style={{ animation: "rankFindGrow .26s cubic-bezier(0.16,1,0.3,1)" }}>
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-[15px] h-[15px] shrink-0 text-[#131313]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></svg>
+                  <input
+                    ref={findInputRef}
+                    value={findQ}
+                    onChange={(e) => { setFindQ(e.target.value); setFindShow(true); }}
+                    onKeyDown={onFindKey}
+                    onFocus={() => { if (findQ.trim()) setFindShow(true); }}
+                    onBlur={() => setFindShow(false)}
+                    maxLength={20}
+                    placeholder="닉네임"
+                    aria-label="닉네임으로 찾기"
+                    role="combobox"
+                    aria-expanded={findShow && !!findList}
+                    className="flex-1 min-w-0 h-full bg-transparent outline-none text-[15px] max-md:text-[16px] font-extrabold text-[#131313] placeholder:text-[#a3a3a3] placeholder:font-bold"
+                  />
+                  {findQ && (
+                    <button
+                      type="button"
+                      aria-label="지우기"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { setFindQ(""); backToRankTop(); findInputRef.current?.focus(); }}
+                      className="shrink-0 w-6 h-6 inline-flex items-center justify-center text-[#a3a3a3] hover:text-[#131313] transition-colors outline-none"
+                    >
+                      <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                    </button>
+                  )}
+                </span>
+              ) : rankMembers || rankTotal ? (
+                // 인원수 — 예전 「서버 랭킹」 제목 줄 오른쪽에 있던 것. 읽기 전(0)이면 칸만. 검색을 펴면 그 자리를 입력칸이 쓴다
+                <span className="hidden sm:inline shrink-0 mr-2 text-[11px] font-bold text-[#a3a3a3] tabular-nums">{(rankMembers || rankTotal).toLocaleString()}명</span>
+              ) : (
+                <span aria-hidden className="hidden sm:block shrink-0 mr-2 w-9 h-3 rounded-sm bg-black/[0.06] animate-pulse" />
+              )}
+              {/* 돋보기 — 펴면 먹 동그라미 ✕(누르면 닫힘) */}
+              <button
+                ref={findBtnRef}
+                type="button"
+                onClick={toggleFind}
+                aria-label={findOpen ? "검색 닫기" : "랭킹 검색"}
+                aria-expanded={findOpen}
+                className={`shrink-0 inline-flex items-center justify-center w-[30px] h-[30px] rounded-full border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${findOpen ? "border-[#131313] bg-[#131313] text-white hover:bg-[#3a3a3a] hover:border-[#3a3a3a]" : "border-[#a3a3a3] bg-white text-[#131313] hover:border-[#131313]"}`}
+              >
+                {findOpen ? (
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                ) : (
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></svg>
+                )}
+              </button>
+              {/* 📌 내 순위로 — 로그인하면 늘 같은 자리(오른쪽 끝). 이 기준에 내 순위가 없으면(음성 0 등) 흐리게 — 생기고 사라지며 줄이 밀리지 않게. 폰은 화살표만 */}
+              {authReady && session?.user && (
+                <button
+                  type="button"
+                  onClick={goMyRank}
+                  // 마지막으로 읽은 결과로만 정한다 — 읽는 동안은 직전 상태 그대로(쪽 · 기준을 넘길 때마다 흐림 ↔ 진함으로 깜빡이지 않게).
+                  // 기준을 바꾼 직후(새 기준을 읽는 중) 누르면 다 읽은 뒤 내 쪽으로(goMyRank)
+                  disabled={!rankMe.row}
+                  aria-label="내 순위로"
+                  className="shrink-0 whitespace-nowrap inline-flex items-center justify-center gap-1 w-[30px] h-[30px] sm:w-auto sm:px-3.5 rounded-full border border-[#a3a3a3] bg-white text-[11px] sm:text-[12px] font-bold text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 enabled:hover:border-[#131313] disabled:opacity-40 disabled:cursor-default"
+                >
+                  <span className="hidden sm:inline">내 순위로</span>
+                  <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              )}
+              </span>
+            </div>
+            {/* 결과 — 뜬 흰 창(16px 모서리 · 패널 그림자, 상자 줄 없음) — 입력칸 왼쪽 끝 ~ ✕ 오른쪽 끝(findPos), 재기 전엔 줄 전체 폭 */}
+            {findOpen && findShow && findList && (
+              <div
+                role="listbox"
+                className="rank-find-anim absolute top-full mt-2.5 left-0 right-0 p-1.5 rounded-2xl border border-[#ededed] bg-white shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]"
+                style={{ animation: "rankFindIn .18s cubic-bezier(0.16,1,0.3,1)", ...(findPos ? { left: findPos.left, right: "auto", width: findPos.width } : null) }}
+              >
+                {findList.length ? (
+                  findList.map((h, i) => (
+                    <button
+                      key={h.userId}
+                      type="button"
+                      role="option"
+                      aria-selected={i === findSel}
+                      onMouseEnter={() => setFindSel(i)}
+                      // 누르는 동안 칸의 초점을 지킨다(초점이 빠지면 목록이 먼저 닫혀 고르기가 안 된다)
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickHit(h)}
+                      className={`w-full flex items-center gap-3 h-11 px-3 rounded-[10px] text-left outline-none transition-colors ${i === findSel ? "bg-[#f4f4f5]" : "bg-white"}`}
+                    >
+                      <span className="shrink-0 w-8 text-[12px] font-black text-[#a3a3a3] tabular-nums">{h.rank.toLocaleString()}</span>
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-[#131313]">{markFound(h.name, findQ)}</span>
+                      <span className="shrink-0 text-[11px] font-extrabold text-[#8a8a8a] tabular-nums">Lv {h.level ?? 0}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="h-11 px-3 flex items-center text-[12px] font-bold text-[#a3a3a3]">
+                    {RANK_MODES.find((m) => m.id === rankMode)?.label} 순위에 없는 이름입니다
+                  </p>
+                )}
+              </div>
+            )}
+            </div>
+
+            <div ref={rankBoxRef} style={rankLoading && rankBoxH ? { minHeight: rankBoxH } : undefined}>
+            {rankLoading ? (
+              // 로딩 뼈대 — 첫 쪽은 시상대까지, 다른 쪽은 순위 줄만(./LevelSkeletons.js, 2026-10-31)
+              <RankListSkeleton podium={rankPage === 0} rows={7} />
+            ) : rankRows.length === 0 ? (
+              <EmptySlot>
+                {rankMode === "voice"
+                  ? `누적 음성 시간은 ${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계됩니다`
+                  : rankMode === "month"
+                  ? "이번 달 획득 기록이 아직 없습니다"
+                  : "아직 기록이 없습니다"}
+              </EmptySlot>
+            ) : (
+              <>
+                {/* 시상대 — 1~3위를 프로필 사진으로 크게. 첫 페이지에서만 나온다.
+                    가운데가 1위, 왼쪽 2위, 오른쪽 3위. 단상 높이로 순위를 한 번 더 말한다. */}
+                {rankPage === 0 && rankRows.length >= 3 && (
+                  <div className="relative mb-10 pt-6">
+                    {/* 1위 뒤에서 번지는 빛 */}
+                    <div
+                      aria-hidden
+                      className="absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[240px] rounded-full blur-[90px] pointer-events-none"
+                      style={{ background: "rgba(233,30,63,0.16)" }}
+                    ></div>
+
+                    <div className="relative grid grid-cols-3 gap-2 sm:gap-5 items-end">
+                      {[rankRows[1], rankRows[0], rankRows[2]].map((r) => {
+                        const first = r.rank === 1;
+                        const c = r.rank === 1 ? "#e91e3f" : r.rank === 2 ? "#8a8a8a" : "#a06a3c";
+                        const isMe = r.userId === session?.user?.id;
+                        const isHit = !!rankTarget && r.userId === rankTarget; // 검색으로 고른 사람 — 번쩍임만(시상대는 이미 눈에 띈다)
+                        const tier = VOICE_TIERS[getTierIndex(r.level || 0)];
+                        const pedestal = first ? "h-16 sm:h-24" : r.rank === 2 ? "h-10 sm:h-16" : "h-7 sm:h-11";
+                        return (
+                          <div
+                            key={r.userId}
+                            data-rank-me={isMe ? "1" : undefined}
+                            data-rank-hit={isHit ? "1" : undefined}
+                            className="flex flex-col items-center text-center min-w-0 rounded-t-2xl"
+                            style={(isMe && rankFlash) || (isHit && hitFlash) ? { animation: "rankMeFlashPodium 1.4s ease-out" } : undefined}
+                          >
+                            {/* 1위 왕관 */}
+                            {first && (
+                              <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6 sm:w-7 sm:h-7 mb-1.5" fill="#e91e3f">
+                                <path d="M3 8.5 7 12l5-7 5 7 4-3.5-1.8 10H4.8Z" />
+                                <rect x="4.6" y="19" width="14.8" height="2.2" rx="1.1" />
+                              </svg>
+                            )}
+
+                            {r.avatarFrame ? <PodiumFramed r={r} c={c} first={first} /> : (
+                            <span className="relative shrink-0">
+                              <span
+                                className={`block rounded-full overflow-hidden ${first ? "w-20 h-20 sm:w-28 sm:h-28" : "w-14 h-14 sm:w-20 sm:h-20"}`}
+                                style={{ boxShadow: `0 0 0 3px ${c}, 0 18px 36px -16px ${c}` }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e0e0e0]" />
+                              </span>
+                              {/* 순위는 원에 겹쳐 붙인다 — 따로 두면 원 크기가 달라 높이가 어긋난다 */}
+                              <span
+                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#ffffff] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
+                                style={{ backgroundColor: c }}
+                              >
+                                {r.rank}
+                              </span>
+                            </span>
+                            )}
+
+                            <p className={`${r.avatarFrame ? "mt-2" : "mt-5"} w-full flex items-center justify-center gap-1 min-w-0 font-black ${first ? "text-[14px] sm:text-[15px]" : "text-[12px] sm:text-[13px]"} ${isMe ? "text-[#e91e3f]" : "text-[#131313]"}`}>
+                              <span className="min-w-0 truncate">{r.name}</span>
+                              <RankBadges badges={r.badges} />
+                            </p>
+
+                            {/* 등급 · 레벨 — 등급은 레벨에서 바로 나온다. 레벨은 아래 목록 줄과 같은 "Lv.161"(시상대에만 빠져 있었다)
+                                📌 2026-10-11 운영자 "랭크 티어 표기 너무 빈약하다" → 등급 칩(A안 — 연한 등급색 바탕 · 등급색 테 알약 안에 엠블럼 18 · 이름 · Lv).
+                                   폰은 시상대 칸이 100px 남짓(360px 폰 실측 101px — 한 줄에 다 넣으면 "실버"도 잘림)이고 줄이 쌓여 "복닥복닥" →
+                                   칩은 엠블럼 + Lv 만(등급은 엠블럼 · 칩 색으로, 운영자 C안 — "PC 도 티어 이름 표기는 필요 없을 듯"). 이름 → 칩 → XP 세 줄 */}
+                            <span
+                              className="inline-flex items-center gap-1 sm:gap-[5px] mt-2 h-6 sm:h-[26px] pl-1.5 pr-2 sm:pl-[7px] sm:pr-2.5 rounded-full max-w-full min-w-0"
+                              // 📌 2026-10-31 운영자 "이거 테두리 좀 없애" — 옅은 등급색 바탕만(테두리 선 뺌)
+                              style={{ backgroundColor: hexA(tier.c, 0.08) }}
+                            >
+                              <span className="sm:hidden inline-flex shrink-0"><TierEmblem tier={tier} size={16} onDark={false} /></span>
+                              <span className="hidden sm:inline-flex shrink-0"><TierEmblem tier={tier} size={18} onDark={false} /></span>
+                              <span className="shrink-0 text-[11px] sm:text-[11.5px] font-extrabold text-[#6b6b76] tabular-nums">Lv.{r.level ?? 0}</span>
+                            </span>
+
+                            <p className={`font-black text-[#131313] tabular-nums mt-2 whitespace-nowrap ${first ? "text-[12px] sm:text-[15px]" : "text-[12px]"}`}>
+                              {rankMode === "voice" ? fmtVoiceTimeMin(r.voiceSeconds) : `${(r.xp || 0).toLocaleString()} XP`}
+                            </p>
+
+                            {/* 단상 */}
+                            <div
+                              className={`w-full mt-3 rounded-t-xl ${pedestal}`}
+                              style={{ background: `linear-gradient(180deg, ${c}2e, ${c}08)`, boxShadow: `inset 0 1px 0 ${c}55` }}
+                            ></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div aria-hidden className="relative h-px bg-black/[0.10]"></div>
+                  </div>
+                )}
+
+                {/* 📌 내 줄 — 이 쪽 목록에 내가 없으면 한 줄(목록에 있으면 그 줄 강조만). 내가 이 쪽보다 앞이면 목록 위, 뒤면 목록 아래 — 순위 순서가 뒤집히지 않게.
+                       목록과 같은 응답으로 오므로 늦게 끼어들며 줄을 밀지 않는다(앞쪽은 2쪽부터라 시상대와 겹치지 않는다) */}
+                {myRank && !rankRows.some((r) => r.userId === myRank.userId) && myRank.rank < (rankRows[0]?.rank ?? 0) && (
+                  <>
+                    <div className="border-y border-black/[0.08]">{rankLine(myRank, true, true)}</div>
+                    <div aria-hidden className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
+                  </>
+                )}
+
+                <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
+                  {(rankPage === 0 && rankRows.length >= 3 ? rankRows.slice(3) : rankRows).map((r) => rankLine(r, !!session?.user?.id && r.userId === session.user.id))}
+                </div>
+
+                {myRank && !rankRows.some((r) => r.userId === myRank.userId) && myRank.rank >= (rankRows[0]?.rank ?? 0) && (
+                  <>
+                    <div aria-hidden className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
+                    <div className="border-y border-black/[0.08]">{rankLine(myRank, true, true)}</div>
+                  </>
+                )}
+
+                {/* 페이지 — 옆으로 넘겨 다음 순위를 본다. 📌 2026-10-31 처음 · 끝 단추 + 쪽 번호 칸(눌러서 바로 입력 · Enter 또는 칸 밖을 누르면 이동). 폰은 단추 글자 없이 기호만 */}
+                {rankPages > 1 && (() => {
+                  const pagerBtn = "inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-30 disabled:cursor-default bg-black/[0.04] text-[#5a5a5a] enabled:hover:bg-black/[0.08] enabled:hover:text-[#131313]";
+                  const commit = (el) => {
+                    const n = parseInt(el.value, 10);
+                    if (Number.isFinite(n) && n >= 1 && n <= rankPages) goRankPage(n - 1);
+                    el.value = String(Number.isFinite(n) && n >= 1 && n <= rankPages ? n : rankPage + 1);
+                  };
+                  return (
+                    <div className="flex items-center justify-between gap-2 sm:gap-4 mt-6">
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={() => goRankPage(0)} disabled={rankPage === 0} aria-label="처음 쪽" className={pagerBtn}>
+                          <span aria-hidden>«</span><span className="hidden sm:inline">처음</span>
+                        </button>
+                        <button type="button" onClick={() => goRankPage(rankPage - 1)} disabled={rankPage === 0} aria-label="이전 쪽" className={pagerBtn}>
+                          <span aria-hidden>←</span><span className="hidden sm:inline">이전</span>
+                        </button>
+                      </div>
+
+                      <span className="flex items-center gap-1.5 text-[12px] font-black text-[#a3a3a3] tabular-nums">
+                        <input
+                          key={rankPage}
+                          defaultValue={rankPage + 1}
+                          inputMode="numeric"
+                          aria-label={`쪽 번호(1 ~ ${rankPages})`}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+                          onBlur={(e) => commit(e.currentTarget)}
+                          className="w-11 h-[30px] text-center border border-[#a3a3a3] bg-white text-[12px] max-md:text-[16px] font-black text-[#131313] tabular-nums outline-none focus:border-[#131313]"
+                        />
+                        <span>/ {rankPages}</span>
+                      </span>
+
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={() => goRankPage(rankPage + 1)} disabled={rankPage >= rankPages - 1} aria-label="다음 쪽" className={pagerBtn}>
+                          <span className="hidden sm:inline">다음</span><span aria-hidden>→</span>
+                        </button>
+                        <button type="button" onClick={() => goRankPage(rankPages - 1)} disabled={rankPage >= rankPages - 1} aria-label="끝 쪽" className={pagerBtn}>
+                          <span className="hidden sm:inline">끝</span><span aria-hidden>»</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+            </div>
+          </Reveal>
+          </>
+  );
+
   return (
     // ⚠️ main에 overflow-hidden 금지 — 하위 sticky(탭바)가 죽는다. 글로우 가로 넘침은 body의 overflow-x: clip이 전역 처리
     <main className="w-full flex-1 flex flex-col relative">
@@ -3922,6 +4423,14 @@ export default function LevelPage() {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
         }
+        /* 📌 2026-11-02 대시보드 ↔ 넓은 판(랭킹 · 안내) — 들어오는 판은 살짝 올라오며, 카드는 왼쪽에서(늦춤은 붙는 쪽에서 [--desk-d:…] — 줄임말 animation 이 animation-delay 를 0 으로 덮어서 변수로 넘긴다) */
+        @keyframes deskIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes deskCardOut { from { clip-path: inset(0 0 0 0 round 24px); max-height: var(--card-h, 900px); opacity: 1; } to { clip-path: inset(0 0 100% 0 round 24px); max-height: 0; opacity: 0.35; } }
+        @keyframes deskCardIn { from { clip-path: inset(0 0 100% 0 round 24px); max-height: 0; opacity: 0.35; } to { clip-path: inset(0 0 0 0 round 24px); max-height: var(--card-h, 900px); opacity: 1; } }
+        .desk-in { animation: deskIn 0.34s cubic-bezier(0.2,0.8,0.2,1) var(--desk-d, 0s) both; }
+        .desk-card-out { animation: deskCardOut 0.3s cubic-bezier(0.55,0,0.7,0.25) forwards; }
+        .desk-card-in { animation: deskCardIn 0.38s cubic-bezier(0.2,0.8,0.2,1) var(--desk-d, 0s) backwards; }
+        @media (prefers-reduced-motion: reduce) { .desk-in, .desk-card-in, .desk-card-out { animation: none; } }
         @keyframes toastIn {
           from { opacity: 0; transform: translateY(-12px) scale(0.97); }
           to { opacity: 1; transform: translateY(0) scale(1); }
@@ -3992,6 +4501,16 @@ export default function LevelPage() {
           from { opacity: 0; transform: translateY(16px) scale(0.985); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
+        /* 랭킹 검색 — 입력칸은 오른쪽(돋보기 쪽)부터 펼쳐지고, 결과 창은 살짝 내려오며 나타난다 */
+        @keyframes rankFindIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes rankFindGrow {
+          from { clip-path: inset(0 0 0 100%); }
+          to   { clip-path: inset(0 0 0 0); }
+        }
+        @media (prefers-reduced-motion: reduce) { .rank-find-anim { animation: none !important; } }
         /* 랭킹 [내 순위로] — 내 줄이 한 번 진하게 번쩍였다가 평소 강조(accent 5%)로 돌아온다 */
         @keyframes rankMeFlash {
           0%, 35% { background-color: rgba(233,30,63,0.16); }
@@ -4019,7 +4538,7 @@ export default function LevelPage() {
         }
       `}} />
 
-      <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} baseXp={P.voiceXp} intervalMin={P_voiceMin} enhanceBonus={enh.voice.bonus} history={me?.seasonHistory} />
+      <TierModal open={tierOpen} onClose={() => setTierOpen(false)} level={me?.level || 0} intervalMin={P_voiceMin} />
       <EnhanceModal open={enhModal} onClose={closeEnh} enh={enh} discount={enhDisc} balance={me} busy={!!enhBusy} onEnhance={enhance} gain={gain} voiceMin={P_voiceMin} policy={P} onTone={(k) => playTone(ENH_KIND[k]?.tone || 620, 0.04, "sine", 0.025)} />
       <PassModal
         open={passOpen}
@@ -4041,15 +4560,14 @@ export default function LevelPage() {
         user={session?.user}
       />
       <ConfirmDialog state={confirmState} onDone={closeConfirm} />
-      <WalletHistory open={walletOpen} onClose={closeWallet} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
-      <GainFxModal open={fxOpen && !!me} onClose={closeFx} gain={gain} voiceMin={P_voiceMin} items={myItems?.items} loading={myItems === null} perks={me?.perks} policy={P} />
       <BagOverlay
         // 📌 인벤토리 「꾸미기」 무대 카드 글자(시안 A — 레벨 페이지 카드와 같은 값)
+        //    📌 2026-11-01 이름은 서버 별명 — /api/xp/me displayName, 없으면 세션 별명(lib/nick)
         cardInfo={me && !guest ? {
-          name: session?.user?.name || "", rank: me.rank, total: me.total, top: rankPct, level: me.level,
+          name: me?.displayName || nickOf(session?.user), rank: me.rank, total: me.total, top: rankPct, level: me.level,
           tierName: tierCur.name, tierColor: tierCur.c, pct: progPct,
           cur: prog.current.toLocaleString(), req: prog.required.toLocaleString(), need: prog.needToNext.toLocaleString(),
-          stats: [["현재 XP", (me.xp || 0).toLocaleString()], ["오늘 획득", `+${todayTotal.toLocaleString()}`], ["누적 출석", `${(me.attendCount || 0).toLocaleString()}일`], ["누적 음성 시간", fmtVoiceTimeMin(me.voiceSeconds)]],
+          stats: [["현재 XP", (me.xp || 0).toLocaleString()], ["최고 레벨", `Lv ${Math.max(me.level || 0, me.maxLevel || 0).toLocaleString()}`], ["연속 출석", `${(me.attendStreak || 0).toLocaleString()}일`], ["누적 음성 시간", fmtVoiceTimeMin(me.voiceSeconds)]],
         } : null}
         open={bagOpen}
         onClose={closeBag}
@@ -4073,6 +4591,14 @@ export default function LevelPage() {
           setMyItems((cur) => (cur ? { ...cur, cardScene: k } : cur));
           setMe((cur) => (cur ? { ...cur, cardScene: k } : cur));
         }}
+        // 레벨 막대(2026-10-31)도 착용 · 해제 즉시 프로필 카드에 — { cardBarPick, cardBar }
+        cardBar={myItems?.cardBar || ""}
+        cardBarPick={myItems?.cardBarPick || ""}
+        onBarChange={(v) => {
+          barSavedRef.current = { at: Date.now(), v };
+          setMyItems((cur) => (cur ? { ...cur, ...v } : cur));
+          setMe((cur) => (cur ? { ...cur, ...v } : cur));
+        }}
         badges={myItems?.badges}
         // 배지 착용 · 해제 즉시 내 정보 배지도 바꾼다(다음 폴링을 기다리지 않게).
         // 📌 랭킹 줄은 건드리지 않는다 — 랭킹은 구매 기준 배지만 보여서(lib/itemPerks badgesOfUsers) 이 목록을 넣으면 남에게 안 보이는 배지가 잠깐 뜬다
@@ -4088,6 +4614,9 @@ export default function LevelPage() {
           setMyItems((cur) => (cur ? { ...cur, avatarFrame: k } : cur));
           setMe((cur) => (cur ? { ...cur, avatarFrame: k } : cur));
         }}
+        // 📌 유물(2026-11-02 — 아직 체험으로만) — 착용 · 꾸미기 즉시 프로필 카드에
+        relic={me?.relic || null}
+        onRelicChange={(v) => setMe((cur) => (cur ? { ...cur, relic: v || undefined } : cur))}
       />
 
       {ACHIEVEMENTS_ON && (
@@ -4121,53 +4650,22 @@ export default function LevelPage() {
 
       {promo && <PromoOverlay from={promo.from} to={promo.to} onClose={closePromo} />}
 
-      {/* ── 탭 줄 — 어떤 탭이든 헤더 바로 아래 같은 자리. 여기가 움직이면 안 된다. ── */}
-      {tabBar}
-
-      {/* 대시보드 탭은 좌우 공간을 쓰는 와이드 HUD(7xl), 문서형 탭은 기존 에디토리얼 폭 유지 */}
-      <div className={`w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 ${activeMainTab === "my" ? "py-6 md:py-10" : "py-10 md:py-14"}`}>
-        {/* ── 머리 한 줄 — 큰 제목(히어로)을 없앤 자리. 선으로 따로 떼지 않고 본문 맨 위에 작게:
-               왼쪽 워드마크 · 시즌 이름, 오른쪽 D-day · 동기화 점 · 갱신 (PC 는 동기화 글자 · 마지막 갱신 시각까지) ── */}
-        <div className="flex items-center justify-between gap-4 mb-6 md:mb-8">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h1 className="text-[20px] md:text-[26px] font-black tracking-tighter leading-none whitespace-nowrap">
-              <span className="text-[#131313]">SYSTEM</span>
-              <span className="text-[#e91e3f] mx-1">:</span>
-              <span className="lux-shimmer">LEVEL</span>
-            </h1>
-            <span className="hidden sm:inline text-[12px] font-black text-[#d01634] whitespace-nowrap">SEASON {SEASON.number} · {SEASON.name}</span>
-            {/* 📌 핫타임 알약은 2026-10-25 카드 바로 아래 띠로 옮겼다(운영자 "상단이 아니라 카드 아래로") — ./HotTime.js */}
-          </div>
-          <div className="inline-flex items-center gap-2 md:gap-2.5 text-[12px] font-bold text-[#5a5a5a] tabular-nums whitespace-nowrap">
-            {seasonDday.ended ? "시즌 종료" : <><span className="sm:hidden">시즌 </span><span className="hidden sm:inline">종료까지 </span>D-{seasonDday.days}</>}
-            {authReady && session?.user && (
-              <>
-                <span className="hidden md:inline text-[#d4d4d4]" aria-hidden>·</span>
-                <span aria-label="실시간 동기화 중" title="실시간 동기화 중"><LiveDot /></span>
-                <span className="hidden md:inline text-[11px] text-[#5a5a5a]">실시간 동기화</span>
-                {lastSync && <span className="hidden md:inline text-[11px] text-[#8a8a8a]">{lastSync.toLocaleTimeString("ko-KR", { hour12: false })}</span>}
-                <button onClick={() => loadMe().then(() => pushToast("동기화 완료"))} className="text-[11px] font-bold text-[#5a5a5a] hover:text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 border border-[#a3a3a3] rounded-full px-2.5 py-0.5">갱신</button>
-              </>
-            )}
-          </div>
-        </div>
+      {/* 와이드 HUD(7xl). 📌 2026-11-02 어느 탭이든 위아래 여백이 같다 — 탭이 대시보드 제목 줄에 있어 여백이 다르면 탭 글자가 움직인다 */}
+      <div className="w-full max-w-7xl mx-auto px-5 md:px-8 flex-1 py-6 md:py-10">
+        {/* 📌 2026-10-31 운영자 "솔직히 난잡하지 않냐" → 본문 맨 위 머리 줄(워드마크 · 시즌 꼬리표 · D-day 막대)을 뺐다 — 「SYSTEM : LEVEL」은 맨 위 사이트 줄에 이미 있다.
+               2026-11-02 따로 있던 탭 줄도 뺐다 — 탭은 대시보드 제목 줄, 시즌은 카드 위 한 줄. 제목은 화면 읽기용으로만 남긴다.
+               핫타임 알약은 2026-10-25 카드 바로 아래 띠로 옮겼다(운영자 "상단이 아니라 카드 아래로") — ./HotTime.js */}
+        <h1 className="sr-only">SYSTEM : LEVEL</h1>
 
 
-        {/* ══ TAB : MY DASHBOARD — 게임 프로필 화면 ══
+        {/* ══ 대시보드 판 — 게임 프로필 화면 ══
                앵커는 플레이어 배너(레벨 링 + 대형 레벨 + 와이드 XP 게이지) 하나.
-               아래는 8:4 비대칭 2열, 한국어 우선 섹션 타이틀, 헤어라인 행 배치 ══ */}
-        {activeMainTab === "my" && (
+               아래는 8:4 비대칭 2열, 한국어 우선 섹션 타이틀, 헤어라인 행 배치.
+               📌 2026-11-02 랭킹 · 안내도 이 판의 제목 줄 · 시즌 줄 아래에 그린다(카드 묶음 · 대시보드 판은 숨김 — deskWide) ══ */}
+        {(
           <div className="relative">
-            {/* ── 로딩 스켈레톤 ── */}
-            {(!authReady || (session?.user && !meLoaded)) && (
-              <div>
-                <div className="h-56 rounded-2xl animate-pulse bg-black/[0.03] mb-8"></div>
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  <div className="lg:col-span-8 h-64 animate-pulse bg-black/[0.02] rounded-2xl"></div>
-                  <div className="lg:col-span-4 h-64 animate-pulse bg-black/[0.02] rounded-2xl"></div>
-                </div>
-              </div>
-            )}
+            {/* ── 로딩 뼈대 — 다 불러온 대시보드와 같은 틀(./LevelSkeletons.js, 2026-10-31) ── */}
+            {(!authReady || (session?.user && !meLoaded)) && <DashSkeleton view={deskView} />}
 
             {/* ── 내 프로필 — 로그인 · 로그인 전(잠김)이 같은 판 ──
                    📌 2026-10-04 로그인 전에도 로그인한 사람과 같은 대시보드(프로필 카드 · 퀘스트 · 랭킹 · 피드 · XP 테이블 · 이벤트)를 그린다.
@@ -4175,26 +4673,35 @@ export default function LevelPage() {
                       값은 지어내지 않는다(— 로 비움). 프로필 카드 위에 자물쇠 + 로그인(사이트 공통 로그인 창), 퀘스트 · 피드는 잠김 칸.
                       랭킹 · XP 테이블 · 이벤트 · 1회 획득(정책 기본값)은 누구에게나 같은 공개 값이라 그대로 */}
             {authReady && (guest || (session?.user && meLoaded && me)) && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-5 lg:gap-y-14 items-start">
+              <div ref={deskGridRef} className="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-5 lg:gap-y-14 items-start">
 
                 {/* 왼쪽 기둥 — 세로 프로필 카드. PC 에서는 제자리에 서 있고 오른쪽 내용만 지나간다(기둥 높이 = 그리드 첫 줄, 오른쪽 열 끝까지) */}
                 <div ref={cardColRef} className="contents lg:block lg:col-span-4 lg:self-stretch min-w-0">
+                    {/* 📌 시즌 줄(카드 위)은 2026-11-02 「시즌」 탭으로 옮겨 뺐다 */}
                     {/* 📌 카드 묶음(2026-10-17) — 프로필 카드 + 바로 아래 이벤트 패스 띠를 한 덩어리로 세운다(PC 고정 · 폰 맨 앞).
-                           잰 높이(fixTop) · 폰 섹션 이동(pickSec)은 이 묶음 기준 */}
-                    <div ref={dashCardRef} className="order-first lg:sticky lg:z-20" style={{ top: fixTop ?? undefined }}>
+                           잰 높이(fixTop) · 폰 섹션 이동(pickSec)은 이 묶음 기준.
+                           📌 2026-11-02 PC 넓은 판(랭킹 · 안내)에서는 숨긴다(폰은 그대로 — 섹션 줄 아래에 판만 바뀐다) — 빠질 땐 위(제목 줄 밑선 쪽)로 접혀 들어가고(desk-card-out — 아래부터 잘려 올라가며 높이도 줄어 폰은 아래 줄이 따라 올라온다),
+                           돌아올 땐 선이 다 줄어든 뒤 위에서 펴진다(desk-card-in). 운영자 "너무 그냥 사라진다" — 옅어지기만 하던 것을 바꿨다 */}
+                    <div
+                      ref={dashCardRef}
+                      className={`order-first lg:sticky lg:z-20 ${deskWide ? "lg:hidden" : ""} ${deskWide ? "" : deskOut ? "desk-card-out" : deskEnter ? "desk-card-in [--desk-d:140ms] max-lg:[--desk-d:40ms]" : ""}`}
+                      style={{ top: fixTop ?? undefined, "--card-h": deskCardH ? `${deskCardH}px` : undefined }}
+                    >
                     {/* 프로필 카드 — 위에서 아래로: 정체성 → 레벨 → 등급 → 경험치 → 인벤토리 · 시즌 패스 · 강화 → 스탯 */}
                     <div
                       className="relative rounded-3xl overflow-hidden shadow-[0_30px_70px_-30px_rgba(0,0,0,0.5)]"
                       style={{ background: `radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, guest ? 0.1 : 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%), linear-gradient(180deg, #1b1b1b 0%, #131313 55%)` }}
                     >
                       {/* 📌 카드 배경(2026-10-15) — 맨 아래 겹에 장면 · 그 위 등급 빛(옅게). 배경이 있으면 바둑판 무늬는 뺀다 */}
-                      {!guest && me?.cardScene ? (
+                      {relicOn ? (
+                        <RelicLayers pick={me.relic} pct={progPct / 100} levelUpAt={relicLvAt} xpAt={relicXpAt} />
+                      ) : !guest && me?.cardScene ? (
                         <SceneBack scene={me.cardScene} glow={`radial-gradient(420px 320px at 86% 30%, ${hexA(tierCur.c, 0.26)} 0%, ${hexA(tierCur.c, 0)} 72%)`} />
                       ) : (
                         <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>
                       )}
                       {/* 📌 착용한 카드 테두리 — 봇 이미지 카드와 같은 액자를 옅게(등급 색과 헷갈리지 않게 색이 아니라 테두리 · 무늬로) */}
-                      {me?.cardSkin && <SkinFrame skin={me.cardSkin} scene={me?.cardScene || ""} />}
+                      {me?.cardSkin && !relicOn && <SkinFrame skin={me.cardSkin} scene={me?.cardScene || ""} />}
                       {!guest && <span aria-hidden className="hidden lg:block absolute -right-3 -bottom-10 text-[150px] font-black text-white/[0.035] leading-none tracking-tighter tabular-nums select-none pointer-events-none">{me.level}</span>}
 
                       {/* 📌 로그인 전 — 카드는 그대로 두고 흐리게, 위에 자물쇠 + 로그인 하나(누르면 사이트 공통 로그인 창) */}
@@ -4223,31 +4730,31 @@ export default function LevelPage() {
                           {/* 📌 착용한 아바타 테두리 — 사진 가운데에 겹친다(감싼 칸이 relative). 이름 줄이 relative 라 테두리 끝보다 위에 그려진다.
                               테두리를 낀 사람만 등급만큼 사진 칸에 여백(frameRoom) — 카드 모서리에 잘리거나 이름 · 칩에 닿지 않게 */}
                           {/* 📌 2026-10-10 운영자 "모바일에서 프로필이 왜 이리 작지?" → 사진 54 → 62px(링 76 → 86px) */}
-                          <span className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(me?.avatarFrame, avatarPx.m, { box: 86, pad: 20, gap: 16 })}>
-                            <RingGauge pct={progPct} size={86} stroke={5} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
+                          <span data-relic-avatar className="relative shrink-0 lg:hidden" style={guest ? undefined : frameRoom(relicOn ? "" : me?.avatarFrame, avatarPx.m, { box: 86, pad: 20, gap: 16 })}>
+                            <RingGauge pct={progPct} size={86} stroke={5} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && (!!me?.avatarFrame || relicOn)}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="rounded-full object-cover" style={{ width: avatarPx.m, height: avatarPx.m }} />
                               ) : (
-                                <span className="rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60" style={{ width: avatarPx.m, height: avatarPx.m }}>{guest ? <GuestAvatar className="w-8 h-8" /> : (me?.displayName || session.user.name || "?").slice(0, 1)}</span>
+                                <span className="rounded-full bg-white/10 flex items-center justify-center text-xl font-black text-white/60" style={{ width: avatarPx.m, height: avatarPx.m }}>{guest ? <GuestAvatar className="w-8 h-8" /> : (me?.displayName || nickOf(session.user) || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
-                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.m} />}
+                            {!guest && !relicOn && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.m} />}
                           </span>
-                          <span className="relative hidden lg:block" style={guest ? undefined : frameRoom(me?.avatarFrame, avatarPx.d, { box: 96, pad: 28, gap: 20 })}>
-                            <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && !!me?.avatarFrame}>
+                          <span data-relic-avatar className="relative hidden lg:block" style={guest ? undefined : frameRoom(relicOn ? "" : me?.avatarFrame, avatarPx.d, { box: 96, pad: 28, gap: 20 })}>
+                            <RingGauge pct={progPct} size={96} stroke={6} trackClass="rgba(255,255,255,0.12)" hideRing={!guest && (!!me?.avatarFrame || relicOn)}>
                               {session?.user?.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={session.user.image} alt="" className="rounded-full object-cover" style={{ width: avatarPx.d, height: avatarPx.d }} />
                               ) : (
-                                <span className="rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: avatarPx.d, height: avatarPx.d }}>{guest ? <GuestAvatar className="w-9 h-9" /> : (me?.displayName || session.user.name || "?").slice(0, 1)}</span>
+                                <span className="rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: avatarPx.d, height: avatarPx.d }}>{guest ? <GuestAvatar className="w-9 h-9" /> : (me?.displayName || nickOf(session.user) || "?").slice(0, 1)}</span>
                               )}
                             </RingGauge>
-                            {!guest && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.d} />}
+                            {!guest && !relicOn && <AvatarFrame frame={me?.avatarFrame} px={avatarPx.d} />}
                           </span>
                           <div className="relative min-w-0 flex-1">
                           {/* 📌 2026-10-24 이름 = 서버 별명(/api/xp/me displayName — 랭킹 · 피드와 같은 이름), 없으면 로그인 이름 */}
-                          <FitName className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none" text={guest ? "— — —" : (me?.displayName || session.user.name)} />
+                          <FitName className="max-w-full text-xl lg:text-[26px] font-black text-white truncate tracking-tight leading-none" text={guest ? "— — —" : (me?.displayName || nickOf(session.user))} />
                           <div className="flex flex-wrap items-center gap-2 mt-3">
                             <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-white/20 text-[11px] font-bold text-white/75 tabular-nums">
                               {guest ? "랭크 —" : <>랭크 #{me.rank.toLocaleString()}<span className="text-white/40 ml-1">/ {me.total.toLocaleString()}</span></>}
@@ -4261,7 +4768,7 @@ export default function LevelPage() {
                         {/* 레벨 — 카드의 얼굴. 등급은 바로 아래 한 줄, 안내는 버튼으로 연다 */}
                         <div className="mt-6 lg:mt-7 pt-5 lg:pt-6 border-t border-white/10">
                           <p className="text-[10px] font-black tracking-[0.35em] text-white/40 uppercase mb-2.5">LEVEL</p>
-                          <p className="text-[52px] lg:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{guest ? "—" : me.level}</p>
+                          <p data-relic-level className="text-[52px] lg:text-6xl font-black text-white tabular-nums tracking-[-0.04em] leading-[0.85]">{guest ? "—" : me.level}</p>
                           {/* 📌 2026-10-11 운영자 "등급 안내 버튼을 옮기자" — 등급 줄 오른쪽 단추가 등급 카드 스킨 깃발을 잘라 먹었다(단추 위에서 끊김).
                                  단추를 빼고 등급 줄(문장 · 이름 · 다음 등급) 자체를 눌러 등급 창을 연다 — 이름 옆 ⓘ 하나만(운영자가 › · 「등급 안내」 글자 · ⓘ 중 고름). 아이콘 줄은 업적 칸 자리라 늘리지 않는다.
                                  지난 시즌 등급도 나중에 이 창에서 */}
@@ -4310,10 +4817,13 @@ export default function LevelPage() {
 
                         {/* 경험치 — 막대 하나, 글자 둘 */}
                         <div className="mt-6">
-                          {/* 📌 카드 배경이 막대 모양을 정하면(유령 펭귄의 밤 — 「유령 꼬리」 · 바람의 클로버 언덕 — 「덩굴 줄기」) 그 막대로, 아니면 기본 막대 */}
-                          {!guest && sceneBarOf(me?.cardScene) === "ghostTrail" ? (
+                          {/* 📌 레벨 막대(2026-10-31 — 카드 배경에서 떼어 따로 끼운다): 고른 막대 · 안 골랐으면 입은 배경의 짝 막대(유령 꼬리 · 덩굴 줄기) · 아니면 기본 막대 */}
+                          {relicOn ? (
+                            // 유물 막대는 RelicLayers 가 이 자리에 그린다(자리만 남김)
+                            <div data-skin-bar className="h-2.5"></div>
+                          ) : !guest && cardBarStyle === "ghostTrail" ? (
                             <div data-skin-bar className="ml-[12px]"><GhostTrailBar pct={progPct} /></div>
-                          ) : !guest && sceneBarOf(me?.cardScene) === "cloverVine" ? (
+                          ) : !guest && cardBarStyle === "cloverVine" ? (
                             <div data-skin-bar><CloverVineBar pct={progPct} /></div>
                           ) : (
                             <div data-skin-bar className="h-2.5 rounded-full bg-white/10 overflow-hidden">
@@ -4387,40 +4897,42 @@ export default function LevelPage() {
                         {/* 스탯 — 두 줄 두 칸. 선은 위 한 줄과 가운데 세로선만. 빙옥은 재화라 뺐다 */}
                         {/* 스탯 — 예전엔 폰에서 XP 테이블을 볼 때 접었다. 2026-10-25 운영자 "제발 모바일에서 XP 테이블 켰을 때 아래부분 없어지는 거 개선 좀" → 늘 보인다 */}
                         {/* data-skin-line — 카드 스킨(항해도 · 새로운 세계)이 배 · 섬을 이 선 위에 얹는다(SkinFrame) */}
-                        <div data-skin-line className="grid grid-cols-2 mt-4 pt-2 border-t border-white/10">
-                          {[
-                            { l: "현재 XP", v: guest ? "—" : (me.xp || 0).toLocaleString(), wallet: true },
-                            { l: "오늘 획득", v: guest ? "—" : `+${todayTotal.toLocaleString()}`, hot: todayTotal > 0, fx: true },
-                            { l: "누적 출석", v: guest ? "—" : `${(me.attendCount || 0).toLocaleString()}일` },
-                            voiceTracked
-                              ? { l: "누적 음성 시간", v: guest ? "—" : fmtVoiceTimeMin(me.voiceSeconds) }
-                              : { l: "누적 음성 시간", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true },
-                          ].map((st, i) => (
-                            <div key={i} className={`min-w-0 py-3 ${i % 2 === 0 ? "pr-4 border-r border-white/10" : "pl-4"}`}>
-                              {st.wallet || st.fx ? (
-                                // 📌 XP · 빙옥 내역 — 라벨 줄 안의 작은 알약. 음수 여백으로 줄 높이를 키우지 않아 옆 칸과 높이가 그대로다
-                                // 📌 2026-10-11 운영자 D안 — 카드 맨 아래 '1회 획득' 세 칸 줄(채팅 · 음성 · 출석)을 빼고 '오늘 획득' 옆 [효과] 알약 하나로.
-                                //    누르면 세부 효과 창(1회 획득 항목별 내역 · 아이템 효과 · 상시 효과). 막대 밑 한 줄 · 카드 밖 띠 · 스탯 밑 작은 줄 · 바닥 띠 · ⓘ 는 반려
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                  <p className="min-w-0 text-[11px] font-bold text-white/45 truncate">{st.l}</p>
-                                  <button
-                                    type="button"
-                                    onClick={st.fx ? openFx : openWallet}
-                                    aria-haspopup="dialog"
-                                    aria-label={st.fx ? "1회 획득 · 세부 효과" : "XP · 빙옥 내역"}
-                                    className="shrink-0 -my-1 inline-flex items-center h-5 px-2 rounded-full border border-white/20 text-[10px] font-bold text-white/60 hover:text-white hover:border-white/45 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                                  >
-                                    {st.fx ? "효과" : "내역"}
-                                  </button>
-                                </div>
-                              ) : (
-                                <p className="text-[11px] font-bold text-white/45 mb-2 truncate">{st.l}</p>
-                              )}
-                              <p className={`text-lg font-black tabular-nums tracking-tight leading-none truncate ${st.hot ? "text-[#ff5c77]" : st.dim ? "text-white/30" : "text-white"}`}>
-                                {st.v}
-                              </p>
-                            </div>
-                          ))}
+                        {/* 📌 2026-11-02 카드 아래 = 운영자 시안 5번 「XP 크게 + 아래 셋」("모양 그대로 넣어" — 반려 · 새 배치 16개 중 .claude/mockups/card-stats/sheet13).
+                               현재 XP 한 줄 크게 → 최고 레벨 · 연속 출석 · 누적 음성 세 칸. 선은 맨 위(스킨이 얹히는 선) 한 줄만 — 운영자 "선이 너무 많긴 한딩" → 가운데 가로선 · 세로선은 뺐다. 단위는 작게, 음성은 시간까지(1시간 전에는 분).
+                               연속 출석은 오늘 아직이면 이름 옆 빨간 점(누적 · 최고 · 달력은 「기록」). 「내역」 · 「효과」 알약 없음 */}
+                        <div data-skin-line className="mt-4 border-t border-white/10">
+                          <div className="pt-3.5 pb-3">
+                            <p className="text-[11px] font-bold text-white/45 mb-2">현재 XP</p>
+                            <p className="text-[30px] font-black tabular-nums tracking-[-0.03em] leading-none truncate text-white">
+                              {guest ? "—" : (me.xp || 0).toLocaleString()}
+                              {!guest && <span className="ml-0.5 text-[11px] font-bold text-white/45 tracking-normal">XP</span>}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-x-4">
+                            {(() => {
+                              const vh = Math.floor((Number(me?.voiceSeconds) || 0) / 3600);
+                              return [
+                                { l: "최고 레벨", v: guest ? "—" : `Lv ${Math.max(me.level || 0, me.maxLevel || 0).toLocaleString()}` },
+                                { l: "연속 출석", v: guest ? "—" : (me.attendStreak || 0).toLocaleString(), u: guest ? "" : "일", dot: !guest && !attendedToday },
+                                !voiceTracked
+                                  ? { l: "누적 음성", v: `${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터`, dim: true }
+                                  : guest ? { l: "누적 음성", v: "—" }
+                                  : vh > 0 ? { l: "누적 음성", v: vh.toLocaleString(), u: "시간" }
+                                  : { l: "누적 음성", v: fmtVoiceTimeMin(me.voiceSeconds) },
+                              ];
+                            })().map((st, i) => (
+                              <div key={i} className="min-w-0 pt-1 pb-3">
+                                <p className="flex items-center gap-1.5 min-w-0 text-[11px] font-bold text-white/45 mb-[7px]">
+                                  <span className="truncate">{st.l}</span>
+                                  {st.dot && <span aria-label="오늘 아직 출석 전" className="shrink-0 w-1.5 h-1.5 rounded-full bg-[#e91e3f]"></span>}
+                                </p>
+                                <p className={`text-base font-black tabular-nums tracking-tight leading-none truncate ${st.dim ? "text-white/30" : "text-white"}`}>
+                                  {st.v}
+                                  {st.u && <span className="ml-0.5 text-[11px] font-bold text-white/45 tracking-normal">{st.u}</span>}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
 
@@ -4440,22 +4952,22 @@ export default function LevelPage() {
                 </div>
 
                 {/* 오른쪽 — 퀘스트는 위 한 줄 전체(내용이 잘리지 않게), 목록 둘은 아래에 반씩 */}
-                <div className="contents lg:grid lg:grid-cols-2 lg:gap-x-10 lg:gap-y-14 lg:col-span-8 lg:items-start min-w-0">
-                    {/* 모바일 — 아래로 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다 */}
+                <div className="contents lg:grid lg:grid-cols-2 lg:gap-x-10 lg:gap-y-14 lg:col-span-8 lg:col-start-5 lg:items-start min-w-0">
+                    {/* 모바일 — 아래로 길게 늘어놓지 않고 아이콘으로 골라 하나씩 본다(랭킹 · 안내는 넓은 판 — 카드가 빠지고 그 자리에) */}
                     <nav ref={mNavRef} aria-label="대시보드 섹션" className={`lg:hidden sticky top-14 md:top-[60px] z-30 -mx-5 px-5 md:-mx-8 md:px-8 border-b border-[#ededed] transition-colors ${mNavStuck ? "bg-white" : "bg-transparent"}`}>
                       <div className="grid grid-flow-col auto-cols-fr">
                         {mobSecs.map((x) => {
-                          const on = mSecOn === x.k;
+                          const on = x.main ? activeMainTab === x.k : activeMainTab === "my" && mSecOn === x.k;
                           return (
                             <button
                               key={x.k}
                               onClick={() => pickSec(x.k)}
                               aria-pressed={on}
-                              className={`relative flex flex-col items-center justify-center gap-1 h-14 outline-none focus:outline-none transition-colors ${on ? "text-[#131313]" : "text-[#a3a3a3]"}`}
+                              className={`relative flex flex-col items-center justify-center gap-1 h-14 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#e91e3f]/40 transition-colors ${on ? "text-[#131313]" : "text-[#a3a3a3]"}`}
                             >
                               <span aria-hidden className="relative">
                                 <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                  <path d={ICON_PATHS[x.icon]} strokeLinecap="round" strokeLinejoin="round" />
+                                  <path d={x.d || ICON_PATHS[x.icon]} strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                                 {x.n > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{x.n}</span>}
                               </span>
@@ -4467,196 +4979,235 @@ export default function LevelPage() {
                       </div>
                     </nav>
 
-                    {/* 📌 PC 맨 위 한 줄 — [이벤트 띠 | XP 테이블]. 2026-10-25 운영자 "현황 이라는 거 좀 맘에 안드는데 · 약간 다르게 배치" → 「현황 · XP 테이블」 밑줄 탭을 뺐다.
-                           XP 테이블 단추를 누르면 창 없이 그 자리에서 아래(퀘스트 · 랭킹 · 피드)가 XP 테이블로 바뀌고("굳이 창으로 띄우는 건 비효율적"), 단추가 먹 테 · ✕ 로 — 한 번 더 누르면 돌아온다.
-                           단추 폭 168px 고정(✕ 는 켰을 때만 오른쪽 끝에 얹음) — 눌러도 이벤트 띠 폭 · 줄이 안 움직인다. 그림자 없음("뒤에 그림자 빼면 어때?" → 단색 + 흰 단추는 1px 테).
-                           이벤트가 없으면 단추만 오른쪽 끝(같은 자리). 아래 줄과 사이는 −mb-6(32px). 폰은 아래 아이콘 줄이 같은 일을 한다(이벤트 띠는 카드 아래 그대로) */}
-                    <div className="hidden lg:flex lg:col-span-2 lg:-mb-6 gap-3">
-                      {evItems.length > 0 && eventBtn("flex flex-1 min-w-0", true)}
-                      <button
-                        type="button"
-                        aria-pressed={!deskOverview}
-                        onClick={() => { setMSec(deskOverview ? "table" : "quest"); playTone(620, 0.04, "sine", 0.025); }}
-                        className={`relative ml-auto shrink-0 w-[168px] flex items-center gap-2.5 h-14 pl-5 pr-[18px] rounded-2xl bg-white text-[#131313] text-[15px] font-black tracking-[-0.01em] transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${deskOverview ? "shadow-[inset_0_0_0_1px_#e3e3e6] hover:shadow-[inset_0_0_0_1px_#c9c9ce]" : "shadow-[inset_0_0_0_2px_#131313]"}`}
+                    {/* 📌 PC 맨 위 한 줄 — 큰 제목 탭 「오늘 · 기록 · XP 테이블」 + 오른쪽 끝 이벤트 알약(2026-11-02 운영자 A안 "일단 a안으로 가봐").
+                           예전(10/25~11/2) [이벤트 띠 | 기록 | XP 테이블] 단추 줄은 "이벤트가 위에 있긴한데 좀 어색해 · 아래 바로 카테고리가 있으니"로 뺐다.
+                           탭은 글자 굵기 · 크기가 같고 색만 바뀐다(켜진 판 먹 · 나머지 흐림) — 눌러도 줄이 안 움직인다. 아래 선은 이 줄에 한 번만(운영자 "기록 아래에 선 있고 나머지는 없고 · 통일").
+                           「XP 테이블」 → 「목표」(앞으로 — 계산기 · Lv N 까지 · 레벨 표). 「오늘」 = 지금(퀘스트 · 랭킹 · 획득 피드),
+                           「기록」 = 지난(로그인했을 때만), 「XP 테이블」 = 앞으로. 이벤트 알약은 진행 중 이벤트가 있을 때만(빨간 숫자 = 받을 것의 합). 폰은 아래 아이콘 줄이 같은 일을 한다 */}
+                    {/* 📌 2026-11-02 따로 있던 LEVEL 탭 줄을 이 줄로 합쳤다 — 「오늘 기록 목표 | 랭킹 안내」(내 시간 셋 | 넓은 판 둘, 가는 세로선) ……… 시즌 · 이벤트.
+                           탭 글자는 대시보드 판 사이에서는 제자리, 넓은 판으로 갈 때만 밑선을 따라 왼쪽 끝으로 간다(운영자 "상단 탭도 약간 움직여야").
+                           밑선은 따로 그린 한 줄(absolute) — 넓은 판(랭킹 · 안내)이면 왼쪽 시즌 줄 아래까지 늘어난다(카드 칸 4 + 틈 4 = 이 줄 폭의 절반 + 20px — 격자 gap-x-10 기준이라 재지 않는다. 주소로 바로 열어도 처음부터 그 길이).
+                           ARCTIC 은 이벤트 알약 왼쪽 글자(xl 부터 — 좁은 PC 는 위 사이트 줄 「콘텐츠」에 있다) */}
+                    <div ref={deskRowRef} role="navigation" aria-label="LEVEL" className="relative hidden lg:flex lg:col-span-2 lg:-mb-6 items-center h-16 pb-4">
+                      {/* 탭 묶음 — 넓은 판(랭킹 · 안내)이면 밑선과 같은 시간 · 같은 곡선으로 왼쪽 끝(카드 칸 자리)까지 미끄러진다.
+                             겹 폭 = 줄 폭이라 translateX(-50% - 20px) = 카드 칸 4 + 틈 4(밑선과 같은 길이). 겹은 누르기를 막지 않는다(pointer-events) */}
+                      <div
+                        className="absolute left-0 top-0 w-full h-12 flex items-center gap-[18px] xl:gap-[22px] pointer-events-none transition-transform duration-[380ms] ease-[cubic-bezier(.4,0,.2,1)]"
+                        style={{ transform: deskWide ? "translateX(calc(-50% - 20px))" : "none" }}
                       >
-                        <svg aria-hidden viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${deskOverview ? "text-[#e91e3f]" : "text-[#131313]"}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.receipt} strokeLinecap="round" strokeLinejoin="round" /></svg>
-                        <span>XP 테이블</span>
-                        {/* ✕ 는 켰을 때만 — 오른쪽 끝에 얹어(absolute) 글자 자리가 안 움직인다. 기본 › 는 뺐다(운영자 "> 이 화살표는 뭔가 안 어울리긴하는데" — 그 자리에서 바뀌는 단추라) */}
-                        {!deskOverview && <svg aria-hidden viewBox="0 0 24 24" className="absolute right-[18px] top-1/2 -translate-y-1/2 w-4 h-4 text-[#131313]" fill="none" stroke="currentColor" strokeWidth="2.4"><path d={ICON_PATHS.close} strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                      </button>
+                      {[
+                        { k: "quest", l: "오늘" },
+                        ...(!guest ? [{ k: "record", l: "기록" }] : []),
+                        { k: "table", l: "목표" },
+                        { k: "season", l: "시즌", main: true },
+                        { k: "rank", l: "랭킹", main: true },
+                        { k: "intro", l: "안내", main: true },
+                      ].map((t) => {
+                        const on = t.main ? activeMainTab === t.k : activeMainTab === "my" && (t.k === "quest" ? deskOverview : mSecOn === t.k);
+                        return (
+                          <Fragment key={t.k}>
+                            {t.k === "season" && <i aria-hidden className="shrink-0 w-[1.5px] h-5 bg-[#d6d6d6]"></i>}
+                            <button
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => {
+                                if (on) return;
+                                if (t.main) { setActiveMainTab(t.k); return; }
+                                if (activeMainTab !== "my") setActiveMainTab("my");
+                                setMSec(t.k);
+                                playTone(620, 0.04, "sine", 0.025);
+                              }}
+                              className={`pointer-events-auto shrink-0 text-[24px] font-black tracking-[-0.02em] leading-8 transition-colors outline-none focus-visible:underline focus-visible:underline-offset-8 focus-visible:decoration-2 ${on ? "text-[#131313]" : "text-[#c4c4c4] hover:text-[#8a8a8a]"}`}
+                            >
+                              {t.l}
+                            </button>
+                          </Fragment>
+                        );
+                      })}
+                      </div>
+                      {/* 오른쪽 끝 — 이벤트. 시즌은 「시즌」 탭으로(2026-11-02 — 여기 꼬리표는 운영자 "별론데"), ARCTIC 은 「시즌」 판 시즌 상점 · 위 사이트 줄 「콘텐츠」 · 폰 독 */}
+                      <span className="ml-auto shrink-0 flex items-center gap-5">
+                      {evItems.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={openEvents}
+                          aria-haspopup="dialog"
+                          aria-label={evTotal > 0 ? `이벤트 ${evTotal}` : "이벤트"}
+                          className={`group shrink-0 inline-flex items-center gap-2.5 h-12 pl-5 pr-4 rounded-full text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${evTotal > 0 ? "bg-[#e91e3f] hover:bg-[#d01634]" : "bg-[#131313] hover:bg-[#1f1f1f]"}`}
+                        >
+                          <svg aria-hidden viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${evTotal > 0 ? "text-white" : "text-[#ff5c77]"}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.gift} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <span className="text-[15px] font-black leading-5">이벤트</span>
+                          {evTotal > 0 && (
+                            <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-white text-[#e91e3f] text-[12px] font-black leading-[22px] text-center tabular-nums">{evTotal > 99 ? "99+" : evTotal}</span>
+                          )}
+                          <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="2.4"><path d={ICON_PATHS.chevronRight} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </button>
+                      )}
+                      </span>
+                      {/* 밑선 — 넓은 판이면 왼쪽 끝(시즌 줄 아래)까지 싹 늘어나고, 돌아오면 다시 준다 */}
+                      <span
+                        aria-hidden
+                        className="absolute bottom-0 right-0 h-px bg-[#131313] transition-[left] duration-[380ms] ease-[cubic-bezier(.4,0,.2,1)]"
+                        style={{ left: deskWide ? "calc(-50% - 20px)" : 0 }}
+                      ></span>
                     </div>
 
                     {/* 일일 퀘스트 — 출석(봇 지급) + 관리자가 정의한 퀘스트(원클릭 수령) */}
                     <section className={`${secCls("quest")} lg:col-span-2`}>
-                      <div className="flex items-end justify-between mb-5">
-                        {/* 📌 모두 받기 — 받을 수 있는 퀘스트(주기 상관없이)가 있을 때만. 제목 옆에 붙어 오른쪽 완료 수는 그대로,
-                               단추(h-7)가 제목 줄 높이(28 · 32px) 안이라 생기고 사라져도 머리 줄 높이가 같다 */}
-                        <div className="flex items-center gap-3 min-w-0">
-                          <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">퀘스트</h3>
-                          {claimableAll > 0 && (
-                            <button
-                              type="button"
-                              onClick={claimAllQuests}
-                              disabled={!!claiming}
-                              className="relative shrink-0 inline-flex items-center h-7 px-3 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
-                            >
-                              {/* 받는 중에도 단추 폭은 그대로 — 글자만 가리고 그 자리에 … */}
-                              <span className={claiming === "all" ? "invisible" : undefined}>모두 받기 {claimableAll}</span>
-                              {claiming === "all" && <span className="absolute inset-0 flex items-center justify-center">…</span>}
-                            </button>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-lg font-black text-[#131313] tabular-nums leading-none">
-                            {guest ? "—" : questDone}<span className="text-[#a3a3a3]"> / {guest ? "—" : questTotal}</span>
-                          </p>
-                          <p className="text-[10px] font-black tracking-[0.2em] text-[#a3a3a3] uppercase mt-1">Complete</p>
-                        </div>
-                      </div>
-
-                      {/* 주기 탭 — 📌 오른쪽 칩은 그 주기 바꾸기(리롤) 값(2026-10-11 운영자 시안 B): 남은 무료가 있으면 「무료 N」, 다 쓰면 「빙옥 N」(회차마다 같은 값).
-                             바꿀 수 없으면(후보 없음 · 유료 끔) 칩 없음 — 탭은 왼쪽에 붙어 있어 칩이 생기고 사라져도 안 움직인다. 칩 높이(28)도 탭 줄 안 */}
-                      <div className="flex items-center gap-2 mb-5">
-                        {[
-                          { v: "daily", l: "일일" },
-                          { v: "weekly", l: "주간" },
-                          { v: "monthly", l: "월간" },
-                        ].map((t) => {
-                          const on = questPeriod === t.v;
-                          const n = claimableBy[t.v];
-                          return (
-                            <button
-                              key={t.v}
-                              onClick={() => setQuestPeriod(t.v)}
-                              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-                                on ? "bg-[#131313] text-white" : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
-                              }`}
-                            >
-                              {t.l}
-                              {n > 0 && (
-                                <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black ${on ? "bg-[#e91e3f] text-white" : "bg-[#e91e3f] text-white"}`}>{n}</span>
+                      {/* 📌 2026-11-02 머리 두 겹(운영자 "머리가 겹겹 · 받을 것 신호가 중복" → 시안 B "ㅇㅇ").
+                             ① 제목 ……… 모두 받기  ② 글자 탭(색만 바뀜 · 진행 수 · 받을 것 점) ……… 바꾸기 · 남은 시간. 폰은 폭이 좁아 바꾸기 · 남은 시간을 ① 줄로 올린다.
+                             예전 「2/4 COMPLETE」 · 전체 막대 · 안내 한 줄(교체 시각) · 받을 카드 붉은 테 · 탭 숫자 배지는 뺐다 —
+                             받을 것 신호는 모두 받기(전체) · 탭 점(어느 주기) · 받기 단추(어느 퀘스트) 셋. 줄 높이(min-h-8)는 모두 받기가 생기고 사라져도 같다 */}
+                      {(() => {
+                        const meta = (
+                          <>
+                            {rrNow?.can && (rrFree > 0 || rrPrice > 0) && (
+                              <span
+                                title={rrFree > 0 ? `이번 주기 무료 바꾸기 ${rrFree}번` : `바꾸기 한 번에 빙옥 ${rrPrice}개`}
+                                className="shrink-0 inline-flex items-center gap-1 text-[12px] font-black text-[#5a5a5a] tabular-nums whitespace-nowrap"
+                              >
+                                <svg aria-hidden viewBox="0 0 24 24" className="w-[13px] h-[13px]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 3v5h5" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 21v-5h-5" /></svg>
+                                {rrFree > 0 ? `무료 ${rrFree}` : `빙옥 ${rrPrice}`}
+                              </span>
+                            )}
+                            <QuestLeft period={questPeriod} />
+                          </>
+                        );
+                        return (
+                          <>
+                            {/* 제목은 꺾이지 않게(shrink-0 · nowrap) — 폰 360px 에서 바꾸기 · 남은 시간 · 모두 받기가 같이 와도 한 줄(간격 8) */}
+                            <div className="flex items-center gap-2 sm:gap-4 min-h-8 mb-3.5 sm:mb-4">
+                              <h3 className="shrink-0 whitespace-nowrap mr-auto text-xl md:text-2xl font-black text-[#131313] tracking-tight">퀘스트</h3>
+                              <span className="contents sm:hidden">{meta}</span>
+                              {claimableAll > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={claimAllQuests}
+                                  disabled={!!claiming}
+                                  className="relative shrink-0 inline-flex items-center h-8 px-3.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12.5px] font-black leading-8 tabular-nums whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
+                                >
+                                  {/* 받는 중에도 단추 폭은 그대로 — 글자만 가리고 그 자리에 … */}
+                                  <span className={claiming === "all" ? "invisible" : undefined}>모두 받기 {claimableAll}</span>
+                                  {claiming === "all" && <span className="absolute inset-0 flex items-center justify-center">…</span>}
+                                </button>
                               )}
-                            </button>
-                          );
-                        })}
-                        <span className="flex-1"></span>
-                        {rrNow?.can && (rrFree > 0 || rrPrice > 0) && (
-                          <span
-                            title={rrFree > 0 ? `이번 주기 무료 바꾸기 ${rrFree}번` : `바꾸기 한 번에 빙옥 ${rrPrice}개`}
-                            className={`shrink-0 inline-flex items-center gap-1 h-7 px-2.5 rounded-full border bg-white text-[11px] font-black tabular-nums whitespace-nowrap ${rrFree > 0 ? "border-[#1f9d55] text-[#1f9d55]" : "border-[#a3a3a3] text-[#2b8c80]"}`}
-                          >
-                            <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 3v5h5" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 21v-5h-5" /></svg>
-                            {rrFree > 0 ? `무료 ${rrFree}` : `빙옥 ${rrPrice}`}
-                          </span>
-                        )}
-                      </div>
+                            </div>
+                            {/* 주기 탭 — 굵기 · 글자 수가 같고 진행 수 칸(min-w) · 점 자리(w-1.5)를 늘 잡아 둬서 고를 때 · 받을 것이 생길 때 탭 줄이 안 움직인다 */}
+                            <div role="tablist" aria-label="퀘스트 주기" className="flex items-center gap-3.5 sm:gap-5 mb-1">
+                              {[
+                                { v: "daily", l: "일일" },
+                                { v: "weekly", l: "주간" },
+                                { v: "monthly", l: "월간" },
+                              ].map((t) => {
+                                const on = questPeriod === t.v;
+                                const [d, n] = questCount[t.v];
+                                const dot = claimableBy[t.v] > 0;
+                                return (
+                                  <button
+                                    key={t.v}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={on}
+                                    onClick={() => setQuestPeriod(t.v)}
+                                    className="group shrink-0 inline-flex items-center gap-1.5 h-8 outline-none focus-visible:underline"
+                                  >
+                                    <span className={`text-[15px] sm:text-[16px] font-black leading-6 transition-colors ${on ? "text-[#131313]" : "text-[#b5b5b5] group-hover:text-[#5a5a5a]"}`}>{t.l}</span>
+                                    {!guest && quests && (
+                                      <span className={`min-w-[26px] text-left text-[12px] font-black tabular-nums ${on ? "text-[#8a8a8a]" : "text-[#cdcdcd]"}`}>{d}/{n}</span>
+                                    )}
+                                    <i aria-hidden className={`w-1.5 h-1.5 rounded-full ${dot ? "bg-[#e91e3f]" : ""}`}></i>
+                                    {dot && <span className="sr-only">받을 보상 있음</span>}
+                                  </button>
+                                );
+                              })}
+                              <span className="flex-1"></span>
+                              <span className="hidden sm:contents">{meta}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
 
-                      {/* 전체 달성률 */}
-                      <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden mb-1.5">
-                        <div className="h-full rounded-full bg-[#e91e3f] transition-[width] duration-700" style={{ width: `${questPct}%` }}></div>
-                      </div>
-                      <p className="text-[10px] font-bold text-[#a3a3a3] mb-5">
-                        {questClaimable > 0
-                          ? <span className="text-[#e91e3f]">받을 수 있는 보상 {questClaimable}개</span>
-                          : questTotal > 0 && questDone === questTotal
-                          // 📌 2026-10-24 운영자 "이 멘트도 좀 바꿔라"(예전 「이 주기의 퀘스트를 모두 마쳤습니다」) — 탭 기간 이름 + 다음 퀘스트 시각을 한 줄로(다 깨면 아래 교체 안내가 가려지던 것까지)
-                          ? `${questPeriod === "monthly" ? "이번 달" : questPeriod === "weekly" ? "이번 주" : "오늘"} 퀘스트 완료 · ${questPeriod === "monthly" ? "매월 1일" : questPeriod === "weekly" ? "월요일" : "자정"}(KST)에 ${questRotates ? "새 퀘스트" : "초기화"}`
-                          : questPeriod === "monthly"
-                          ? questRotates ? "매월 1일(KST)에 새 퀘스트로 교체됩니다" : "매월 1일(KST)에 초기화됩니다"
-                          : questPeriod === "weekly"
-                          ? questRotates ? "매주 월요일(KST)에 새 퀘스트로 교체됩니다" : "매주 월요일(KST)에 초기화됩니다"
-                          : questRotates ? "매일 자정(KST)에 새 퀘스트로 교체됩니다" : "매일 자정(KST)에 초기화됩니다"}
-                      </p>
-
-                      {/* 퀘스트 로그 — 📌 2026-10-11 「두 줄 요약」(운영자 시안 S2 "이거 2안으로 걍 가자"): 카드 하나 = 1줄 제목 · 설명(작고 옅게) ……… 보상 / 2줄 막대 · 진행 수 · 단추.
-                             % 인장 · 붉은 레일 · 그림자 없음, 받을 카드는 붉은 테. (그 전: 한 판 목록 → "하나로 통합되니까 좀 이상하네" → 카드)
-                             · 막대 길이 통일 — 숫자 칸(w-14 · sm:w-16)과 보상 칸(w-20 · sm:w-24) 폭을 고정해 어느 줄이든 막대 끝이 같은 자리("퀘스트마다 다른 바 디자인이 고질병")
-                             · 긴 제목 · 설명은 "…"으로 자르지 않고 낱말 단위로 줄을 바꿔 다 보인다(그 줄만 길어진다)
-                             · 받을 것은 붉은 테 + 왼쪽 붉은 레일(예전 그대로), 바꾼 카드는 잠깐 옅은 노랑 · 빙옥 보상은 XP 아래 작은 줄 */}
+                      {/* 퀘스트 줄 — 📌 2026-11-02 B안: 상자 · 선 없이 간격으로(「기록」 판과 같은 결). 진행 고리 | 이름 · 설명 · 정확한 수(세 줄) | 보상 · 단추.
+                             보상 · 단추는 PC 나란히(96 · 64 폭 고정 — 줄마다 같은 자리), 폰은 보상 아래 단추. 단추가 없으면 폰은 그 자리를 비우지 않는다.
+                             정확한 수는 줄이지 않고 설명 아래 따로 한 줄(운영자 "줄이면 얼마나 얻었는지를 모르잖아" · "한줄에 다 있는 게 맘에 안듦").
+                             고리 색 = 진행 검정 · 다 함 빨강 · 받음 회색(초록은 뺐다). 긴 제목 · 설명은 낱말 단위로 줄을 바꾼다. 바꾼 줄은 잠깐 옅은 노랑 */}
                       {questRows.length > 0 && (
                         <div>
                           {questRows.map((q) => {
-                            const pct = Math.min(100, Math.round((q.current / Math.max(1, q.target)) * 100));
+                            // 내림 — 아직 못 끝냈는데 「100%」로 보이지 않게(다 하면 고리 가운데가 체크)
+                            const pct = Math.min(100, Math.floor((q.current / Math.max(1, q.target)) * 100));
                             // 📌 단위는 서버가 정한 값(lib/questKinds.js questUnit — 회 · 분 · 일 · 건 · 개 · XP). 옛 응답이면 세는 방식으로
                             const unit = q.metric === "xp" ? " XP" : q.metric === "point" ? " 빙옥" : q.unit || (q.metric === "minute" ? "분" : "회");
                             const done = q.done;
+                            const dim = q.claimed;
                             // POINT 보상은 나중에 서버에 실린 값이라 없을 수도 있다 — 없으면 0 으로 본다
                             const rXp = Number(q.rewardXp) || 0;
                             const rPoint = Number(q.rewardPoint) || 0;
                             const busy = claiming === q.id || claiming === "all";
                             const rr = quests?.pool?.[q.period]?.reroll;
                             const rrCost = (Number(rr?.left) || 0) > 0 ? 0 : Math.max(0, Number(rr?.price) || 0);
+                            const reward = (
+                              <span className="shrink-0 flex flex-col items-end">
+                                {rXp > 0 && (
+                                  <span className={`text-[15px] font-black tabular-nums leading-none whitespace-nowrap ${dim ? "text-[#a3a3a3]" : "text-[#e91e3f]"}`}>
+                                    +{rXp.toLocaleString()}<span className="text-[10px] font-bold ml-1 text-[#a3a3a3]">XP</span>
+                                  </span>
+                                )}
+                                {rPoint > 0 && (
+                                  <span className={`${rXp > 0 ? "mt-1 text-[11px]" : "text-[15px] leading-none"} font-black tabular-nums whitespace-nowrap ${dim ? "text-[#a3a3a3]" : "text-[#2b8c80]"}`}>
+                                    +{rPoint.toLocaleString()}<span className="text-[10px] font-bold ml-1 text-[#a3a3a3]">빙옥</span>
+                                  </span>
+                                )}
+                              </span>
+                            );
                             return (
                               <div
                                 key={q.id}
-                                className={`relative rounded-2xl mb-2.5 px-4 py-3.5 transition-colors duration-[1200ms] ${
-                                  q.claimable
-                                    ? "bg-white shadow-[0_0_0_1.5px_#e91e3f]"
-                                    : rerolled === q.id
-                                    ? "bg-[#fff6dc] shadow-[0_0_0_1px_rgba(224,161,42,0.6)]"
-                                    : "bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
-                                }`}
+                                className={`-mx-3 px-3 py-3 md:py-[13px] rounded-xl flex items-center gap-3.5 md:gap-4 transition-colors duration-[1200ms] ${rerolled === q.id ? "bg-[#fff6dc]" : ""}`}
                               >
-                                {/* 1줄 — 제목 · 설명(작고 옅게) ……… 보상 */}
-                                <div className="flex items-start gap-3">
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`text-[14.5px] font-black tracking-tight leading-snug break-keep [overflow-wrap:anywhere] ${q.claimed ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{q.name}</p>
-                                    {q.desc && <p className="text-[11px] mt-0.5 leading-relaxed text-[#8a8a8a] break-keep [overflow-wrap:anywhere]">{q.desc}</p>}
-                                  </div>
-                                  {/* 보상 · 단추는 같은 폭 칸에서 가운데 맞춤(운영자 "여기 중앙에 배열") — 보상이 이 폭을 넘으면 칸만 넓어지고 막대는 그대로 */}
-                                  <div className="shrink-0 min-w-[72px] sm:min-w-20 flex flex-col items-center">
-                                    {rXp > 0 && (
-                                      <p className={`text-[15px] font-black tabular-nums leading-none whitespace-nowrap ${q.claimed ? "text-[#a3a3a3]" : "text-[#e91e3f]"}`}>
-                                        +{rXp.toLocaleString()}<span className="text-[10px] font-bold ml-1 text-[#a3a3a3]">XP</span>
-                                      </p>
-                                    )}
-                                    {rPoint > 0 && (
-                                      <p className={`${rXp > 0 ? "mt-1 text-[11px]" : "text-[15px] leading-none"} font-black tabular-nums whitespace-nowrap ${q.claimed ? "text-[#a3a3a3]" : "text-[#2b8c80]"}`}>
-                                        +{rPoint.toLocaleString()}<span className="text-[10px] font-bold ml-1 text-[#a3a3a3]">빙옥</span>
-                                      </p>
-                                    )}
-                                  </div>
+                                <QuestRing pct={pct} done={done} dim={dim} />
+                                {/* 이름 · 설명 · 정확한 수 */}
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-[14.5px] font-black tracking-tight leading-snug break-keep [overflow-wrap:anywhere] ${dim ? "text-[#a3a3a3]" : "text-[#131313]"}`}>{q.name}</p>
+                                  {q.desc && <p className="text-[11.5px] mt-0.5 leading-relaxed text-[#8a8a8a] break-keep [overflow-wrap:anywhere]">{q.desc}</p>}
+                                  <p className={`mt-0.5 text-[12px] font-black tabular-nums whitespace-nowrap ${dim ? "text-[#a3a3a3]" : "text-[#131313]"}`}>
+                                    {q.current.toLocaleString()}
+                                    <span className={`font-extrabold ${dim ? "text-[#c4c4c4]" : "text-[#8a8a8a]"}`}> / {q.target.toLocaleString()}{unit}</span>
+                                  </p>
                                 </div>
-
-                                {/* 2줄 — 막대 · 진행 수 · 단추(숫자 칸 · 단추 칸 폭 고정 — 막대 길이가 카드마다 같다) */}
-                                <div className="flex items-center gap-2.5 mt-2.5">
-                                  <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
-                                    <div className={`h-full rounded-full transition-[width] duration-700 ${done ? "bg-emerald-600" : "bg-[#131313]"}`} style={{ width: `${pct}%` }}></div>
-                                  </div>
-                                  {/* 📌 2026-10-25 숫자가 길면(5,000,000/5,000,000 XP) 고정 폭을 넘쳐 오른쪽 「완료」와 겹쳤다 — 최소 폭만 두고 넘치면 칸이 넓어져 그 카드의 막대만 짧아진다 */}
-                                  <span className="shrink-0 min-w-[60px] sm:min-w-16 text-right text-[11px] font-black text-[#5a5a5a] tabular-nums whitespace-nowrap">
-                                    {q.current.toLocaleString()}/{q.target.toLocaleString()}{unit}
-                                  </span>
-                                  <div className="shrink-0 w-[72px] sm:w-20 h-8 flex items-center justify-center">
+                                {/* 보상 · 단추 — PC 나란히, 폰 위아래 */}
+                                <div className="shrink-0 flex flex-col items-end gap-1.5 md:flex-row md:items-center md:gap-5">
+                                  <span className="md:w-24 flex justify-end">{reward}</span>
+                                  <div className="h-8 flex items-center justify-end md:justify-center md:w-16 empty:hidden md:empty:flex">
                                     {q.claimable ? (
                                       <button
                                         onClick={() => claimQuest(q)}
                                         disabled={busy}
-                                        className="relative h-8 px-3.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
+                                        className="relative h-8 px-3.5 rounded-full bg-[#e91e3f] hover:bg-[#d01634] disabled:opacity-60 text-white text-[12px] font-black leading-8 whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
                                       >
-                                        {/* 받는 중에도 단추 폭은 "받기" 그대로 — 모두 받기 중이면 받을 칸 전부 … */}
+                                        {/* 받는 중에도 단추 폭은 "받기" 그대로 — 모두 받기 중이면 받을 줄 전부 … */}
                                         <span className={busy ? "invisible" : undefined}>받기</span>
                                         {busy && <span className="absolute inset-0 flex items-center justify-center">…</span>}
                                       </button>
                                     ) : q.claimed ? (
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 whitespace-nowrap">
-                                        <svg aria-hidden viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3.2"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                      <span className="inline-flex items-center gap-1 text-[11.5px] font-black text-[#a3a3a3] whitespace-nowrap">
+                                        <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3.2"><path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                         완료
                                       </span>
                                     ) : done ? (
                                       /* 자동 지급 퀘스트는 달성 직후 봇이 준다 — 잠깐 뜨는 상태 */
-                                      <span className="text-[11px] font-black text-emerald-700 whitespace-nowrap">{q.auto ? "지급 중" : "달성"}</span>
+                                      <span className="text-[11.5px] font-black text-[#131313] whitespace-nowrap">{q.auto ? "지급 중" : "달성"}</span>
                                     ) : q.auto ? (
                                       <span className="text-[11px] font-bold text-[#a3a3a3] whitespace-nowrap">자동 지급</span>
                                     ) : q.rerollable && !guest ? (
-                                      /* 📌 바꾸기 — 아이콘만(값은 주기 탭 줄 칩). 유료도 누르면 바로(서버가 화면에 보인 값 · 잔액 확인) */
+                                      /* 📌 바꾸기 — 아이콘만(값은 탭 줄 오른쪽). 유료도 누르면 바로(서버가 화면에 보인 값 · 잔액 확인) */
                                       <button
                                         type="button"
                                         onClick={() => rerollQuest(q, rrCost)}
                                         disabled={!!claiming}
                                         aria-label={`${q.name} 다른 퀘스트로 바꾸기 (${rrCost > 0 ? `빙옥 ${rrCost}` : "무료"})`}
                                         title={rrCost > 0 ? `다른 퀘스트로 바꾸기 · 빙옥 ${rrCost}` : "다른 퀘스트로 바꾸기 · 무료"}
-                                        className="relative w-8 h-8 rounded-full border border-[#a3a3a3] text-[#5a5a5a] enabled:hover:border-[#131313] enabled:hover:text-[#131313] disabled:opacity-50 inline-flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/40"
+                                        className="relative w-8 h-8 rounded-full border border-[#c8c8c8] text-[#5a5a5a] enabled:hover:border-[#131313] enabled:hover:text-[#131313] disabled:opacity-50 inline-flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#131313]/40"
                                       >
                                         {claiming === `rr:${q.id}` ? (
                                           <span className="text-[11px] font-black">…</span>
@@ -4686,8 +5237,8 @@ export default function LevelPage() {
                     </section>
 
                     {/* 아래 왼쪽 — 서버 랭킹 */}
-                    {/* 랭킹 묶음 — 현황이 아닐 때는 빈 틀도 숨긴다 */}
-                    <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} min-w-0`}>
+                    {/* 랭킹 묶음 — 지금(첫 화면) 아래 왼쪽. 폰은 섹션 줄 「랭킹」. 현황이 아닐 때는 빈 틀도 숨긴다 */}
+                    <div className={`contents ${!deskWide && deskOverview ? "lg:block" : "lg:hidden"} min-w-0`}>
                     {/* 서버 랭킹 */}
                     <section className={secCls("rank")}>
                       <div className="flex items-end justify-between mb-4">
@@ -4702,14 +5253,15 @@ export default function LevelPage() {
                           {/* 전체 순위는 랭킹 탭에서 — 여기는 TOP 10 만 */}
                           <button
                             onClick={() => { setRankMode(lbTab); setRankPage(0); setActiveMainTab("rank"); }}
-                            className="whitespace-nowrap text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
+                            className="lg:max-xl:hidden whitespace-nowrap text-[11px] font-bold text-[#8a8a8a] hover:text-[#e91e3f] transition-colors outline-none focus:outline-none"
                           >
                             전체 보기 →
                           </button>
                         </span>
                       </div>
                       {!lb[lbTab] ? (
-                        <div className="py-10 text-center text-[11px] font-bold text-[#a3a3a3]">불러오는 중…</div>
+                        // 로딩 뼈대 — 로그인하면 「내 순위」 판 + TOP 10, 로그인 전이면 TOP 10 만(굵은 윗선)
+                        guest ? <TopListSkeleton rows={10} strongTop /> : <><PanelSkeleton /><TopListSkeleton rows={10} /></>
                       ) : !lb[lbTab].data?.length ? (
                         <EmptySlot>아직 집계된 기록이 없습니다</EmptySlot>
                       ) : (
@@ -4718,7 +5270,7 @@ export default function LevelPage() {
                         //    2026-10-04 동점 규칙 하나 — XP 내림차순, 동점은 userId 오름차순(글자 비교 — 가입 순서 아님. 목록 · 내 정보 · 봇이 모두 같다)
                         guest ? (
                           // 로그인 전 — 공개 TOP 10 만(내 순위 판 없음 — 맨 윗줄을 굵은 선으로)
-                          <RankRows rows={lb[lbTab].data} strongTop />
+                          <RankRows rows={lb[lbTab].data} strongTop fmt={lbTab === "voice" ? (r) => fmtVoiceTimeMin(r.voiceSeconds) : null} />
                         ) : (() => {
                           // 📌 2026-10-24 「내 순위」 판(운영자 고른 시안 — "아까 넣었던 바 디자인 넣어") — 목록 아래 ··· 내 줄 대신 목록 위에 한 판.
                           //    #순위 / 전체 · 막대 = 전체 중 내 자리(위에서부터 — 상위 N% 와 같은 뜻, 최소 2%) · LV · XP · 상위 N%(프로필 카드 「상위 N%」와 같은 계산).
@@ -4747,12 +5299,12 @@ export default function LevelPage() {
                                   </div>
                                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-[9px]">
                                     <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap">LV <b className="font-black text-[#131313] tabular-nums">{Number(mine.level ?? me?.level ?? 0).toLocaleString()}</b></span>
-                                    <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap"><b className="font-black text-[#131313] tabular-nums">{myXp.toLocaleString()}</b> XP</span>
+                                    <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap">{lbTab === "voice" ? <b className="font-black text-[#131313] tabular-nums">{fmtVoiceTimeMin(mine?.voiceSeconds)}</b> : <><b className="font-black text-[#131313] tabular-nums">{myXp.toLocaleString()}</b> XP</>}</span>
                                     {topPct != null && <span className="text-[10.5px] font-extrabold text-[#5a5a5a] whitespace-nowrap">상위 <b className="font-black text-[#e91e3f] tabular-nums">{topPct}%</b></span>}
                                   </div>
                                 </div>
                               )}
-                              <RankRows rows={rows} myId={session.user.id} meRow={false} strongTop={!(mine?.rank > 0)} />
+                              <RankRows rows={rows} myId={session.user.id} meRow={false} strongTop={!(mine?.rank > 0)} fmt={lbTab === "voice" ? (r) => fmtVoiceTimeMin(r.voiceSeconds) : null} />
                             </>
                           );
                         })()
@@ -4762,10 +5314,10 @@ export default function LevelPage() {
 
                     {/* 아래 오른쪽 — 획득 피드 (진행 중 이벤트는 2026-10-03 대시보드 맨 아래 전체 폭 판으로 옮겼다 — EventBoard) */}
                     {/* 피드 묶음 — 현황이 아닐 때는 빈 틀도 숨긴다 (남겨 두면 빈 줄 하나만큼 간격이 벌어진다) */}
-                    <div className={`contents ${deskOverview ? "lg:block" : "lg:hidden"} lg:space-y-14 min-w-0`}>
+                    <div className={`contents ${!deskWide && deskOverview ? "lg:block" : "lg:hidden"} lg:space-y-14 min-w-0`}>
                     {/* 획득 피드 — 최근 15건(/api/xp/my-logs FEED_LIMIT). 📌 2026-10-24 운영자 "획득 피드 단추 없애" — 「전체 N건 보기」 · 「접기」 단추를 뺐다.
                            PC 는 10줄 틀 안에서 휠로 나머지를 넘기고, 폰은 피드만 따로 보는 칸이라 15건을 다 늘어놓는다 */}
-                    <section className={secCls("feed")}>
+                    <section className={secCls("quest")}>
                       <div className="flex items-end justify-between mb-4">
                         <div>
                           <h3 className="text-xl md:text-2xl font-black text-[#131313] tracking-tight">획득 피드</h3>
@@ -4777,7 +5329,8 @@ export default function LevelPage() {
                       ) : myLogs?.logs?.length ? (
                         <>
                           {/* 📌 2026-10-24 오늘 — 합계 + 종류별 막대 · 범례(XP 가 어디서 늘었는지 한눈에). 0 인 종류는 막대 · 범례에서 뺀다.
-                                 옛 응답(today 에 effect · payout 없음)이면 합계에서 채팅 · 음성 · 출석을 뺀 나머지를 아이템으로 본다 */}
+                                 옛 응답(today 에 effect · payout 없음)이면 합계에서 채팅 · 음성 · 출석을 뺀 나머지를 아이템으로 본다.
+                                 📌 2026-11-02 맨 위 「오늘」 줄로 옮겼다가 운영자 "예전처럼 되돌리기"로 다시 여기 */}
                           {(() => {
                             const td = myLogs.today || {};
                             const val = (k) => Math.max(0, Number(td[k]) || 0);
@@ -4811,6 +5364,7 @@ export default function LevelPage() {
                                  2026-10-24 줄 앞 색 점(뜻이 안 보였다) → 종류 아이콘(옅은 판) · 숫자 뒤 XP · 10줄(옆 서버 랭킹 10줄과 나란히 — 두 칸 다 92 판 + 46 줄).
                                  📌 PC 틀 높이는 10줄(1 + 46 × 10 = 461px) 그대로 — 나머지는 틀 안에서 휠로 넘긴다(운영자 "획득피드 펼치면 늘어나는 거 개선") */}
                           <div className="border-t border-[#ededed] [overflow-anchor:none] lg:max-h-[461px] lg:overflow-y-auto lg:overscroll-contain no-bar">
+                            {/* 📌 한 건씩 그대로 나열(2026-11-02 오늘만 · 같은 적립 묶기를 넣었다가 운영자 "기능이 다르다" — 피드는 실시간 한 건씩, 모아 보기는 「기록」 내역) */}
                             {myLogs.logs.map((l, i) => {
                               const kd = feedKindOf(l.reason);
                               return (
@@ -4835,16 +5389,51 @@ export default function LevelPage() {
                     </div>
 
                     {/* XP 테이블 — 예전엔 탭, 이제 대시보드 카테고리. 왼쪽 카드와 나란히 오른쪽 8칸 */}
-                    <section className={`${mSecOn === "table" ? "block" : "hidden"} lg:col-span-2 min-w-0`}>
+                    <section className={`${!deskWide && mSecOn === "table" ? "block" : "hidden"} lg:col-span-2 min-w-0 ${deskFx}`}>
                       {/* 활동 속도 — 최근 7일 활동 XP ÷ XP 를 받은 분(/api/xp/my-logs pace) · 목표 계산기 「활동하면 약 N분」 */}
-                      <XpTableView myLevel={me?.level || 0} myXp={me?.xp ?? null} perMin={myLogs?.pace?.minutes > 0 ? myLogs.pace.xp / myLogs.pace.minutes : 0} onTone={() => playTone(620, 0.04, "sine", 0.025)} />
+                      <XpTableView
+                        myLevel={me?.level || 0}
+                        myXp={me?.xp ?? null}
+                        perMin={myLogs?.pace?.minutes > 0 ? myLogs.pace.xp / myLogs.pace.minutes : 0}
+                        onTone={() => playTone(620, 0.04, "sine", 0.025)}
+                        middle={({ lv, left, mine }) =>
+                          // 📌 2026-11-02 「목표」 — 남은 XP 를 내 1회 획득량으로 나눈 채팅 · 음성 · 출석(./RecordView GoalReach). 예전 검은 「획득 효과」 판(옛 효과 창)은 뺐다 —
+                          //    XP 에 붙는 효과는 줄마다 세부 구성에, XP 와 상관없는 상시 효과는 인벤토리 설명에
+                          me && mine && left > 0 ? <GoalReach lv={lv} left={left} gain={gain} voiceMin={P_voiceMin} /> : null
+                        }
+                      />
+                    </section>
+
+                    {/* 📌 2026-11-02 「기록」(지난) — XP 테이블처럼 그 자리를 갈아 끼운다(출석 · 시즌 · 내역 — ./RecordView). 켰을 때만 그린다 */}
+                    <section className={`${!deskWide && mSecOn === "record" ? "block" : "hidden"} lg:col-span-2 min-w-0 ${deskFx}`}>
+                      {!deskWide && mSecOn === "record" && me && (
+                        <RecordView
+                          me={me}
+                          user={session?.user}
+                          todayTotal={todayTotal}
+                          rec={rec}
+                          recErr={recErr}
+                          month={myLogs?.month}
+                          gain={gain}
+                          kinds={FEED_KINDS}
+                          attendVoiceMin={P.attendVoiceMin}
+                          seasonName={SEASON.name}
+                          seasonTotal={lb.total?.me?.xp ?? null}
+                          dLabel={dLabel}
+                          onTone={() => playTone(620, 0.04, "sine", 0.025)}
+                        />
+                      )}
                     </section>
                 </div>
 
                 {/* ── 진행 중 이벤트 — 격자 마지막 줄 전체 폭 판(EventBoard). PC 는 카테고리와 상관없이 늘 맨 아래,
-                       폰은 아이콘 줄의 "이벤트"를 골랐을 때만(다른 섹션처럼 하나씩 본다).
+                       폰은 퀘스트 섹션 맨 아래(2026-11-02 아이콘 줄의 "이벤트" 칸 자리를 「기록」에 내줬다).
                        📌 격자 안에 둔다 — 밖에 두면 폰에서 아이콘 줄(sticky)이 붙어 있을 자리가 없어 같이 올라가 버린다. 간격은 격자 gap-y */}
-                <EventBoard events={events} className={`${mSecOn === "event" ? "block" : "hidden"} lg:block lg:col-span-12 min-w-0`} />
+                <EventBoard events={events} className={`${deskWide ? "hidden" : `${mSecOn === "quest" ? "block" : "hidden"} ${deskOverview ? "lg:block" : "lg:hidden"} ${deskFx}`} lg:col-span-12 min-w-0`} />
+                {/* 넓은 판 — 제목 줄 바로 아래 전체 폭(PC 는 격자 첫 줄 40 + 줄 사이 56 + 16 — 밑선과 48 띄움) */}
+                {deskView === "intro" && <div className={`col-span-full lg:col-span-12 lg:mt-4 min-w-0 ${deskPanelFx}`}>{introPanel()}</div>}
+                {deskView === "season" && <div className={`col-span-full lg:col-span-12 lg:mt-4 min-w-0 ${deskPanelFx}`}>{seasonPanel()}</div>}
+                {deskView === "rank" && <div className={`col-span-full lg:col-span-12 lg:mt-4 min-w-0 ${deskPanelFx}`}>{rankPanel()}</div>}
               </div>
             )}
 
@@ -4853,233 +5442,18 @@ export default function LevelPage() {
               <div className="py-16 text-center">
                 <p className="text-sm text-[#5a5a5a] mb-5">데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
                 <button onClick={() => loadMe()} className="px-6 py-2.5 bg-[#e91e3f] hover:bg-[#d01634] text-white text-xs font-bold rounded-full transition-colors outline-none focus:outline-none">다시 시도</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ TAB : INTRO ══════════════════ */}
-        {/* 📌 시스템 안내 — 한눈에 읽히는 안내판 (app/level/SystemGuide). 숫자는 모두 지금 설정값에서 읽는다 */}
-        {activeMainTab === "intro" && (
-          <div>
-            <SectionHeader title="시스템 안내" />
-            <SystemGuide
-              P={P}
-              chatBase={P_chatBase}
-              chatCooldownLabel={P_chatCooldownLabel}
-              voiceMin={P_voiceMin}
-              policy={policy}
-              pass={pass}
-              passEnabled={passEnabled}
-              enhOpen={enhOpen}
-              canSeeShop={canSeeShop}
-              seasonDday={seasonDday}
-              me={me}
-              tierIdx={tierIdx}
-            />
-          </div>
-        )}
-
-        {/* ══ TAB : RANKING ════════════════ */}
-        {activeMainTab === "rank" && (
-          <Reveal>
-            <SectionHeader
-              title="서버 랭킹"
-              right={
-                <span className="shrink-0 text-[11px] font-bold text-[#a3a3a3] tabular-nums">
-                  {(rankMembers || rankTotal).toLocaleString()}명
-                </span>
-              }
-            />
-
-            {/* 기준 — 현재 / 누적 / 이번 달 / 음성 시간
-                📌 알약 넷 + [내 순위로]가 폰 한 줄에 들어가게 sm 미만은 글자 11 · 여백 10(360 에서 약 308px / 320), 360 미만은 [내 순위로]를 화살표만 */}
-            <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-bar mb-6">
-              {RANK_MODES.map((m) => {
-                const on = rankMode === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => { setRankMode(m.id); setRankPage(0); playTone(620, 0.04, "sine", 0.025); }}
-                    className={`shrink-0 whitespace-nowrap px-2.5 sm:px-3.5 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-colors outline-none focus:outline-none ${
-                      on
-                        ? "bg-[#131313] text-white"
-                        : "bg-black/[0.04] text-[#5a5a5a] hover:bg-black/[0.08] hover:text-[#131313]"
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
-              {/* 📌 내 순위로 — 로그인하면 늘 같은 자리(오른쪽 끝). 이 기준에 내 순위가 없으면(음성 0 등) 흐리게 — 생기고 사라지며 줄이 밀리지 않게 */}
-              {authReady && session?.user && (
-                <button
-                  type="button"
-                  onClick={goMyRank}
-                  // 마지막으로 읽은 결과로만 정한다 — 읽는 동안은 직전 상태 그대로(쪽 · 기준을 넘길 때마다 흐림 ↔ 진함으로 깜빡이지 않게).
-                  // 기준을 바꾼 직후(새 기준을 읽는 중) 누르면 다 읽은 뒤 내 쪽으로(goMyRank)
-                  disabled={!rankMe.row}
-                  aria-label="내 순위로"
-                  className="ml-auto shrink-0 max-[360px]:self-stretch whitespace-nowrap inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-[5px] rounded-full border border-[#a3a3a3] bg-white text-[11px] sm:text-[12px] font-bold text-[#131313] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 enabled:hover:border-[#131313] disabled:opacity-40 disabled:cursor-default"
-                >
-                  <span className="max-[360px]:hidden">내 순위로</span>
-                  <svg aria-hidden viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </button>
-              )}
-            </div>
-
-            <div ref={rankBoxRef} style={rankLoading && rankBoxH ? { minHeight: rankBoxH } : undefined}>
-            {rankLoading ? (
-              <div className="space-y-2">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-[52px] rounded-lg bg-black/[0.04] animate-pulse"></div>
-                ))}
-              </div>
-            ) : rankRows.length === 0 ? (
-              <EmptySlot>
-                {rankMode === "voice"
-                  ? `누적 음성 시간은 ${+VOICE_TIME_START.slice(5, 7)}월 ${+VOICE_TIME_START.slice(8, 10)}일부터 집계됩니다`
-                  : rankMode === "month"
-                  ? "이번 달 획득 기록이 아직 없습니다"
-                  : "아직 기록이 없습니다"}
-              </EmptySlot>
-            ) : (
-              <>
-                {/* 시상대 — 1~3위를 프로필 사진으로 크게. 첫 페이지에서만 나온다.
-                    가운데가 1위, 왼쪽 2위, 오른쪽 3위. 단상 높이로 순위를 한 번 더 말한다. */}
-                {rankPage === 0 && rankRows.length >= 3 && (
-                  <div className="relative mb-10 pt-6">
-                    {/* 1위 뒤에서 번지는 빛 */}
-                    <div
-                      aria-hidden
-                      className="absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[240px] rounded-full blur-[90px] pointer-events-none"
-                      style={{ background: "rgba(233,30,63,0.16)" }}
-                    ></div>
-
-                    <div className="relative grid grid-cols-3 gap-2 sm:gap-5 items-end">
-                      {[rankRows[1], rankRows[0], rankRows[2]].map((r) => {
-                        const first = r.rank === 1;
-                        const c = r.rank === 1 ? "#e91e3f" : r.rank === 2 ? "#8a8a8a" : "#a06a3c";
-                        const isMe = r.userId === session?.user?.id;
-                        const tier = VOICE_TIERS[getTierIndex(r.level || 0)];
-                        const pedestal = first ? "h-16 sm:h-24" : r.rank === 2 ? "h-10 sm:h-16" : "h-7 sm:h-11";
-                        return (
-                          <div
-                            key={r.userId}
-                            data-rank-me={isMe ? "1" : undefined}
-                            className="flex flex-col items-center text-center min-w-0 rounded-t-2xl"
-                            style={isMe && rankFlash ? { animation: "rankMeFlashPodium 1.4s ease-out" } : undefined}
-                          >
-                            {/* 1위 왕관 */}
-                            {first && (
-                              <svg aria-hidden viewBox="0 0 24 24" className="w-6 h-6 sm:w-7 sm:h-7 mb-1.5" fill="#e91e3f">
-                                <path d="M3 8.5 7 12l5-7 5 7 4-3.5-1.8 10H4.8Z" />
-                                <rect x="4.6" y="19" width="14.8" height="2.2" rx="1.1" />
-                              </svg>
-                            )}
-
-                            {r.avatarFrame ? <PodiumFramed r={r} c={c} first={first} /> : (
-                            <span className="relative shrink-0">
-                              <span
-                                className={`block rounded-full overflow-hidden ${first ? "w-20 h-20 sm:w-28 sm:h-28" : "w-14 h-14 sm:w-20 sm:h-20"}`}
-                                style={{ boxShadow: `0 0 0 3px ${c}, 0 18px 36px -16px ${c}` }}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={r.avatar || ""} alt="" className="w-full h-full object-cover bg-[#e0e0e0]" />
-                              </span>
-                              {/* 순위는 원에 겹쳐 붙인다 — 따로 두면 원 크기가 달라 높이가 어긋난다 */}
-                              <span
-                                className={`absolute left-1/2 -translate-x-1/2 -bottom-2 inline-flex items-center justify-center rounded-full text-white font-black tabular-nums ring-2 ring-[#ffffff] ${first ? "w-7 h-7 text-[13px]" : "w-6 h-6 text-[11px]"}`}
-                                style={{ backgroundColor: c }}
-                              >
-                                {r.rank}
-                              </span>
-                            </span>
-                            )}
-
-                            <p className={`${r.avatarFrame ? "mt-2" : "mt-5"} w-full flex items-center justify-center gap-1 min-w-0 font-black ${first ? "text-[14px] sm:text-[15px]" : "text-[12px] sm:text-[13px]"} ${isMe ? "text-[#e91e3f]" : "text-[#131313]"}`}>
-                              <span className="min-w-0 truncate">{r.name}</span>
-                              <RankBadges badges={r.badges} />
-                            </p>
-
-                            {/* 등급 · 레벨 — 등급은 레벨에서 바로 나온다. 레벨은 아래 목록 줄과 같은 "Lv.161"(시상대에만 빠져 있었다)
-                                📌 2026-10-11 운영자 "랭크 티어 표기 너무 빈약하다" → 등급 칩(A안 — 연한 등급색 바탕 · 등급색 테 알약 안에 엠블럼 18 · 이름 · Lv).
-                                   폰은 시상대 칸이 100px 남짓(360px 폰 실측 101px — 한 줄에 다 넣으면 "실버"도 잘림)이고 줄이 쌓여 "복닥복닥" →
-                                   칩은 엠블럼 + Lv 만(등급은 엠블럼 · 칩 색으로, 운영자 C안 — "PC 도 티어 이름 표기는 필요 없을 듯"). 이름 → 칩 → XP 세 줄 */}
-                            <span
-                              className="inline-flex items-center gap-1 sm:gap-[5px] mt-2 h-6 sm:h-[26px] pl-1.5 pr-2 sm:pl-[7px] sm:pr-2.5 rounded-full max-w-full min-w-0"
-                              style={{ backgroundColor: hexA(tier.c, 0.08), boxShadow: `inset 0 0 0 1px ${hexA(tier.c, 0.25)}` }}
-                            >
-                              <span className="sm:hidden inline-flex shrink-0"><TierEmblem tier={tier} size={16} onDark={false} /></span>
-                              <span className="hidden sm:inline-flex shrink-0"><TierEmblem tier={tier} size={18} onDark={false} /></span>
-                              <span className="shrink-0 text-[11px] sm:text-[11.5px] font-extrabold text-[#6b6b76] tabular-nums">Lv.{r.level ?? 0}</span>
-                            </span>
-
-                            <p className={`font-black text-[#131313] tabular-nums mt-2 whitespace-nowrap ${first ? "text-[12px] sm:text-[15px]" : "text-[12px]"}`}>
-                              {rankMode === "voice" ? fmtVoiceTimeMin(r.voiceSeconds) : `${(r.xp || 0).toLocaleString()} XP`}
-                            </p>
-
-                            {/* 단상 */}
-                            <div
-                              className={`w-full mt-3 rounded-t-xl ${pedestal}`}
-                              style={{ background: `linear-gradient(180deg, ${c}2e, ${c}08)`, boxShadow: `inset 0 1px 0 ${c}55` }}
-                            ></div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div aria-hidden className="relative h-px bg-black/[0.10]"></div>
-                  </div>
-                )}
-
-                {/* 📌 내 줄 — 이 쪽 목록에 내가 없으면 한 줄(목록에 있으면 그 줄 강조만). 내가 이 쪽보다 앞이면 목록 위, 뒤면 목록 아래 — 순위 순서가 뒤집히지 않게.
-                       목록과 같은 응답으로 오므로 늦게 끼어들며 줄을 밀지 않는다(앞쪽은 2쪽부터라 시상대와 겹치지 않는다) */}
-                {myRank && !rankRows.some((r) => r.userId === myRank.userId) && myRank.rank < (rankRows[0]?.rank ?? 0) && (
-                  <>
-                    <div className="border-y border-black/[0.08]">{rankLine(myRank, true)}</div>
-                    <div aria-hidden className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
-                  </>
-                )}
-
-                <div className="border-y border-black/[0.08] divide-y divide-black/[0.06]">
-                  {(rankPage === 0 && rankRows.length >= 3 ? rankRows.slice(3) : rankRows).map((r) => rankLine(r, !!session?.user?.id && r.userId === session.user.id))}
+                {/* 내 정보를 못 읽어도 랭킹 · 안내(공개 값)는 볼 수 있게 — 제목 줄 · 섹션 줄은 격자와 함께 빠지므로 여기서 연다 */}
+                <div className="mt-5 flex items-center justify-center gap-5">
+                  {[{ k: "my", l: "오늘" }, { k: "season", l: "시즌" }, { k: "rank", l: "랭킹" }, { k: "intro", l: "안내" }].map((t) => (
+                    <button key={t.k} type="button" aria-pressed={activeMainTab === t.k} onClick={() => setActiveMainTab(t.k)} className={`text-[14px] font-black transition-colors outline-none focus-visible:underline ${activeMainTab === t.k ? "text-[#131313]" : "text-[#b5b5b5] hover:text-[#5a5a5a]"}`}>{t.l}</button>
+                  ))}
                 </div>
-
-                {myRank && !rankRows.some((r) => r.userId === myRank.userId) && myRank.rank >= (rankRows[0]?.rank ?? 0) && (
-                  <>
-                    <div aria-hidden className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
-                    <div className="border-y border-black/[0.08]">{rankLine(myRank, true)}</div>
-                  </>
-                )}
-
-                {/* 페이지 — 옆으로 넘겨 다음 순위를 본다 */}
-                {rankPages > 1 && (
-                  <div className="flex items-center justify-between gap-4 mt-6">
-                    <button
-                      onClick={() => { setRankPage((p) => Math.max(0, p - 1)); playTone(560, 0.04, "sine", 0.025); }}
-                      disabled={rankPage === 0}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-30 disabled:cursor-default bg-black/[0.04] text-[#5a5a5a] enabled:hover:bg-black/[0.08] enabled:hover:text-[#131313]"
-                    >
-                      <span aria-hidden>←</span> 이전
-                    </button>
-
-                    <span className="text-[12px] font-black text-[#8a8a8a] tabular-nums">
-                      {rankPage + 1} <span className="text-[#a3a3a3]">/ {rankPages}</span>
-                    </span>
-
-                    <button
-                      onClick={() => { setRankPage((p) => Math.min(rankPages - 1, p + 1)); playTone(680, 0.04, "sine", 0.025); }}
-                      disabled={rankPage >= rankPages - 1}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-[12px] font-bold transition-colors outline-none focus:outline-none disabled:opacity-30 disabled:cursor-default bg-black/[0.04] text-[#5a5a5a] enabled:hover:bg-black/[0.08] enabled:hover:text-[#131313]"
-                    >
-                      다음 <span aria-hidden>→</span>
-                    </button>
-                  </div>
-                )}
-              </>
+              </div>
             )}
-            </div>
-          </Reveal>
+            {authReady && session?.user && meLoaded && !me && deskView !== "my" && (
+              <div className={`mt-2 ${deskPanelFx}`}>{deskView === "rank" ? rankPanel() : deskView === "season" ? seasonPanel() : introPanel()}</div>
+            )}
+          </div>
         )}
 
         {/* ══ TAB : POLICY ═════════════════ */}

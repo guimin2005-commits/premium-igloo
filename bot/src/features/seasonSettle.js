@@ -4,11 +4,14 @@
 //  · RANKER 역할(BotSetting.rankerRoleId)이 있으면 지난 보유자에게서 떼고 3인에게 붙인 뒤 레벨업 채널에 발표
 //  · 관리자가 나중에 요청한 지급(roleGrantRequested)도 같은 방식으로 처리한다. 명예의 전당 등재는 관리자가 수기로
 //  · 시즌 티어 테두리(settleFrames) — 결산된 시즌마다 한 번, 모두의 「시즌 끝 순간 등급」을 UserXp.seasonFrame 에 적는다
-import { UserXp, BotSetting, SeasonResult, isDuplicateKeyError } from "../db.js";
-import { SEASONS, seasonEndMs, getLevelByXp } from "../leveling.js";
+import mongoose from "mongoose";
+import { UserXp, BotSetting, SeasonResult, XpLog, Payout, Purchase, WalletLog, isDuplicateKeyError } from "../db.js";
+import { SEASONS, seasonEndMs, seasonStartMs, getLevelByXp } from "../leveling.js";
 import { config } from "../config.js";
 import { buildMessageWithCard, cardAvatar, SITE_URL, tierOf } from "../botMessages.js";
-import { rankTotalOf } from "../rankBoards.js";
+import { rankTotalOf, rankTotalSince, totalBoard } from "../rankBoards.js";
+import { getSettings } from "../botSettings.js";
+import { SeasonPass, normalizeTiers, seasonStartBaseXp } from "../views/pass.js";
 import { serverHumanCount } from "../serverMembers.js";
 
 const TICK_MS = 5 * 60 * 1000;
@@ -89,7 +92,13 @@ async function settleEnded(guild) {
 //    📌 지난 시즌 기록(UserXp.seasonHistory)도 같은 차례에 — { season, name, level, tier(아이언은 "iron"), rank, total, at } 를 한 줄 붙인다.
 //       순위는 그 순간 xp 내림차순 · userId 오름차순(사이트 랭킹 · /api/xp/me 와 같은 규칙), total 은 문서 수와 서버 사람 수 중 큰 쪽(2026-10-25 — /api/xp/me 의 total 과 같다).
 //       같은 시즌이 이미 있으면 붙이지 않는다(필터 — framesAt 을 적기 전에 멈췄다 다시 돌아도 두 번 안 들어간다) · 최근 20개만
+//    📌 2026-11-02 사이트 「기록」 지난 시즌 창이 시즌 탭 「내 시즌 기록」과 같은 네 칸을 보이게(운영자 "내 시즌 기록도 기록에서 전시즌 확인 가능하게") —
+//       seasonXp · seasonRank: 누적 XP · 누적 순위(사이트 랭킹 누적 탭 · /랭크 누적과 같은 totalBoard, 끝난 시즌 시작부터) — 0 이하는 순위 없음(0)
+//       maxLevel: max(그 순간 레벨, UserXp.maxLevel) · passTier / passMax: 시즌 패스 단계(views/pass.js passView 와 같은 진행도 = xp − 기준선, 패스가 꺼져 있으면 0 / 0).
+//       기준선은 그 시즌에 찍힌 passBaseXp, 없으면(패스 창을 안 연 사람 · 새 시즌으로 이미 다시 찍힌 사람) 끝난 시즌 시작부터 다시 센다(seasonStartBaseXp).
+//       모두 「결산하는 순간」 값 — 봇이 시즌이 끝나고 한참 뒤에 돌면 그 사이 번 XP 도 들어간다(레벨 · 등급과 같다)
 const FRAME_FROM_SEASON = 2;
+const RANK_M = { UserXp, XpLog, Payout, Purchase, WalletLog, ObjectId: mongoose.Types.ObjectId };
 const HISTORY_KEEP = 20;
 async function settleFrames(guild) {
   const rows = await SeasonResult.find({ framesAt: null, season: { $gte: FRAME_FROM_SEASON } }).sort({ season: 1 }).lean();
@@ -100,25 +109,44 @@ async function settleFrames(guild) {
   for (const r of rows) {
     const s = SEASONS.find((x) => x.number === r.season);
     if (!s) continue;
-    const docs = await UserXp.find({}, { userId: 1, level: 1, xp: 1 }).sort({ xp: -1, userId: 1 }).lean();
+    const docs = await UserXp.find({}, { userId: 1, level: 1, xp: 1, maxLevel: 1, passSeason: 1, passBaseXp: 1 }).sort({ xp: -1, userId: 1 }).lean();
     const at = new Date();
     const total = rankTotalOf(docs.length, humans);
+    // 누적 XP · 누적 순위 — 못 읽으면 0(순위 없음)으로 두고 나머지는 그대로 적는다
+    const board = await totalBoard(RANK_M, rankTotalSince(seasonStartMs(s), getSettings().ledgerSince)).catch((e) => {
+      console.error(`시즌 ${r.season} 누적 집계 실패:`, e?.message || e);
+      return [];
+    });
+    const seasonOf = new Map(board.map((b, i) => [b.userId, { xp: Math.max(0, Math.floor(Number(b.xp) || 0)), rank: i + 1 }]));
+    const passCfg = await SeasonPass.findOne({ key: "main" }).lean().catch(() => null);
+    const passTiers = passCfg?.enabled ? normalizeTiers(passCfg.tiers, passCfg.nextTid) : [];
     let count = 0;
     const ops = [];
-    docs.forEach((d, i) => {
-      const level = Number(d.level) || getLevelByXp(Number(d.xp) || 0);
+    for (const [i, d] of docs.entries()) {
+      const xp = Number(d.xp) || 0;
+      const level = Number(d.level) || getLevelByXp(xp);
       const key = tierOf(level).key;
       const frame = key === "iron" ? "" : key;
       if (frame) count++;
       ops.push({ updateOne: { filter: { _id: d._id }, update: { $set: { seasonFrame: { season: r.season, frame, at } } } } });
-      const entry = { season: r.season, name: r.name || s.name, level, tier: key, rank: i + 1, total, at };
+      let passTier = 0;
+      if (passTiers.length) {
+        const base = (Number(d.passSeason) || 0) === r.season ? Number(d.passBaseXp) || 0 : await seasonStartBaseXp(d.userId, xp, s, d._id).catch(() => xp);
+        const progress = Math.max(0, xp - base);
+        passTier = passTiers.filter((t) => progress >= t.need).length; // need 오름차순 — 넘은 칸 수 = 마지막으로 넘은 단계
+      }
+      const sv = seasonOf.get(d.userId);
+      const entry = {
+        season: r.season, name: r.name || s.name, level, tier: key, rank: i + 1, total, at,
+        seasonXp: sv?.xp || 0, seasonRank: sv?.rank || 0, maxLevel: Math.max(level, Number(d.maxLevel) || 0), passTier, passMax: passTiers.length,
+      };
       ops.push({
         updateOne: {
           filter: { _id: d._id, "seasonHistory.season": { $ne: r.season } },
           update: { $push: { seasonHistory: { $each: [entry], $slice: -HISTORY_KEEP } } },
         },
       });
-    });
+    }
     for (let i = 0; i < ops.length; i += 1000) await UserXp.bulkWrite(ops.slice(i, i + 1000), { ordered: false });
     const done = await SeasonResult.updateOne({ _id: r._id, framesAt: null }, { $set: { framesAt: at, frameCount: count } });
     if (done.modifiedCount) console.log(`🏆 시즌 ${r.season} 티어 테두리: ${count}명 (전체 ${docs.length})`);

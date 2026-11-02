@@ -14,6 +14,8 @@ import { SEASON, getSeasonDday } from "@/lib/season";
 import { getTier } from "@/lib/voiceTiers";
 import { saleEnded, saleUntilMs, saleUntilLabel } from "@/lib/saleWindow";
 import { productIconOf } from "@/lib/cosmeticArt";
+import { HomeCurationSk, HomeFreshSk } from "./skeletons/Home";
+import { Sk } from "./skeletons/Sk";
 
 // 📌 ARCTIC 홈 — 배너 → 유형 타일 4장 → 두 갈래 큐레이션 → 신상품 줄 → 이번 주.
 //    헤더·유형 줄·독·푸터는 ArcticShopBody 가 그린다. 여기는 홈 본문만.
@@ -277,7 +279,8 @@ export default function ArcticHome({
       {/* ── 두 갈래 큐레이션 ── */}
       <section ref={curRef} className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14" style={lockH ? { minHeight: lockH } : undefined}>
         {!ready ? (
-          <div className="py-16 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+          // 📌 로딩 뼈대 — 다 불러온 두 갈래와 같은 틀 · 같은 크기(./skeletons/Home.tsx)
+          <HomeCurationSk />
         ) : active.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#8a8a8a]">등록된 상품이 없습니다.</div>
         ) : (
@@ -314,6 +317,8 @@ export default function ArcticHome({
       </section>
 
       {/* ── 신상품 — 가로로 밀어 본다(폰 두 장 반 · PC 다섯 장) ── */}
+      {/* 📌 기다리는 동안은 같은 자리에 뼈대 — 다 불러온 뒤 이 줄이 끼어들어 「이번 주」가 밀려 내려가지 않게 */}
+      {!ready && <HomeFreshSk />}
       {ready && fresh.length > 0 && (
         <section className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-14">
           <div className={secHead}>
@@ -336,7 +341,7 @@ export default function ArcticHome({
         </div>
         <div className="grid md:grid-cols-2 gap-4 md:gap-5">
           {/* 📌 추천을 기다리는 동안은 할인 칸 자리만 비워 둔다 — 시즌 칸이 두 칸 폭으로 그려졌다가 반으로 줄어들지 않게 */}
-          {!deal && !ready && <div aria-hidden className="h-[180px] md:h-[200px]"></div>}
+          {!deal && !ready && <Sk className="h-[180px] md:h-[200px] rounded-md" />}
           {deal && (
             <Link href={`/arctic/item/${deal.it._id}`}
               className="group relative overflow-hidden rounded-md h-[180px] md:h-[200px] p-6 md:p-7 pr-[150px] md:pr-[190px] text-white block bg-gradient-to-br from-[#131313] to-[#3a3a3a] hover:to-[#4a4a4a] transition-colors">

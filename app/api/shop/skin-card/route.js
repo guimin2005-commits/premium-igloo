@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { SKIN_OF, SCENE_OF, FRAME_OF } from "@/lib/itemEffects";
+import { SKIN_OF, SCENE_OF, BAR_OF, FRAME_OF } from "@/lib/itemEffects";
 import { FRAME_ART } from "@/lib/avatarFrameArt";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
@@ -14,9 +14,10 @@ import { connectToDatabase } from "@/lib/mongodb";
 import UserXp from "@/models/UserXp";
 import { serverMemberCount } from "@/lib/serverMembers";
 import { rankTotalOf } from "@/lib/rankBoards";
-import { buildCard, CARD_SIZE, CARD_FONT, CARD_SKIN_KEYS, CARD_SCENE_KEYS, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
+import { buildCard, CARD_SIZE, CARD_FONT, CARD_SKIN_KEYS, CARD_SCENE_KEYS, CARD_BAR_KEYS, sampleCardData, fontCoverage, fetchAvatarDataUri } from "@/lib/botCards";
 import { getCumulativeXpByLevel } from "@/lib/leveling";
 import { COSMETIC_SAMPLE } from "@/lib/cosmeticSample";
+import { nickOf } from "@/lib/nick";
 // 카드 배경 그림(장면 PNG) — 이 서버 경로만 읽어 buildCard 에 넣는다(lib/botCards 는 그림을 끌어오지 않는다)
 import { sceneLayer } from "@/lib/cardScenes/art";
 
@@ -30,6 +31,8 @@ import { sceneLayer } from "@/lib/cardScenes/art";
 //       세트(카드 스킨 + 테두리)의 적용 미리보기가 고른 테두리를 함께 보낸다. 캐시 키는 스킨 + 테두리
 //    📌 &scene=<카드 배경 키>(2026-10-15) — 카드 배경을 깐 카드(봇 /레벨 카드가 배경을 그린다 — lib/botCards CARD_SCENES). 아는 배경 키만(SCENE_OF · CARD_SCENE_KEYS 둘 다), 아니면 400.
 //       배경만 보내도 된다(skin 없이 — 기본 테두리). 둘 다 없으면 400. 캐시 키는 스킨 + 배경 + 테두리 — 배경 없는 주소 · 그림은 예전과 같다(CDN 캐시 그대로)
+//    📌 &bar=<레벨 막대 키>(2026-10-31 카드 배경에서 막대를 뗐다) — 그 막대를 그린 카드. 아는 키만(BAR_OF · CARD_BAR_KEYS 둘 다), 아니면 400.
+//       빈 값(&bar=)은 기본 막대, 안 보내면 배경의 짝 막대(예전 주소 그대로). 막대만 보내도 된다
 
 const fail = (message, status = 400) => NextResponse.json({ success: false, message, error: message }, { status });
 
@@ -56,29 +59,30 @@ function loadFonts() {
   return fontsPromise;
 }
 
-// 예시 사람의 사진 — 사이트 미리보기와 같은 로고 펭귄(public/logo.png). 못 읽으면 이름 첫 글자 원형(카드가 알아서 그린다)
-const LOGO_FILE = join(process.cwd(), "public/logo.png");
-let logoPromise = null;
-function loadLogo() {
-  if (!logoPromise) {
-    logoPromise = readFile(LOGO_FILE)
+// 📌 예시 사람의 사진 — 사람 모양 기본 프로필(public/avatar-default.png · 사이트 미리보기와 같은 그림). 못 읽으면 이름 첫 글자 원형(카드가 알아서 그린다)
+//    2026-10-31 운영자 "미리보기 펭귄 좀 없애 · 닉네임 해서 무 프로필로 · 사람 모양 프로필"(예전엔 로고 펭귄)
+const SAMPLE_AVATAR_FILE = join(process.cwd(), "public/avatar-default.png");
+let sampleAvatarPromise = null;
+function loadSampleAvatar() {
+  if (!sampleAvatarPromise) {
+    sampleAvatarPromise = readFile(SAMPLE_AVATAR_FILE)
       .then((buf) => `data:image/png;base64,${buf.toString("base64")}`)
       .catch(() => {
-        logoPromise = null;
+        sampleAvatarPromise = null;
         return null;
       });
   }
-  return logoPromise;
+  return sampleAvatarPromise;
 }
 
 // 예시 사람의 /레벨 카드 값 — 사이트 미리보기 카드와 같은 레벨 · 진행률(누적 XP 는 lib/leveling.js 공식)
-function sampleData(skin, avatar, frame = "", scene = "") {
+function sampleData(skin, avatar, frame = "", scene = "", bar = undefined) {
   const s = COSMETIC_SAMPLE;
   const base = getCumulativeXpByLevel(s.level);
   const step = getCumulativeXpByLevel(s.level + 1) - base;
   const cur = Math.floor(step * s.progress);
   return {
-    ...sampleCardData("cmdLevel", 0, avatar, skin, scene),
+    ...sampleCardData("cmdLevel", 0, avatar, skin, scene, bar),
     ...(frame ? { frame } : {}),
     name: s.name,
     level: s.level,
@@ -100,9 +104,9 @@ async function render(data) {
 
 // 📌 본인 /레벨 카드 값 — /api/xp/me 와 같은 계산(레벨 구간 진행 · 순위 = 나보다 위인 사람 + 1).
 //    동점은 userId 오름차순 — 서버 랭킹 · 내 정보 · 봇 /레벨 · /랭크와 같은 규칙(2026-10-04 "규칙 하나로 맞추면")
-async function myData(session, skin, frame = "", scene = "") {
+async function myData(session, skin, frame = "", scene = "", bar = undefined) {
   await connectToDatabase();
-  const doc = await UserXp.findOne({ userId: session.user.id }, { xp: 1, level: 1 }).lean();
+  const doc = await UserXp.findOne({ userId: session.user.id }, { xp: 1, level: 1, displayName: 1 }).lean();
   const xp = doc?.xp || 0;
   const level = doc?.level || 0;
   const [above, docCount, members, avatar] = await Promise.all([
@@ -114,9 +118,10 @@ async function myData(session, skin, frame = "", scene = "") {
   const cur = getCumulativeXpByLevel(level);
   const next = getCumulativeXpByLevel(level + 1);
   return {
-    ...sampleCardData("cmdLevel", 0, avatar, skin, scene),
+    ...sampleCardData("cmdLevel", 0, avatar, skin, scene, bar),
     ...(frame ? { frame } : {}),
-    name: String(session.user.name || ""),
+    // 📌 2026-11-01 이름은 서버 별명 — UserXp.displayName(봇이 적는 별명) → 세션 별명(nickOf). 계정 이름은 그리지 않는다
+    name: String(doc?.displayName || nickOf(session.user)).trim(),
     level,
     xp,
     need: Math.max(0, next - xp),
@@ -128,11 +133,11 @@ async function myData(session, skin, frame = "", scene = "") {
 // 본인 카드 메모리 캐시 — 사람 · 스킨 · 배경 · 테두리별 5분, 많아야 200장(오래된 것부터 버린다)
 const MINE_TTL = 5 * 60 * 1000;
 const mineCache = new Map();
-async function minePng(session, skin, frame, scene) {
-  const key = `${session.user.id}:${skin}:${scene}:${frame}`;
+async function minePng(session, skin, frame, scene, bar) {
+  const key = `${session.user.id}:${skin}:${scene}:${frame}:${bar ?? "~"}`;
   const hit = mineCache.get(key);
   if (hit && Date.now() - hit.at < MINE_TTL) return hit.png;
-  const png = await render(await myData(session, skin, frame, scene));
+  const png = await render(await myData(session, skin, frame, scene, bar));
   mineCache.delete(key);
   mineCache.set(key, { at: Date.now(), png });
   if (mineCache.size > 200) mineCache.delete(mineCache.keys().next().value);
@@ -143,14 +148,14 @@ async function minePng(session, skin, frame, scene) {
 //    📌 테두리 · 배경을 붙이면 조합이 스킨 × 배경 × 테두리만큼 늘어난다 — 많아야 240장(오래된 것부터 버린다 — 다시 그리면 된다)
 const pngCache = new Map();
 const PNG_MAX = 240;
-function pngOf(skin, frame, scene) {
-  const key = `${skin}:${scene}:${frame}`;
+function pngOf(skin, frame, scene, bar) {
+  const key = `${skin}:${scene}:${frame}:${bar ?? "~"}`;
   let p = pngCache.get(key);
   if (!p) {
     p = (async () => {
-      const [{ fonts, has }, avatar] = await Promise.all([loadFonts(), loadLogo()]);
+      const [{ fonts, has }, avatar] = await Promise.all([loadFonts(), loadSampleAvatar()]);
       const { width, height } = CARD_SIZE.cmdLevel;
-      const res = new ImageResponse(buildCard("cmdLevel", sampleData(skin, avatar, frame, scene), createElement, { has, scene: sceneLayer }), { width, height, fonts });
+      const res = new ImageResponse(buildCard("cmdLevel", sampleData(skin, avatar, frame, scene, bar), createElement, { has, scene: sceneLayer }), { width, height, fonts });
       return new Uint8Array(await res.arrayBuffer());
     })();
     pngCache.set(key, p);
@@ -163,7 +168,11 @@ function pngOf(skin, frame, scene) {
 export async function GET(request) {
   const skin = request.nextUrl.searchParams.get("skin") || "";
   const scene = request.nextUrl.searchParams.get("scene") || "";
-  if (!skin && !scene) return fail("잘못된 카드 테두리입니다.");
+  // &bar=<레벨 막대 키> — 없으면(undefined) 배경의 짝 막대, "" 은 기본 막대
+  const barRaw = request.nextUrl.searchParams.get("bar");
+  const bar = barRaw === null ? undefined : barRaw;
+  if (bar && (!Object.prototype.hasOwnProperty.call(BAR_OF, bar) || !CARD_BAR_KEYS.includes(bar))) return fail("잘못된 레벨바입니다.");
+  if (!skin && !scene && !bar) return fail("잘못된 카드 테두리입니다.");
   if (skin && (!Object.prototype.hasOwnProperty.call(SKIN_OF, skin) || !CARD_SKIN_KEYS.includes(skin))) return fail("잘못된 카드 테두리입니다.");
   if (scene && (!Object.prototype.hasOwnProperty.call(SCENE_OF, scene) || !CARD_SCENE_KEYS.includes(scene))) return fail("잘못된 카드 배경입니다.");
   const frame = request.nextUrl.searchParams.get("frame") || "";
@@ -173,12 +182,12 @@ export async function GET(request) {
     if (request.nextUrl.searchParams.get("me") === "1") {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {
-        const png = await minePng(session, skin, frame, scene);
+        const png = await minePng(session, skin, frame, scene, bar);
         // 📌 본인 카드는 URL 이 누구든 같다 — 브라우저 캐시에 두면 같은 기기에서 계정을 바꿔도 앞 사람 카드가 보인다. 다시 그리는 비용은 mineCache 가 막는다
         return new NextResponse(png, { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" } });
       }
     }
-    const png = await pngOf(skin, frame, scene);
+    const png = await pngOf(skin, frame, scene, bar);
     return new NextResponse(png, {
       headers: {
         "Content-Type": "image/png",

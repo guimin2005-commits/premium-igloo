@@ -9,7 +9,7 @@ import { POINT_RATE, pointToXp, xpToPoint } from "@/lib/pointRate";
 import Dropdown, { type DropdownOption } from "../../components/Dropdown";
 import ItemIcon, { ArtIcon } from "../../components/ItemIcon";
 import IconPicker from "../../components/IconPicker";
-import { artOfSkin, artOfScene, artOfFrame, frameImageOf, cosmeticAutoOf, legacyFrameArtOf, cosmeticIconOf, cosmeticKeysOf } from "@/lib/cosmeticArt";
+import { artOfSkin, artOfScene, artOfBar, artOfFrame, frameImageOf, cosmeticAutoOf, legacyFrameArtOf, cosmeticIconOf, cosmeticKeysOf } from "@/lib/cosmeticArt";
 import BackdropPicker from "../../components/BackdropPicker";
 import ProductCard from "../../arctic/ProductCard";
 import StoreCardArt, { BundleArt, bundlePartsOf } from "../../arctic/CardArt";
@@ -23,8 +23,8 @@ import { ITEM_TYPE_OPTIONS, STORE_TYPE_OPTIONS, itemTypeLabel, itemTypeColor, no
 import { CATEGORY_OPTIONS, CATEGORY_MAX, normalizeCategory, resolveCategory, shortNameOf } from "@/lib/itemCategory";
 import { RARITIES, normalizeRarity, rarityOf, rarityRank } from "@/lib/rarity";
 import {
-  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, SCENES, FRAMES, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
-  normalizeEffects, describeEffect, againXpOf, describeItemBasic, CANDY_TIERS, CANDY_TIER_MAX, CANDY_XP_MAX, normalizeCandyTiers, describeRoleBuff, cashbackRuleOf, hasConsumable, skinsOf, scenesOf, framesOf,
+  TRIGGERS, TRIGGER_OF, EFFECT_KINDS, SKINS, SCENES, BARS, FRAMES, FIELD_RANGE, DAY_LABELS, MAX_EFFECTS, amountMaxOf,
+  normalizeEffects, describeEffect, againXpOf, describeItemBasic, CANDY_TIERS, CANDY_TIER_MAX, CANDY_XP_MAX, normalizeCandyTiers, describeRoleBuff, cashbackRuleOf, hasConsumable, skinsOf, scenesOf, barsOf, framesOf,
   FRAME_ALL, SKIN_RANK_ALL,
   effectLinesOf, autoEffectLinesOf, normalizeEffectText, EFFECT_TEXT_MAX, EFFECT_TEXT_LINE_MAX,
   COSMETIC_SCOPES, normalizeScope, autoScopeOf, scopeLabelOf, scopeNotesOf, isCosmeticItem,
@@ -243,18 +243,21 @@ function Thumb({ it }: { it: any }) {
 type ThumbArt = { icon?: unknown; imageUrl?: unknown; itemImageUrl?: unknown };
 const withCosmeticIcon = <T extends ThumbArt>(it: T, src: { effects?: { list?: unknown } } | null | undefined): T => {
   const raw0 = src?.effects?.list;
-  const list = (Array.isArray(raw0) ? normalizeEffects(raw0) : []) as { on?: string; skin?: string; scene?: string; frame?: string }[];
+  const list = (Array.isArray(raw0) ? normalizeEffects(raw0) : []) as { on?: string; skin?: string; scene?: string; bar?: string; frame?: string }[];
   const skin = list.find((e) => e?.on === "cardSkin" && e.skin);
   const scene = list.find((e) => e?.on === "cardScene" && e.scene);
+  const bar = list.find((e) => e?.on === "cardBar" && e.bar);
   const frame = list.find((e) => e?.on === "avatarFrame" && e.frame);
   const skins: string[] = skin ? skinsOf(skin.skin) : [];
   const scenes: string[] = scene ? scenesOf(scene.scene) : [];
+  const bars: string[] = bar ? barsOf(bar.bar) : [];
   const frames: string[] = frame ? framesOf(frame.frame) : [];
-  if (!it || (!skins.length && !scenes.length && !frames.length)) return it;
+  if (!it || (!skins.length && !scenes.length && !bars.length && !frames.length)) return it;
   const raw = String(it.imageUrl || it.itemImageUrl || "");
   const out = cosmeticIconOf({
     icon: it.icon, imageUrl: raw,
     ...(scenes.length ? { sceneKey: scenes[0] } : {}),
+    ...(bars.length ? { barKey: bars[0] } : {}),
     ...(skins.length > 1 ? { skinKeys: skins } : skins.length ? { skinKey: skins[0] } : {}),
     ...(frames.length > 1 ? { frameKeys: frames } : frames.length ? { frameKey: frames[0] } : {}),
   });
@@ -271,7 +274,7 @@ const cosmeticKeysProp = (ri: { type?: string; effects?: { list?: unknown } } | 
 //    open(조건 펼침)은 화면 상태라 저장하지 않는다. chText 는 채널 목록을 못 불러왔을 때 쓰는 ID 입력칸의 날 글자
 type EffectDraft = {
   id: string; on: string; mode: string; amount: string; minMinutes: string; everyN: string;
-  chance: string; minMembers: string; seconds: string; skin: string; frame: string; scene: string;
+  chance: string; minMembers: string; seconds: string; skin: string; frame: string; scene: string; bar: string;
   again: string; // 다시 오른 레벨 몫(levelUp — "" = 크기의 절반 · lib/itemEffects againXpOf)
   candy: CandyRow[]; // 보상 구간 표(voiceCandy — 처음엔 기본 표 · 기본 표와 같으면 저장하지 않는다 · lib/itemEffects normalizeCandyTiers)
   maxPct: string; // 최대 %(voiceStay — 머물수록 증가의 끝)
@@ -297,7 +300,7 @@ const candyTiersError = (rows: CandyRow[]): string => {
 };
 const newEffectId = () => Math.random().toString(36).slice(2, 10);
 const newEffect = (): EffectDraft => ({
-  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "", frame: "", scene: "", again: "", maxPct: "",
+  id: newEffectId(), on: "chat", mode: "add", amount: "", minMinutes: "", everyN: "", chance: "", minMembers: "", seconds: "", skin: "", frame: "", scene: "", bar: "", again: "", maxPct: "",
   candy: candyRowsOf(CANDY_TIERS),
   days: [], hourFrom: "", hourTo: "", channelIds: [], chText: "", open: false,
 });
@@ -308,7 +311,9 @@ const effectOf = (d: EffectDraft) => ({
   id: d.id, on: d.on, mode: d.mode, amount: TRIGGER_OF[d.on]?.needs === "seconds" ? undefined : numOrNone(d.amount),
   minMinutes: numOrNone(d.minMinutes), everyN: numOrNone(d.everyN),
   chance: numOrNone(d.chance), minMembers: numOrNone(d.minMembers), seconds: numOrNone(d.seconds), skin: d.skin || undefined, frame: d.frame || undefined,
-  scene: d.scene || undefined,
+  scene: d.scene || undefined, bar: d.bar || undefined,
+  // 📌 유물(2026-11-02) — 키는 하나(사건의 지평선)라 고르는 칸 없이 그 키로
+  relic: TRIGGER_OF[d.on]?.needs === "relic" ? "horizon" : undefined,
   againAmount: TRIGGER_OF[d.on]?.again ? numOrNone(d.again) : undefined,
   maxPct: TRIGGER_OF[d.on]?.maxPct ? numOrNone(d.maxPct) : undefined,
   // 보상 구간 표 — 기본 표와 같으면 보내지 않는다(기본 표를 따라가게)
@@ -345,7 +350,7 @@ const draftOf = (e: any): EffectDraft => {
     amount: e?.amount ? String(e.amount) : "", minMinutes: e?.minMinutes ? String(e.minMinutes) : "", everyN: e?.everyN ? String(e.everyN) : "",
     chance: e?.chance ? String(e.chance) : "", minMembers: e?.minMembers ? String(e.minMembers) : "",
     seconds: e?.seconds ? String(e.seconds) : "", skin: typeof e?.skin === "string" ? e.skin : "",
-    frame: typeof e?.frame === "string" ? e.frame : "", scene: typeof e?.scene === "string" ? e.scene : "",
+    frame: typeof e?.frame === "string" ? e.frame : "", scene: typeof e?.scene === "string" ? e.scene : "", bar: typeof e?.bar === "string" ? e.bar : "",
     again: e?.againAmount != null ? String(e.againAmount) : "",
     maxPct: e?.maxPct ? String(e.maxPct) : "",
     candy: candyRowsOf(normalizeCandyTiers(e?.candyTiers) || CANDY_TIERS),
@@ -622,16 +627,19 @@ const revealInvalid = (f: HTMLFormElement | null) => {
   return () => f.removeEventListener("invalid", on, true);
 };
 
-// 📌 꾸미기 아이템의 입는 모양(카드 테두리 · 카드 배경 · 프로필 테두리) — 폼의 효과 줄에서 첫 키. 등급 전체 · 테두리 전체는 맨 윗 등급 그림으로
+// 📌 꾸미기 아이템의 입는 모양(카드 테두리 · 카드 배경 · 레벨 막대 · 프로필 테두리) — 폼의 효과 줄에서 첫 키. 등급 전체 · 테두리 전체는 맨 윗 등급 그림으로
 //    (상점 상세 적용 미리보기 lib/itemCosmetic cosmeticOf 와 같은 규칙). 하나도 없으면 null(착용 미리보기 판 없음)
-const wearOf = (fx: { on: string; skin: string; scene: string; frame: string }[]) => {
+const wearOf = (fx: { on: string; skin: string; scene: string; bar: string; frame: string }[]) => {
   const sk = fx.find((d) => d.on === "cardSkin" && d.skin)?.skin || "";
   const scene = fx.find((d) => d.on === "cardScene" && d.scene)?.scene || "";
+  const br = fx.find((d) => d.on === "cardBar" && d.bar)?.bar || "";
   const fr = fx.find((d) => d.on === "avatarFrame" && d.frame)?.frame || "";
   const skin = sk === SKIN_RANK_ALL ? "rank_igloo" : skinsOf(sk).length ? sk : "";
   const frame = fr === FRAME_ALL ? "igloo" : framesOf(fr).length ? fr : "";
   const sc = scenesOf(scene).length ? scene : "";
-  return skin || sc || frame ? { skin, scene: sc, frame } : null;
+  // 레벨 막대 — 막대 효과가 있으면 그 막대, 없으면 undefined(배경의 짝 막대 · 상점 미리보기와 같다)
+  const bar = barsOf(br).length ? br : undefined;
+  return skin || sc || bar || frame ? { skin, scene: sc, bar, frame } : null;
 };
 // 📌 착용 미리보기(2026-10-17 승인 시안 shop-tidy ⑤) — 내 프로필 카드 · 디스코드 /레벨 카드에 그 꾸미기를 입혀 본다(입은 모습을 보고 희귀도를 정하게).
 //    상점 상세 적용 미리보기(app/arctic/AppliedPreview)와 같은 부품(ProfileCardPreview · FitBox · whoOf)과 같은 디스코드 그림(/api/shop/skin-card?me=1 — 서버가 세션 본인 값으로).
@@ -646,7 +654,7 @@ const loadWearMe = () => {
   }
   return wearMeLoad;
 };
-function WearPreview({ skin, scene, frame }: { skin: string; scene: string; frame: string }) {
+function WearPreview({ skin, scene, bar, frame }: { skin: string; scene: string; bar?: string; frame: string }) {
   const { data: session } = useSession();
   const user = session?.user || null;
   const [me, setMe] = useState<unknown>(null);
@@ -657,8 +665,8 @@ function WearPreview({ skin, scene, frame }: { skin: string; scene: string; fram
   }, []);
   const today = useTodayXp(!!user && !!me);
   const who = whoOf(user, me, today);
-  const src = skin || scene
-    ? `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`
+  const src = skin || scene || bar
+    ? `/api/shop/skin-card?skin=${encodeURIComponent(skin)}${scene ? `&scene=${encodeURIComponent(scene)}` : ""}${bar ? `&bar=${encodeURIComponent(bar)}` : ""}${frame ? `&frame=${encodeURIComponent(frame)}` : ""}${user ? "&me=1" : ""}`
     : "";
   const [failed, setFailed] = useState("");
   const discord = !!src && failed !== src;
@@ -668,7 +676,7 @@ function WearPreview({ skin, scene, frame }: { skin: string; scene: string; fram
       <div className="shrink-0">
         <div className="relative w-[136px] h-[200px] overflow-hidden">
           <FitBox pad={1} max={1}>
-            <ProfileCardPreview who={who} skin={skin} scene={scene} frame={frame} />
+            <ProfileCardPreview who={who} skin={skin} scene={scene} bar={bar} frame={frame} />
           </FitBox>
         </div>
         <p className={cap}>프로필 카드</p>
@@ -897,13 +905,21 @@ const subLabel = "mb-1.5 text-[12px] font-bold text-[#5a5a5a]";
 //    배경 · 카드 테두리는 그 아이콘(lib/cosmeticArt artOfScene · artOfSkin), 프로필 테두리는 테두리 그림(public/avatar-borders — 등급 전체는 아이콘) + 이름.
 //    판은 높이 고정(안에서 스크롤) — 효과 줄 높이가 고른 것에 따라 바뀌지 않게. 열 때 고른 칸이 보이게 판 안에서만 굴린다
 const COSMETIC_BOX_H = 264;
-const PICKER_LABEL = { skin: "카드 테두리", scene: "카드 배경", frame: "프로필 테두리" } as const;
-function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "scene" | "frame"; value: string; onChange: (v: string) => void }) {
+const PICKER_LABEL = { skin: "카드 테두리", scene: "카드 배경", bar: "레벨바", frame: "프로필 테두리" } as const;
+// 레벨 막대 묶음(2026-10-31) — 배경과 같은 묶음 이름(할로윈 · 친구 초대 · 기타)
+const BAR_GROUPS: { l: string; has: (s: { v: string }) => boolean }[] = [
+  { l: "할로윈", has: (s) => s.v === "bar_ghost" },
+  { l: "친구 초대", has: (s) => s.v === "bar_clover" },
+  { l: "기타", has: (s) => s.v !== "bar_ghost" && s.v !== "bar_clover" },
+];
+function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "scene" | "bar" | "frame"; value: string; onChange: (v: string) => void }) {
   const groups = kind === "skin"
     ? SKIN_GROUPS.map((g) => ({ l: g.l, opts: SKINS.filter(g.has) }))
     : kind === "scene"
       ? SCENE_GROUPS.map((g) => ({ l: g.l, opts: SCENES.filter(g.has) }))
-      : FRAME_GROUPS.map((g) => ({ l: g.l, opts: [...FRAMES.filter(g.has), ...(g.all ? [{ v: "all", l: "등급 전체" }] : [])] }));
+      : kind === "bar"
+        ? BAR_GROUPS.map((g) => ({ l: g.l, opts: BARS.filter(g.has) }))
+        : FRAME_GROUPS.map((g) => ({ l: g.l, opts: [...FRAMES.filter(g.has), ...(g.all ? [{ v: "all", l: "등급 전체" }] : [])] }));
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const box = boxRef.current;
@@ -933,7 +949,7 @@ function CosmeticPicker({ kind, value, onChange }: { kind: "skin" | "scene" | "f
                         <img src={img} alt="" className="absolute inset-0 w-full h-full" />
                       </>
                     ) : (
-                      <ArtIcon k={kind === "skin" ? artOfSkin(o.v) : kind === "scene" ? artOfScene(o.v) : artOfFrame(o.v)} size={32} />
+                      <ArtIcon k={kind === "skin" ? artOfSkin(o.v) : kind === "scene" ? artOfScene(o.v) : kind === "bar" ? artOfBar(o.v) : artOfFrame(o.v)} size={32} />
                     )}
                   </span>
                   <span className={`block w-full truncate text-center text-[11px] font-bold ${on ? "text-[#131313]" : "text-[#5a5a5a]"}`}>{o.l}</span>
@@ -1011,6 +1027,7 @@ function EffectsEditor({
       ...(t.needs === "skin" && !d.skin ? { skin: SKINS[0].v } : {}),
       ...(t.needs === "frame" && !d.frame ? { frame: FRAMES[0].v } : {}),
       ...(t.needs === "scene" && !d.scene && SCENES[0] ? { scene: SCENES[0].v } : {}),
+      ...(t.needs === "bar" && !d.bar && BARS[0] ? { bar: BARS[0].v } : {}),
       // 머물수록 증가 — 최대 % 는 비우면 저장되지 않으므로 20 으로 채워 둔다
       ...(t.maxPct && !d.maxPct ? { maxPct: "20" } : {}),
     });
@@ -1077,7 +1094,7 @@ function EffectsEditor({
             </div>
 
             {/* 값 줄 — 효과마다 필요한 칸만. 크기가 없는 효과(보호막 · 배지)는 줄이 없다. 카드 배경 · 카드 테두리 · 프로필 테두리는 아래 그림 칸 */}
-            {(!t.noAmount || (t.needs && t.needs !== "skin" && t.needs !== "frame" && t.needs !== "scene")) && (
+            {(!t.noAmount || (t.needs && t.needs !== "skin" && t.needs !== "frame" && t.needs !== "scene" && t.needs !== "bar")) && (
               <Inline className="mt-2">
                 {t.needs === "minMinutes" && (
                   <>
@@ -1189,8 +1206,10 @@ function EffectsEditor({
             })()}
             {/* 📌 스킨 · 테두리 — 그림 칸(목록 칸은 길어 찾기 어려웠다). key: 효과 종류가 바뀌면 판을 새로 열어 고른 칸으로 굴린다 */}
             {t.needs === "scene" && <CosmeticPicker key={`${d.id}:scene`} kind="scene" value={d.scene} onChange={(v) => setRow(i, { scene: v })} />}
+            {t.needs === "bar" && <CosmeticPicker key={`${d.id}:bar`} kind="bar" value={d.bar} onChange={(v) => setRow(i, { bar: v })} />}
             {t.needs === "skin" && <CosmeticPicker key={`${d.id}:skin`} kind="skin" value={d.skin} onChange={(v) => setRow(i, { skin: v })} />}
             {t.needs === "frame" && <CosmeticPicker key={`${d.id}:frame`} kind="frame" value={d.frame} onChange={(v) => setRow(i, { frame: v })} />}
+            {t.needs === "relic" && <p className="mt-2 text-[12px] font-bold text-[#5a5a5a]">사건의 지평선</p>}
 
             {d.open && trig && (
               <div className="mt-3 pt-3 border-t border-[#ededed]">
@@ -5196,7 +5215,7 @@ export default function AdminShopPage() {
     ...regGroups.map((g) => ({ value: `g:${g}`, label: g, hint: String(regGroupCount.get(g) || 0), icon: <FolderMark /> })),
   ];
   // 꾸미기 효과에 맞는 아이콘 — 아이콘 고르기 판이 먼저 보여 준다
-  const regArtSuggest = [...new Set(itemForm.effects.flatMap((d) => (d.on === "cardScene" && d.scene ? [artOfScene(d.scene)] : d.on === "cardSkin" && d.skin ? [artOfSkin(d.skin)] : d.on === "avatarFrame" && d.frame ? [artOfFrame(d.frame)] : [])))];
+  const regArtSuggest = [...new Set(itemForm.effects.flatMap((d) => (d.on === "cardScene" && d.scene ? [artOfScene(d.scene)] : d.on === "cardBar" && d.bar ? [artOfBar(d.bar)] : d.on === "cardSkin" && d.skin ? [artOfSkin(d.skin)] : d.on === "avatarFrame" && d.frame ? [artOfFrame(d.frame)] : [])))];
   // 상품 묶음 — 아이템 순서 · 그룹 표(상품 그룹 = 연결 아이템 그룹, 세트는 첫 구성 아이템 그룹)
   const prodIdx = itemIndexOf(regItems.map((it) => ({ id: String(it._id), group: groupOfItem(it) })));
   // 유형 ▾ — 역할 · 권한 · 아이템 · 꾸미기 · 기프트카드 · 세트(개수). 판매 상태는 거르기 판 칸(칩 수는 전체 상품 기준)
@@ -6174,7 +6193,7 @@ export default function AdminShopPage() {
                     <>
                       {regWear && (
                         <PaneSection title="착용 미리보기" summary="내 프로필로" flush>
-                          <WearPreview skin={regWear.skin} scene={regWear.scene} frame={regWear.frame} />
+                          <WearPreview skin={regWear.skin} scene={regWear.scene} bar={regWear.bar} frame={regWear.frame} />
                         </PaneSection>
                       )}
                       <PaneSection title="인벤토리 미리보기" summary={itemForm.visible ? "표시" : "숨김"}

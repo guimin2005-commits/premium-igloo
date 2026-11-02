@@ -18,6 +18,7 @@ import { categoryLabelOf, itemShortName } from "../ProductCard";
 import { isUnitSale, qtyCapOf } from "@/lib/unitSale";
 import { CART_KEY, CHECKOUT_KEY, readShopList, readShopRaw, writeShopList, removeShopKey, useShopUid } from "../shopStore";
 import { useGuestShopLogin } from "../useGuestShopLogin";
+import CheckoutSkeleton from "../skeletons/Checkout";
 
 const ORDER_KEY = "iglooShopOrderId";
 const ORDER_TTL = 60 * 60 * 1000;
@@ -308,10 +309,13 @@ export default function CheckoutPage() {
     }
   };
 
+  // 📌 2026-11-01 로딩 뼈대 — 다 불러온 결제 화면과 같은 틀(../skeletons/Checkout). 줄 수는 이미 읽은 장바구니 그대로
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+      <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+        <CheckoutSkeleton rows={cart.length || (shopReady ? (readShopRaw(CHECKOUT_KEY, shopUid) ? readShopList(CHECKOUT_KEY, shopUid) : readShopList(CART_KEY, shopUid)).length : 1)} />
+        <ArcticFooter />
+        <ArcticDock />
       </div>
     );
   }

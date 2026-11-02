@@ -5,6 +5,7 @@ import { requireAdmin, denyIfMaintenance } from "@/lib/apiAuth";
 import { authOptions } from "@/lib/authOptions";
 // 📌 유저 화면에서 부르는 조회 · 우회(예약 공지 · 재촉 이력 · 대신 제출 · 재촉)는 「유저 화면으로 보기」를 따른다. 관리 쓰기는 requireAdmin 그대로
 import { isAdminViewer } from "@/lib/adminViewServer";
+import { fetchGuildMember } from "@/lib/discordMember";
 import { ScrimSeason, ScrimTeam, ScrimAvailability, ScrimFixture, ScrimNotice, ScrimNudge } from "@/models/Scrim";
 import Auction from "@/models/Auction";
 import {
@@ -42,8 +43,14 @@ const ensureSeason = async () => {
 
 // 📌 디스코드 표시 이름 — 경매 예명이 아니라 실제 닉네임으로 저장한다.
 //    이미 프로필이 공개된 뒤이므로 가릴 이유가 없다. 실패하면 넘어온 이름을 그대로 쓴다.
+//    📌 2026-11-01 서버 별명 먼저(길드 멤버 nick → 표시 이름 → 계정 이름). 서버에 없거나 조회 실패면 예전처럼 /users/{id}
 const discordName = async (id, fallback) => {
   if (!id || !/^\d{15,21}$/.test(id) || !process.env.DISCORD_BOT_TOKEN) return fallback;
+  const g = await fetchGuildMember(id);
+  if (g.status === "ok") {
+    const n = String(g.member?.nick || g.member?.user?.global_name || g.member?.user?.username || "").trim();
+    if (n) return n;
+  }
   try {
     const r = await fetch(`https://discord.com/api/v10/users/${id}`, {
       headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },

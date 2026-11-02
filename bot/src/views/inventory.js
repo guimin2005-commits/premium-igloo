@@ -2,7 +2,7 @@
 //    보유 판정은 itemEffects.js 의 ownedItemList(사이트 lib/ownedItems.js 와 같은 규칙)를 그대로 쓴다.
 //    봇은 읽기만 한다 — 절대 저장하지 않는다.
 import { Item, ShopItem, Purchase, UserXp } from "../db.js";
-import { ownedItemList, pickCardSkin, pickCardScene, scenesOf, pickAvatarFrame, framesOf, withSeasonFrame, seasonFrameOf, skinsOf, seasonSkinOf, withSeasonSkin } from "../itemEffects.js";
+import { ownedItemList, pickCardSkin, pickCardScene, pickCardBar, barsOf, scenesOf, pickAvatarFrame, framesOf, withSeasonFrame, seasonFrameOf, skinsOf, seasonSkinOf, withSeasonSkin } from "../itemEffects.js";
 import { isBoosterMember } from "../booster.js";
 import { formatUntil } from "../botMessages.js";
 import { goedamTicketInfo } from "../goedamTicket.js";
@@ -27,6 +27,9 @@ const esc = (s) => String(s || "").replace(/([\\*_~|`>])/g, "\\$1");
 const effectsOf = (item) => (Array.isArray(item?.effects) ? item.effects : []);
 const skinOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "cardSkin" && e.skin)?.skin || ""));
 const sceneOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "cardScene" && e.scene)?.scene || ""));
+// 레벨바(2026-10-31) — 카드 배경과 같은 꼴(UserXp.cardBarPick · 안 골랐으면 기본 막대 — 배경은 막대를 바꾸지 않는다)
+const barOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "cardBar" && e.bar)?.bar || ""));
+const SCENE_PAIR_BAR = { sc_ghost: "bar_ghost", sc_clover: "bar_clover" };
 const frameOf = (item) => (item?.type === "physical" ? "" : String(effectsOf(item).find((e) => e?.on === "avatarFrame" && e.frame)?.frame || ""));
 const isBadge = (item) => item?.type !== "physical" && effectsOf(item).some((e) => e?.on === "profileBadge");
 // 📌 단 배지 id — 사이트 lib/itemEffects.js pickBadges 와 같은 규칙. owned: 가진 배지 아이템 id, pick: UserXp.badgePick
@@ -44,17 +47,21 @@ export function pickBadgeIds(owned, pick) {
 async function wornOf(userId, owned) {
   const skins = [];
   const scenes = [];
+  const bars = [];
   const frames = [];
   for (const { item } of owned) {
     for (const s of skinsOf(skinOf(item))) if (!skins.includes(s)) skins.push(s); // 등급 전체(rank_all) 아이템은 9종
     for (const c of scenesOf(sceneOf(item))) if (!scenes.includes(c)) scenes.push(c);
+    for (const b of barsOf(barOf(item))) if (!bars.includes(b)) bars.push(b);
     for (const f of framesOf(frameOf(item))) if (!frames.includes(f)) frames.push(f); // 전체(all) 아이템은 9종
   }
   const badges = owned.filter(({ item }) => isBadge(item)).map(({ item }) => String(item._id));
   // 📌 시즌 티어 테두리(seasonFrame)는 아이템이 없어도 있을 수 있어 늘 읽는다
-  const pick = await UserXp.findOne({ userId }, { cardSkinPick: 1, cardScenePick: 1, avatarFramePick: 1, badgePick: 1, seasonFrame: 1 }).lean();
+  const pick = await UserXp.findOne({ userId }, { cardSkinPick: 1, cardScenePick: 1, cardBarPick: 1, avatarFramePick: 1, badgePick: 1, seasonFrame: 1 }).lean();
   const skin = pickCardSkin(withSeasonSkin(skins, pick), pick?.cardSkinPick || ""); // 시즌 등급 카드 스킨(seasonFrame 등급)도 가진 것
   const scene = pickCardScene(scenes, pick?.cardScenePick || "");
+  for (const sc of scenes) { const b = SCENE_PAIR_BAR[sc]; if (b && !bars.includes(b)) bars.push(b); } // 가진 배경의 짝 막대도 가진 것
+  const bar = pickCardBar(bars, pick?.cardBarPick || "");
   const frame = pickAvatarFrame(withSeasonFrame(frames, pick), pick?.avatarFramePick || "");
   // 직접 단 배지만 — 안 골랐으면 자동으로 달지 않는다(사이트 lib/itemEffects pickBadges 와 같다 — badgePick 순서대로 가진 것만 · 중복 없이 · 최대 3)
   // 시즌 티어 테두리 — 같은 테두리를 아이템으로도 가졌으면 따로 줄을 만들지 않는다(사이트와 같다)
@@ -63,7 +70,7 @@ async function wornOf(userId, owned) {
   // 시즌 등급 카드 스킨 — 같은 스킨을 아이템으로도 가졌으면 따로 줄을 만들지 않는다(사이트와 같다)
   const ss = seasonSkinOf(pick);
   const seasonSkin = ss && !skins.includes(ss) ? { key: ss, tier: sk, n: Number(pick.seasonFrame.season) || 0 } : null;
-  return { skin, scene, frame, badges: new Set(pickBadgeIds(badges, pick?.badgePick)), season, seasonSkin };
+  return { skin, scene, bar, frame, badges: new Set(pickBadgeIds(badges, pick?.badgePick)), season, seasonSkin };
 }
 
 /**
@@ -92,7 +99,7 @@ export async function inventoryView(member) {
   // 📌 2026-10-25 괴담회 추첨권은 추첨 마감에 끝난다(../goedamTicket.js — 사이트 lib/inventory.js 와 같다). 만료가 없거나 더 늦으면 마감으로 읽는다(DB 는 그대로)
   const tk = await goedamTicketInfo().catch(() => null);
   if (tk?.id && tk.closesAt) for (const o of owned) if (String(o.item?._id) === tk.id && (!o.expiresAt || new Date(o.expiresAt) > tk.closesAt)) o.expiresAt = tk.closesAt;
-  const worn = await wornOf(userId, owned).catch(() => ({ skin: "", scene: "", frame: "", badges: new Set(), season: null, seasonSkin: null }));
+  const worn = await wornOf(userId, owned).catch(() => ({ skin: "", scene: "", bar: "", frame: "", badges: new Set(), season: null, seasonSkin: null }));
   // 📌 시즌 티어 테두리(UserXp.seasonFrame) — 아이템이 아니어도 가진 것으로 한 줄(사이트 인벤토리의 꾸미기 카드와 같다). 다음 시즌 끝(그 결산이 덮어쓴다)
   if (worn.season) {
     const [label, color] = FRAME_LABEL[worn.season.key];
@@ -135,7 +142,7 @@ export async function inventoryView(member) {
   const DECO_ART = {
     hwf_pumpkin: "deco-pumpkin-mouth", hwf_crystal: "deco-crystal-ball", hwf_ghost: "deco-ghost-sheet", hwf_candy: "deco-wrapped-candy",
     hwf_mummy: "deco-mummy", hwf_window: "deco-haunted-window", hwf_blackcat: "deco-black-cat", hwf_patch: "deco-pumpkin-patch", hwf_party: "deco-ghost-party", hwf_witch: "deco-witch-night", hwf_shop: "deco-candy-shop", hwf_grave: "deco-moon-grave", nwf_world: "deco-new-world", nwf_chart: "deco-sea-chart", nwf_airship: "deco-airship",
-    evf_ghost: "deco-ghost-tail", evf_clover: "deco-clover", bsf_aura: "deco-booster-aura",
+    evf_ghost: "deco-ghost-tail", evf_clover: "deco-clover", bsf_aura: "deco-booster-aura", evf_rec: "deco-rec",
   };
   const legacyFrameArt = (url) => {
     const m = /^\/avatar-borders\/([a-z0-9_]+)\.svg$/i.exec(String(url || "").trim());
@@ -146,6 +153,7 @@ export async function inventoryView(member) {
   const bag = owned.map(({ item, expiresAt, pending, count, stack, season }) => {
     const skin = skinOf(item);
     const scene = sceneOf(item);
+    const bar = barOf(item);
     const frame = frameOf(item);
     // 옛 그림만 뗀다 — 운영자가 고른 아이콘이 있으면 그 아이콘, 비었거나 공용 아이콘이면 테두리 도트 아이콘(사이트 cosmeticIconOf 와 같은 순서)
     const legacy = legacyFrameArt(item.imageUrl);
@@ -162,7 +170,7 @@ export async function inventoryView(member) {
       stack: !!stack,
       expiresAt,
       pending: !!pending,
-      worn: (!!worn.skin && skinsOf(skin).includes(worn.skin)) || (!!worn.scene && scenesOf(scene).includes(worn.scene)) || (!!worn.frame && framesOf(frame).includes(worn.frame)) || worn.badges.has(String(item._id)),
+      worn: (!!worn.skin && skinsOf(skin).includes(worn.skin)) || (!!worn.scene && scenesOf(scene).includes(worn.scene)) || (!!worn.bar && barsOf(bar).includes(worn.bar)) || (!!worn.frame && framesOf(frame).includes(worn.frame)) || worn.badges.has(String(item._id)),
     };
   });
 

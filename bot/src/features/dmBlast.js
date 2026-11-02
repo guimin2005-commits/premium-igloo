@@ -5,10 +5,12 @@
 //  📌 집기: cursor 를 조건부로 옮긴 쪽만 그 몫을 보낸다 + 보낸 한 줄(DmBlastSend · blastId + userId 유니크)을 먼저 넣은 쪽만 보낸다 — 겹친 봇 · 재시작에도 한 사람 한 통.
 //     서버를 나간 사람 · DM 막힘은 까닭만 적고(failed) 다시 두드리지 않는다. 틀을 꺼 두면 쉰다(켜면 이어서). 관리자가 멈추면(stopped) 거기서 끝
 //  📌 target "all" 은 사이트가 받는 사람을 비워 둔다 — 처음 집을 때 서버 멤버(봇 제외)로 채운다
+//  📌 보낸 DM 은 받은 사람 알림함에도 한 줄(inbox.js dmAndLog — DM 이 막혀도 남는다)
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { DmBlast, DmBlastSend, isDuplicateKeyError } from "../db.js";
 import { config } from "../config.js";
 import { buildMessage, currentTemplate, commonVars, SITE_URL } from "../botMessages.js";
+import { dmAndLog } from "../inbox.js";
 
 const TICK_MS = 20 * 1000;
 const GAP_MS = 1500;
@@ -105,7 +107,7 @@ async function run(client) {
       await DmBlast.updateOne({ _id: blast._id, cursor: to }, { $set: { cursor: from } }).catch(() => {});
       return;
     }
-    const ok = await member.send({ ...msg, components: [drawButton()] }).then(() => true).catch(() => false);
+    const ok = await dmAndLog(member, { ...msg, components: [drawButton()] }, blast.key, vars);
     await mark(ok, ok ? "" : "dm");
     await wait(GAP_MS);
   }

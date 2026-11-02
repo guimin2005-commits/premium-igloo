@@ -28,6 +28,7 @@ import { Goedam, GoedamWatch, GoedamDraw, GoedamGroup, GoedamGiftCode, Purchase,
 import { config } from "../config.js";
 import { recordBotError } from "./heartbeat.js";
 import { buildMessage, currentTemplate, commonVars, SITE_URL } from "../botMessages.js";
+import { dmAndLog } from "../inbox.js";
 
 // 📌 세 갈래(사이트 · 봇 · 화면)가 같은 글자를 쓴다 — 약속 문서 「키 · 표식」
 export const GOEDAM_KEY = "goedam-2026";
@@ -519,7 +520,7 @@ async function dmVoiceTicket(userId, item, count, minutes) {
   const msg = buildMessage("goedamVoiceTicket", { ...commonVars(member, member.guild), item: item.name, count, minutes });
   if (!msg) return;
   const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("뽑기 하러 가기").setURL(`${SITE_URL}${DRAW_PATH}`));
-  await member.send({ ...msg, components: [row] }).catch(() => {});
+  await dmAndLog(member, { ...msg, components: [row] }, "goedamVoiceTicket", { item: item.name, count, minutes }); // 알림함에도 한 줄(inbox.js)
 }
 
 // 음성 날 하나 — 그날 기준을 넘은 사람의 줄(sid "voice:<날짜>")에 그날 합을 쓰고(새 줄 · 늘어난 줄만, $max), 아직 안 받은 줄을
@@ -643,7 +644,7 @@ async function noticeGifts() {
       await undo(); // 관리자가 꺼 두었다 — 켜면 그때 보낸다
       return;
     }
-    const ok = await member.send(msg).then(() => true).catch(() => false);
+    const ok = await dmAndLog(member, msg, "goedamGiftNotice", { prize: r.prizeName || "문화상품권" }); // 알림함에도 한 줄(inbox.js — 번호는 싣지 않는다)
     if (ok) console.log(`🎟️ 괴담회 문화상품권 안내 DM: ${r.userName || r.userId}`);
     else await GoedamDraw.updateOne({ _id: r._id }, { $set: { noticeError: "dm" } }).catch(() => {});
   }
@@ -699,6 +700,7 @@ async function noticeGroups() {
     const guide = buildMessage("goedamGiftNotice", { ...base, prize: "문화상품권" })?.embeds || [];
     if (guide.length && embeds.length + guide.length <= EMBEDS_MAX && embedChars([...embeds, ...guide]) <= EMBED_CHARS_MAX) embeds.push(...guide);
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("번호 확인하러 가기").setURL(`${SITE_URL}${GROUP_PATH}`));
+    // 알림함 줄은 사이트가 승인할 때 이미 넣었다(lib/goedamGroup.js notify) — 여기선 DM 만(inbox.js 를 거치지 않는다)
     const ok = await member.send({ ...msg, embeds, components: [row] }).then(() => true).catch(() => false);
     if (ok) console.log(`🎟️ 게임 그룹 지원 승인 DM: ${member.user?.username || r.userId} (${nameOf.get(r.groupId)})`);
     else await GoedamGiftCode.updateOne({ _id: r._id }, { $set: { noticeError: "dm" } }).catch(() => {});

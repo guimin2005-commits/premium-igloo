@@ -15,6 +15,7 @@ import ItemIcon from "../components/ItemIcon";
 import { itemTypeColor } from "@/lib/items";
 import { openLogin } from "../components/LoginPrompt";
 import { readShopList, CART_KEY, WISH_KEY } from "../arctic/shopStore";
+import { nickOf } from "@/lib/nick";
 
 // 📌 내 정보 — A(잉크 헤더) + D(묶음 줄 목록).
 //    줄은 전부 '해당하는 곳'으로 간다. 알림·문의·구인 내역은 /profile/notice · /profile/inquiry · /profile/recruit 로 분리했고,
@@ -234,7 +235,8 @@ export default function MyInfoPage() {
                 <div className="min-w-0 flex-1 basis-[180px]">
                   {/* 📌 이름 옆 프로필 배지 — 보유한 '프로필 배지' 효과 아이템 아이콘(최대 3, 관리자 순서 — /api/xp/me badges). 이름이 길면 이름만 줄인다 */}
                   <div className="flex items-center gap-2 min-w-0">
-                    <h1 className="min-w-0 text-[22px] md:text-[26px] font-black text-white tracking-tight leading-tight truncate">{session?.user?.name}</h1>
+                    {/* 📌 2026-11-01 이름은 서버 별명(lib/nick) — session.user.name 은 계정 이름이라 조회에만 */}
+                    <h1 className="min-w-0 text-[22px] md:text-[26px] font-black text-white tracking-tight leading-tight truncate">{nickOf(session?.user)}</h1>
                     {canSeeLevel && Array.isArray(shopMe?.badges) && shopMe.badges.length > 0 && (
                       <span className="shrink-0 inline-flex items-center gap-1">
                         {shopMe.badges.slice(0, 3).map((b: any) => (

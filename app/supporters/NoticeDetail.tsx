@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { Reveal } from "../components/Lux";
 import { RenderFormattedText } from "../components/FormattedText";
 import { useAdminView } from "../components/AdminView";
+import { nickOf } from "@/lib/nick";
 
 // 📌 서포터즈 공지 한 건 = 한 페이지 (/supporters/notice/[id]).
 //    창(overlay)으로 띄우면 새로고침·링크 공유·뒤로 가기가 어긋나서 제 주소를 갖는 페이지로 뺐다.
@@ -413,7 +414,7 @@ export default function NoticeDetail({ postId }: { postId: string }) {
     const optimistic: Comment = {
       _id: tmpId,
       userId: String(user?.id || ""),
-      userName: String(user?.name || ""),
+      userName: nickOf(user), // 📌 2026-11-01 서버 별명(서버가 저장하는 이름과 같다)
       userImage: user?.image || undefined,
       content,
       createdAt: new Date().toISOString(),

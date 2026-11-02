@@ -24,7 +24,7 @@
 //      상시형  — 들고 있는 동안. 조건 없음, 같은 효과는 합산 후 상한 — perksOf
 //               봇: passBoost(xp.js grantXp) · cooldownCut(chatXp) · muteRelief(voiceXp) / 사이트만: enhanceDiscount · shopCashback · questBonus
 //      소모형  — streakShield(attend.js) — 구매 하나를 consumeStreakShield 로 소모(Purchase.consumedAt)
-//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) · cardScene(카드 배경 — perksOf().cardScenes, pickCardScene)
+//      꾸미기형 — cardSkin(이미지 카드 스킨 — perksOf().cardSkins 중 유저가 고른 것, pickCardSkin) · cardScene(카드 배경 — perksOf().cardScenes, pickCardScene) · cardBar(레벨 막대 — perksOf().cardBars, pickCardBar)
 //               / 사이트만: profileBadge · avatarFrame(perksOf().avatarFrames, pickAvatarFrame)
 //
 //    📌 보유 판정 (사이트 lib/ownedItems.js · app/api/shop/my-items (A)/(B) 와 같은 규칙)
@@ -79,6 +79,7 @@ const EFFECT_TRIGGERS = {
   // ── 소모형 · 꾸미기형 ──
   streakShield: { kind: "consumable", modes: ["add"], noAmount: true },          // 연속 출석 보호막 1회
   cardScene: { kind: "cosmetic", modes: ["add"], needs: "scene", noAmount: true }, // 카드 배경(2026-10-15 — 카드 테두리와 따로 고르고 함께 입는다)
+  cardBar: { kind: "cosmetic", modes: ["add"], needs: "bar", noAmount: true }, // 레벨 막대(2026-10-31 — 배경 · 테두리와 따로 고르고 함께 입는다)
   cardSkin: { kind: "cosmetic", modes: ["add"], needs: "skin", noAmount: true }, // 이미지 카드 스킨
   profileBadge: { kind: "cosmetic", modes: ["add"], noAmount: true },            // 사이트 — 프로필 배지
   avatarFrame: { kind: "cosmetic", modes: ["add"], needs: "frame", noAmount: true }, // 사이트 — 아바타 테두리
@@ -110,10 +111,24 @@ const SCENE_KEYS = new Set(["sc_ghost", "sc_clover"]);
 export const scenesOf = (scene) => (SCENE_KEYS.has(scene) ? [scene] : []);
 // 📌 유저가 고른 배경(UserXp.cardScenePick) — 사이트 pickCardScene 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
 export const pickCardScene = (scenes, pick) => pickCardSkin(scenes, pick);
+// 📌 레벨 막대 키 bar_<영문>(2026-10-31) — 사이트 lib/itemEffects.js BARS · SCENE_BAR · pickCardBar 와 같은 키 · 규칙(모르는 키는 저장 때처럼 버린다).
+//    BAR_STYLE = 그리는 모양(botCards ghostBar · cloverBar — 배경 meta.bar 와 같은 이름). 배경을 가진 사람은 짝 막대(SCENE_BAR)도 가진다(perksOf)
+const BAR_STYLE = { bar_ghost: "ghostTrail", bar_clover: "cloverVine" };
+const BAR_KEYS = new Set(Object.keys(BAR_STYLE));
+const SCENE_BAR = { sc_ghost: "bar_ghost", sc_clover: "bar_clover" };
+export const barsOf = (bar) => (BAR_KEYS.has(bar) ? [bar] : []);
+export const barStyleOf = (bar) => BAR_STYLE[bar] || "";
+// 📌 유저가 고른 막대(UserXp.cardBarPick) — "" 한 번도 안 고름 → 입은 배경의 짝 막대 · "none" 기본 막대 · 막대 키(가진 것만). 반환 막대 키 또는 ""(기본)
+// 📌 2026-10-31 운영자 "분리 안 됐잖아" — 배경은 막대를 바꾸지 않는다: "" 안 고름 · "none" = 기본 막대, 막대 키 = 그 막대(가진 것만 — 가진 배경의 짝 막대 포함)
+export function pickCardBar(bars, pick) {
+  const list = Array.isArray(bars) ? bars : [];
+  if (!pick || pick === "none") return "";
+  return list.includes(pick) ? pick : "";
+}
 // 📌 아바타 테두리 키(등급 키) — 사이트 lib/itemEffects.js FRAMES 와 같아야 한다(모르는 키는 저장 때처럼 버린다)
 //    앞 9개는 등급 키(시즌 티어 보상), 뒤는 꾸미기 테두리(할로윈 hwf_* · A New World nwf_* · 이벤트 evf_* · 서버 부스터 bsf_*)
 const TIER_FRAME_KEYS = ["bronze", "silver", "gold", "platinum", "diamond", "master", "grandmaster", "challenger", "igloo"];
-const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship", "evf_ghost", "evf_clover", "bsf_aura"]);
+const FRAME_KEYS = new Set([...TIER_FRAME_KEYS, "hwf_pumpkin", "hwf_crystal", "hwf_ghost", "hwf_candy", "hwf_mummy", "hwf_window", "hwf_blackcat", "hwf_patch", "hwf_party", "hwf_witch", "hwf_shop", "hwf_grave", "nwf_world", "nwf_chart", "nwf_airship", "evf_ghost", "evf_clover", "bsf_aura", "evf_rec"]);
 // 📌 유저가 고른 테두리(UserXp.avatarFramePick) — 사이트 pickAvatarFrame 과 같은 규칙(카드 스킨과 같다: "" 안 고름 · "none" 끔)
 export const pickAvatarFrame = (frames, pick) => pickCardSkin(frames, pick);
 // 📌 "all" — 테두리 9종 전부(관리자 테스트 아이템, 사이트 FRAME_ALL 과 같다). 효과의 frame 값 → 가진 것으로 치는 키들
@@ -223,6 +238,12 @@ function cleanEffects(list) {
       if (!SCENE_KEYS.has(sc)) return;
       if (out.some((x) => x.scene)) return; // 카드 배경은 아이템 하나에 하나(카드 스킨과는 함께 있어도 된다) — 사이트 normalizeEffects 와 같다
       e.scene = sc;
+    }
+    if (t.needs === "bar") {
+      const b = String(raw?.bar || "");
+      if (!BAR_KEYS.has(b)) return;
+      if (out.some((x) => x.bar)) return; // 레벨 막대도 아이템 하나에 하나 — 사이트 normalizeEffects 와 같다
+      e.bar = b;
     }
     // 요일 · 시간대는 발동형에만 — 상시 · 소모 · 꾸미기는 가지고 있는 동안 늘 붙는다
     if (t.kind === "trigger") {
@@ -736,12 +757,13 @@ export function wispHuntXp(member, { channel = null, kst = kstNow() } = {}) {
  *    cardSkin: "" — 자동으로 입히는 스킨 없음(2026-10-04, 사이트 perksOfItems 와 같다)
  *    cardSkins: 가진 스킨 전부(관리자 순서 — 아이템 sortOrder · createdAt) — 유저가 고른 스킨은 pickCardSkin 으로 (botMessages withSkin)
  *    cardScenes: 가진 카드 배경 전부(관리자 순서 · 중복 없음) — 고른 것은 pickCardScene (botMessages withSkin · 사이트 perksOfItems 와 같다)
+ *    cardBars: 가진 레벨 막대 전부 + 가진 배경의 짝 막대(중복 없음) — 고른 것은 pickCardBar (2026-10-31)
  *    avatarFrames: 가진 아바타 테두리 전부(관리자 순서 · 중복 없음) — 고른 것은 pickAvatarFrame (사이트 perksOfItems 와 같다)
  *    오류가 나도 0 · "" 을 돌려준다.
- * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[], cardScenes: string[], avatarFrames: string[] }}
+ * @returns {{ cooldownCut: number, muteRelief: number, passBoost: number, cardSkin: string, cardSkins: string[], cardScenes: string[], cardBars: string[], avatarFrames: string[] }}
  */
 export function perksOf(member) {
-  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [], cardScenes: [], avatarFrames: [] };
+  const out = { cooldownCut: 0, muteRelief: 0, passBoost: 0, cardSkin: "", cardSkins: [], cardScenes: [], cardBars: [], avatarFrames: [] };
   try {
     if (!state.effectsById.size) return out;
     const owned = ownedItemIds(member);
@@ -751,6 +773,7 @@ export function perksOf(member) {
     let boost = 0;
     const skins = [];
     const scenes = [];
+    const bars = [];
     const frames = [];
     for (const [itemId, list] of state.effectsById) {
       if (!owned.has(itemId)) continue;
@@ -760,6 +783,7 @@ export function perksOf(member) {
         else if (e.on === "passBoost") boost += e.amount;
         else if (e.on === "cardSkin") for (const sk of skinsOf(e.skin)) { if (!skins.includes(sk)) skins.push(sk); }
         else if (e.on === "cardScene") for (const sc of scenesOf(e.scene)) { if (!scenes.includes(sc)) scenes.push(sc); }
+        else if (e.on === "cardBar") for (const b of barsOf(e.bar)) { if (!bars.includes(b)) bars.push(b); }
         else if (e.on === "avatarFrame") for (const fk of framesOf(e.frame)) { if (!frames.includes(fk)) frames.push(fk); }
       }
     }
@@ -770,6 +794,8 @@ export function perksOf(member) {
     out.cardSkin = pickCardSkin(skins, "");
     out.cardSkins = skins;
     out.cardScenes = scenes;
+    for (const sc of scenes) { const b = SCENE_BAR[sc]; if (b && !bars.includes(b)) bars.push(b); } // 가진 배경의 짝 막대
+    out.cardBars = bars;
     out.avatarFrames = frames;
   } catch (e) {
     console.error("아이템 효과 계산 오류 (perks):", e.message);

@@ -11,23 +11,29 @@ import { playTone } from "@/lib/sfx";
 import ItemIcon from "./ItemIcon";
 import TierEmblem from "./TierEmblem";
 import AvatarFrame from "./AvatarFrame";
-import { SceneBack, sceneBarOf, GhostTrailBar, CloverVineBar } from "./SceneBack";
+import { SceneBack, barStyleOfKey, GhostTrailBar, CloverVineBar } from "./SceneBack";
 import { sceneMetaOf } from "@/lib/cardScenes";
 import { VOICE_TIERS } from "@/lib/voiceTiers";
 import { ICON_PATHS } from "./Icons";
 import { PopShell } from "./PopShell";
-import { artOfSkin, artOfScene, artOfFrame } from "@/lib/cosmeticArt";
+import { artOfSkin, artOfScene, artOfBar, artOfFrame } from "@/lib/cosmeticArt";
 import { useAdminView } from "./AdminView";
 import { rarityOf, rarityRank, RARITIES } from "@/lib/rarity";
+import { nickOf } from "@/lib/nick";
+import { RELIC_KEY, RELIC_NAME, RELIC_COLOR, normPick } from "@/lib/relic/meta";
 const RARITY_TOP = RARITIES.length; // 등급 보상 — 모든 희귀도보다 앞
 import {
-  SKIN_OF, SKIN_NONE, FRAME_OF, SCENE_OF, SKIN_RANK_ALL, FRAME_ALL,
+  SKIN_OF, SKIN_NONE, FRAME_OF, SCENE_OF, BAR_OF, BARS, shownBarOf, SKIN_RANK_ALL, FRAME_ALL,
   MAX_BADGES, badgeSlotsOf, badgeOrderOf, firstEmptySlot, pickSlot, nextEmptySlot, putBadgeAt, takeBadgeAt,
   AUTO_SCOPE, scopeLabelOfKeys, scopeLabelOfKind, describeEffect, SKINS, SCENES, FRAMES,
 } from "@/lib/itemEffects";
 
 // 📌 장착 판 미리보기의 카드 테두리 · 카드 배경 그림(SkinFrame → lib/cardSkins, 그림 코드가 크다) — 꾸미기 탭을 열 때만 받는다(ARCTIC 목록 화면 짐을 늘리지 않게)
 const SkinFrame = dynamic(() => import("./SkinFrame"), { ssr: false });
+// 📌 유물 「사건의 지평선」(2026-11-02) — 캔버스 그림 · 꾸미기 창 · 칸 그림은 따로 실어 온다(그림 코드가 크다). 한 묶음: 입으면 카드 배경 · 테두리 · 레벨바 · 프로필 테두리를 통째로
+const RelicLayers = dynamic(() => import("./RelicLayers"), { ssr: false });
+const RelicWindow = dynamic(() => import("./RelicWindow"), { ssr: false });
+const RelicThumb = dynamic(() => import("./RelicThumb"), { ssr: false });
 
 // 📌 인벤토리 — 레벨 대시보드의 가방 팝업을 내 정보 · ARCTIC 에서도 그 자리에 띄운다 (다른 화면으로 넘기지 않는다)
 
@@ -132,6 +138,7 @@ export const invIconType = (it) => (it.source === "level" ? "level" : it.type ||
 export const invTierOf = (it) => (it?.source === "level" && it.rewardLevel != null ? VOICE_TIERS.find((t) => t.min === it.rewardLevel) || null : null);
 // 칸 · 상세의 아이콘 — 등급 보상은 엠블럼, 나머지는 공용 ItemIcon
 const InvIcon = ({ it, size, color, dim }) => {
+  if (it?.relicKey) return <RelicThumb pick={null} w={Math.round(size * 0.62)} />; // 유물 — 작은 카드 한 장
   const tier = invTierOf(it);
   if (tier) return <TierEmblem tier={tier} size={Math.round(size * 1.15)} muted={dim} />;
   return <ItemIcon icon={it.icon} imageUrl={it.imageUrl} type={invIconType(it)} size={size} color={color} dim={dim} />;
@@ -168,15 +175,18 @@ export const invShortName = (it) => (typeof it?.shortName === "string" && it.sho
 export const COSMETIC_KINDS = [
   { id: "scene", label: "카드 배경" },
   { id: "skin", label: "카드 테두리" },
+  { id: "bar", label: "레벨바" }, // 2026-10-31 카드 배경에서 떼어 따로 끼운다
   { id: "frame", label: "프로필 테두리" },
   { id: "badge", label: "배지" },
   { id: "etc", label: "기타" },
 ];
 // 한 아이템이 여러 종류일 수 있다(카드 배경 + 카드 테두리 한 아이템) — 칩 · 장착 칸은 어느 쪽으로 걸러도 그 아이템이 보이게 종류 목록으로 본다
 export const cosmeticKindsOf = (it) => {
+  if (it.relicKey) return ["scene", "skin", "bar", "frame"]; // 유물 — 한 묶음이라 네 종류 어디서 걸러도 보이고, 맨 앞(카드 배경 자리)에 선다
   const out = [];
   if (it.sceneKey) out.push("scene");
   if (it.skinKey || it.skinKeys?.length) out.push("skin");
+  if (it.barKey) out.push("bar");
   if (it.frameKey || it.frameKeys?.length) out.push("frame");
   if (it.badgeId) out.push("badge");
   return out.length ? out : ["etc"];
@@ -198,7 +208,7 @@ export const sortCosmeticByKind = (rows) =>
     .map((x) => x.it);
 // 📌 2026-10-18 꾸미기는 「효과」 대신 「적용 범위」(운영자 "효과라는 건 약간 이상하잖아") — 서버(lib/inventory)가 칸마다 isCosmetic · scopeLabel
 //    (관리자가 고른 범위 > 종류마다 자동 — lib/itemEffects AUTO_SCOPE)을 싣는다. 그 칸이 없는 칸(옛 응답)만 꾸미기 키로 자동 값. 꾸미기가 아니면 ""
-const SCOPE_KIND = { scene: "cardScene", skin: "cardSkin", frame: "avatarFrame", badge: "profileBadge" };
+const SCOPE_KIND = { scene: "cardScene", skin: "cardSkin", bar: "cardBar", frame: "avatarFrame", badge: "profileBadge" };
 export const invScopeOf = (it) => {
   if (!it) return "";
   if (typeof it.isCosmetic === "boolean") return it.isCosmetic ? it.scopeLabel || "" : "";
@@ -209,7 +219,8 @@ export const invScopeOf = (it) => {
 let OLD_COSMETIC_LINES = null;
 const oldCosmeticLine = (l) => {
   OLD_COSMETIC_LINES ??= new Set([
-    ...["profileBadge", "cardSkin", "cardScene", "avatarFrame"].map((on) => describeEffect({ on })),
+    ...["profileBadge", "cardSkin", "cardScene", "cardBar", "avatarFrame"].map((on) => describeEffect({ on })),
+    ...BARS.map((b) => describeEffect({ on: "cardBar", bar: b.v })),
     ...SKINS.map((s) => describeEffect({ on: "cardSkin", skin: s.v })),
     ...SCENES.map((s) => describeEffect({ on: "cardScene", scene: s.v })),
     ...FRAMES.map((f) => describeEffect({ on: "avatarFrame", frame: f.v })),
@@ -229,6 +240,7 @@ export const invKindOf = (it) => {
   if (it.source === "level") return invTierOf(it) ? "등급 보상" : "레벨 보상";
   if (it.sceneKey) return "카드 배경";
   if (it.skinKey || it.skinKeys?.length) return "카드 테두리";
+  if (it.barKey) return "레벨바";
   if (it.frameKey || it.frameKeys?.length) return "프로필 테두리";
   if (it.badgeId) return "프로필 배지";
   const head = (it.type || it.kind) === "cosmetic" ? splitItemName(it.name).kind : "";
@@ -417,7 +429,7 @@ const InvSlot = ({ it, on, onClick, worn = false, fav = false, onWear }) => {
 //    전체(9종) 테두리 아이템(it.frameKeys)이면 등급 칸 9개 — frameCur: 지금 쓰는 테두리 키, 누르면 그 테두리 · 낀 칸을 다시 누르면 해제
 //    fav(true · false) · onFav 면 머리 오른쪽 위에 즐겨찾기 별(관리자 체험 · 미리보기는 null — 단추 없음)
 //    onLook — 꾸미기 탭 밖(전체)에서 고른 꾸미기: 단추 맨 아래 「꾸미기에서 보기」(꾸미기 탭으로 넘어가 그 칸을 고른다 — 무대 카드에 입혀 보이는 전용 화면)
-const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneBusy = false, skinOn = false, skinCur = "", onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, frameCur = "", onFrame, frameBusy = false, fav = null, onFav, onLook }) => {
+const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneBusy = false, barOn = false, onBar, barBusy = false, skinOn = false, skinCur = "", onSkin, skinBusy = false, badgeSlot = -1, onBadgeOpen, frameOn = false, frameCur = "", onFrame, frameBusy = false, fav = null, onFav, onLook }) => {
   const accent = invAccentOf(it);
   const rar = rarOf(it);
   const favOn = fav != null && !compact;
@@ -426,9 +438,9 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
   // 📌 카드 배경 · 카드 테두리 · 배지 · 프로필 테두리 중 둘 이상인 아이템은 버튼이 여럿 — 어느 쪽인지 앞에 붙여 가른다(하나뿐이면 그냥 착용 · 착용 해제)
   // 📌 꾸미기 — 효과 줄 대신 「적용 범위」 줄(invScopeOf). 꾸미기 문장은 서버가 효과 줄에서 뺐다 — 남은 효과(채팅 XP 등)는 아래 효과 칸에 그대로
   const scope = invScopeOf(it);
-  const both = [it.sceneKey, it.skinKey || it.skinKeys?.length, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
+  const both = [it.sceneKey, it.barKey, it.skinKey || it.skinKeys?.length, it.badgeId, it.frameKey || it.frameKeys?.length].filter(Boolean).length > 1;
   // 단추가 하나라도 있을 때만 단추 칸(빈 칸이 여백만 차지하지 않게) — 아래 단추들의 조건과 같다
-  const hasActions = !compact && !!((it.expiresAt && it.renewId) || it.eventLink === "goedam" || it.sceneKey || it.skinKey || it.skinKeys?.length > 1 || it.badgeId || it.frameKey || it.frameKeys?.length > 1 || onLook);
+  const hasActions = !compact && !!((it.expiresAt && it.renewId) || it.eventLink === "goedam" || it.sceneKey || it.barKey || it.skinKey || it.skinKeys?.length > 1 || it.badgeId || it.frameKey || it.frameKeys?.length > 1 || onLook);
   const wearBtn = (on) =>
     `mt-1 w-full h-9 rounded-full text-[11px] font-black flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${
       on ? "border border-white/20 hover:border-white/45 text-white/80 hover:text-white" : "bg-white text-[#131313] hover:bg-white/90"
@@ -438,7 +450,7 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
   const lookBtn = onLook && !compact ? (
     <button type="button" onClick={onLook} className={wearBtn(true)}>꾸미기에서 보기</button>
   ) : null;
-  const pairFirst = lookBtn ? (it.sceneKey ? "scene" : it.skinKey ? "skin" : it.badgeId ? "badge" : it.frameKey ? "frame" : "") : "";
+  const pairFirst = lookBtn ? (it.sceneKey ? "scene" : it.barKey ? "bar" : it.skinKey ? "skin" : it.badgeId ? "badge" : it.frameKey ? "frame" : "") : "";
   const withLook = (key, el) => (pairFirst === key ? <div className="grid grid-cols-2 gap-2">{el}{lookBtn}</div> : el);
   return (
     <div className="min-w-0">
@@ -522,12 +534,18 @@ const InvDetail = ({ it, compact = false, onGo, sceneOn = false, onScene, sceneB
             사용
           </Link>
         )}
-        {/* 📌 카드 배경 — 카드 바탕 그림 전체(레벨 막대 모양도 배경 몫). 카드 테두리와 따로 끼고 함께 입는다(배경 위에 테두리) */}
+        {/* 📌 카드 배경 — 카드 바탕 그림 전체. 카드 테두리 · 레벨 막대와 따로 끼고 함께 입는다(배경 위에 테두리) */}
         {/* 착용 단추가 없는 꾸미기(등급 칸 묶음뿐)는 꾸미기에서 보기를 여기 전체 폭으로 */}
         {lookBtn && !pairFirst && lookBtn}
         {it.sceneKey && !compact && withLook("scene",
           <button type="button" disabled={sceneBusy} onClick={() => onScene?.(sceneOn ? SKIN_NONE : it.sceneKey)} className={wearBtn(sceneOn)}>
             {both ? (sceneOn ? "카드 배경 해제" : "카드 배경 착용") : sceneOn ? "착용 해제" : "착용"}
+          </button>
+        )}
+        {/* 📌 레벨바(2026-10-31 — 카드 배경에서 떼어 따로 끼운다). 카드 배경의 짝 막대는 인벤토리에 따로 한 칸(lib/inventory) */}
+        {it.barKey && !compact && withLook("bar",
+          <button type="button" disabled={barBusy} onClick={() => onBar?.(barOn ? SKIN_NONE : it.barKey)} className={wearBtn(barOn)}>
+            {both ? (barOn ? "레벨바 해제" : "레벨바 착용") : barOn ? "착용 해제" : "착용"}
           </button>
         )}
         {/* 📌 카드 테두리 — 가진 테두리 중 하나를 골라 봇 이미지 카드(레벨업 · /레벨 · /랭크 · /출석체크)와 내 프로필 카드에 씌운다.
@@ -861,28 +879,29 @@ const CARD_W = 360, CARD_H = 556; // 미리보기 카드 판(봇 /레벨 카드 
 
 // 내 카드 작은 미리보기 — 360 × 556 판에 레벨 페이지 카드와 같은 부품(잉크 바탕 · 격자 · SkinFrame · 사진 + AvatarFrame)을 그리고 w 폭으로 줄인다.
 //    SkinFrame 은 카드 테두리(skin)와 카드 배경(scene)을 받는다. 레벨 막대 자리(data-skin-bar)는 늘 두고, 기본 막대 모양은 배경이 없을 때만(막대 모양은 배경 몫)
-//    카드 배경은 맨 아래 겹(SceneBack — lib/cardScenes), 막대 모양도 배경 몫(sceneBarOf — 유령 꼬리)
+//    카드 배경은 맨 아래 겹(SceneBack — lib/cardScenes). 📌 bar — 레벨바 키(2026-10-31 따로 끼운다 · ""/없음 기본 막대 — 배경은 막대를 바꾸지 않는다)
 // 📌 info — 막대 진행(pct)만 쓴다. 카드에 글자는 넣지 않는다 — 프로필 · 레벨 바만(2026-10-17 운영자 "레벨도 빼 어수선하다 닉네임이랑"). bare — 막대 없이(목록 칸 그림)
-function EquipCard({ w, skin, scene, frame, image, name, info = null, bare = false }) {
+export function EquipCard({ w, skin, scene, bar, frame, relic = null, image, name, info = null, bare = false }) {
   const k = w / CARD_W;
-  const sceneBar = sceneBarOf(scene);
+  const sceneBar = barStyleOfKey(bar || "");
   const pct = info ? Math.max(0, Math.min(100, Number(info.pct) || 0)) : 42;
+  // 📌 유물(2026-11-02) — 입으면 배경 · 테두리 · 막대 · 프로필 테두리를 통째로 그린다(다른 꾸미기 겹은 감춘다)
   return (
     <div className="relative overflow-hidden" style={{ width: w, height: Math.round(CARD_H * k), borderRadius: 24 * k, boxShadow: "0 0 0 1px rgba(255,255,255,0.12), 0 18px 40px -18px rgba(0,0,0,0.85)" }}>
       <div className="absolute left-0 top-0 overflow-hidden" style={{ width: CARD_W, height: CARD_H, transform: `scale(${k})`, transformOrigin: "0 0", background: "linear-gradient(180deg, #1b1b1b 0%, #131313 55%)" }}>
-        {sceneMetaOf(scene) ? <SceneBack scene={scene} /> : <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>}
-        {skin && <SkinFrame skin={skin} scene={scene} />}
+        {relic ? <RelicLayers pick={relic} pct={pct / 100} preview still={bare} /> : sceneMetaOf(scene) ? <SceneBack scene={scene} /> : <div aria-hidden className="absolute inset-0 lux-grid-bg-dark opacity-70 pointer-events-none"></div>}
+        {skin && !relic && <SkinFrame skin={skin} scene={scene} />}
         <div className="absolute flex items-center justify-center" style={{ left: 28, top: 28, width: 96, height: 96 }}>
-          {!frame && <span aria-hidden className="absolute inset-0 rounded-full" style={{ boxShadow: "inset 0 0 0 6px rgba(255,255,255,0.12)" }}></span>}
+          {!frame && !relic && <span aria-hidden className="absolute inset-0 rounded-full" style={{ boxShadow: "inset 0 0 0 6px rgba(255,255,255,0.12)" }}></span>}
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={image} alt="" draggable={false} className="relative rounded-full object-cover" style={{ width: 68, height: 68 }} />
           ) : (
             <span className="relative rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: 68, height: 68 }}>{(name || "?").slice(0, 1)}</span>
           )}
-          <AvatarFrame frame={frame} px={68} />
+          {!relic && <AvatarFrame frame={frame} px={68} />}
         </div>
-        {bare ? null : sceneBar === "ghostTrail" ? (
+        {bare || relic ? null : sceneBar === "ghostTrail" ? (
           <div data-skin-bar className="absolute" style={{ left: 40, right: 28, top: 333 }}><GhostTrailBar pct={pct} /></div>
         ) : sceneBar === "cloverVine" ? (
           <div data-skin-bar className="absolute" style={{ left: 28, right: 28, top: 333 }}><CloverVineBar pct={pct} /></div>
@@ -905,7 +924,25 @@ function EquipCard({ w, skin, scene, frame, image, name, info = null, bare = fal
 
 // 실제 모습 칸 그림 — 카드 배경 · 카드 테두리는 작은 카드, 프로필 테두리는 사진 둘레, 그 밖(배지 등)은 아이콘
 function LookArt({ it, size, image, name }) {
+  if (it.relicKey) return <RelicThumb pick={null} w={Math.round(size * 0.6)} />;
   if (it.sceneKey) return <EquipCard w={Math.round(size * 0.6)} scene={it.sceneKey} image={image} name={name} bare />;
+  // 레벨바(2026-10-31) — 실제 막대 그대로(작은 카드에 넣으면 막대가 안 보였다 · 운영자 "본 디자인이랑 너무 다르자나"). 칸이 크면 2배(2px 도트 그대로 또렷하게)
+  if (it.barKey) {
+    const st = barStyleOfKey(it.barKey);
+    const Bar = st === "ghostTrail" ? GhostTrailBar : st === "cloverVine" ? CloverVineBar : null;
+    if (Bar) {
+      const k = size >= 72 ? 2 : 1;
+      const lead = st === "ghostTrail" ? 18 : 0; // 유령 꼬리 랜턴은 막대 왼쪽 18px 바깥
+      const w = Math.max(24, Math.floor((size * 0.86) / k) - lead);
+      return (
+        <span className="relative block pointer-events-none" style={{ width: (w + lead) * k, height: 22 * k }}>
+          <span className="absolute left-0 top-0 origin-top-left" style={{ transform: k > 1 ? `scale(${k})` : undefined, width: w + lead, paddingLeft: lead, paddingTop: 5 }}>
+            <Bar pct={72} />
+          </span>
+        </span>
+      );
+    }
+  }
   const skin = it.skinKey || it.skinKeys?.[0];
   if (skin) return <EquipCard w={Math.round(size * 0.6)} skin={skin} image={image} name={name} bare />;
   const frame = it.frameKey || it.frameKeys?.[0];
@@ -957,12 +994,12 @@ function SlotA({ slot, sel, onClick, S, labelW }) {
 // 고른 아이템 상세(A · 가로 한 줄) — 무대 아래에서 착용 단추까지 한눈에(2026-10-16 — 긴 상세는 단추가 창 아래로 밀렸다).
 //    글씨 · 색 · 단추는 다른 탭 상세(InvDetail)와 같다: 아이콘 홈 칸 · 종류(아이템 색) · 이름 · 상태(보유 중 초록) · 기간 · 흰 알약 단추
 //    📌 2026-10-17 종류 글자(회색) · 아이콘 칸 띠 · 빛은 희귀도 색 · 착용 단추 옆 즐겨찾기 별(fav — null 이면 없음). 2026-10-18 등급 알약은 뺐다(아래)
-function DetailRow({ it, worn, busy, onWear, onBadge, fav = null, onFav }) {
+function DetailRow({ it, worn, busy, onWear, onBadge, onRelic, fav = null, onFav }) {
   const accent = invAccentOf(it);
   const rar = rarOf(it);
   const dday = ddayOf(it);
   // 종류 글자 — 서버가 정한 분류(categoryLabel), 없는 칸(옛 응답)만 꾸미기 키 → 유형 이름
-  const kind = it.categoryLabel || (it.sceneKey ? "카드 배경" : it.skinKey ? "카드 테두리" : it.frameKey ? "프로필 테두리" : it.badgeId ? "프로필 배지" : itemTypeLabel(it.type || it.kind));
+  const kind = it.categoryLabel || (it.sceneKey ? "카드 배경" : it.skinKey ? "카드 테두리" : it.barKey ? "레벨바" : it.frameKey ? "프로필 테두리" : it.badgeId ? "프로필 배지" : itemTypeLabel(it.type || it.kind));
   const from = { shop: "상점", pass: "시즌 패스", event: "이벤트 패스", invite: "친구 초대", grant: "지급", season: "시즌 보상", trial: "체험" }[it.source] || "";
   // 서버 부스터 혜택(부스팅 중인 동안 가진 것 — lib/inventory.js (C))은 기간 대신 출처 한 마디
   const sub = it.source === "booster" ? "서버 부스터" : [from, it.expiresAt ? (dday !== null ? `D-${dday}` : "기간제") : "영구"].filter(Boolean).join(" · ");
@@ -999,7 +1036,11 @@ function DetailRow({ it, worn, busy, onWear, onBadge, fav = null, onFav }) {
           {it.badgeId ? (
             <button type="button" onClick={onBadge} className={btn(false)}>배지 설정</button>
           ) : (
-            <button type="button" disabled={busy} onClick={onWear} className={btn(worn)}>{worn ? "착용 해제" : "착용"}</button>
+            <>
+              {/* 유물 — 코어 색 · 조각 고르기 창(꾸미기) + 착용 */}
+              {it.relicKey && <button type="button" onClick={onRelic} className={btn(true)}>꾸미기</button>}
+              <button type="button" disabled={busy} onClick={onWear} className={btn(worn)}>{worn ? "착용 해제" : "착용"}</button>
+            </>
           )}
         </div>
       </div>
@@ -1008,8 +1049,8 @@ function DetailRow({ it, worn, busy, onWear, onBadge, fav = null, onFav }) {
 }
 // 폰 무대(A) — 카드(글자 없이 꾸미기 모습만) + 아래 한 줄 칸 넷(종류 이름만). 2026-10-16 "폰쪽은 너무 답답해 · 너무 세부적인 걸 다 들어가게 하지마"
 function StageMini({ slots, slotOn, onSlot, card, info, glow, image, name, onClearAll, clearOff, label = "장착 중" }) {
-  const order = ["scene", "skin", "frame", "badge"];
-  const short = { scene: "카드 배경", skin: "카드 테두리", frame: "프로필 테두리", badge: "배지" };
+  const order = ["scene", "skin", "bar", "frame", "badge"]; // 2026-10-31 레벨바 칸(카드 배경에서 뗐다)
+  const short = { scene: "카드 배경", skin: "카드 테두리", bar: "레벨바", frame: "프로필 테두리", badge: "배지" };
   return (
     <div className="relative shrink-0 rounded-[14px] border border-white/[0.06] bg-black/30 overflow-hidden">
       <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(60% 46% at 50% 36%, ${glow}, transparent 72%)` }}></div>
@@ -1024,15 +1065,15 @@ function StageMini({ slots, slotOn, onSlot, card, info, glow, image, name, onCle
         <span aria-hidden className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[62%] h-5 rounded-[50%] pointer-events-none" style={{ background: `radial-gradient(closest-side, ${glow}, transparent)` }}></span>
         <div style={{ filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.55))" }}><EquipCard w={170} {...card} info={info} image={image} name={name} /></div>
       </div>
-      <div className="relative grid grid-cols-4 gap-2 px-3 pb-4">
+      <div className="relative grid grid-cols-5 gap-1.5 px-3 pb-4">
         {order.map((id) => {
           const sl = slots[id];
           const sel = slotOn === id;
           return (
             <button key={id} type="button" aria-pressed={sel} aria-label={`${sl.kind} · ${sl.empty ? "비어 있음" : sl.name}`} onClick={() => onSlot(id)} className={`min-w-0 flex flex-col items-center ${SLOT_FOCUS}`}>
-              <span className="relative w-14 h-14 flex items-center justify-center" style={{ background: SLOT_BG, ...(sl.empty && !sel ? { border: "1.5px dashed rgba(255,255,255,0.2)" } : { boxShadow: slotShadow(sel, sl.empty) }) }}>
+              <span className="relative w-[52px] h-[52px] flex items-center justify-center" style={{ background: SLOT_BG, ...(sl.empty && !sel ? { border: "1.5px dashed rgba(255,255,255,0.2)" } : { boxShadow: slotShadow(sel, sl.empty) }) }}>
                 {!sl.empty && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: sl.accent }}></span>}
-                {sl.empty ? <span aria-hidden className="text-[18px] font-black leading-none text-white/30">+</span> : <span aria-hidden className="pointer-events-none flex items-center justify-center">{sl.art(56)}</span>}
+                {sl.empty ? <span aria-hidden className="text-[18px] font-black leading-none text-white/30">+</span> : <span aria-hidden className="pointer-events-none flex items-center justify-center">{sl.art(52)}</span>}
               </span>
               <span className={`block mt-1.5 max-w-full truncate text-[10px] font-bold leading-none ${sel ? "text-white" : "text-white/45"}`}>{short[id]}</span>
             </button>
@@ -1044,7 +1085,7 @@ function StageMini({ slots, slotOn, onSlot, card, info, glow, image, name, onCle
 }
 // 폰 상세(A) — 아래에 붙는 얇은 줄: 아이콘 · 이름 · 단추만
 //    📌 2026-10-17 알약 없이(최소) — 아이콘 칸 띠만 희귀도 색, 단추 앞에 작은 즐겨찾기 별(fav — null 이면 없음)
-function DetailMini({ it, worn, busy, onWear, onBadge, fav = null, onFav }) {
+function DetailMini({ it, worn, busy, onWear, onBadge, onRelic, fav = null, onFav }) {
   const accent = invAccentOf(it);
   const rar = rarOf(it);
   const btn = (on) => `shrink-0 h-9 px-5 rounded-full text-[12px] font-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60 ${on ? "border border-white/25 text-white/85" : "bg-white text-[#131313]"}`;
@@ -1056,6 +1097,7 @@ function DetailMini({ it, worn, busy, onWear, onBadge, fav = null, onFav }) {
       </span>
       <p className="min-w-0 flex-1 text-[14px] font-black text-white truncate">{invShortName(it)}</p>
       {fav != null && <FavButton on={fav} onToggle={onFav} />}
+      {it.relicKey && <button type="button" onClick={onRelic} className={btn(true)}>꾸미기</button>}
       {it.badgeId ? <button type="button" onClick={onBadge} className={btn(false)}>배지 설정</button> : <button type="button" disabled={busy} onClick={onWear} className={btn(worn)}>{worn ? "착용 해제" : "착용"}</button>}
     </div>
   );
@@ -1077,15 +1119,18 @@ function StageA({ slots, slotOn, onSlot, card, info, glow, image, name, onClearA
   const cw = big ? 220 : Math.min(150, Math.max(120, W - 2 * 92)), ch = Math.round((cw * CARD_H) / CARD_W);
   const S = big ? 80 : 60, labelW = big ? 132 : 86;
   const gap = Math.max(4, Math.min(big ? 64 : 22, Math.floor((W - cw - 2 * labelW) / 2) - 4));
-  const cardX = Math.round((W - cw) / 2), cardY = 4;
+  // 📌 2026-10-31 레벨바 칸 — 오른쪽 셋(카드 배경 · 카드 테두리 · 레벨바), 왼쪽 둘. 칸 하나 높이 = 칸 + 이름 두 줄(SlotA)
+  const blockH = S + 36;
+  const H = Math.max(ch + 26, 3 * blockH + 12);
+  const cardX = Math.round((W - cw) / 2), cardY = Math.max(4, Math.round((H - 22 - ch) / 2));
   const colL = cardX - gap - labelW, colR = cardX + cw + gap;
-  const rowY = [Math.round(cardY + ch * 0.1), Math.round(cardY + ch * 0.56)];
-  const H = ch + 26;
+  const step3 = Math.floor((H - 4 - blockH) / 2);
   const layout = [
-    { id: "frame", side: -1, row: 0, ty: 0.14 },
-    { id: "badge", side: -1, row: 1, ty: 0.48 },
-    { id: "scene", side: 1, row: 0, ty: 0.3 },
-    { id: "skin", side: 1, row: 1, ty: 0.72 },
+    { id: "frame", side: -1, y: Math.round(cardY + ch * 0.1), ty: 0.14 },
+    { id: "badge", side: -1, y: Math.round(cardY + ch * 0.56), ty: 0.48 },
+    { id: "scene", side: 1, y: 0, ty: 0.3 },
+    { id: "skin", side: 1, y: step3, ty: 0.48 },
+    { id: "bar", side: 1, y: 2 * step3, ty: 0.62 },
   ];
   return (
     <div className="relative shrink-0 rounded-[14px] border border-white/[0.06] bg-black/30 overflow-hidden">
@@ -1097,7 +1142,7 @@ function StageA({ slots, slotOn, onSlot, card, info, glow, image, name, onClearA
           모두 해제
         </button>
       </div>
-      <div ref={boxRef} className="relative mx-3 sm:mx-5 mt-2 mb-4" style={{ height: W ? H : Math.round((220 * CARD_H) / CARD_W) + 26 }}>
+      <div ref={boxRef} className="relative mx-3 sm:mx-5 mt-2 mb-4" style={{ height: W ? H : Math.max(Math.round((220 * CARD_H) / CARD_W) + 26, 3 * 116 + 12) }}>
         {W > 0 && (
           <>
             <span aria-hidden className="absolute rounded-[50%] pointer-events-none" style={{ left: cardX - cw * 0.3, top: cardY + ch - 6, width: cw * 1.6, height: 22, background: `radial-gradient(closest-side, ${glow}, transparent)` }}></span>
@@ -1105,7 +1150,7 @@ function StageA({ slots, slotOn, onSlot, card, info, glow, image, name, onClearA
               {layout.map((l) => {
                 const s = slots[l.id];
                 const sx = l.side < 0 ? colL + labelW / 2 + S / 2 : colR + labelW / 2 - S / 2;
-                const sy = rowY[l.row] + S / 2;
+                const sy = l.y + S / 2;
                 const ex = l.side < 0 ? cardX : cardX + cw;
                 const ey = cardY + Math.round(l.ty * ch);
                 const mx = Math.round((sx + ex) / 2);
@@ -1122,7 +1167,7 @@ function StageA({ slots, slotOn, onSlot, card, info, glow, image, name, onClearA
               <EquipCard w={cw} {...card} image={image} name={name} info={info} />
             </div>
             {layout.map((l) => (
-              <div key={l.id} className="absolute" style={{ left: l.side < 0 ? colL : colR, top: rowY[l.row] }}>
+              <div key={l.id} className="absolute" style={{ left: l.side < 0 ? colL : colR, top: l.y }}>
                 <SlotA slot={slots[l.id]} sel={slotOn === l.id} onClick={() => onSlot(l.id)} S={S} labelW={labelW} />
               </div>
             ))}
@@ -1146,7 +1191,7 @@ function StageA({ slots, slotOn, onSlot, card, info, glow, image, name, onClearA
 // 📌 avatarFrame: 서버(my-items)가 준 지금 쓰는 테두리 키("" 이면 없음). POST /api/xp/avatar-frame 로 저장하고 onFrameChange(키) 로 부모에 알린다(스킨과 같은 흐름)
 // 📌 cardScene: 서버(my-items)가 준 지금 쓰는 카드 배경 키("" 이면 없음). POST /api/xp/card-scene 로 저장하고 onSceneChange(키) 로 부모에 알린다(카드 테두리와 같은 흐름 · 따로 고르고 함께 입는다)
 // 📌 관리자 체험(2026-10-15 운영자 "관리자만 인벤토리에서 아무 아이템 꺼내서 써볼 수 있게 · 테스트 서버에서만") —
-//    테스트 사이트(localhost)에서 관리자에게만 「체험」 탭: 모든 카드 배경 · 카드 테두리 · 프로필 테두리를 가진 것처럼 끼워 본다.
+//    테스트 사이트(localhost)에서 관리자에게만 「체험」 탭: 모든 카드 배경 · 카드 테두리 · 레벨바 · 프로필 테두리를 가진 것처럼 끼워 본다(레벨바 2026-10-31).
 //    안 가진 것을 끼우면 서버에 저장하지 않고 이 브라우저(localStorage)에만 — 실서버 DB · 봇 카드엔 안 간다. 가진 것을 끼우거나 해제하면 체험 값을 지우고 원래대로 저장
 //    📌 2026-10-17 체험 탭 · 체험 값 덧씌우기는 관리자로 보는 중(useAdminView().admin)일 때만 — 「유저 화면으로 보기」나 같은 브라우저의 다른 계정엔 서버 값 그대로
 const TRIAL_KEY = "inv-trial-v1";
@@ -1166,16 +1211,17 @@ const writeTrial = (patch) => {
 export const applyTrial = (data, on) => {
   if (!data || !on) return data;
   const t = readTrial();
-  if (!t.skin && !t.scene && !t.frame) return data;
-  return { ...data, ...(t.skin ? { cardSkin: t.skin } : {}), ...(t.scene ? { cardScene: t.scene } : {}), ...(t.frame ? { avatarFrame: t.frame } : {}) };
+  if (!t.skin && !t.scene && !t.bar && !t.frame && !t.relic) return data;
+  return { ...data, ...(t.skin ? { cardSkin: t.skin } : {}), ...(t.scene ? { cardScene: t.scene } : {}), ...(t.bar ? { cardBarPick: t.bar, cardBar: t.bar } : {}), ...(t.frame ? { avatarFrame: t.frame } : {}), ...(t.relic && typeof t.relic === "object" ? { relic: normPick(t.relic) } : {}) };
 };
 // 체험 칸 — 가진 것은 빼고 모든 키를 아이템 모양으로(가방 칸 · 상세가 그대로 그린다)
 function trialItemsOf(owned) {
-  const has = { skin: new Set(), scene: new Set(), frame: new Set() };
+  const has = { skin: new Set(), scene: new Set(), bar: new Set(), frame: new Set() };
   for (const it of owned) {
     if (it.skinKey) has.skin.add(it.skinKey);
     (it.skinKeys || []).forEach((k) => has.skin.add(k));
     if (it.sceneKey) has.scene.add(it.sceneKey);
+    if (it.barKey) has.bar.add(it.barKey);
     if (it.frameKey) has.frame.add(it.frameKey);
     (it.frameKeys || []).forEach((k) => has.frame.add(k));
   }
@@ -1184,12 +1230,20 @@ function trialItemsOf(owned) {
     status: "completed", days: 0, expiresAt: null, provisional: false, acquiredAt: null, renewId: "", siteOnly: false, source: "trial", rewardLevel: null,
     // 📌 꾸미기 — 효과 줄 없이 적용 범위(그 종류의 자동 값 — 가방 칸과 같은 칸 이름)
     trial: true, effectLines: [], effectCustom: false, isCosmetic: true,
-    scopeLabel: scopeLabelOfKind(kind === "scene" ? "cardScene" : kind === "skin" ? "cardSkin" : "avatarFrame"), orderRef: "",
-    ...(kind === "scene" ? { sceneKey: key } : kind === "skin" ? { skinKey: key } : { frameKey: key }),
+    scopeLabel: scopeLabelOfKind(kind === "scene" ? "cardScene" : kind === "skin" ? "cardSkin" : kind === "bar" ? "cardBar" : "avatarFrame"), orderRef: "",
+    ...(kind === "scene" ? { sceneKey: key } : kind === "skin" ? { skinKey: key } : kind === "bar" ? { barKey: key } : { frameKey: key }),
   });
+  // 📌 유물 「사건의 지평선」(2026-11-02) — 안 가진 관리자만 체험으로(이 브라우저에만 · 서버 저장 없음)
+  const relicOwned = owned.some((it) => it.relicKey === RELIC_KEY);
+  const relicIt = {
+    ...mk("relic", RELIC_KEY, "유물", RELIC_NAME, "", RELIC_COLOR), uid: `trial:relic:${RELIC_KEY}`, icon: "", relicKey: RELIC_KEY, rarity: "relic",
+    scopeLabel: "대시보드 / 인벤토리", frameKey: undefined,
+  };
   return [
+    ...(relicOwned ? [] : [relicIt]),
     ...Object.keys(SCENE_OF).filter((k) => !has.scene.has(k)).map((k) => mk("scene", k, "카드 배경", SCENE_OF[k].l, artOfScene(k), "#45b4ff")),
     ...Object.keys(SKIN_OF).filter((k) => k !== SKIN_RANK_ALL && !has.skin.has(k)).map((k) => mk("skin", k, "카드 테두리", SKIN_OF[k].l, artOfSkin(k), "#8a6bff")),
+    ...Object.keys(BAR_OF).filter((k) => !has.bar.has(k)).map((k) => mk("bar", k, "레벨바", BAR_OF[k].l, artOfBar(k), "#2fbf71")),
     ...Object.keys(FRAME_OF).filter((k) => k !== FRAME_ALL && !has.frame.has(k)).map((k) => mk("frame", k, "프로필 테두리", FRAME_OF[k].l, artOfFrame(k), "#ff8a24")),
   ];
 }
@@ -1274,16 +1328,18 @@ const fillOf = (n, m, p, fit) => {
   const rm = Math.max(1, Math.ceil(n / m)) * m, rp = Math.max(1, Math.ceil(n / p)) * p;
   return { total: Math.max(rm, rp), cls: (i) => `${i < rm ? "block" : "hidden"} ${i < rp ? "sm:block" : "sm:hidden"}` };
 };
-export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, tab, onTab, synced, onTone, loading = false, error = "", cardSkin = "", onSkinChange, cardScene = "", onSceneChange, badges, onBadgesChange, avatarFrame = "", onFrameChange }) => {
+export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, tab, onTab, synced, onTone, loading = false, error = "", cardSkin = "", onSkinChange, cardScene = "", onSceneChange, cardBar = "", cardBarPick = "", onBarChange, badges, onBadgesChange, avatarFrame = "", onFrameChange, relic = null, onRelicChange }) => {
   const { data: trialSession } = useSession();
   const { admin } = useAdminView();
   const trialOn = isTestHost() && admin;
   const ownedKeys = useMemo(() => {
-    const o = { skin: new Set(), scene: new Set(), frame: new Set() };
+    const o = { skin: new Set(), scene: new Set(), bar: new Set(), frame: new Set(), relic: new Set() };
     for (const it of groupsIn[0]?.items || []) {
+      if (it.relicKey) o.relic.add(it.relicKey);
       if (it.skinKey) o.skin.add(it.skinKey);
       (it.skinKeys || []).forEach((k) => o.skin.add(k));
       if (it.sceneKey) o.scene.add(it.sceneKey);
+      if (it.barKey) o.bar.add(it.barKey);
       if (it.frameKey) o.frame.add(it.frameKey);
       (it.frameKeys || []).forEach((k) => o.frame.add(k));
     }
@@ -1341,8 +1397,23 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   const [sceneBase, setSceneBase] = useState(cardScene);
   if (sceneBase !== cardScene) { setSceneBase(cardScene); setSceneNow(null); }
   const curScene = sceneNow ?? cardScene;
+  // 📌 레벨바(2026-10-31) — 고른 값(pick: "" 안 고름 · "none" 기본 · 키) + 서버가 확인한 막대(bar). 안 골랐으면 기본 막대(배경은 막대를 바꾸지 않는다 — shownBarOf)
+  const [barNow, setBarNow] = useState(null); // 방금 저장한 { pick, bar }(서버 값이 오기 전까지)
+  const [barBusy, setBarBusy] = useState(false);
+  const [barBase, setBarBase] = useState(`${cardBarPick}|${cardBar}`);
+  if (barBase !== `${cardBarPick}|${cardBar}`) { setBarBase(`${cardBarPick}|${cardBar}`); setBarNow(null); }
+  const curBarPick = barNow ? barNow.pick : cardBarPick;
+  const curBarResolved = barNow ? barNow.bar : cardBar;
+  const curBar = shownBarOf(curBarPick, curBarResolved, curScene);
   useEffect(() => { setFrameNow(null); }, [avatarFrame]);
   const curFrame = frameNow ?? avatarFrame;
+  // 📌 유물(2026-11-02) — 입은 값({ core, frame, border, bg, bar } · 없으면 null). 방금 저장한 값(undefined = 없음)이 부모 값보다 먼저
+  const [relicNow, setRelicNow] = useState(undefined);
+  const relicKeyOf = JSON.stringify(relic || null);
+  useEffect(() => { setRelicNow(undefined); }, [relicKeyOf]);
+  const curRelic = relicNow !== undefined ? relicNow : relic;
+  const [relicOpen, setRelicOpen] = useState(false); // 꾸미기 창
+  if (!open && relicOpen) setRelicOpen(false);
   // 📌 단 배지는 부모 값 그대로 — 저장 결과는 onBadgesChange 로 부모가 바로 반영한다(옛 조회가 덮지 않게 막는 건 keepSavedBadges)
   const wornIds = (Array.isArray(badges) ? badges : []).map((b) => b.itemId);
   // 배지 창 상자 — 가진 배지 아이템(같은 배지 id 는 한 번, 가방 순서)
@@ -1377,6 +1448,17 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     const next = res.data?.cardScene || "";
     setSceneNow(next);
     onSceneChange?.(next);
+    return { ok: true };
+  };
+  const postBar = async (bar) => {
+    // 체험(안 가진 레벨바) — 이 브라우저에만(다른 꾸미기와 같다)
+    if (trialOn && bar !== SKIN_NONE && !ownedKeys.bar.has(bar)) { writeTrial({ bar }); setBarNow({ pick: bar, bar }); onBarChange?.({ cardBarPick: bar, cardBar: bar }); return { ok: true }; }
+    if (trialOn) writeTrial({ bar: "" });
+    const res = await postJson("/api/xp/card-bar", { bar });
+    if (!res?.success) return { ok: false, error: res?.error };
+    const next = { pick: String(res.data?.cardBarPick ?? bar), bar: String(res.data?.cardBar || "") };
+    setBarNow(next);
+    onBarChange?.({ cardBarPick: next.pick, cardBar: next.bar });
     return { ok: true };
   };
   const postFrame = async (frame) => {
@@ -1433,6 +1515,18 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       setSceneBusy(false);
     }
   };
+  const saveBar = async (bar) => {
+    if (barBusy || clearBusy) return;
+    setBarBusy(true);
+    try {
+      const r = await postBar(bar);
+      if (!r.ok) return failSay(r.error);
+      playTone(bar === SKIN_NONE ? 523 : 784, 0.07, "sine", 0.03);
+      say(bar === SKIN_NONE ? "레벨바를 해제했습니다" : `${lookName("barKey", bar, BAR_OF[bar]?.l)} 레벨바를 착용했습니다`);
+    } finally {
+      setBarBusy(false);
+    }
+  };
   const saveFrame = async (frame) => {
     if (frameBusy || clearBusy) return;
     setFrameBusy(true);
@@ -1463,12 +1557,16 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   // 📌 장착 판 「모두 해제」 — 낀 것(카드 배경 · 카드 테두리 · 프로필 테두리 · 단 배지)을 한 번에 뺀다. 확인 없이 한 번에(알림 · 소리는 한 번).
   //    배지는 배지 창과 같은 저장(POST /api/xp/badge { order: [] , base: 지금 단 순서}) — 하나라도 못 빼면 그 문구
   const clearAll = async () => {
-    if (clearBusy || skinBusy || sceneBusy || frameBusy || badgeBusy) return;
+    if (clearBusy || skinBusy || sceneBusy || barBusy || frameBusy || badgeBusy) return;
     const jobs = [];
     if (curScene) jobs.push(postScene(SKIN_NONE));
+    // 레벨바는 직접 고른 것만 기본으로(안 고른 "" 은 이미 기본 막대)
+    if (curBarPick && curBarPick !== SKIN_NONE) jobs.push(postBar(SKIN_NONE));
     if (curSkin) jobs.push(postSkin(SKIN_NONE));
     if (curFrame) jobs.push(postFrame(SKIN_NONE));
     if (wornIds.length) jobs.push(postBadges([], wornIds));
+    // 유물도 함께 벗는다(가진 것은 서버 · 체험은 이 브라우저)
+    if (curRelic) jobs.push(postRelic(null).then((r) => { if (r.ok) { setRelicNow(null); onRelicChange?.(null); } return r; }));
     if (!jobs.length) return;
     setClearBusy(true);
     try {
@@ -1508,6 +1606,32 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   };
   // 넣을 수 있는 아이템만 단추 — 넣었으면 true · 안 넣었으면 false · 관리자 체험 아이템 · 로그인 안 함은 null(상세 fav prop)
   const favOf = (it) => (signedIn && favReady && it?.uid && !it.trial && !String(it.uid).startsWith("trial:") ? favs.has(favKeyOf(it)) : null);
+  // 📌 유물 착용 · 해제 · 꾸미기 저장(2026-11-02) — 가진 유물은 서버에(app/api/xp/relic — UserXp.relicPick), 안 가진 관리자는 체험(이 브라우저 localStorage)
+  const postRelic = async (pick) => {
+    if (ownedKeys.relic.has(RELIC_KEY)) {
+      if (trialOn) writeTrial({ relic: "" });
+      const res = await postJson("/api/xp/relic", pick ? { pick } : { off: true });
+      return res?.success ? { ok: true, relic: res.data?.relic || null } : { ok: false, error: res?.error };
+    }
+    if (!trialOn) return { ok: false, error: "가지고 있지 않은 유물입니다" };
+    writeTrial({ relic: pick || "" });
+    return { ok: true, relic: pick };
+  };
+  const [relicBusy, setRelicBusy] = useState(false);
+  const saveRelic = async (pick, msg) => {
+    if (relicBusy) return false;
+    setRelicBusy(true);
+    const r = await postRelic(pick ? normPick(pick) : null).finally(() => setRelicBusy(false));
+    if (!r.ok) { failSay(r.error); return false; }
+    const next = r.relic ? normPick(r.relic) : null;
+    setRelicNow(next);
+    onRelicChange?.(next);
+    playTone(next ? 784 : 523, 0.07, "sine", 0.03);
+    say(msg || (next ? `${RELIC_NAME}을 착용했습니다` : `${RELIC_NAME} 착용을 해제했습니다`));
+    return true;
+  };
+  const openRelic = () => { setRelicOpen(true); playTone(660, 0.06, "sine", 0.03); };
+  const closeRelic = useCallback(() => { setRelicOpen(false); playTone(523, 0.06, "sine", 0.025); }, []);
   const openBadges = () => { setBadgeOpen(true); playTone(660, 0.06, "sine", 0.03); };
   const closeBadges = useCallback(() => { setBadgeOpen(false); playTone(523, 0.06, "sine", 0.025); }, []);
   // 정렬 — 보는 사람 브라우저에 기억(편의용). 못 읽으면 기본
@@ -1516,6 +1640,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     try { const v = localStorage.getItem(INV_SORT_KEY); if (INV_SORTS.some((o) => o.v === v)) setSort(v); } catch {}
   }, []);
   const [sortOpen, setSortOpen] = useState(false); // 폰 정렬 단추의 목록
+  const [kindOpen, setKindOpen] = useState(false); // 꾸미기 「종류」 단추의 목록(2026-11-01 A안)
   const pickSort = (v) => {
     setSort(v);
     onTone();
@@ -1609,6 +1734,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   const wornScene = curScene ? findWorn((it) => it.sceneKey === curScene) : null;
   const wornSkin = curSkin ? findWorn((it) => it.skinKey === curSkin) || findWorn((it) => it.skinKeys?.includes(curSkin)) : null;
   const wornFrame = curFrame ? findWorn((it) => it.frameKey === curFrame) || findWorn((it) => it.frameKeys?.includes(curFrame)) : null;
+  const wornBar = curBar ? findWorn((it) => it.barKey === curBar) : null;
   const wornBadges = Array.isArray(badges) ? badges : [];
   const wornBadgeItem = wornIds.length ? findWorn((it) => it.badgeId === wornIds[0]) : null;
   const keySlot = (kind, key, item, label, artKey) => {
@@ -1616,12 +1742,12 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     const accent = item ? invAccentOf(item) : "#d4d4d4";
     // 📌 이름은 가방의 그 아이템 이름이 먼저(관리 화면에서 바꾼 이름 — 아래 목록 칸과 같은 글자, 2026-10-26 「신비로운 깃털 궤도」가 칸에선 옛 이름).
     //    키 여럿을 가진 아이템(등급 전체 · 테두리 전체)에서 고른 키는 그 키 이름(더 좁은 말)
-    const single = !!item && (item.sceneKey === key || item.skinKey === key || item.frameKey === key);
+    const single = !!item && (item.sceneKey === key || item.skinKey === key || item.barKey === key || item.frameKey === key);
     return {
       kind, empty: false, name: single ? invShortName(item) : label || (item ? invShortName(item) : key), accent, glow: invGlowOf(item || { color: accent }),
       art: (size) => {
-        const look = kind === "카드 배경" ? { sceneKey: key } : kind === "카드 테두리" ? { skinKey: key } : kind === "프로필 테두리" ? { frameKey: key } : null;
-        if (look) return <LookArt it={look} size={Math.round(size * 0.8)} image={trialSession?.user?.image || ""} name={trialSession?.user?.name || ""} />;
+        const look = kind === "카드 배경" ? { sceneKey: key } : kind === "카드 테두리" ? { skinKey: key } : kind === "레벨바" ? { barKey: key } : kind === "프로필 테두리" ? { frameKey: key } : null;
+        if (look) return <LookArt it={look} size={Math.round(size * 0.8)} image={trialSession?.user?.image || ""} name={nickOf(trialSession?.user)} />;
         return item ? <InvIcon it={item} size={size} color={accent} /> : <ItemIcon icon={`art:${artKey}`} type="cosmetic" size={size} color={accent} />;
       },
     };
@@ -1630,6 +1756,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   const equipSlots = {
     scene: keySlot("카드 배경", curScene, wornScene, SCENE_OF[curScene]?.l, artOfScene(curScene)),
     skin: keySlot("카드 테두리", curSkin, wornSkin, SKIN_OF[curSkin]?.l, artOfSkin(curSkin)),
+    bar: keySlot("레벨바", curBar, wornBar, BAR_OF[curBar]?.l, artOfBar(curBar)),
     frame: keySlot("프로필 테두리", curFrame, wornFrame, FRAME_OF[curFrame]?.l, artOfFrame(curFrame)),
     badge: wornBadges.length
       ? {
@@ -1656,7 +1783,12 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
         }
       : { kind: `배지 0/${MAX_BADGES}`, empty: true, name: "", accent: "", glow: "", art: () => null },
   };
-  const wornItemOf = { scene: wornScene, skin: wornSkin, frame: wornFrame, badge: wornBadgeItem };
+  // 📌 유물을 입으면 카드 꾸미기 칸 넷이 모두 유물(이름 = 유물 이름 · 그림 = 입은 모습 작은 카드)
+  if (curRelic) {
+    const rs = (kind) => ({ kind, empty: false, name: RELIC_NAME, accent: RELIC_COLOR, glow: invGlowOf({ color: RELIC_COLOR }), art: (size) => <RelicThumb pick={curRelic} w={Math.round(size * 0.5)} /> });
+    Object.assign(equipSlots, { scene: rs("카드 배경"), skin: rs("카드 테두리"), bar: rs("레벨바"), frame: rs("프로필 테두리") });
+  }
+  const wornItemOf = { scene: wornScene, skin: wornSkin, bar: wornBar, frame: wornFrame, badge: wornBadgeItem };
   // 칸을 누르면 아래 목록이 그 종류로(같은 칸을 다시 누르면 전체로) — 낀 것이 있으면 그 아이템을 골라 상세(해제 단추)를 보인다
   const tapEquip = (id) => {
     onTone();
@@ -1666,7 +1798,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     const worn = wornItemOf[id];
     if (worn?.uid && active?.items.some((x) => x.uid === worn.uid) && (!favOnlyOn || favs.has(favKeyOf(worn)) || favKeep.has(favKeyOf(worn)))) setSel(worn.uid);
   };
-  const anyWorn = !!(curScene || curSkin || curFrame || wornIds.length);
+  const anyWorn = !!(curRelic || curScene || (curBarPick && curBarPick !== SKIN_NONE) || curSkin || curFrame || wornIds.length);
 
   // uid 로 되짚는다 — 30초 폴링이 배열을 갈아끼워도 엉뚱한 것을 가리키지 않는다
   const selItem = sel ? rows.find((r) => r.uid === sel) || null : null;
@@ -1677,18 +1809,9 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   // 📌 장착 판 — 「꾸미기」(· 관리자 「체험」) 탭에서만, 상세 · 목록 위에 전체 폭(2026-10-15 운영자 "아까 이 예시랑 너무 다른데" — 시안처럼 판이 맨 위에 넓게).
   //    옷장(무대 · 큰 미리보기 칸)으로 바꿔 봤다가 운영자 "내가 원한 건 이게 아니야 · 걍 전으로 가자"로 되돌렸다
   // 📌 칩(꾸미기 종류) · 정렬 줄 — 꾸미기 A 오른쪽과 다른 탭 목록 머리가 같은 줄을 쓴다(2026-10-16 운영자 "카테고리 부분은 작게 · 지금 인벤토리 디자인이랑 안 맞는 것도 있어")
-  // 📌 왼쪽 칩 — 「즐겨찾기」(별 + 글자 · 즐겨찾기한 것만 켜고 끄기 · 2026-10-18) 다음 꾸미기 종류 칩(가진 종류가 둘 이상일 때 · 숫자 없이). 두 칩 줄이 같이 쓴다.
-  //    즐겨찾기 칩은 맨 앞 늘 같은 자리 · 같은 폭(켜면 채운 별 · 노란 테 — 글자 · 폭 그대로) — 켜고 꺼도 종류 칩이 밀리지 않는다
-  //    종류 칩 묶음(radiogroup)은 상자 없이(contents) — 즐겨찾기 칩과 한 흐름으로 줄을 접는다(묶음째 다음 줄로 넘어가 즐겨찾기 칩만 남지 않게)
-  const kindChips = subKinds.length > 1 ? [{ id: "all", label: "전체" }, ...subKinds].map((k) => {
-    const on = subOn === k.id;
-    return (
-      <button key={k.id} type="button" role="radio" aria-checked={on} onClick={() => { setSub(k.id); onTone(); }}
-        style={PILL_W} className={`shrink-0 h-7 px-2.5 rounded-full border inline-flex items-center justify-center text-[11px] font-bold leading-[26px] whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${on ? "border-white/70 text-white" : "border-white/15 text-white/45 hover:text-white/75"}`}>
-        {k.label}
-      </button>
-    );
-  }) : null;
+  // 📌 왼쪽 칩 — 「즐겨찾기」(별 + 글자 · 즐겨찾기한 것만 켜고 끄기 · 2026-10-18) 하나. 즐겨찾기 칩은 맨 앞 늘 같은 자리 · 같은 폭(켜면 채운 별 · 노란 테 — 글자 · 폭 그대로)
+  //    📌 2026-11-01 꾸미기 종류 칩(전체 · 카드 배경 · 카드 테두리 · 레벨바 · 프로필 테두리 · 배지)은 뺐다 — 운영자 "꾸미기 너무 많지 않니"(세 줄로 접혔다).
+  //       무대 칸 다섯이 같은 일을 한다: 칸을 누르면 그 종류로 거르고, 다시 누르면 전체(tapEquip)
   const chipsLeft = (
     <div className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
       {favChipOk && (
@@ -1699,8 +1822,6 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
           즐겨찾기
         </button>
       )}
-      {favChipOk && kindChips && <span aria-hidden className="shrink-0 w-px h-4 mx-0.5 bg-white/10"></span>}
-      {kindChips && <div role="radiogroup" aria-label="꾸미기 종류" className="contents">{kindChips}</div>}
     </div>
   );
   const chipSortRow = (groups[0]?.items.length ?? 0) > 1 ? (
@@ -1742,10 +1863,38 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
           </div>
         </div>
       ) : null;
-  // 꾸미기 A 오른쪽 칸(좁다) — 칩은 줄을 접어 다 보이게(숨은 가로 스크롤 금지 — 2026-10-16 "안 넘어가니까"), 정렬은 늘 「기본 ▾」 단추 하나
+  // 📌 꾸미기 「종류」 단추(2026-11-01 운영자 A안 — 종류 칩이 세 줄로 접혀 "너무 많지 않니" → 칩을 빼 보니 "좀 그렇잖아" → 정렬 옆 드롭다운).
+  //    정렬 「기본 ▾」과 같은 모양 · 같은 목록 판. 가진 종류만(둘 이상일 때). 무대 칸을 눌러 거르면 이 단추도 그 종류로(같은 sub), 고르면 무대 칸도 그 칸이 밝아진다
+  const kindLabel = subOn === "all" ? "종류" : subKinds.find((k) => k.id === subOn)?.label || "종류";
+  const kindPick = subKinds.length > 1 ? (
+    <div className="shrink-0 relative">
+      <button type="button" aria-haspopup="listbox" aria-expanded={kindOpen} aria-label={`종류 · ${subOn === "all" ? "전체" : kindLabel}`} onClick={() => { setKindOpen((v) => !v); setSortOpen(false); onTone(); }}
+        className={`h-7 pl-2.5 pr-2 rounded-full border text-[11px] font-bold leading-[26px] inline-flex items-center gap-1 whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${subOn === "all" ? "border-white/15 text-white/80" : "border-white/70 text-white"}`}>
+        {kindLabel}
+        <svg aria-hidden viewBox="0 0 20 20" className={`w-3 h-3 transition-transform ${kindOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+      {kindOpen && (
+        <>
+          {/* 바깥을 누르면 닫힘 */}
+          <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-20 cursor-default" onClick={() => setKindOpen(false)} />
+          <div role="listbox" aria-label="종류" className="absolute right-0 top-full mt-1.5 z-30 min-w-[132px] rounded-2xl bg-[#1d1d1d] border border-white/10 p-1 shadow-[0_28px_56px_-28px_rgba(0,0,0,0.25)]">
+            {[{ id: "all", label: "전체" }, ...subKinds].map((k) => (
+              <button key={k.id} type="button" role="option" aria-selected={subOn === k.id} onClick={() => { setSub(k.id); setKindOpen(false); onTone(); }}
+                className={`w-full h-9 px-3 rounded-xl text-left text-[12px] font-bold whitespace-nowrap flex items-center justify-between gap-3 transition-colors outline-none focus-visible:bg-white/10 ${subOn === k.id ? "text-white bg-white/[0.06]" : "text-white/60 hover:text-white hover:bg-white/[0.04]"}`}>
+                {k.label}
+                {subOn === k.id && <svg aria-hidden viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  ) : null;
+  // 꾸미기 A 오른쪽 칸(좁다) — 왼쪽 「즐겨찾기」, 오른쪽 「종류 ▾」 · 「기본 ▾」 단추 둘(한 줄)
   const chipSortRowA = (groups[0]?.items.length ?? 0) > 1 ? (
-        <div className="flex items-start gap-3 mb-3">
+        <div className="flex items-start gap-1.5 mb-3">
           {chipsLeft}
+          {kindPick}
           {/* 📌 정렬 — 넓은 화면은 세 단추, 폰(640 미만)은 단추 하나 「기본 ▾」(2026-10-11 운영자 "너무 좁아지면 그냥 단추 표기로 해" — 꾸미기 칩과 한 줄에 다 들어가게).
                  모든 탭에서 같은 모양(탭마다 다르지 않게) */}
           <div aria-hidden={rows.length > 1 ? undefined : true} className={`shrink-0 relative ${rows.length > 1 ? "" : "invisible"}`}>
@@ -1757,7 +1906,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
                 </button>
               ))}
             </div>
-            <button type="button" aria-haspopup="listbox" aria-expanded={sortOpen} aria-label={`정렬 · ${INV_SORTS.find((o) => o.v === sort)?.l || "기본"}`} onClick={() => { setSortOpen((v) => !v); onTone(); }}
+            <button type="button" aria-haspopup="listbox" aria-expanded={sortOpen} aria-label={`정렬 · ${INV_SORTS.find((o) => o.v === sort)?.l || "기본"}`} onClick={() => { setSortOpen((v) => !v); setKindOpen(false); onTone(); }}
               className="h-7 pl-2.5 pr-2 rounded-full border border-white/15 text-[11px] font-bold leading-[26px] text-white/80 inline-flex items-center gap-1 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-white/60">
               {INV_SORTS.find((o) => o.v === sort)?.l || "기본"}
               <svg aria-hidden viewBox="0 0 20 20" className={`w-3 h-3 transition-transform ${sortOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -1782,16 +1931,22 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       ) : null;
   // ── 꾸미기 A(「꾸미기」 · 관리자 「체험」 탭) — 왼쪽 무대 + 상세, 오른쪽 칩 + 실제 모습 칸 ──
   const wardA = active?.id === "cosmetic" || active?.id === "trial";
-  const wornOf = (it) => (!!it.sceneKey && it.sceneKey === curScene) || (!!it.skinKey && it.skinKey === curSkin) || (!!it.skinKeys && it.skinKeys.includes(curSkin)) || (!!it.frameKey && it.frameKey === curFrame) || (!!it.frameKeys && it.frameKeys.includes(curFrame)) || (!!it.badgeId && wornIds.includes(it.badgeId));
+  // 유물을 입으면 카드 꾸미기 넷은 가려져 「착용」이 아니다(배지는 따로)
+  const wornOf = (it) => (!!it.relicKey && !!curRelic) || (!curRelic && ((!!it.sceneKey && it.sceneKey === curScene) || (!!it.barKey && !it.sceneKey && it.barKey === curBar) || (!!it.skinKey && it.skinKey === curSkin) || (!!it.skinKeys && it.skinKeys.includes(curSkin)) || (!!it.frameKey && it.frameKey === curFrame) || (!!it.frameKeys && it.frameKeys.includes(curFrame)))) || (!!it.badgeId && wornIds.includes(it.badgeId));
   const glowA = invGlowOf(selItem || wornScene || wornSkin || wornFrame || null).replace("0.24)", "0.3)");
-  const meImgA = trialSession?.user?.image || "", meNameA = trialSession?.user?.name || "";
+  // 📌 2026-11-01 카드 그림 · 머리글자 이름은 서버 별명(lib/nick) — 장착 칸 그림(LookArt)도 같은 값
+  const meImgA = trialSession?.user?.image || "", meNameA = nickOf(trialSession?.user);
   // 📌 미리 보기 — 고른 아이템을 무대 카드에 입혀 본다(착용 전). 착용해야 바깥(레벨 페이지 카드)이 바뀐다.
   //    2026-10-17 운영자 "아이템을 클릭하면 미리보기가 바뀌어야지 착용하면 바깥도 바뀌는 거고" · "그럴 거면 미리보기가 왜 있어?"
   //    장착 칸 넷은 낀 것 그대로(미리 보는 동안 머리 글자만 「미리 보기」). 여러 키 묶음(등급 테두리 등)은 낀 키가 그 안이면 그것, 아니면 첫 키
   const tryKey = (one, many, cur) => one || (many?.length ? (many.includes(cur) ? cur : many[0]) : "");
-  const tryOn = selItem ? { scene: selItem.sceneKey || "", skin: tryKey(selItem.skinKey, selItem.skinKeys, curSkin), frame: tryKey(selItem.frameKey, selItem.frameKeys, curFrame) } : {};
-  const cardA = { skin: tryOn.skin || curSkin, scene: tryOn.scene || curScene, frame: tryOn.frame || curFrame };
-  const tryingA = cardA.skin !== curSkin || cardA.scene !== curScene || cardA.frame !== curFrame;
+  const tryOn = selItem ? { scene: selItem.sceneKey || "", bar: selItem.barKey || "", skin: tryKey(selItem.skinKey, selItem.skinKeys, curSkin), frame: tryKey(selItem.frameKey, selItem.frameKeys, curFrame) } : {};
+  // 레벨바 — 레벨바 아이템이면 그 막대, 아니면 지금 낀 막대(배경을 입혀 봐도 막대는 그대로 — 2026-10-31 분리)
+  const cardA = { skin: tryOn.skin || curSkin, scene: tryOn.scene || curScene, frame: tryOn.frame || curFrame, bar: tryOn.bar || curBar };
+  // 유물 — 유물을 고르면 입혀 보고(안 입었으면 기본 모습), 다른 카드 꾸미기를 고르면 유물 없이(입으면 유물을 벗으니까)
+  const otherLook = !!selItem && !selItem.relicKey && !!(selItem.sceneKey || selItem.barKey || selItem.skinKey || selItem.frameKey);
+  cardA.relic = selItem?.relicKey ? curRelic || normPick(null) : otherLook ? null : curRelic || null;
+  const tryingA = cardA.skin !== curSkin || cardA.scene !== curScene || cardA.frame !== curFrame || cardA.bar !== curBar || !!cardA.relic !== !!curRelic;
   const stageLabelA = tryingA ? "미리 보기" : "장착 중";
   // 📌 꾸미기에서 보기(2026-10-18 운영자 "전체에서 꾸미기 아이템 클릭하면 꾸미기 탭으로 가기") — 꾸미기 탭 밖에서 고른 꾸미기만.
   //    꾸미기 탭으로 넘어가 그 칸을 고른다(무대 카드에 입혀 보임 · 종류 칩은 전체로 — 그 칸이 걸러지지 않게). 「즐겨찾기」 거르기는 켠 그대로(그 칸은 이미 목록에 있다)
@@ -1804,10 +1959,28 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
     onTone();
   };
   // 칸을 두 번 누름 — 그 칸을 고르고 바로 착용 · 해제(배지는 배지 창). 꾸미기 · 체험 탭 그림 칸이 같이 쓴다
-  const wearNow = (it) => { setSel(it.uid); if (it.badgeId) openBadges(); else if (simpleA(it) && !(sceneBusy || skinBusy || frameBusy || clearBusy)) wearA(it); };
-  const simpleA = (it) => !!it && !(it.skinKeys?.length > 1 || it.frameKeys?.length > 1 || (it.expiresAt && it.renewId)) && [it.sceneKey, it.skinKey, it.frameKey, it.badgeId].filter(Boolean).length === 1;
+  const wearNow = (it) => { setSel(it.uid); if (it.badgeId) openBadges(); else if (simpleA(it) && !(sceneBusy || barBusy || skinBusy || frameBusy || clearBusy)) wearA(it); };
+  const simpleA = (it) => !!it && !(it.skinKeys?.length > 1 || it.frameKeys?.length > 1 || (it.expiresAt && it.renewId)) && [it.relicKey, it.sceneKey, !it.sceneKey && it.barKey, it.skinKey, it.frameKey, it.badgeId].filter(Boolean).length === 1;
   const wearA = (it) => {
-    if (it.sceneKey) return saveScene(wornOf(it) ? SKIN_NONE : it.sceneKey);
+    // 유물 — 한 묶음. 입으면 지금 고른 값(처음이면 기본 보이드 · 1 1 1 1), 다시 누르면 벗는다
+    if (it.relicKey) return saveRelic(curRelic ? null : normPick(null));
+    // 유물을 입은 채 다른 카드 꾸미기를 입으면 유물은 벗는다(섞어 입기 없음 — 운영자 "다른 거 못 끼게")
+    if (curRelic && (it.sceneKey || it.barKey || it.skinKey || it.frameKey)) {
+      saveRelic(null, `${RELIC_NAME}을 벗고 바꿔 입었습니다`);
+      if (it.sceneKey && it.barKey) { saveBar(it.barKey); return saveScene(it.sceneKey); }
+      if (it.sceneKey) return saveScene(it.sceneKey);
+      if (it.barKey) return saveBar(it.barKey);
+      if (it.skinKey) return saveSkin(it.skinKey);
+      return saveFrame(it.frameKey);
+    }
+    // 배경 + 레벨바 한 아이템 — 둘을 함께 끼우고 함께 뺀다(착용 판정은 배경 기준 — wornOf)
+    if (it.sceneKey && it.barKey) {
+      const off = it.sceneKey === curScene;
+      saveBar(off ? SKIN_NONE : it.barKey);
+      return saveScene(off ? SKIN_NONE : it.sceneKey);
+    }
+    if (it.sceneKey) return saveScene(it.sceneKey === curScene ? SKIN_NONE : it.sceneKey);
+    if (it.barKey) return saveBar(wornOf(it) ? SKIN_NONE : it.barKey);
     if (it.skinKey) return saveSkin(wornOf(it) ? SKIN_NONE : it.skinKey);
     if (it.frameKey) return saveFrame(wornOf(it) ? SKIN_NONE : it.frameKey);
   };
@@ -1846,10 +2019,10 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
   const noteOf = () => (loading ? "불러오는 중…" : favOnlyOn ? "즐겨찾기한 아이템이 없습니다" : error || "아직 보유한 아이템이 없습니다");
 
   const detailA =selItem && simpleA(selItem) ? (
-    <DetailRow it={selItem} worn={wornOf(selItem)} busy={sceneBusy || skinBusy || frameBusy || clearBusy} onWear={() => wearA(selItem)} onBadge={openBadges} fav={favOf(selItem)} onFav={() => toggleFav(selItem)} />
+    <DetailRow it={selItem} worn={wornOf(selItem)} busy={sceneBusy || barBusy || skinBusy || frameBusy || clearBusy} onWear={() => wearA(selItem)} onBadge={openBadges} onRelic={openRelic} fav={favOf(selItem)} onFav={() => toggleFav(selItem)} />
   ) : selItem ? (
     <InvDetail it={selItem} onGo={onClose} fav={favOf(selItem)} onFav={() => toggleFav(selItem)}
-      sceneOn={!!selItem.sceneKey && selItem.sceneKey === curScene} onScene={saveScene} sceneBusy={sceneBusy || clearBusy}
+      sceneOn={!!selItem.sceneKey && selItem.sceneKey === curScene} onScene={saveScene} sceneBusy={sceneBusy || clearBusy} barOn={!!selItem.barKey && selItem.barKey === curBar} onBar={saveBar} barBusy={barBusy || clearBusy}
       skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} skinCur={curSkin} onSkin={saveSkin} skinBusy={skinBusy || clearBusy}
       badgeSlot={selItem.badgeId ? wornIds.indexOf(selItem.badgeId) : -1} onBadgeOpen={openBadges}
       frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} frameCur={curFrame} onFrame={saveFrame} frameBusy={frameBusy || clearBusy} />
@@ -1859,11 +2032,11 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       <div className="min-w-0 sm:flex-1 sm:overflow-y-auto no-bar px-4 sm:px-6 pt-4 sm:py-6 flex flex-col gap-4">
         <div className="sm:hidden">
           <StageMini slots={equipSlots} slotOn={slotOn} onSlot={tapEquip} card={cardA} label={stageLabelA} info={cardInfo} glow={glowA}
-            image={meImgA} name={meNameA} onClearAll={clearAll} clearOff={!anyWorn || clearBusy || skinBusy || sceneBusy || frameBusy || badgeBusy} />
+            image={meImgA} name={meNameA} onClearAll={clearAll} clearOff={!anyWorn || clearBusy || skinBusy || sceneBusy || barBusy || frameBusy || badgeBusy} />
         </div>
         <div className="hidden sm:block">
           <StageA slots={equipSlots} slotOn={slotOn} onSlot={tapEquip} card={cardA} label={stageLabelA} info={cardInfo} glow={glowA}
-            image={meImgA} name={meNameA} onClearAll={clearAll} clearOff={!anyWorn || clearBusy || skinBusy || sceneBusy || frameBusy || badgeBusy} />
+            image={meImgA} name={meNameA} onClearAll={clearAll} clearOff={!anyWorn || clearBusy || skinBusy || sceneBusy || barBusy || frameBusy || badgeBusy} />
         </div>
         {/* 상세 — PC 는 무대 아래. 폰은 목록 아래에 붙는 얇은 줄(DetailMini) */}
         {detailA && <div className="hidden sm:block pt-1">{detailA}</div>}
@@ -1875,7 +2048,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
         {selItem && (
           simpleA(selItem) ? (
             <div className="sm:hidden sticky bottom-0 -mx-4 mt-4 px-4 py-3 bg-[#141414]/95 backdrop-blur border-t border-white/10">
-              <DetailMini it={selItem} worn={wornOf(selItem)} busy={sceneBusy || skinBusy || frameBusy || clearBusy} onWear={() => wearA(selItem)} onBadge={openBadges} fav={favOf(selItem)} onFav={() => toggleFav(selItem)} />
+              <DetailMini it={selItem} worn={wornOf(selItem)} busy={sceneBusy || barBusy || skinBusy || frameBusy || clearBusy} onWear={() => wearA(selItem)} onBadge={openBadges} onRelic={openRelic} fav={favOf(selItem)} onFav={() => toggleFav(selItem)} />
             </div>
           ) : (
             <div className="sm:hidden mt-5">{detailA}</div>
@@ -1915,7 +2088,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
         <div className={`relative flex flex-col sm:flex-1 ${detailMin ? "overflow-y-auto overflow-x-hidden no-bar overscroll-contain" : ""}`} style={detailMin ? { height: detailMin } : undefined}>
         {selItem ? (
           <InvDetail it={selItem} onGo={onClose} fav={favOf(selItem)} onFav={() => toggleFav(selItem)} onLook={lookTabOn && isLookRow(selItem) ? () => goLook(selItem) : undefined}
-            sceneOn={!!selItem.sceneKey && selItem.sceneKey === curScene} onScene={saveScene} sceneBusy={sceneBusy || clearBusy}
+            sceneOn={!!selItem.sceneKey && selItem.sceneKey === curScene} onScene={saveScene} sceneBusy={sceneBusy || clearBusy} barOn={!!selItem.barKey && selItem.barKey === curBar} onBar={saveBar} barBusy={barBusy || clearBusy}
             skinOn={!!selItem.skinKey && selItem.skinKey === curSkin} skinCur={curSkin} onSkin={saveSkin} skinBusy={skinBusy || clearBusy}
             badgeSlot={selItem.badgeId ? wornIds.indexOf(selItem.badgeId) : -1} onBadgeOpen={openBadges}
             frameOn={!!selItem.frameKey && selItem.frameKey === curFrame} frameCur={curFrame} onFrame={saveFrame} frameBusy={frameBusy || clearBusy} />
@@ -1934,7 +2107,7 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
           {(allItems || []).map((it) => (
             <div key={it.uid}>
               {/* 즐겨찾기 · 꾸미기에서 보기 단추 자리도 같게 — 누르는 일은 없다 */}
-              <InvDetail it={it} sceneOn={!!it.sceneKey && it.sceneKey === curScene} skinOn={!!it.skinKey && it.skinKey === curSkin} skinCur={curSkin} badgeSlot={it.badgeId ? wornIds.indexOf(it.badgeId) : -1}
+              <InvDetail it={it} sceneOn={!!it.sceneKey && it.sceneKey === curScene} barOn={!!it.barKey && it.barKey === curBar} skinOn={!!it.skinKey && it.skinKey === curSkin} skinCur={curSkin} badgeSlot={it.badgeId ? wornIds.indexOf(it.badgeId) : -1}
                 frameOn={!!it.frameKey && it.frameKey === curFrame} frameCur={curFrame} fav={favOf(it) == null ? null : false} onLook={lookTabOn && isLookRow(it) ? noop : undefined} />
             </div>
           ))}
@@ -1957,6 +2130,10 @@ export const BagOverlay = ({ cardInfo = null, open, onClose, groups: groupsIn, t
       {/* invGroups 는 보유 0개면 [] 를 돌려준다 — groups[0] 로 판정하면 신규 유저에게 문구가 안 뜬다 */}
       {gridOf(rows, false, "grid-cols-4 sm:grid-cols-6", 4, 6, true, rows.length === 0 ? noteOf() : "")}
     </PopShell>
+    {/* 유물 꾸미기 창 — 코어 색 · 조각 1 · 2 · 3 · 주사위 · 적용 */}
+    {relicOpen && (
+      <RelicWindow cur={curRelic || normPick(null)} onClose={closeRelic} onSave={(p) => saveRelic(p, `${RELIC_NAME} 꾸미기를 적용했습니다`)} onTone={onTone} image={trialSession?.user?.image || ""} name={nickOf(trialSession?.user)} />
+    )}
     {badgeOpen && (
       <BadgeWindow onClose={closeBadges} items={badgeItems} badges={badges} busy={badgeBusy} onSave={saveBadgeOrder} onTone={onTone} />
     )}
@@ -2001,6 +2178,10 @@ export function keepSavedFrame(data, t0, saved) {
 export function keepSavedScene(data, t0, saved) {
   return data && saved && t0 < saved.at ? { ...data, cardScene: saved.v } : data;
 }
+// 📌 레벨 막대도 같은 규칙(2026-10-31) — saved: { at: 저장 시각, v: { cardBarPick, cardBar } }
+export function keepSavedBar(data, t0, saved) {
+  return data && saved && saved.v && t0 < saved.at ? { ...data, cardBarPick: saved.v.cardBarPick, cardBar: saved.v.cardBar } : data;
+}
 
 // 📌 그 자리에서 여는 인벤토리 — 내 정보 · ARCTIC 이 쓴다. 열 때마다 /api/shop/my-items 를 새로 읽는다.
 //    처음 읽기 전에는 빈 가방 문구 대신 불러오는 중. 여닫는 소리는 레벨 가방과 같다(낮은음 → 높은음 / 반대).
@@ -2011,6 +2192,7 @@ export function InventoryPopup({ open, onClose }) {
   const badgeSaved = useRef({ at: 0, v: [] }); // 마지막 배지 저장(keepSavedBadges)
   const frameSaved = useRef({ at: 0, v: "" }); // 마지막 테두리 저장(keepSavedFrame)
   const sceneSaved = useRef({ at: 0, v: "" }); // 마지막 카드 배경 저장(keepSavedScene)
+  const barSaved = useRef({ at: 0, v: null }); // 마지막 레벨 막대 저장(keepSavedBar)
   useEffect(() => {
     if (!open) return;
     playTone(392, 0.06, "sine", 0.03);
@@ -2022,7 +2204,7 @@ export function InventoryPopup({ open, onClose }) {
       .then((d) => {
         if (!alive) return;
         // 실패는 빈 가방과 구분한다 — 받아 둔 목록(과 지금 스킨 · 연동 여부)이 있으면 그대로 두고 문구만 바꾼다
-        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedScene(keepSavedFrame(keepSavedBadges(keepSavedSkin(d.data, t0, skinSaved.current), t0, badgeSaved.current), t0, frameSaved.current), t0, sceneSaved.current)));
+        if (d?.success) setData((cur) => mergeMyItems(cur, keepSavedBar(keepSavedScene(keepSavedFrame(keepSavedBadges(keepSavedSkin(d.data, t0, skinSaved.current), t0, badgeSaved.current), t0, frameSaved.current), t0, sceneSaved.current), t0, barSaved.current)));
         else setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: d?.error || "불러오지 못했습니다" }));
       })
       .catch(() => { if (alive) setData((cur) => ({ ...(cur || {}), items: cur?.items || [], error: "불러오지 못했습니다" })); });
@@ -2054,6 +2236,12 @@ export function InventoryPopup({ open, onClose }) {
       onSceneChange={(k) => {
         sceneSaved.current = { at: Date.now(), v: k };
         setData((cur) => (cur ? { ...cur, cardScene: k } : cur));
+      }}
+      cardBar={data?.cardBar || ""}
+      cardBarPick={data?.cardBarPick || ""}
+      onBarChange={(v) => {
+        barSaved.current = { at: Date.now(), v };
+        setData((cur) => (cur ? { ...cur, ...v } : cur));
       }}
       badges={data?.badges}
       onBadgesChange={(list) => {

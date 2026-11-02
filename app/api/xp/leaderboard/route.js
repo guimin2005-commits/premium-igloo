@@ -135,6 +135,44 @@ async function withMyBadges(row) {
   return map?.has(row.userId) ? { ...row, badges: map.get(row.userId) } : row;
 }
 
+// 📌 이름 검색(q — 2026-10-31 운영자 "랭킹탭에 검색 기능 · 편의기능") — 서버 별명(displayName) · 아이디(username)에 q 가 든 사람 중
+//    이 기준(period)에 순위가 있는 사람을 순위 순으로 최대 SEARCH_MAX 명. 순위는 목록과 같은 규칙(값 내림차순 · 동점은 userId 오름차순 · 누적 · 이번 달은 같은 순위표).
+//    q 는 20자까지 · 정규식 글자는 이스케이프(그대로 찾는다). page = 이 limit 로 넘길 때 그 사람이 있는 쪽(0 부터)
+const SEARCH_MAX = 5;
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+async function searchRanks(period, q, pageOf, ledgerSince) {
+  const re = new RegExp(escRe(q), "i");
+  const found = await UserXp.find(
+    { $or: [{ displayName: re }, { username: re }] },
+    { userId: 1, displayName: 1, username: 1, xp: 1, level: 1, voiceSeconds: 1 }
+  ).limit(200).lean();
+  if (!found.length) return [];
+  const nameOf = (u) => u.displayName || u.username || NO_NAME;
+  if (period === "total" || period === "month") {
+    const board = period === "total" ? await totalBoard(totalSince(ledgerSince)) : await monthBoard(kstMonthStart());
+    const want = new Map(found.map((u) => [u.userId, u]));
+    const out = [];
+    for (let i = 0; i < board.length && out.length < SEARCH_MAX; i++) {
+      const u = want.get(board[i].userId);
+      if (u) out.push({ rank: i + 1, page: pageOf(i + 1), userId: u.userId, name: nameOf(u), level: u.level ?? 0, xp: board[i].xp || 0 });
+    }
+    return out;
+  }
+  // 현재 · 음성 — 찾은 사람을 목록과 같은 순서로 세운 뒤 앞 SEARCH_MAX 명만 순위를 센다(음성은 1초라도 있는 사람만 — 목록과 같게)
+  const key = period === "voice" ? "voiceSeconds" : "xp";
+  const list = found
+    .filter((u) => period !== "voice" || (u.voiceSeconds || 0) > 0)
+    .sort((a, b) => (b[key] || 0) - (a[key] || 0) || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
+    .slice(0, SEARCH_MAX);
+  return Promise.all(
+    list.map(async (u) => {
+      const v = u[key] || 0;
+      const rank = (await UserXp.countDocuments({ $or: [{ [key]: { $gt: v } }, { [key]: v, userId: { $lt: u.userId } }] })) + 1;
+      return { rank, page: pageOf(rank), userId: u.userId, name: nameOf(u), level: u.level ?? 0, ...(period === "voice" ? { voiceSeconds: v } : { xp: v }) };
+    })
+  );
+}
+
 // ── [조회] 랭킹 ──────────────────────────────────────────────
 //   period=all   현재 XP        (UserXp.xp — 관리자 회수 · 초기화는 이미 빠져 있다)
 //   period=total 누적 XP        (이번 시즌 얻은 XP 전부 = 현재 + 이번 시즌에 쓴 XP — totalBoard)
@@ -143,6 +181,7 @@ async function withMyBadges(row) {
 //   skip/limit 으로 페이지를 넘긴다. 순위는 skip 을 더해 이어진다.
 //   me=1 이면 로그인한 본인의 순위 · 값 · 쪽(me)을 함께 준다 — 목록에 없을 때 화면이 내 줄을 따로 그린다
 //   📌 2026-10-25 members = 순위의 전체 인원(서버 사람 수 포함 — rankTotalOf). 화면의 「N명」 · 「/ 전체」 · 「상위 N%」가 쓴다. total 은 목록에 오른 수(쪽 넘기기)
+//   📌 2026-10-31 q=이름 일부 — 목록 대신 matches(맞는 사람 최대 5명의 순위 · 쪽)만(searchRanks)
 export async function GET(request) {
   try {
     await connectToDatabase();
@@ -163,6 +202,9 @@ export async function GET(request) {
     const myId = session?.user?.id || "";
     const myName = session?.user?.name || "";
     const pageOf = (rank) => Math.floor((rank - 1) / limit);
+    // 이름 검색 — 목록 대신 맞는 사람(순위 · 쪽)만 준다(위 searchRanks)
+    const q = (sp.get("q") || "").trim().slice(0, 20);
+    if (q) return NextResponse.json({ success: true, period, matches: await searchRanks(period, q, pageOf, gate?.ledgerSince) });
     const memberCount = serverMemberCount().catch(() => 0); // 기다리지 않고 시작 — 응답 직전에 받는다
     const membersOf = async (n) => rankTotalOf(n, await memberCount);
 

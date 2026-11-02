@@ -60,6 +60,8 @@ export async function POST(request) {
     if (closed) return relay(closed);
 
     const userId = session.user.id;
+    // 📌 멤버 이름 칸(members[].name)은 계정 이름 그대로 — 지원 보너스 추첨권 Purchase.userName · 알림 recipientName · 관리 › 그룹 화면이 이 값을 쓴다.
+    //    유저 화면은 읽을 때 서버 별명으로 바꾼다(lib/goedamGroup memberNames — 2026-11-01, 친구 초대 lib/invite.js redeemInvite 와 같은 방식)
     const r = await groupAction({ action, userId, userName: session.user.name || "", body });
     if (!r.ok) return fail(r.status || 400, r.error);
     const state = await getGroupState(userId, { isAdmin: await isAdminViewer(session) });

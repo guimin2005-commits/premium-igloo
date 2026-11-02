@@ -10,6 +10,7 @@ import { useAdminView } from "../components/AdminView";
 import { VOICE_TIME_START } from "@/lib/season";
 import { tone, useToasts, ToastStack, fmtDate, BLUE, fieldClass, CheckMark, CommentIcon, ArrowRight, type Post, type AckStats } from "./NoticeDetail";
 import { openLogin } from "../components/LoginPrompt";
+import { nickOf } from "@/lib/nick";
 
 // 📌 서포터즈 전용 — 활동 · 평가·지급 · 공지·가이드 · 신고·피드백 네 탭.
 //    입장은 세션 플래그(isSupporter)로 먼저 가르고, 서버(/api/supporters/*)가 다시 막는다.
@@ -596,7 +597,7 @@ export default function SupportersPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={user.image} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-2xl font-black text-white/60">{String(user.name || "?").slice(0, 1)}</span>
+                      <span className="text-2xl font-black text-white/60">{String(nickOf(user) || "?").slice(0, 1)}</span>
                     )}
                   </span>
                   <div className="min-w-0">
@@ -609,7 +610,8 @@ export default function SupportersPage() {
                       </span>
                       <span className="text-[11px] font-bold text-white/40 tabular-nums">{fmtMonth(me.month)}</span>
                     </div>
-                    <p className="mt-2.5 text-2xl md:text-3xl font-black text-white truncate tracking-tight leading-none">{user.name}</p>
+                    {/* 📌 2026-11-01 이름은 서버 별명(lib/nick) — 머리글자도 같은 값 */}
+                    <p className="mt-2.5 text-2xl md:text-3xl font-black text-white truncate tracking-tight leading-none">{nickOf(user)}</p>
                     {(goals.chat > 0 || goals.voiceMin > 0) && (
                       <p className={`mt-2.5 text-[11px] font-bold ${chatDone && voiceDone ? "text-[#ff5c77]" : "text-white/35"}`}>
                         {chatDone && voiceDone ? "이번 달 목표 달성" : "이번 달 목표 진행 중"}

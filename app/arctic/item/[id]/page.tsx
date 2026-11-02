@@ -23,6 +23,7 @@ import { CART_KEY, WISH_KEY, CHECKOUT_KEY, readShopList, writeShopList, useShopU
 import { onCartChange } from "../../cardCart";
 import { productIconOf } from "@/lib/cosmeticArt";
 import { rarityOf } from "@/lib/rarity";
+import { ItemSkeleton } from "../../skeletons/Item";
 
 // 유형 배지 — 라벨·색은 lib/items.js 가 단일 원천(세트만 ProductCard 의 typeLabelOf · typeColorOf)
 //    label — 분류(ProductCard categoryLabelOf — API categoryLabel, 옛 응답은 이름 머리말). 없으면 유형 이름
@@ -201,10 +202,13 @@ export default function ItemDetailPage() {
 
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(""), 1800); };
 
+  // 📌 2026-11-01 로딩 — 「불러오는 중...」 글자 대신 다 불러온 화면(로그인 기준)과 같은 틀의 뼈대(../../skeletons/Item). 하단바는 불러온 뒤와 같은 자리에 그대로
   if (status === "loading" || isLoading) {
     return (
-      <div className="w-full flex-1 bg-white min-h-screen">
-        <div className="py-32 text-center text-sm text-[#8a8a8a]">불러오는 중...</div>
+      <div className="w-full flex-1 bg-white text-[#131313] min-h-screen">
+        <ItemSkeleton />
+        <ArcticFooter />
+        <ArcticDock />
       </div>
     );
   }

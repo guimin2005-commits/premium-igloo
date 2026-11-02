@@ -238,7 +238,7 @@ export const Sparkline = ({ history = [], h = 96 }) => {
 // 랭킹 한 줄 — RankRows 안에서 정의하면 렌더마다 새 컴포넌트가 돼 행이 통째로 다시 붙는다
 //    📌 2026-10-24 대시보드 「내 순위」 판 시안 그대로 — 줄 46px(아래 선 포함 · 옆 획득 피드 줄과 같은 높이) · 1~3위도 같은 높이(순위 칸 · 굵기로만 구분) ·
 //       줄 밑 1위 대비 막대는 뺐다(길이가 달라 끊긴 선처럼 보였다 — 1위와의 거리는 위 「내 순위」 막대가 맡는다)
-const RankRow = ({ rank, name, level, xp, mine, badges }) => {
+const RankRow = ({ rank, name, level, xp, value = null, mine, badges }) => {
     const podium = rank <= 3;
     return (
       <div className={`relative flex items-center gap-[11px] h-[46px] border-b border-[#ededed] transition-colors ${mine ? "bg-[#e91e3f]/[0.05]" : "hover:bg-black/[0.02]"}`}>
@@ -271,25 +271,26 @@ const RankRow = ({ rank, name, level, xp, mine, badges }) => {
           </span>
           <span className="shrink-0 w-12 text-right text-[10px] font-black text-[#a3a3a3] tabular-nums uppercase tracking-[0.04em]">Lv {level}</span>
           <span className={`shrink-0 w-[92px] text-right tabular-nums font-black ${podium ? "text-[13.5px] text-[#131313]" : "text-[13px] text-[#5a5a5a]"}`}>
-            {(xp || 0).toLocaleString()}
+            {value ?? (xp || 0).toLocaleString()}
           </span>
       </div>
     );
 };
 
 // 📌 meRow false — 목록 밖 내 줄(··· + 내 줄)을 그리지 않는다(대시보드는 위 「내 순위」 판이 맡는다). strongTop — 맨 윗줄을 굵은 선(#131313)으로(위 판이 없을 때)
-export const RankRows = ({ rows = [], myId, me, myName = "", meRow = true, strongTop = false }) => {
+// fmt — 오른쪽 값 글자(없으면 XP 숫자). 2026-11-02 대시보드 「음성」 기준은 머문 시간
+export const RankRows = ({ rows = [], myId, me, myName = "", meRow = true, strongTop = false, fmt = null }) => {
   const inList = !!myId && rows.some((r) => r.userId === myId);
 
   return (
     <div className={`border-t ${strongTop ? "border-[#131313]" : "border-[#ededed]"}`}>
       {rows.map((r) => (
-        <RankRow key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} mine={!!myId && r.userId === myId} badges={r.badges} />
+        <RankRow key={r.userId} rank={r.rank} name={r.name} level={r.level} xp={r.xp} value={fmt ? fmt(r) : null} mine={!!myId && r.userId === myId} badges={r.badges} />
       ))}
       {meRow && myId && !inList && me && (
         <>
           <div className="py-1.5 text-center text-[#a3a3a3] text-[10px] font-black tracking-[0.4em]">···</div>
-          <RankRow rank={me.rank} name={myName} level={me.level} xp={me.xp} mine badges={me.badges} />
+          <RankRow rank={me.rank} name={myName} level={me.level} xp={me.xp} value={fmt ? fmt(me) : null} mine badges={me.badges} />
         </>
       )}
     </div>
