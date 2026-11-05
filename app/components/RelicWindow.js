@@ -5,16 +5,33 @@
 //    PC: 왼쪽 미리보기 카드(글자 없음 · 움직임 + 이어지는 연출) · 오른쪽 코어 색 칸 넷 + 조각 네 줄(라벨 옆 고른 이름 · 칸엔 번호만) · 오른쪽 아래 [주사위] [적용]
 //    폰: 바닥 창 — 미리보기 240 · 코어 색 · 같은 폭 밑줄 탭 넷(탭 줄 안 움직임) · 그 조각 1 · 2 · 3 · 아래 [주사위] [적용]
 //    한 묶음: 코어 색 하나 + 조각마다 1 · 2 · 3(「안 씀」 없음). 고르면 미리보기가 바로 바뀌고 「적용」 한 번에 저장(바뀐 게 없으면 꺼짐)
-//    주사위 — 코어 색 · 조각 넷을 무작위로 골라 미리보기에(저장은 「적용」)
+//    주사위 — 코어 색 · 조각 넷 · 아이콘을 무작위로 골라 미리보기에(저장은 「적용」)
+//    📌 2026-11-03 「아이콘」 줄 — 대시보드 카드 단추 아이콘(기본 · 1 궤도 · 2 파편 · 3 렌즈, 운영자 "기존 것도 선택 가능하게"). 칸엔 인벤토리 아이콘이 그 모양으로 움직인다
+//      줄이 다섯이 되어 PC 칸을 76 → 58 로 줄였다(창 높이 그대로 — PC 창 세로 스크롤 0). 폰 탭은 다섯이라 탭 글자를 짧게(프로필 · 테두리 · 배경 · 레벨바 · 아이콘)
+//      미리보기 카드에도 단추 아이콘 셋(운영자 "아이콘은 미리보기에 안 보이나?" → "넣어") — 실제 카드 단추 줄과 같은 비율 자리 · 글자 없이. 인벤토리 무대 카드는 그대로(최소)
 import { useEffect, useMemo, useRef, useState } from "react";
 import RelicLayers from "./RelicLayers";
 import { CORE_KEYS, PIECES, NAMES2, RELIC_NAME, coreName, coreColors, normPick, randomPick } from "@/lib/relic";
 import { relicPieceThumb } from "@/lib/relic/thumb";
+import { ICON_NAMES } from "@/lib/relic/icons";
+import RelicIcon from "./RelicIcon";
+import { ICON_PATHS } from "./Icons";
 
 const SLOT_BG = "#0c0c0c";
 const slotShadow = (on) => `${on ? "0 0 0 2px #ffffff" : "0 0 0 1px #262626"}, inset 2px 2px 0 rgba(0,0,0,0.55), inset -1px -1px 0 rgba(255,255,255,0.06)`;
 const FOCUS = "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70";
-const same = (a, b) => ["core", "frame", "border", "bg", "bar"].every((k) => a?.[k] === b?.[k]);
+const same = (a, b) => ["core", "frame", "border", "bg", "bar", "icon"].every((k) => a?.[k] === b?.[k]);
+// 줄 — 카드 조각 넷 + 아이콘(0 기본 · 1~3)
+const ROWS = [...PIECES, ["icon", "아이콘"]];
+const TAB = { frame: "프로필", border: "테두리", bg: "배경", bar: "레벨바", icon: "아이콘" };
+const optsOf = (p) => (p === "icon" ? [0, 1, 2, 3] : [1, 2, 3]);
+const nameOf = (p, v) => (p === "icon" ? ICON_NAMES[v] : NAMES2[p][v - 1]);
+// 미리보기 카드 단추 아이콘 — 실제 카드(PC 378 × 649)의 단추 줄 자리를 360 × 556 판 비율로: 가로 0.216 · 0.5 · 0.784, 레벨바 가운데에서 76 아래
+const PREVIEW_ICONS = [["bag", 78], ["star", 180], ["bolt", 282]], PREVIEW_ICON_Y = 339 + 76;
+// 「기본」 — 카드와 같은 선 아이콘
+const LineIcon = ({ kind }) => (
+  <svg viewBox="0 0 24 24" className="block w-6 h-6 text-white/55" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS[kind]} strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
 const glowOf = (core) => { const n = parseInt(coreColors(core).p2.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},0.24)`; };
 
 // 미리보기 카드 — 360 × 556 판을 w 폭으로 줄여(인벤토리 무대 카드와 같은 자리 · 사진 (76, 76) 지름 68)
@@ -32,6 +49,11 @@ function PreviewCard({ pick, w, image, name }) {
             <span className="rounded-full bg-white/10 flex items-center justify-center text-2xl font-black text-white/60" style={{ width: 68, height: 68 }}>{(name || "?").slice(0, 1)}</span>
           )}
         </div>
+        {PREVIEW_ICONS.map(([kind, x], i) => (
+          <span key={kind} aria-hidden className="absolute" style={{ left: x - 12, top: PREVIEW_ICON_Y - 12, zIndex: 5 }}>
+            {pick.icon ? <RelicIcon kind={kind} style={pick.icon} core={pick.core} i={i} /> : <LineIcon kind={kind} />}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -88,12 +110,18 @@ export default function RelicWindow({ cur, onClose, onSave, busy = false, onTone
   const tile = (p, n, size, full = false) => {
     const on = draft[p] === n;
     return (
-      <button key={n} type="button" aria-pressed={on} aria-label={`${n} ${NAMES2[p][n - 1]}`} title={NAMES2[p][n - 1]} onClick={() => pickPiece(p, n)}
+      <button key={n} type="button" aria-pressed={on} aria-label={n ? `${n} ${nameOf(p, n)}` : nameOf(p, n)} title={nameOf(p, n)} onClick={() => pickPiece(p, n)}
         className={`relative shrink-0 overflow-hidden transition-[filter] ${on ? "" : "hover:brightness-125"} ${full ? "aspect-square w-full" : ""} ${FOCUS}`}
         style={{ ...(full ? {} : { width: size, height: size }), background: SLOT_BG, boxShadow: slotShadow(on) }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {thumbs[p]?.[n - 1] && <img src={thumbs[p][n - 1]} alt="" draggable={false} className="block w-full h-full pointer-events-none" />}
-        <span aria-hidden className={`absolute top-[5px] left-[7px] text-[10px] font-black leading-none tabular-nums pointer-events-none ${on ? "text-white" : "text-white/40"}`}>{n}</span>
+        {p === "icon" ? (
+          <span aria-hidden className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {n ? <RelicIcon kind="bag" style={n} core={draft.core} /> : <LineIcon kind="bag" />}
+          </span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          thumbs[p]?.[n - 1] && <img src={thumbs[p][n - 1]} alt="" draggable={false} className="block w-full h-full pointer-events-none" />
+        )}
+        {n > 0 && <span aria-hidden className={`absolute top-[5px] left-[7px] text-[10px] font-black leading-none tabular-nums pointer-events-none ${on ? "text-white" : "text-white/40"}`}>{n}</span>}
       </button>
     );
   };
@@ -147,11 +175,11 @@ export default function RelicWindow({ cur, onClose, onSave, busy = false, onTone
               {label("코어 색", coreName(draft.core))}
               <div className="mt-2">{swatches(40)}</div>
             </div>
-            <div className="mt-[22px] flex flex-col gap-3">
-              {PIECES.map(([p, head]) => (
-                <div key={p}>
-                  {label(head, NAMES2[p][draft[p] - 1])}
-                  <div className="mt-2 flex gap-2.5">{[1, 2, 3].map((n) => tile(p, n, 76))}</div>
+            <div className="mt-4">
+              {ROWS.map(([p, head], j) => (
+                <div key={p} className={j ? "mt-[9px]" : ""}>
+                  {label(head, nameOf(p, draft[p]))}
+                  <div className="mt-1.5 flex gap-2.5">{optsOf(p).map((n) => tile(p, n, 58))}</div>
                 </div>
               ))}
             </div>
@@ -169,16 +197,16 @@ export default function RelicWindow({ cur, onClose, onSave, busy = false, onTone
             {label("코어 색", coreName(draft.core))}
             <div className="mt-2">{swatches(40)}</div>
           </div>
-          <div role="tablist" className="mt-5 grid grid-cols-4 shadow-[inset_0_-1px_0_rgba(255,255,255,0.08)]">
-            {PIECES.map(([p, head]) => (
+          <div role="tablist" className="mt-5 grid grid-cols-5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.08)]">
+            {ROWS.map(([p]) => (
               <button key={p} type="button" role="tab" aria-selected={tab === p} onClick={() => { setTab(p); onTone?.(); }}
                 className={`py-2.5 text-[11px] font-black text-center ${tab === p ? "text-white shadow-[inset_0_-2px_0_#fff]" : "text-white/45"} ${FOCUS}`}>
-                {head}
+                {TAB[p]}
               </button>
             ))}
           </div>
-          <div className="mt-3.5">{label("", NAMES2[tab][draft[tab] - 1])}</div>
-          <div className="mt-2 grid grid-cols-3 gap-3 pb-4">{[1, 2, 3].map((n) => tile(tab, n, 0, true))}</div>
+          <div className="mt-3.5">{label("", nameOf(tab, draft[tab]))}</div>
+          <div className={`mt-2 grid ${tab === "icon" ? "grid-cols-4" : "grid-cols-3"} gap-3 pb-4`}>{optsOf(tab).map((n) => tile(tab, n, 0, true))}</div>
         </div>
         <div className="sm:hidden relative z-10 shrink-0 flex items-center gap-2 px-5 pt-3" style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
           {btnDice("w-11 h-11")}

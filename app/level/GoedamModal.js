@@ -28,7 +28,7 @@ import { preloadSfx, playSfx } from "@/lib/sfxFiles";
 //      ⓪ 원래 표가 0.5초 보인다(결과 화면에서 다시 눌러도 표부터 — 운영자 "0.5초 정도 원본 티켓 나오고 찢어지는")
 //      ① 그 표가 당겨지고(.18s) 꼬리표(ticket-stub.png)가 톱니 모양으로 찢겨 떨어진다(종이 조각) ② 양쪽 커튼이 가운데로 닫힌다(위가 먼저 · 아래 자락이 늦게 · 가운데서 출렁)
 //      ③ 닫힌 채 결과를 기다린다(전설 이상이면 다 닫힌 뒤 이음매에 등급 색 빛줄) ④ 커튼이 열리며 결과 — 1장은 큰 카드(희귀도 색 테 · 이름 · 양 · code 는 코드 + 「복사」 · none 은 유령 펭귄 + 「다음 기회에」),
-//         10장은 5 × 2 작은 칸. 희귀도 연출은 가장 높은 등급 하나를 따른다(RevealFx — 기본 효과 + 등급이 오를수록 더한다)
+//         10장은 5 × 2 작은 칸 + 다 보인 뒤 무대 아래쪽에 코드 줄(코드 + 「복사」 — 2026-11-05 운영자 "10장으로 뽑았을 때 코드를 못 보니?"). 희귀도 연출은 가장 높은 등급 하나를 따른다(RevealFx — 기본 효과 + 등급이 오를수록 더한다)
 //      오류면 애니메이션을 접고 토스트
 //    📌 2026-10-25 운영자 "뽑기 효과음 짜쳐 · 오히려 고티어 효과음이 별로" + "나오는 애니메이션도 좀" — 약속 .claude/mockups/goedam/REVEAL-SPEC.md
 //      ④ 를 「등급 상승 + 카드 뒤집기」로: 커튼이 열리면 뒷면 카드(「?」) → 테가 일반 색부터 그 등급 색까지 한 단씩 오르고 → 멈춤(전설 이상은 떨림 · 깜빡) → 뒤집혀 앞면.
@@ -595,6 +595,10 @@ const GD_CSS = `
 .gd-mc.none .gd-mn { color: #8f88c8; }
 .gd-ma { display: block; max-width: 100%; font-size: 9.5px; font-weight: 800; line-height: 12px; color: ${GD.gold}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 @media (max-width: 639.98px) { .gd-mn { font-size: 9.5px; line-height: 12px; } .gd-ma { display: none; } }
+/* 10장 코드 줄 — 칸 아래(무대 바닥 쪽) 한 줄에 하나. 셋부터는 그 안에서 굴리고 다음 줄이 반쯤 보인다(더 있다는 표시). 줄 수만큼 칸(.gd-grid)을 위로 올린다 */
+.gd-grid.hc { bottom: calc(var(--u) * 3 + var(--cr) * 34px + 3px); }
+.gd-codes { position: absolute; z-index: 11; left: calc(var(--u) * (var(--cw) + 3)); right: calc(var(--u) * (var(--cw) + 3)); bottom: calc(var(--u) * 3); max-height: calc(var(--cr) * 34px); overflow-y: auto; scrollbar-width: none; }
+.gd-codes .gd-code { height: 34px; margin-top: 0; }
 /* 단추 둘 — 1장 · 10장(같은 폭) */
 .gd-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-gap: 9px; width: 100%; }
 .gd-two .gd-go { width: 100%; }
@@ -1221,9 +1225,12 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
         </div>
       );
     } else {
-      // 10장 — 작은 칸 5 × 2(코드는 내 당첨에서 복사). 칸마다 뒷면 · 앞면 겹침 — 시각은 계획 cards[i]
+      // 10장 — 작은 칸 5 × 2. 칸마다 뒷면 · 앞면 겹침 — 시각은 계획 cards[i]
+      //   코드 상품은 다 보인 뒤 칸 아래에 코드 + 복사(미리 보이면 스포 · 줄을 눌러도 평소 화면으로 넘어가지 않게). 내 당첨에도 그대로 있다
+      const codes = anim.done ? list.filter((r) => r.code) : [];
       body = (
-        <div className="gd-grid" {...live}>
+        <>
+        <div className={`gd-grid${codes.length ? " hc" : ""}`} style={codes.length ? { "--cr": codes.length > 2 ? 2.5 : codes.length } : undefined} {...live}>
           {list.map((r, i) => {
             const rk = rankOf(r);
             const amt = amountOf(r);
@@ -1242,6 +1249,17 @@ export default function GoedamModal({ open, onClose, pushToast, onDrawn, onCount
             );
           })}
         </div>
+        {codes.length > 0 && (
+          <div className="gd-codes" style={{ "--cr": codes.length > 2 ? 2.5 : codes.length }} onClick={(e) => e.stopPropagation()}>
+            {codes.map((r, i) => (
+              <div key={r.id || i} className="gd-code" title={nameOf(r)}>
+                <code>{r.code}</code>
+                <button type="button" className="gd-sb gd-pp" onClick={() => copy(r.code)}>복사</button>
+              </div>
+            ))}
+          </div>
+        )}
+        </>
       );
     }
     screen = (

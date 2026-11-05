@@ -8,7 +8,7 @@ import { normPick } from "@/lib/relic/meta";
 import UserXp from "@/models/UserXp";
 
 // 📌 유물 착용 · 꾸미기 저장 · 해제(2026-11-02 「사건의 지평선」) — 인벤토리 [착용] · 꾸미기 창 [적용]이 부른다(레벨바 app/api/xp/card-bar 와 같은 모양).
-//    POST { pick: { key, core, frame, border, bg, bar } } — 입기(고른 값 저장) · POST { off: true } — 벗기
+//    POST { pick: { key, core, frame, border, bg, bar, icon } } — 입기(고른 값 저장 — normPick 이 모르는 값을 기본으로) · POST { off: true } — 벗기
 //    가진 유물만(lib/itemEffects perksOfItems relics — 효과 on:"relic"). 저장은 UserXp.relicPick 하나. 다른 꾸미기 고른 값은 건드리지 않는다(유물이 가린다)
 //    반환: { relic } — 지금 입은 값(벗었으면 null)
 export async function POST(request) {

@@ -81,7 +81,7 @@ const UserXpSchema = new mongoose.Schema({
   // 📌 고른 유물(2026-11-02 「사건의 지평선」) — 없으면 안 입음. { key: 유물 키, core: 코어 색, frame · border · bg · bar: 조각 번호 1~3 }(lib/relic/meta normPick).
   //    입으면 카드 배경 · 테두리 · 레벨바 · 프로필 테두리를 통째로 그린다(다른 꾸미기 고른 값은 그대로 두고 가린다). 인벤토리 [착용] · 꾸미기 창(app/api/xp/relic)
   //    default: undefined — 다른 쓰기가 빈 값을 만들지 않게
-  relicPick: { type: new mongoose.Schema({ key: String, core: String, frame: Number, border: Number, bg: Number, bar: Number }, { _id: false }), default: undefined },
+  relicPick: { type: new mongoose.Schema({ key: String, core: String, frame: Number, border: Number, bg: Number, bar: Number, icon: Number }, { _id: false }), default: undefined }, // icon — 카드 단추 아이콘 0 기본 · 1~3(2026-11-03)
   // 📌 시즌 티어 테두리 — 시즌이 끝나면 봇(seasonSettle settleFrames)이 「시즌 끝 순간 등급」을 적는다(아이언은 ""). 다음 결산이 덮어쓴다 = 회수.
   //    가진 테두리로 친다(lib/itemEffects withSeasonFrame). 봇(bot/src/db.js)도 같은 칸 · default: undefined — 봇 upsert 가 빈 값을 만들지 않게
   seasonFrame: { type: new mongoose.Schema({ season: Number, frame: String, at: Date }, { _id: false }), default: undefined },

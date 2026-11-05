@@ -23,7 +23,7 @@ export async function connectToDatabase() {
       bufferCommands: false,
       maxPoolSize: 8,
       minPoolSize: 0,
-      maxIdleTimeMS: 15_000,
+      maxIdleTimeMS: 120_000,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {

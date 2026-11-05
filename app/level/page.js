@@ -30,6 +30,8 @@ import SkinFrame from "../components/SkinFrame";
 import dynamic from "next/dynamic";
 // 📌 유물 「사건의 지평선」 카드 겹(2026-11-02) — 그림 코드가 커서 따로 실어 온다
 const RelicLayers = dynamic(() => import("../components/RelicLayers"), { ssr: false });
+// 「사건의 지평선」 카드 단추 아이콘(2026-11-03 커스텀 「아이콘」 1~3) — 불러오는 동안도 칸(24 × 24)을 지켜 단추 글자가 들썩이지 않게
+const RelicIcon = dynamic(() => import("../components/RelicIcon"), { ssr: false, loading: () => <span aria-hidden className="block w-6 h-6"></span> });
 import { SceneBack, barStyleOfKey, GhostTrailBar, CloverVineBar } from "../components/SceneBack";
 import AvatarFrame, { frameRoom, frameSizeOf, FRAME_GRID, FRAME_REACH } from "../components/AvatarFrame";
 import { playTone } from "@/lib/sfx";
@@ -75,6 +77,27 @@ const RANK_MODES = [
 ];
 const LB_MODES = RANK_MODES.map((m) => (m.id === "voice" ? { ...m, label: "음성" } : m));
 const RANK_PAGE_SIZE = 20;
+
+// 📌 2026-11-05 주기 호출 줄임 — 11/4 Vercel 무료 CPU 한도(4시간)를 7시간 41분으로 넘겨 본 사이트가 멈췄다. 탭 하나가 1분에 17번, 숨겨 둬도 불렀다.
+//    · 숨긴 탭은 부르지 않는다. 돌아왔을 때 backMs 이상 지났으면 바로 한 번(창으로 돌아오면 맞춰지는 것은 그대로)
+//    · 처음 한 번은 부르는 쪽이 한다 — 이 훅은 그다음부터
+const useVisiblePoll = (fn, ms, { enabled = true, backMs = ms } = {}) => {
+  const fnRef = useRef(fn);
+  useEffect(() => { fnRef.current = fn; });
+  useEffect(() => {
+    if (!enabled) return;
+    let last = Date.now();
+    const run = () => { last = Date.now(); fnRef.current(); };
+    const t = setInterval(() => { if (!document.hidden && Date.now() - last >= ms - 1000) run(); }, Math.min(ms, 5000)); // 1초 여유 — 타이머가 조금 일찍 오면 한 박자(5초) 밀렸다
+    const onBack = () => { if (!document.hidden && Date.now() - last >= backMs) run(); };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("focus", onBack);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onBack); window.removeEventListener("focus", onBack); };
+  }, [ms, backMs, enabled]);
+};
+// 내 정보에서 이 값이 그대로면 획득 내역 · 퀘스트 · 패스도 거의 그대로다 — 바뀌었을 때만 전부 읽는다(늦어도 ME_FULL_MS 마다 한 번은 전부)
+const meSigOf = (d) => [d?.xp, d?.level, d?.point, d?.attendCount, d?.lastAttendDate, d?.voiceSeconds].join("|");
+const ME_FULL_MS = 5 * 60 * 1000;
 
 // 레벨 공식은 lib/leveling.js 단일 소스 (봇 지급 로직과 1:1)
 
@@ -2816,11 +2839,8 @@ export default function LevelPage() {
       <svg aria-hidden viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${ink ? "text-[#ff5c77]" : "text-[#e91e3f]"}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.gift} strokeLinecap="round" strokeLinejoin="round" /></svg>
       <span className="text-[15px] font-black tracking-tight">이벤트</span>
       <span className="ml-auto flex items-center gap-2.5">
-        {evTotal > 0 && (
-          <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#e91e3f] text-white text-[12px] font-black leading-[22px] text-center tabular-nums">
-            {evTotal > 99 ? "99+" : evTotal}
-          </span>
-        )}
+        {/* 받을 것 있음 — 숫자 대신 빨간 점(2026-11-05 운영자 "왜 빨간 점으로 표현 안 하냐") */}
+        {evTotal > 0 && <span aria-hidden className="shrink-0 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
         <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 transition-colors ${ink ? "text-white/45 group-hover:text-white" : "text-[#a3a3a3] group-hover:text-[#131313]"}`} fill="none" stroke="currentColor" strokeWidth="2.4"><path d={ICON_PATHS.chevronRight} strokeLinecap="round" strokeLinejoin="round" /></svg>
       </span>
     </button>
@@ -2917,7 +2937,7 @@ export default function LevelPage() {
     window.history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
   }, [evParam]);
 
-  // 퀘스트 — 30초 폴링에 함께 실려 진행도가 실시간으로 찬다
+  // 퀘스트 — XP 가 바뀔 때(30초마다 확인 · pollMe) 함께 읽어 진행도가 찬다. XP 없이 오른 진행도는 늦어도 5분 안에
   const [quests, setQuests] = useState(null);
   const [questPeriod, setQuestPeriod] = useState("daily");
   const [tierOpen, setTierOpen] = useState(false);   // 등급 안내 모달
@@ -2939,15 +2959,28 @@ export default function LevelPage() {
     setQuests(data);
   }, []);
 
+  const lastFullRef = useRef(0);  // 마지막으로 전부 읽은 시각
+  const meSigRef = useRef("");    // 마지막으로 그린 내 정보의 XP · 레벨 · 빙옥 · 출석 · 음성(meSigOf)
+  const applyMe = useCallback((meRes, t0) => {
+    const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current, barSavedRef.current);
+    const prev = prevXpRef.current;
+    if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); if (d.relic && d.level === prev.level) setRelicXpAt(Date.now()); }
+    if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); if (d.relic) setRelicLvAt(Date.now()); }
+    prevXpRef.current = d;
+    meSigRef.current = meSigOf(meRes.data);
+    setMe(d);
+  }, [pushToast]);
+
   const loadMe = useCallback(async () => {
     try {
       const t0 = Date.now();
+      lastFullRef.current = t0;
       const [meRes, logRes, qRes, itemRes, passRes] = await Promise.all([
         fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/my-logs", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/xp/quests", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
         fetch("/api/shop/my-items", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-        // 패스는 30초 폴링에 같이 실어 둔다 — 봇이 XP 를 넣어 티어가 오르면 화면도 따라 오른다
+        // 패스도 같이 읽는다 — 봇이 XP 를 넣어 티어가 오르면 화면도 따라 오른다(pollMe 가 XP 변화를 보고 이 전부 읽기를 부른다)
         fetch("/api/pass", { cache: "no-store" })
           .then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))
           .catch(() => null),
@@ -2957,20 +2990,23 @@ export default function LevelPage() {
       // 한 번 끊겼다고 패스 탭이 통째로 사라지면 안 되므로 상태 코드로 갈라 본다.
       if (passRes?.body?.success) setPass(passRes.body);
       else if (passRes && (passRes.status === 401 || passRes.status === 403)) setPass(null);
-      if (meRes?.success) {
-        const d = keepSaved(meRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current, barSavedRef.current);
-        const prev = prevXpRef.current;
-        if (prev && d.xp > prev.xp) { pushToast(`+${(d.xp - prev.xp).toLocaleString()} XP 획득`); sfxXp(); if (d.relic && d.level === prev.level) setRelicXpAt(Date.now()); }
-        if (prev && d.level > prev.level) { pushToast(`레벨 업! Lv.${prev.level} → Lv.${d.level}`, true); if (onDashRef.current) sfxLevelUp(); if (d.relic) setRelicLvAt(Date.now()); }
-        prevXpRef.current = d;
-        setMe(d);
-      }
+      if (meRes?.success) applyMe(meRes, t0);
       if (logRes?.success) setMyLogs(logRes.data);
       if (qRes?.success && t0 >= questSavedRef.current) setQuests(qRes.data);
       if (itemRes?.success) setMyItems((cur) => mergeMyItems(cur, keepSaved(itemRes.data, t0, skinSavedRef.current, badgeSavedRef.current, frameSavedRef.current, sceneSavedRef.current, trialRef.current, barSavedRef.current)));
     } catch {}
     setMeLoaded(true);
-  }, [pushToast]);
+  }, [applyMe]);
+  // 📌 30초 주기 — 내 정보만 읽고, XP · 레벨 · 빙옥 · 출석 · 음성이 바뀌었거나 5분이 지났을 때만 전부 읽는다(예전엔 30초마다 API 다섯 개를 다).
+  //    XP 알림 · 획득 피드는 XP 가 바뀔 때 함께 오므로 예전과 같은 박자다
+  const pollMe = useCallback(async () => {
+    if (Date.now() - lastFullRef.current >= ME_FULL_MS) return loadMe();
+    const t0 = Date.now();
+    const meRes = await fetch("/api/xp/me", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    if (!meRes?.success) return;
+    if (meSigOf(meRes.data) !== meSigRef.current) return loadMe();
+    applyMe(meRes, t0);
+  }, [loadMe, applyMe]);
 
   // 📌 가방을 열 때 보유 목록만 새로 읽는다 — 30초 폴링을 기다리면 방금 받은 것이 안 보이거나,
   //    직전 조회가 실패했을 때 빈 가방이 새로고침 전까지 남는다
@@ -3272,29 +3308,28 @@ export default function LevelPage() {
     if (authStatus === "loading") return;
     if (!session?.user) { setMe(null); setMyLogs(null); setQuests(null); setMyItems(null); setPass(null); prevXpRef.current = null; setMeLoaded(true); return; }
     loadMe();
-    const t = setInterval(loadMe, 30 * 1000);
-    const onFocus = () => loadMe();
-    window.addEventListener("focus", onFocus);
-    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
   }, [session?.user?.id, authStatus, loadMe]); // eslint-disable-line react-hooks/exhaustive-deps
+  useVisiblePoll(pollMe, 30 * 1000, { enabled: authStatus !== "loading" && !!session?.user, backMs: 15 * 1000 });
 
-  // ── 리더보드 (공개 데이터, 60초 갱신) ──
+  // ── 리더보드 (공개 데이터) — 첫 화면에 네 기준을 다 읽고(탭을 눌러도 기다리지 않게), 그다음은 보는 탭만 60초마다.
+  //    다른 탭은 고를 때 60초가 지났으면 다시 읽는다. 「누적」은 시즌 요약(lb.total)도 쓰니 5분마다 같이(2026-11-05 — 예전엔 60초마다 넷 다)
   const [lb, setLb] = useState({ all: null, total: null, month: null, voice: null });
   const [lbTab, setLbTab] = useState("all");
-  useEffect(() => {
-    const load = () => {
-      // me=1 — 로그인했으면 내 순위 한 줄(me)이 같이 온다(TOP 10 밖이면 목록 아래 내 줄). 비로그인은 서버가 null
-      LB_MODES.forEach(({ id: period }) =>
-        fetch(`/api/xp/leaderboard?period=${period}&limit=10&me=1`, { cache: "no-store" })
-          .then((r) => r.json())
-          .then((d) => { if (d?.success) setLb((p) => ({ ...p, [period]: d })); })
-          .catch(() => {})
-      );
-    };
-    load();
-    const t = setInterval(load, 60 * 1000);
-    return () => clearInterval(t);
+  const lbAtRef = useRef({});
+  const loadLb = useCallback((period) => {
+    lbAtRef.current[period] = Date.now();
+    // me=1 — 로그인했으면 내 순위 한 줄(me)이 같이 온다(TOP 10 밖이면 목록 아래 내 줄). 비로그인은 서버가 null
+    fetch(`/api/xp/leaderboard?period=${period}&limit=10&me=1`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success) setLb((p) => ({ ...p, [period]: d })); })
+      .catch(() => {});
   }, []);
+  useEffect(() => { LB_MODES.forEach(({ id }) => loadLb(id)); }, [loadLb]);
+  useEffect(() => { if (Date.now() - (lbAtRef.current[lbTab] || 0) >= 60 * 1000) loadLb(lbTab); }, [lbTab, loadLb]);
+  useVisiblePoll(() => {
+    loadLb(lbTab);
+    if (lbTab !== "total" && Date.now() - (lbAtRef.current.total || 0) >= 5 * 60 * 1000) loadLb("total");
+  }, 60 * 1000);
 
   // 대시보드 파생값
   const prog = me?.levelProgress || { current: 0, required: 1, needToNext: 0 };
@@ -3303,6 +3338,8 @@ export default function LevelPage() {
   const cardBarStyle = barStyleOfKey(shownBarOf(me?.cardBarPick || "", me?.cardBar || ""));
   // 📌 유물(2026-11-02) — 입으면 카드 배경 · 테두리 · 레벨바 · 프로필 테두리를 통째로 RelicLayers 가 그린다(다른 꾸미기 겹 · 사진 고리 · 막대는 감춘다)
   const relicOn = !guest && !!me?.relic;
+  // 카드 단추 아이콘 — 유물을 입고 「아이콘」을 1~3 으로 골랐을 때만 바꾼다(0 기본 = 지금 선 아이콘)
+  const relicIco = relicOn ? me.relic.icon || 0 : 0;
   // 📌 프로필 사진 크기 — 테두리를 끼면 링이 빠지므로 사진이 링 자리를 채운다(2026-10-10 "아이템까지 적용시키면 너무 작아짐 · 비율이 안 맞음").
   //    링 칸(모바일 86 · PC 96)은 그대로, 사진은 모바일만 62 → 78(PC 68 그대로). 테두리는 사진 크기에 맞춰 함께 커진다
   const framedAvatar = !!me?.avatarFrame && !!session?.user;
@@ -3316,7 +3353,6 @@ export default function LevelPage() {
   const tierIdx = getTierIndex(me?.level ?? 0);
   const tierCur = VOICE_TIERS[tierIdx];
   const tierNext = VOICE_TIERS[tierIdx + 1] || null;
-  const tierNextBound = tierNext ? tierNext.min : null;
 
   // 퀘스트 — 주기(일일/주간/월간)별로 나눠 본다
   const questAll = quests?.quests || [];
@@ -3761,7 +3797,7 @@ export default function LevelPage() {
         .then((j) => { if (!live) return; if (j?.success) { setRec(j.data); setRecErr(false); } else setRecErr(true); })
         .catch(() => { if (live) setRecErr(true); });
     load();
-    const t = setInterval(load, 60 * 1000);
+    const t = setInterval(() => { if (!document.hidden) load(); }, 60 * 1000);
     return () => { live = false; clearInterval(t); };
   }, [recKey]);
 
@@ -3820,18 +3856,13 @@ export default function LevelPage() {
 
   // 📌 현재 XP 정책 — 레벨 대시보드에서 값을 바꾸면 이 페이지 수치도 즉시 따라간다
   const [policy, setPolicy] = useState(null);
-  useEffect(() => {
-    const load = () => fetch("/api/xp/policy", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => { if (d?.success) setPolicy(d.data); })
-      .catch(() => {});
-    load();
-    // 대시보드에서 저장한 값이 열려 있는 화면에도 반영되도록 주기 갱신
-    const t = setInterval(load, 30 * 1000);
-    const onFocus = () => load();
-    window.addEventListener("focus", onFocus);
-    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
-  }, []);
+  const loadPolicy = useCallback(() => fetch("/api/xp/policy", { cache: "no-store" })
+    .then((r) => r.json())
+    .then((d) => { if (d?.success) setPolicy(d.data); })
+    .catch(() => {}), []);
+  useEffect(() => { loadPolicy(); }, [loadPolicy]);
+  // 대시보드에서 저장한 값이 열려 있는 화면에도 반영되도록 주기 갱신 — 드물게 바뀌는 설정이라 5분(창으로 돌아오면 1분 지났을 때 바로, 2026-11-05 — 예전 30초)
+  useVisiblePoll(loadPolicy, 5 * 60 * 1000, { backMs: 60 * 1000 });
 
   // 정책값 헬퍼 (로드 전에는 기존 기본값 사용)
   const P = {
@@ -4805,11 +4836,7 @@ export default function LevelPage() {
                               </svg>
                               </span>
                               )}
-                              {!guest && tierNext && tierNextBound !== null && (
-                                <span className="block text-[11px] font-bold text-white/50 mt-1.5 truncate tabular-nums">
-                                  <span style={tierText(tierNext, hexLift(tierNext.c, 0.15))}>{tierNext.name}</span>까지 {Math.max(0, tierNextBound - me.level)}레벨
-                                </span>
-                              )}
+                              {/* 📌 2026-11-03 운영자 「다음 등급까지 N레벨」 줄(골드까지 60레벨) 뺌 — 등급 이름만. 남은 레벨은 등급 안내 창(ⓘ)에서 */}
                             </span>
                             </button>
                           </div>
@@ -4850,9 +4877,13 @@ export default function LevelPage() {
                             {(guest || myItems) && (
                               <button onClick={openBag} aria-label="인벤토리 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
                                 <span aria-hidden className="relative">
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                    <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                                  {relicIco ? (
+                                    <RelicIcon kind="bag" style={relicIco} core={me.relic.core} i={0} />
+                                  ) : (
+                                    <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                      <path d={ICON_PATHS.bag} strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
                                   {invUnread > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{invUnread}</span>}
                                 </span>
                                 <span className="max-w-full truncate text-[12px] font-bold text-white/80 group-hover:text-white transition-colors">인벤토리</span>
@@ -4861,9 +4892,13 @@ export default function LevelPage() {
                             {passEnabled && (
                               <button onClick={openPass} aria-label="시즌 패스 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
                                 <span aria-hidden className="relative">
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                    <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                                  {relicIco ? (
+                                    <RelicIcon kind="star" style={relicIco} core={me.relic.core} i={1} />
+                                  ) : (
+                                    <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                      <path d={ICON_PATHS.star} strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
                                   {passClaimable > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{passClaimable}</span>}
                                 </span>
                                 <span className="max-w-full truncate text-[12px] font-bold text-white/80 group-hover:text-white transition-colors">시즌 패스</span>
@@ -4872,9 +4907,13 @@ export default function LevelPage() {
                             {enhOpen && (
                               <button type="button" onClick={openEnh} aria-label="강화 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
                                 <span aria-hidden className="relative">
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                    <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                                  {relicIco ? (
+                                    <RelicIcon kind="bolt" style={relicIco} core={me.relic.core} i={2} />
+                                  ) : (
+                                    <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                      <path d={ICON_PATHS.bolt} strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
                                 </span>
                                 <span className="max-w-full truncate text-[12px] font-bold text-white/80 group-hover:text-white transition-colors">강화</span>
                               </button>
@@ -4882,9 +4921,13 @@ export default function LevelPage() {
                             {ACHIEVEMENTS_ON && (guest || session?.user) && (
                               <button type="button" onClick={openAch} aria-label="업적 열기" className="group min-w-0 flex flex-col items-center justify-center gap-2 py-3 outline-none focus:outline-none">
                                 <span aria-hidden className="relative">
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                    <path d={ICON_PATHS.trophy} strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                                  {relicIco ? (
+                                    <RelicIcon kind="trophy" style={relicIco} core={me.relic.core} i={3} />
+                                  ) : (
+                                    <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/55 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                      <path d={ICON_PATHS.trophy} strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
                                   {/* 받을 보상이 있는 업적 수 — 다른 칸과 같은 빨간 배지 */}
                                   {!guest && ach.claimable > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#e91e3f] text-white text-[9px] font-black flex items-center justify-center tabular-nums">{ach.claimable}</span>}
                                 </span>
@@ -5033,13 +5076,13 @@ export default function LevelPage() {
                           onClick={openEvents}
                           aria-haspopup="dialog"
                           aria-label={evTotal > 0 ? `이벤트 ${evTotal}` : "이벤트"}
-                          className={`group shrink-0 inline-flex items-center gap-2.5 h-12 pl-5 pr-4 rounded-full text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40 ${evTotal > 0 ? "bg-[#e91e3f] hover:bg-[#d01634]" : "bg-[#131313] hover:bg-[#1f1f1f]"}`}
+                          className="group shrink-0 inline-flex items-center gap-2.5 h-12 pl-5 pr-4 rounded-full text-white bg-[#131313] hover:bg-[#1f1f1f] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#e91e3f]/40"
                         >
-                          <svg aria-hidden viewBox="0 0 24 24" className={`w-5 h-5 shrink-0 ${evTotal > 0 ? "text-white" : "text-[#ff5c77]"}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.gift} strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <svg aria-hidden viewBox="0 0 24 24" className="w-5 h-5 shrink-0 text-[#ff5c77]" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={ICON_PATHS.gift} strokeLinecap="round" strokeLinejoin="round" /></svg>
                           <span className="text-[15px] font-black leading-5">이벤트</span>
-                          {evTotal > 0 && (
-                            <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-white text-[#e91e3f] text-[12px] font-black leading-[22px] text-center tabular-nums">{evTotal > 99 ? "99+" : evTotal}</span>
-                          )}
+                          {/* 받을 것 있음 — 숫자 대신 빨간 점(2026-11-05 운영자 "왜 빨간 점으로 표현 안 하냐"). 빨간 판 위 점은 안 보여 판은 늘 먹색.
+                              점이 뜨면 알약이 18px 길어진다 — 글자 위에 겹친 판은 운영자 "별로 안 이쁜데"로 되돌림 */}
+                          {evTotal > 0 && <span aria-hidden className="shrink-0 w-2 h-2 rounded-full bg-[#e91e3f]"></span>}
                           <svg aria-hidden viewBox="0 0 24 24" className="w-4 h-4 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" strokeWidth="2.4"><path d={ICON_PATHS.chevronRight} strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </button>
                       )}
